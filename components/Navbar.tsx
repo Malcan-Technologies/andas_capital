@@ -124,7 +124,7 @@ export default function Navbar({
 					<div className="hidden md:flex items-center space-x-6">
 						<div className="relative group">
 							<a
-								href="https://wa.me/60312345678"
+								href="https://wa.me/60164614919?text=I'm%20interested%20in%20Kapital%20lending%20products"
 								target="_blank"
 								rel="noopener noreferrer"
 								className="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 border-gray-200 hover:border-white text-gray-200 hover:text-white transition-colors"
