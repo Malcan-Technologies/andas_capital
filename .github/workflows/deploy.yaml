@@ -58,6 +58,7 @@ jobs:
           target: "/var/www/growkapital"
           strip_components: 0
           debug: true
+          timeout: 300s
 
       - name: Execute deployment commands
         if: success()
@@ -67,21 +68,22 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEYS }}
           debug: true
+          command_timeout: "30m"
           script: |
             cd /var/www/growkapital
-            npm ci --production
+            npm ci --omit=dev
             
             # Configure Nginx
             sudo cp nginx.conf /etc/nginx/sites-available/growkapital
             sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
             sudo nginx -t
-
+            
             # Start/restart services
             pm2 delete growkapital || true
-            pm2 start npm --name "growkapital" -- start
+            NODE_ENV=production pm2 start npm --name "growkapital" -- start
             pm2 save
             sudo systemctl restart nginx
-
+            
             # Print status for debugging
             echo "PM2 status:"
             pm2 status 
