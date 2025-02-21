@@ -157,7 +157,7 @@ export default function About() {
 								</div>
 							</div>
 						</div>
-						<div className="relative h-[400px] rounded-2xl overflow-hidden shadow-xl">
+						<div className="relative h-[250px] md:h-[400px] rounded-2xl overflow-hidden shadow-xl">
 							<Image
 								src="/hero-image.jpg"
 								alt="Kapital team working"
@@ -208,7 +208,7 @@ export default function About() {
 						</p>
 					</div>
 					<div className="grid md:grid-cols-2 gap-12 items-center">
-						<div className="relative h-[500px]">
+						<div className="relative h-[300px] md:h-[500px]">
 							<Image
 								src="/values.svg"
 								alt="Our company values illustration"
@@ -400,7 +400,7 @@ export default function About() {
 								All Positions Filled
 							</button>
 						</div>
-						<div className="relative h-[400px]">
+						<div className="relative h-[250px] md:h-[400px]">
 							<Image
 								src="/team.svg"
 								alt="Happy team members"

@@ -98,17 +98,17 @@ export default function EmployeeMicroLoan() {
 								<div className="flex gap-4 justify-center lg:justify-start mb-12">
 									<Link
 										href="/apply"
-										className="bg-white text-purple-900 px-8 py-4 rounded-full text-lg font-semibold hover:bg-purple-50 transition-all"
+										className="bg-white text-purple-900 px-4 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold hover:bg-purple-50 transition-all"
 									>
 										Apply Now
 									</Link>
 									<Link
 										href="#how-it-works"
-										className="border-2 border-white text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-white/10 transition-colors flex items-center"
+										className="border-2 border-white text-white px-4 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold hover:bg-white/10 transition-colors flex items-center"
 									>
 										How It Works
 										<svg
-											className="ml-2 w-5 h-5"
+											className="ml-2 w-4 h-4 sm:w-5 sm:h-5"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -428,7 +428,7 @@ export default function EmployeeMicroLoan() {
 						</div>
 
 						{/* Image Section */}
-						<div className="relative rounded-3xl overflow-hidden h-[600px]">
+						<div className="relative rounded-3xl overflow-hidden h-[300px] md:h-[500px]">
 							<Image
 								src={
 									activeView === "employee"
@@ -567,7 +567,7 @@ export default function EmployeeMicroLoan() {
 					</div>
 
 					{/* Terms and Calculator Section */}
-					<div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-3xl p-12">
+					<div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-3xl p-4 sm:p-8 md:p-12">
 						<div className="text-center mb-12">
 							<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
 								Loan Terms & Calculator
@@ -878,7 +878,7 @@ export default function EmployeeMicroLoan() {
 					</div>
 
 					{/* FAQ Section */}
-					<div className="mt-24 bg-white rounded-3xl p-12">
+					<div className="mt-24 bg-white rounded-3xl p-4 sm:p-8 md:p-12">
 						<div className="text-center mb-12">
 							<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
 								Frequently Asked Questions

@@ -153,8 +153,26 @@ export default function Footer() {
 
 				{/* Copyright */}
 				<div className="mt-12 pt-8 border-t border-white/10">
-					<div className="grid grid-cols-12 gap-8">
-						<div className="col-span-9 text-gray-400">
+					<div className="flex flex-col space-y-6">
+						{/* SSL Badge - Shown at top on all screens */}
+						<div className="flex justify-start">
+							<div className="inline-flex items-center gap-2 bg-[#0F0A1F] backdrop-blur-lg rounded-xl p-4 border border-white/10 w-fit">
+								<span className="text-green-400 flex-shrink-0">
+									<MdShield size={20} />
+								</span>
+								<div className="text-sm">
+									<p className="text-green-400 font-medium">
+										SSL Secured
+									</p>
+									<p className="text-gray-400 text-xs">
+										256-bit encryption
+									</p>
+								</div>
+							</div>
+						</div>
+
+						{/* Legal Text */}
+						<div className="text-gray-400 space-y-4">
 							<p>
 								© {new Date().getFullYear()} Kapital. All rights
 								reserved.
@@ -174,27 +192,11 @@ export default function Footer() {
 								Lending products offered by OPG Capital Holdings
 								Sdn. Bhd. (KPKT License: WL3337/07/01-9/020223).
 							</p>
-							<p>&nbsp;</p>
 							<p>
 								Disclaimer: All third party trademarks, product
 								and company names are the property of their
 								respective holders.
 							</p>
-						</div>
-						<div className="col-span-3 flex items-start justify-end">
-							<div className="inline-flex items-center gap-2 bg-[#0F0A1F] backdrop-blur-lg rounded-xl p-4 border border-white/10 w-fit">
-								<span className="text-green-400 flex-shrink-0">
-									<MdShield size={20} />
-								</span>
-								<div className="text-sm">
-									<p className="text-green-400 font-medium">
-										SSL Secured
-									</p>
-									<p className="text-gray-400 text-xs">
-										256-bit encryption
-									</p>
-								</div>
-							</div>
 						</div>
 					</div>
 				</div>

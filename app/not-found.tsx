@@ -63,11 +63,11 @@ export default function NotFound() {
 									Chat on WhatsApp
 								</a>
 								<a
-									href="tel:+60123456789"
+									href="tel:+60164614919"
 									className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full font-semibold transition-all"
 								>
 									<MdPhone size={24} />
-									+60 12-345 6789
+									+60 16-461 4919
 								</a>
 							</div>
 						</div>
