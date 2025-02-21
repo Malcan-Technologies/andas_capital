@@ -25,36 +25,37 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Setup SSH
+      - name: Debug SSH Setup
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           eval $(ssh-agent -s)
-          ssh-add ~/.ssh/deploy_key
+          ssh-add -v ~/.ssh/deploy_key
+          ssh-add -l
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+          echo "Testing SSH connection..."
+          ssh -v -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'echo "SSH connection successful"'
 
       - name: Deploy to Digital Ocean
-        env:
-          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
+          key_path: ~/.ssh/deploy_key
           source: ".next/,public/,package.json,package-lock.json,nginx.conf"
           target: "/var/www/growkapital"
           strip_components: 0
+          debug: true
 
       - name: Execute deployment commands
-        env:
-          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
+          key_path: ~/.ssh/deploy_key
+          debug: true
           script: |
             cd /var/www/growkapital
             npm ci --production
