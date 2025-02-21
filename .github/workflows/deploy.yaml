@@ -3,7 +3,7 @@ name: Deploy to Production
 on:
   push:
     branches:
-      - main  # or master, depending on your default branch
+      - main
 
 jobs:
   deploy:
@@ -25,30 +25,14 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Debug SSH Setup
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ls -la ~/.ssh/deploy_key
-          echo "Content of deploy_key (first line):"
-          head -n 1 ~/.ssh/deploy_key
-          echo "SSH Host: ${{ secrets.SSH_HOST }}"
-          echo "SSH User: ${{ secrets.SSH_USER }}"
-          eval $(ssh-agent -s)
-          ssh-add -v ~/.ssh/deploy_key
-          ssh-add -l
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          echo "Testing SSH connection..."
-          if [ -z "${{ secrets.SSH_USER }}" ]; then
-            echo "Error: SSH_USER secret is not set"
-            exit 1
-          fi
-          ssh -vvv -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'echo "SSH connection successful"'
 
-      - name: Deploy to Digital Ocean
-        if: success()
+      - name: Sync files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -57,34 +41,39 @@ jobs:
           source: ".next/,public/,package.json,package-lock.json,nginx.conf"
           target: "/var/www/growkapital"
           strip_components: 0
-          debug: true
+          rm: false
           timeout: 300s
 
-      - name: Execute deployment commands
-        if: success()
+      - name: Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEYS }}
-          debug: true
-          command_timeout: "30m"
+          command_timeout: "5m"
           script: |
             cd /var/www/growkapital
-            npm ci --omit=dev
             
-            # Configure Nginx
-            sudo cp nginx.conf /etc/nginx/sites-available/growkapital
-            sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
-            sudo rm -f /etc/nginx/sites-enabled/default
-            sudo nginx -t
+            # Efficient dependency management
+            if [ ! -d "node_modules" ] || [ ! -f "node_modules/.package-json-hash" ] || \
+               [ "$(md5sum package.json | cut -d' ' -f1)" != "$(cat node_modules/.package-json-hash 2>/dev/null)" ]; then
+              rm -rf node_modules
+              [ -d "/var/www/node_modules_cache/growkapital" ] && cp -r /var/www/node_modules_cache/growkapital node_modules
+              npm ci --omit=dev --quiet
+              mkdir -p /var/www/node_modules_cache
+              md5sum package.json | cut -d' ' -f1 > node_modules/.package-json-hash
+              rm -rf /var/www/node_modules_cache/growkapital
+              cp -r node_modules /var/www/node_modules_cache/growkapital
+            fi
             
-            # Start/restart services
-            pm2 delete growkapital || true
+            # Update Nginx config only if changed
+            if ! cmp -s nginx.conf /etc/nginx/sites-available/growkapital; then
+              sudo cp nginx.conf /etc/nginx/sites-available/growkapital
+              sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
+              sudo nginx -t && sudo systemctl reload nginx
+            fi
+            
+            # Restart application
+            pm2 delete growkapital 2>/dev/null || true
             NODE_ENV=production pm2 start npm --name "growkapital" -- start
-            pm2 save
-            sudo systemctl restart nginx
-            
-            # Print status for debugging
-            echo "PM2 status:"
-            pm2 status 
+            pm2 save -s 
