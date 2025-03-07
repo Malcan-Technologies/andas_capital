@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import {
 	LineChart,
 	Line,
@@ -378,7 +379,7 @@ export default function EmployeeMicroLoan() {
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1">
+												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
 													Employee Verification
 												</h4>
 												<p className="text-gray-600">
@@ -395,7 +396,7 @@ export default function EmployeeMicroLoan() {
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1">
+												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
 													Automated Deductions
 												</h4>
 												<p className="text-gray-600">
@@ -412,7 +413,7 @@ export default function EmployeeMicroLoan() {
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1">
+												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
 													Dashboard Access
 												</h4>
 												<p className="text-gray-600">
@@ -605,11 +606,39 @@ export default function EmployeeMicroLoan() {
 										</p>
 									</div>
 									<div>
-										<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2">
-											Processing Fee
+										<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2 flex items-center gap-2">
+											Origination Fee
+											<div className="relative group">
+												<InformationCircleIcon className="h-4 w-4 text-gray-500 cursor-help" />
+												<div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 p-2 bg-gray-800 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+													Covers the cost of
+													processing the loan
+													application, underwriting,
+													and funding the loan
+													<div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+												</div>
+											</div>
 										</h4>
 										<p className="text-gray-600 dark:text-gray-600">
-											7.5% of loan amount
+											3% of loan amount
+										</p>
+									</div>
+									<div>
+										<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2 flex items-center gap-2">
+											Legal Fees
+											<div className="relative group">
+												<InformationCircleIcon className="h-4 w-4 text-gray-500 cursor-help" />
+												<div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 p-2 bg-gray-800 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+													Covers the cost of legal
+													documentation, stamp duties,
+													and other regulatory
+													requirements
+													<div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+												</div>
+											</div>
+										</h4>
+										<p className="text-gray-600 dark:text-gray-600">
+											2% of loan amount
 										</p>
 									</div>
 									<div>
