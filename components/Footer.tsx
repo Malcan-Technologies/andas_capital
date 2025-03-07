@@ -45,6 +45,14 @@ export default function Footer() {
 							</li>
 							<li>
 								<Link
+									href="/equipment-financing"
+									className="text-gray-300 hover:text-white"
+								>
+									Equipment Financing
+								</Link>
+							</li>
+							<li>
+								<Link
 									href="/products"
 									className="text-gray-300 hover:text-white"
 								>
