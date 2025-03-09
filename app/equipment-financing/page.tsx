@@ -19,10 +19,23 @@ import Footer from "@/components/Footer";
 export default function EquipmentFinancing() {
 	const [loanAmount, setLoanAmount] = useState(50000);
 	const [loanTerm, setLoanTerm] = useState(12);
+	const [equipmentCost, setEquipmentCost] = useState(100000);
 
 	const INTEREST_RATE = 0.01; // 1% per month
 	const ORIGINATION_FEE_RATE = 0.03; // 3%
 	const LEGAL_FEE_RATE = 0.02; // 2%
+	const MAX_FINANCING_PERCENTAGE = 0.6; // 60% of equipment cost
+	const MAX_LOAN_AMOUNT = 500000; // Maximum loan amount cap
+
+	const handleEquipmentCostChange = (newCost: number) => {
+		setEquipmentCost(newCost);
+		// Adjust loan amount if it exceeds the maximum allowed
+		const maxByPercentage = newCost * MAX_FINANCING_PERCENTAGE;
+		const maxLoanAmount = Math.min(maxByPercentage, MAX_LOAN_AMOUNT);
+		if (loanAmount > maxLoanAmount) {
+			setLoanAmount(Math.floor(maxLoanAmount));
+		}
+	};
 
 	const calculateOriginationFee = () => {
 		return loanAmount * ORIGINATION_FEE_RATE;
@@ -604,13 +617,50 @@ export default function EquipmentFinancing() {
 							<div className="space-y-8">
 								<div>
 									<label className="block text-lg font-medium text-gray-700 dark:text-gray-700 mb-2">
+										Equipment Cost: RM{" "}
+										{equipmentCost.toLocaleString()}
+									</label>
+									<input
+										type="range"
+										min="20000"
+										max="1000000"
+										step="10000"
+										value={equipmentCost}
+										onChange={(e) =>
+											handleEquipmentCostChange(
+												Number(e.target.value)
+											)
+										}
+										className="w-full h-4 rounded-lg appearance-none cursor-pointer bg-emerald-200 hover:bg-emerald-300"
+									/>
+									<div className="flex justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
+										<span>RM 20,000</span>
+										<span>RM 1,000,000</span>
+									</div>
+								</div>
+								<div>
+									<label className="block text-lg font-medium text-gray-700 dark:text-gray-700 mb-2">
 										Loan Amount: RM{" "}
 										{loanAmount.toLocaleString()}
+										<span className="text-sm text-gray-500 ml-2">
+											(Max: RM{" "}
+											{Math.min(
+												equipmentCost *
+													MAX_FINANCING_PERCENTAGE,
+												MAX_LOAN_AMOUNT
+											).toLocaleString()}{" "}
+											- 60% of equipment cost, capped at
+											RM 500,000)
+										</span>
 									</label>
 									<input
 										type="range"
 										min="10000"
-										max="500000"
+										max={Math.min(
+											equipmentCost *
+												MAX_FINANCING_PERCENTAGE,
+											MAX_LOAN_AMOUNT
+										)}
 										step="10000"
 										value={loanAmount}
 										onChange={(e) =>
@@ -622,7 +672,14 @@ export default function EquipmentFinancing() {
 									/>
 									<div className="flex justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
 										<span>RM 10,000</span>
-										<span>RM 500,000</span>
+										<span>
+											RM{" "}
+											{Math.min(
+												equipmentCost *
+													MAX_FINANCING_PERCENTAGE,
+												MAX_LOAN_AMOUNT
+											).toLocaleString()}
+										</span>
 									</div>
 								</div>
 								<div>
