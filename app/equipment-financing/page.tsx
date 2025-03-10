@@ -909,8 +909,6 @@ export default function EquipmentFinancing() {
 							</h4>
 							<ul className="text-gray-600 dark:text-gray-600 space-y-2">
 								<li>• Form 9</li>
-								<li>• Form 13 (If applicable)</li>
-								<li>• Form 24</li>
 								<li>• Business Registration (SSM)</li>
 							</ul>
 						</div>
@@ -935,7 +933,7 @@ export default function EquipmentFinancing() {
 								Bank Statements
 							</h4>
 							<p className="text-gray-600 dark:text-gray-600">
-								Latest 6 months bank statements
+								Latest 3 months bank statements
 							</p>
 						</div>
 
