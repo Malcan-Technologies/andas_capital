@@ -31,12 +31,13 @@ type ProductCategory = {
 type ProductsType = {
 	business: ProductCategory;
 	personal: ProductCategory;
+	credit: ProductCategory;
 };
 
 export default function Products() {
-	const [activeProduct, setActiveProduct] = useState<"business" | "personal">(
-		"business"
-	);
+	const [activeProduct, setActiveProduct] = useState<
+		"business" | "personal" | "credit"
+	>("business");
 
 	const products: ProductsType = {
 		business: {
@@ -161,6 +162,27 @@ export default function Products() {
 				},
 			],
 		},
+		credit: {
+			title: "Credit Solutions",
+			description:
+				"Build and improve your credit score with our specialized products",
+			types: [
+				{
+					id: "credit-score",
+					title: "Credit Score+",
+					description:
+						"Build your credit score through consistent micro-payments with CTOS reporting",
+					features: [
+						"Monthly CTOS reporting",
+						"Get your savings back",
+						"Flexible payment plans",
+						"30% CTOS report discount",
+					],
+					maxAmount: "Improve your credit score",
+					icon: <MdShowChart size={24} />,
+				},
+			],
+		},
 	};
 
 	return (
@@ -183,13 +205,17 @@ export default function Products() {
 						<button
 							key={key}
 							onClick={() =>
-								setActiveProduct(key as "business" | "personal")
+								setActiveProduct(
+									key as "business" | "personal" | "credit"
+								)
 							}
 							className={`px-8 py-3 rounded-full font-semibold transition-all ${
 								activeProduct === key
 									? key === "business"
 										? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
-										: "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
+										: key === "personal"
+										? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
+										: "bg-gradient-to-r from-[#F7E16F] to-[#F5D742] text-[#0A0612] shadow-lg"
 									: "bg-white text-gray-600 hover:bg-gray-50"
 							}`}
 						>
@@ -205,13 +231,16 @@ export default function Products() {
 							className={`rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all flex flex-col h-full backdrop-blur-lg ${
 								product.id !== "employee" &&
 								product.id !== "equipment" &&
-								product.id !== "sme"
+								product.id !== "sme" &&
+								product.id !== "credit-score"
 									? "opacity-60"
 									: ""
 							} ${
 								activeProduct === "business"
 									? "bg-gradient-to-br from-blue-500/10 via-indigo-500/10 to-blue-500/10 hover:from-blue-500/20 hover:via-indigo-500/20 hover:to-blue-500/20 border border-blue-200/20"
-									: "bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-emerald-500/10 hover:from-emerald-500/20 hover:via-teal-500/20 hover:to-emerald-500/20 border border-emerald-200/20"
+									: activeProduct === "personal"
+									? "bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-emerald-500/10 hover:from-emerald-500/20 hover:via-teal-500/20 hover:to-emerald-500/20 border border-emerald-200/20"
+									: "bg-gradient-to-br from-[#F7E16F]/10 via-[#F5D742]/10 to-[#F7E16F]/10 hover:from-[#F7E16F]/20 hover:via-[#F5D742]/20 hover:to-[#F7E16F]/20 border border-[#F7E16F]/20"
 							}`}
 						>
 							<div className="flex-1">
@@ -220,7 +249,9 @@ export default function Products() {
 										className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-lg ${
 											activeProduct === "business"
 												? "bg-blue-100/90 text-blue-600"
-												: "bg-emerald-100/90 text-emerald-600"
+												: activeProduct === "personal"
+												? "bg-emerald-100/90 text-emerald-600"
+												: "bg-[#F7E16F]/90 text-[#F5D742]"
 										}`}
 									>
 										{product.icon}
@@ -233,7 +264,10 @@ export default function Products() {
 											className={`text-sm px-2 py-1 rounded-full backdrop-blur-lg ${
 												activeProduct === "business"
 													? "bg-blue-100/90 text-blue-700"
-													: "bg-emerald-100/90 text-emerald-700"
+													: activeProduct ===
+													  "personal"
+													? "bg-emerald-100/90 text-emerald-700"
+													: "bg-[#F7E16F] text-[#0A0612]"
 											}`}
 										>
 											{product.maxAmount}
@@ -255,7 +289,10 @@ export default function Products() {
 												className={`w-5 h-5 ${
 													activeProduct === "business"
 														? "text-blue-600"
-														: "text-emerald-600"
+														: activeProduct ===
+														  "personal"
+														? "text-emerald-600"
+														: "text-[#F5D742]"
 												}`}
 												fill="none"
 												stroke="currentColor"
@@ -277,14 +314,18 @@ export default function Products() {
 							<div className="mt-8">
 								{product.id === "employee" ||
 								product.id === "equipment" ||
-								product.id === "sme" ? (
+								product.id === "sme" ||
+								product.id === "credit-score" ? (
 									<div className="flex gap-4">
 										<a
 											href="/apply"
-											className={`flex-1 text-center text-white px-6 py-3 rounded-full font-semibold transition-all shadow-lg ${
+											className={`flex-1 text-center px-6 py-3 rounded-full font-semibold transition-all shadow-lg ${
 												activeProduct === "business"
-													? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-													: "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+													? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+													: activeProduct ===
+													  "personal"
+													? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
+													: "bg-gradient-to-r from-[#F7E16F] to-[#F5D742] hover:from-[#F7E16F]/80 hover:to-[#F5D742]/80 text-[#0A0612]"
 											}`}
 										>
 											Apply Now
@@ -295,12 +336,17 @@ export default function Products() {
 													? "/pay-advance"
 													: product.id === "equipment"
 													? "/equipment-financing"
-													: "/sme-term-loan"
+													: product.id === "sme"
+													? "/sme-term-loan"
+													: "/credit-score+"
 											}
 											className={`flex-1 text-center px-6 py-3 rounded-full font-semibold transition-all border-2 ${
 												activeProduct === "business"
 													? "border-blue-600 text-blue-700 hover:bg-blue-50"
-													: "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+													: activeProduct ===
+													  "personal"
+													? "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+													: "border-[#F7E16F] text-[#0A0612] hover:bg-[#F7E16F]/20"
 											}`}
 										>
 											Learn More
