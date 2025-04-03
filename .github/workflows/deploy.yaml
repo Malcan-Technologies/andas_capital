@@ -18,11 +18,14 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
 
       - name: Install dependencies
+        working-directory: ./frontend
         run: npm ci
 
       - name: Build application
+        working-directory: ./frontend
         run: npm run build
 
       - name: Setup SSH
@@ -35,7 +38,12 @@ jobs:
       - name: Sync changed files
         run: |
           # Create archive of files to sync
-          tar -czf deploy.tar.gz .next/ public/ package.json package-lock.json nginx.conf
+          cd frontend
+          tar -czf ../deploy.tar.gz .next/ public/ package.json package-lock.json
+          cd ..
+          # Add config and scripts to the archive
+          tar -rf deploy.tar.gz config/nginx.conf scripts/deploy.sh
+          gzip -f deploy.tar
           
           # Copy archive to server
           scp -i ~/.ssh/deploy_key deploy.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/
@@ -116,9 +124,9 @@ jobs:
             fi
             
             # Quick Nginx config check and reload if needed
-            if ! cmp -s nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
+            if ! cmp -s config/nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
               echo "Updating Nginx configuration..."
-              sudo cp nginx.conf /etc/nginx/sites-available/growkapital
+              sudo cp config/nginx.conf /etc/nginx/sites-available/growkapital
               sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
               if sudo nginx -t; then
                 sudo systemctl reload nginx
