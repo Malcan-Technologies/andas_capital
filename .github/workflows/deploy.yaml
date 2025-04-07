@@ -685,74 +685,38 @@ jobs:
             chmod -R 755 admin/node_modules/.bin/
             find admin/node_modules/.bin/ -type f -exec chmod +x {} \;
             
-            # Start the frontend application properly
-            echo "Starting the frontend application..."
+            # Fix frontend
+            echo "Attempting to fix frontend..."
+            pm2 delete growkapital-frontend || true
             cd /var/www/growkapital/frontend
-            pm2 delete growkapital-frontend 2>/dev/null || true
-            pm2 delete backend 2>/dev/null || true
-            pm2 delete growkapital 2>/dev/null || true
 
-            # Improved node_modules check and installation for frontend
-            echo "Checking frontend node_modules status..."
-            if [ ! -d "node_modules" ]; then
-              echo "⚠️ Frontend node_modules directory is missing!"
-              echo "Installing frontend dependencies with verbose output..."
-              
-              # First ensure package.json exists
-              if [ ! -f "package.json" ]; then
-                echo "❌ ERROR: package.json not found in frontend directory!"
-                ls -la
-              else
-                echo "✓ package.json found in frontend directory"
-                cat package.json | grep "dependencies" -A 5
-                echo "Installing dependencies..."
-                
-                # Clean any corrupted node_modules or cache
-                rm -rf node_modules package-lock.json .next/cache
-                
-                # Install with more debug info and fallbacks
-                npm install --production --verbose --legacy-peer-deps || {
-                  echo "❌ npm install failed with error code $?"
-                  echo "Trying alternative installation method..."
-                  npm install --no-optional --production --legacy-peer-deps || {
-                    echo "❌ Alternative installation also failed!"
-                    echo "Creating minimal node_modules to continue..."
-                    mkdir -p node_modules/.bin
-                    npm install next react react-dom --no-save
-                  }
-                }
-                
-                # Verify installation
-                if [ -d "node_modules" ]; then
-                  echo "✓ node_modules directory now exists"
-                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
-                else
-                  echo "❌ node_modules still missing after installation attempt!"
-                fi
-              fi
-            else
-              echo "✓ Frontend node_modules directory exists"
-              ls -la node_modules/.bin/ | grep next || {
-                echo "⚠️ next binary missing, reinstalling Next.js..."
-                npm install next --save
-              }
+            # Check if frontend has proper Next.js configuration
+            if [ ! -f "next.config.js" ]; then
+              echo "Creating frontend next.config.js..."
+              cat > next.config.js << 'EOF'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
+  output: 'standalone',
+  experimental: {
+    serverActions: true,
+  },
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  },
+}
+
+module.exports = nextConfig
+EOF
             fi
 
-            # Create start script with explicit port binding
-            cat > start.sh << 'EOF'
-            #!/bin/bash
-            cd "$(dirname "$0")"
+            # Start frontend with proper environment variables
+            echo "Starting frontend with proper environment variables..."
             export PORT=3002
             export NODE_ENV=production
             export HOSTNAME=0.0.0.0
-            ./node_modules/.bin/next start -p 3002 --hostname 0.0.0.0
-            EOF
-            chmod +x start.sh
-
-            # Start frontend
-            echo "Starting frontend with explicit port 3002..."
-            export NODE_OPTIONS="--max-old-space-size=256"
-            pm2 start ./start.sh --name "growkapital-frontend"
+            pm2 start npm --name "growkapital-frontend" -- start
 
             # Verify port binding for frontend
             sleep 5
@@ -1032,7 +996,45 @@ jobs:
             echo "Attempting to fix frontend..."
             pm2 delete growkapital-frontend || true
             cd /var/www/growkapital/frontend
+
+            # Check if frontend has proper Next.js configuration
+            if [ ! -f "next.config.js" ]; then
+              echo "Creating frontend next.config.js..."
+              cat > next.config.js << 'EOF'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
+  output: 'standalone',
+  experimental: {
+    serverActions: true,
+  },
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  },
+}
+
+module.exports = nextConfig
+EOF
+            fi
+
+            # Start frontend with proper environment variables
+            echo "Starting frontend with proper environment variables..."
+            export PORT=3002
+            export NODE_ENV=production
+            export HOSTNAME=0.0.0.0
             pm2 start npm --name "growkapital-frontend" -- start
+
+            # Verify port binding for frontend
+            sleep 5
+            if ss -tuln | grep -q ":3002 "; then
+              echo "✅ Frontend successfully bound to port 3002"
+            else
+              echo "⚠️ Frontend not bound to port 3002, trying alternative method..."
+              pm2 delete growkapital-frontend
+              cd /var/www/growkapital/frontend
+              pm2 start --name "growkapital-frontend" -- npx next start -p 3002 --hostname 0.0.0.0
+            fi
 
             # Fix admin
             echo "Attempting to fix admin..."
@@ -1066,6 +1068,17 @@ EOF
             export NODE_ENV=production
             export HOSTNAME=0.0.0.0
             pm2 start npm --name "growkapital-admin" -- start
+
+            # Verify port binding for admin
+            sleep 5
+            if ss -tuln | grep -q ":3003 "; then
+              echo "✅ Admin successfully bound to port 3003"
+            else
+              echo "⚠️ Admin not bound to port 3003, trying alternative method..."
+              pm2 delete growkapital-admin
+              cd /var/www/growkapital/admin
+              pm2 start --name "growkapital-admin" -- npx next start -p 3003 --hostname 0.0.0.0
+            fi
 
             # Fix backend
             echo "Attempting to fix backend..."
