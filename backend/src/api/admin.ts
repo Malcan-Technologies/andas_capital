@@ -11,6 +11,13 @@ interface AuthRequest extends Request {
 	};
 }
 
+/**
+ * @swagger
+ * tags:
+ *   name: Admin
+ *   description: API endpoints for Admin dashboard
+ */
+
 const router = express.Router();
 const prisma = new PrismaClient();
 

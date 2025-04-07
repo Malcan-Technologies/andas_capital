@@ -14,6 +14,13 @@ const router = Router();
 
 /**
  * @swagger
+ * tags:
+ *   name: Users
+ *   description: API endpoints for managing logged-in user's data
+ */
+
+/**
+ * @swagger
  * /api/users/me:
  *   get:
  *     summary: Get current user information

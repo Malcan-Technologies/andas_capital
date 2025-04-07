@@ -13,6 +13,13 @@ const router = Router();
 
 /**
  * @swagger
+ * tags:
+ *   name: Auth
+ *   description: API endpoints for managing user authentication
+ */
+
+/**
+ * @swagger
  * /api/auth/login:
  *   post:
  *     summary: Login with phone number and password
