@@ -754,8 +754,10 @@ jobs:
               # Create next binary if it doesn't exist
               if [ ! -f "node_modules/.bin/next" ]; then
                 echo "Creating next binary wrapper..."
-                echo '#!/bin/sh
-/usr/bin/env node "/var/www/growkapital/frontend/node_modules/next/dist/bin/next" "$@"' > node_modules/.bin/next
+                cat << 'NEXTBINSCRIPT' > node_modules/.bin/next
+#!/bin/sh
+/usr/bin/env node "/var/www/growkapital/frontend/node_modules/next/dist/bin/next" "$@"
+NEXTBINSCRIPT
                 chmod +x node_modules/.bin/next
               else
                 chmod +x node_modules/.bin/next
@@ -874,8 +876,10 @@ jobs:
               # Create next binary if it doesn't exist
               if [ ! -f "node_modules/.bin/next" ]; then
                 echo "Creating next binary wrapper..."
-                echo '#!/bin/sh
-/usr/bin/env node "/var/www/growkapital/admin/node_modules/next/dist/bin/next" "$@"' > node_modules/.bin/next
+                cat << 'NEXTBINSCRIPT' > node_modules/.bin/next
+#!/bin/sh
+/usr/bin/env node "/var/www/growkapital/admin/node_modules/next/dist/bin/next" "$@"
+NEXTBINSCRIPT
                 chmod +x node_modules/.bin/next
               else
                 chmod +x node_modules/.bin/next
