@@ -19,34 +19,69 @@ jobs:
           echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/deploy_key
 
       - name: Copy files to server
         run: |
           # Create destination directories on server via SSH
           echo "Creating destination directories on server..."
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             mkdir -p /var/www/growkapital/frontend
             mkdir -p /var/www/growkapital/admin
             mkdir -p /var/www/growkapital/backend
             mkdir -p /var/www/growkapital/config
             mkdir -p /var/www/growkapital/scripts
+            chmod -R 755 /var/www/growkapital
           '
           
-          # Direct rsync for each component
+          # Direct rsync for each component with explicit SSH options
           echo "Deploying frontend files via rsync..."
-          rsync -avz --exclude="node_modules" --exclude=".next/cache" --checksum --compress --stats --info=progress2 frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
+            --exclude="node_modules" \
+            --exclude=".next/cache" \
+            --checksum \
+            --compress \
+            --stats \
+            --info=progress2 \
+            frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
           echo "Deploying admin files via rsync..."
-          rsync -avz --exclude="node_modules" --exclude=".next/cache" --checksum --compress --stats --info=progress2 admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
+            --exclude="node_modules" \
+            --exclude=".next/cache" \
+            --checksum \
+            --compress \
+            --stats \
+            --info=progress2 \
+            admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
           echo "Deploying backend files via rsync..."
-          rsync -avz --exclude="node_modules" --checksum --compress --stats --info=progress2 backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
+            --exclude="node_modules" \
+            --checksum \
+            --compress \
+            --stats \
+            --info=progress2 \
+            backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
           
           echo "Deploying config files via rsync..."
-          rsync -avz --delete --checksum --compress --stats --info=progress2 config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
+            --delete \
+            --checksum \
+            --compress \
+            --stats \
+            --info=progress2 \
+            config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
           
           echo "Deploying scripts files via rsync..."
-          rsync -avz --delete --checksum --compress --stats --info=progress2 scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
+            --delete \
+            --checksum \
+            --compress \
+            --stats \
+            --info=progress2 \
+            scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
 
       # Build Frontend
       - name: Install frontend dependencies
