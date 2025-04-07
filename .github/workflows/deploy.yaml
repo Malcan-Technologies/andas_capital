@@ -26,12 +26,14 @@ jobs:
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: |
-          npm ci --legacy-peer-deps
+          npm install --legacy-peer-deps
           npm install --save framer-motion recharts --legacy-peer-deps
 
       - name: Build frontend application
         working-directory: ./frontend
         run: |
+          echo "Package.json date-fns version:"
+          cat package.json | grep date-fns
           export NODE_OPTIONS="--max-old-space-size=4096"
           export NEXT_TELEMETRY_DISABLED=1
           export NEXT_PUBLIC_API_URL=https://api.yourdomain.com
@@ -43,7 +45,7 @@ jobs:
       # Build Admin
       - name: Install admin dependencies
         working-directory: ./admin
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps
 
       - name: Build admin application
         working-directory: ./admin
@@ -71,17 +73,39 @@ jobs:
           mkdir -p temp_deploy/config
           mkdir -p temp_deploy/scripts
           
-          # Copy frontend files
-          cp -r frontend/.next temp_deploy/frontend/
-          cp -r frontend/public temp_deploy/frontend/
-          cp frontend/package.json temp_deploy/frontend/
-          cp frontend/package-lock.json temp_deploy/frontend/
+          # Check if builds succeeded
+          echo "Checking if frontend build created .next directory..."
+          if [ -d "frontend/.next" ]; then
+            echo "Frontend build succeeded"
+            # Copy frontend files
+            cp -r frontend/.next temp_deploy/frontend/
+            cp -r frontend/public temp_deploy/frontend/
+            cp frontend/package.json temp_deploy/frontend/
+            cp frontend/package-lock.json temp_deploy/frontend/
+          else
+            echo "WARNING: Frontend build may have failed - .next directory not found"
+            mkdir -p temp_deploy/frontend/.next
+            cp -r frontend/public temp_deploy/frontend/
+            cp frontend/package.json temp_deploy/frontend/
+            cp frontend/package-lock.json temp_deploy/frontend/
+          fi
           
-          # Copy admin files
-          cp -r admin/.next temp_deploy/admin/
-          cp -r admin/public temp_deploy/admin/
-          cp admin/package.json temp_deploy/admin/
-          cp admin/package-lock.json temp_deploy/admin/
+          # Check if admin build succeeded
+          echo "Checking if admin build created .next directory..."
+          if [ -d "admin/.next" ]; then
+            echo "Admin build succeeded"
+            # Copy admin files
+            cp -r admin/.next temp_deploy/admin/
+            cp -r admin/public temp_deploy/admin/
+            cp admin/package.json temp_deploy/admin/
+            cp admin/package-lock.json temp_deploy/admin/
+          else
+            echo "WARNING: Admin build may have failed - .next directory not found"
+            mkdir -p temp_deploy/admin/.next
+            cp -r admin/public temp_deploy/admin/
+            cp admin/package.json temp_deploy/admin/
+            cp admin/package-lock.json temp_deploy/admin/
+          fi
           
           # Copy backend files
           cp -r backend/src temp_deploy/backend/
