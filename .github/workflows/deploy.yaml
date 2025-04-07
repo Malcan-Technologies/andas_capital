@@ -13,14 +13,40 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: |
-            frontend/package-lock.json
-            admin/package-lock.json
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy files to server
+        run: |
+          # Create destination directories on server via SSH
+          echo "Creating destination directories on server..."
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            mkdir -p /var/www/growkapital/frontend
+            mkdir -p /var/www/growkapital/admin
+            mkdir -p /var/www/growkapital/backend
+            mkdir -p /var/www/growkapital/config
+            mkdir -p /var/www/growkapital/scripts
+          '
+          
+          # Direct rsync for each component
+          echo "Deploying frontend files via rsync..."
+          rsync -avz --exclude="node_modules" --exclude=".next/cache" --checksum --compress --stats --info=progress2 frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
+          
+          echo "Deploying admin files via rsync..."
+          rsync -avz --exclude="node_modules" --exclude=".next/cache" --checksum --compress --stats --info=progress2 admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
+          
+          echo "Deploying backend files via rsync..."
+          rsync -avz --exclude="node_modules" --checksum --compress --stats --info=progress2 backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          
+          echo "Deploying config files via rsync..."
+          rsync -avz --delete --checksum --compress --stats --info=progress2 config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+          
+          echo "Deploying scripts files via rsync..."
+          rsync -avz --delete --checksum --compress --stats --info=progress2 scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
 
       # Build Frontend
       - name: Install frontend dependencies
@@ -152,6 +178,9 @@ jobs:
           # Install dependencies with legacy peer deps
           if [ ! -d "node_modules" ]; then
             echo "Performing fresh install..."
+            # First install date-fns at a compatible version
+            npm install date-fns@3.2.0 --save-exact
+            # Then install the rest with legacy peer deps
             npm install --legacy-peer-deps
           else
             echo "Updating existing dependencies..."
@@ -189,139 +218,30 @@ jobs:
           }
           rm .env.build  # Clean up temporary file
 
-      - name: Setup SSH
+      - name: Copy built files to server
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          # Copy built files to server
+          echo "Copying built frontend files..."
+          rsync -avz --exclude="node_modules" --exclude=".next/cache" frontend/.next/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/.next/
+          
+          echo "Copying built admin files..."
+          rsync -avz --exclude="node_modules" --exclude=".next/cache" admin/.next/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/.next/
+          
+          # Install node_modules on server
+          echo "Installing node_modules on server..."
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd /var/www/growkapital/frontend
+            npm install --legacy-peer-deps
+            
+            cd /var/www/growkapital/admin
+            npm install --legacy-peer-deps
+            
+            cd /var/www/growkapital/backend
+            npm install --legacy-peer-deps
+          '
 
-      - name: Prepare deployment files
+      - name: Handle environment files
         run: |
-          # Add descriptive name to package.json for easier identification
-          cd frontend
-          sed -i 's/"name": "frontend"/"name": "growkapital-frontend"/g' package.json
-          cd ..
-          
-          cd admin
-          sed -i 's/"name": "admin"/"name": "growkapital-admin"/g' package.json
-          cd ..
-          
-          # Create a temporary directory for organizing files
-          mkdir -p temp_deploy/frontend
-          mkdir -p temp_deploy/admin
-          mkdir -p temp_deploy/backend
-          mkdir -p temp_deploy/config
-          mkdir -p temp_deploy/scripts
-          
-          # Check if builds succeeded
-          echo "Checking if frontend build created .next directory..."
-          if [ -d "frontend/.next" ]; then
-            echo "Frontend build succeeded"
-          # Copy frontend files
-          cp -r frontend/.next temp_deploy/frontend/
-          cp -r frontend/public temp_deploy/frontend/
-          cp frontend/package.json temp_deploy/frontend/
-          cp frontend/package-lock.json temp_deploy/frontend/
-          else
-            echo "WARNING: Frontend build may have failed - .next directory not found"
-            mkdir -p temp_deploy/frontend/.next
-            cp -r frontend/public temp_deploy/frontend/
-            cp frontend/package.json temp_deploy/frontend/
-            cp frontend/package-lock.json temp_deploy/frontend/
-          fi
-          
-          # Check if admin build succeeded
-          echo "Checking if admin build created .next directory..."
-          if [ -d "admin/.next" ]; then
-            echo "Admin build succeeded"
-            # Copy admin files
-            cp -r admin/.next temp_deploy/admin/
-            cp -r admin/public temp_deploy/admin/
-            cp admin/package.json temp_deploy/admin/
-            cp admin/package-lock.json temp_deploy/admin/
-          else
-            echo "WARNING: Admin build may have failed - .next directory not found"
-            mkdir -p temp_deploy/admin/.next
-            cp -r admin/public temp_deploy/admin/
-            cp admin/package.json temp_deploy/admin/
-            cp admin/package-lock.json temp_deploy/admin/
-          fi
-          
-          # Copy backend files
-          cp -r backend/src temp_deploy/backend/
-          cp -r backend/prisma temp_deploy/backend/
-          cp backend/package.json temp_deploy/backend/
-          cp backend/package-lock.json temp_deploy/backend/
-          cp backend/tsconfig.json temp_deploy/backend/
-          cp -r backend/docker-compose.prod.yml temp_deploy/backend/
-          cp -r backend/Dockerfile.prod temp_deploy/backend/
-          
-          # Copy config and scripts
-          cp config/nginx.conf temp_deploy/config/
-          cp scripts/deploy.sh temp_deploy/scripts/
-          
-          # Create archive from the organized directory
-          cd temp_deploy
-          
-          # Direct rsync deployment instead of creating archives
-          echo "Using direct rsync deployment to avoid disk space issues"
-          
-          # Setup SSH for rsync
-          mkdir -p ~/.ssh
-          eval $(ssh-agent)
-          ssh-add ~/.ssh/deploy_key
-          
-          # Create destination directories on server via SSH
-          echo "Creating destination directories on server..."
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            mkdir -p /var/www/growkapital/frontend
-            mkdir -p /var/www/growkapital/admin
-            mkdir -p /var/www/growkapital/backend
-            mkdir -p /var/www/growkapital/config
-            mkdir -p /var/www/growkapital/scripts
-          '
-          
-          # Direct rsync for each component
-          echo "Deploying frontend files via rsync..."
-          rsync -avz --exclude="node_modules" --exclude=".next/cache" --checksum --compress --stats --info=progress2 frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
-          
-          # Ensure node_modules exists for frontend
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            if [ ! -d "/var/www/growkapital/frontend/node_modules" ]; then
-              echo "Frontend node_modules missing after rsync, will be installed during deployment"
-            else
-              echo "✓ Frontend node_modules directory preserved by rsync"
-            fi
-          '
-          
-          echo "Deploying admin files via rsync..."
-          rsync -avz --exclude="node_modules" --exclude=".next/cache" --checksum --compress --stats --info=progress2 admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
-          
-          # Ensure node_modules exists for admin
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            if [ ! -d "/var/www/growkapital/admin/node_modules" ]; then
-              echo "Admin node_modules missing after rsync, will be installed during deployment"
-            else
-              echo "✓ Admin node_modules directory preserved by rsync"
-            fi
-          '
-          
-          echo "Deploying backend files via rsync..."
-          rsync -avz --exclude="node_modules" --checksum --compress --stats --info=progress2 backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
-          
-          echo "Deploying config files via rsync..."
-          rsync -avz --delete --checksum --compress --stats --info=progress2 config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
-          
-          echo "Deploying scripts files via rsync..."
-          rsync -avz --delete --checksum --compress --stats --info=progress2 scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
-          
-          # Make scripts executable
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            chmod +x /var/www/growkapital/scripts/*.sh
-            touch /tmp/files-changed
-          '
-          
           # Handle environment files
           echo "Setting up environment files..."
           
@@ -339,64 +259,6 @@ jobs:
           echo "${{ secrets.BACKEND_ENV }}" > backend.env
           scp -i ~/.ssh/deploy_key backend.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/.env
           rm backend.env
-          
-          # Run post-deployment tasks in smaller chunks to avoid SSH timeouts
-          echo "Setting permissions..."
-          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            # Set ownership at directory level instead of recursively processing all files
-            chown -R $USER:$USER /var/www/growkapital
-            
-            # Use targeted permission settings instead of recursive find
-            chmod 755 /var/www/growkapital
-            chmod 755 /var/www/growkapital/frontend /var/www/growkapital/admin /var/www/growkapital/backend /var/www/growkapital/config /var/www/growkapital/scripts
-            
-            # Only ensure scripts are executable
-            chmod +x /var/www/growkapital/scripts/*.sh
-          '
-          
-          echo "Checking frontend build..."
-          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            if [ ! -d "/var/www/growkapital/frontend/.next" ]; then
-              echo "⚠️ Frontend .next directory not found. Rebuilding..."
-              cd /var/www/growkapital/frontend
-              npm install --production --no-progress
-              npm run build || echo "Frontend build failed, but continuing deployment"
-            else
-              echo "✓ Frontend .next directory exists"
-            fi
-          '
-          
-          echo "Checking admin build..."
-          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            if [ ! -d "/var/www/growkapital/admin/.next" ]; then
-              echo "⚠️ Admin .next directory not found. Rebuilding..."
-              cd /var/www/growkapital/admin
-              npm install --production --no-progress
-              npm run build || echo "Admin build failed, but continuing deployment"
-            else
-              echo "✓ Admin .next directory exists"
-            fi
-          '
-          
-          echo "Restarting services..."
-          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            if systemctl is-active --quiet nginx; then
-              systemctl reload nginx
-              echo "✓ Nginx reloaded"
-            else
-              systemctl start nginx
-              echo "✓ Nginx started"
-            fi
-            
-            # The backend runs in Docker, no PM2 needed
-            echo "✓ Backend already managed by Docker in the backend deployment step"
-            
-            touch /tmp/files-changed
-          '
-          
-          cd ..
-          # Clean up temporary directory
-          rm -rf temp_deploy
 
       - name: Deploy
         uses: appleboy/ssh-action@v1.0.3
