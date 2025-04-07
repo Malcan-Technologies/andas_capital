@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
 	Box,
 	Button,
@@ -32,7 +32,8 @@ interface PersonalInfoVerificationFormProps {
 	onBack: () => void;
 }
 
-export default function PersonalInfoVerificationForm({
+// Create a client component for handling searchParams
+function PersonalInfoVerificationFormContent({
 	onSubmit,
 	onBack,
 }: PersonalInfoVerificationFormProps) {
@@ -411,5 +412,15 @@ export default function PersonalInfoVerificationForm({
 				</Button>
 			</Box>
 		</Box>
+	);
+}
+
+export default function PersonalInfoVerificationForm(
+	props: PersonalInfoVerificationFormProps
+) {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<PersonalInfoVerificationFormContent {...props} />
+		</Suspense>
 	);
 }

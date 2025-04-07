@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
 	Box,
 	Button,
@@ -46,7 +46,8 @@ interface ApplicationDetailsFormProps {
 	selectedProduct: Product;
 }
 
-export default function ApplicationDetailsForm({
+// Create a client component for handling searchParams
+function ApplicationDetailsFormContent({
 	onSubmit,
 	onBack,
 	selectedProduct,
@@ -352,5 +353,15 @@ export default function ApplicationDetailsForm({
 				</Button>
 			</Box>
 		</Box>
+	);
+}
+
+export default function ApplicationDetailsForm(
+	props: ApplicationDetailsFormProps
+) {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<ApplicationDetailsFormContent {...props} />
+		</Suspense>
 	);
 }

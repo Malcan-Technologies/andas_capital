@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Logo from "../../components/Logo";
 import Cookies from "js-cookie";
@@ -15,7 +15,8 @@ interface CountryData {
 	name: string;
 }
 
-export default function LoginPage() {
+// Create a client component for handling searchParams
+function LoginPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [error, setError] = useState<string | null>(null);
@@ -254,5 +255,13 @@ export default function LoginPage() {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+export default function LoginPage() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<LoginPageContent />
+		</Suspense>
 	);
 }

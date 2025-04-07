@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
 	Stepper,
@@ -92,7 +92,8 @@ interface Document {
 // Local interface for backward compatibility
 interface Product extends ProductType {}
 
-export default function ApplyPage() {
+// Create a client component for handling searchParams
+function ApplyPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [activeStep, setActiveStep] = useState(0);
@@ -940,5 +941,13 @@ export default function ApplyPage() {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+export default function ApplyPage() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<ApplyPageContent />
+		</Suspense>
 	);
 }

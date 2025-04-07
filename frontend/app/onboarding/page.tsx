@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
 	Stepper,
@@ -24,7 +24,8 @@ const steps = [
 	"Bank Account (optional)",
 ];
 
-export default function OnboardingPage() {
+// Create a client component for handling searchParams
+function OnboardingPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [activeStep, setActiveStep] = useState(0);
@@ -298,5 +299,13 @@ export default function OnboardingPage() {
 				</Paper>
 			</div>
 		</div>
+	);
+}
+
+export default function OnboardingPage() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<OnboardingPageContent />
+		</Suspense>
 	);
 }

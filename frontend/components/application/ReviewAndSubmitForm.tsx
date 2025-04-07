@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
 	Box,
 	Button,
@@ -41,7 +41,8 @@ interface ProductDetails {
 	code: string;
 }
 
-export default function ReviewAndSubmitForm({
+// Create a client component for handling searchParams
+function ReviewAndSubmitFormContent({
 	onSubmit,
 	onBack,
 	userData,
@@ -1014,5 +1015,13 @@ export default function ReviewAndSubmitForm({
 				</Button>
 			</Box>
 		</Box>
+	);
+}
+
+export default function ReviewAndSubmitForm(props: ReviewAndSubmitFormProps) {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<ReviewAndSubmitFormContent {...props} />
+		</Suspense>
 	);
 }
