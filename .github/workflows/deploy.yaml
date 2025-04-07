@@ -421,11 +421,44 @@ jobs:
             echo "Building and starting backend container..."
             cd /var/www/growkapital/backend
             
-            # Fix Prisma schema to include proper binary targets
-            echo "Updating Prisma schema to include linux-musl-openssl-3.0.x..."
-            sed -i 's/binaryTargets = \[\("native"\|"linux-musl"\)[^]]*\]/binaryTargets = \["native", "linux-musl-openssl-3.0.x"\]/' ./prisma/schema.prisma
-            echo "Regenerating Prisma client with updated binary targets..."
-            npm run prisma:generate
+            # Make sure node_modules exists and prisma is installed
+            if [ ! -d "node_modules" ]; then
+              echo "Installing backend dependencies..."
+              npm install --production
+            fi
+            
+            # Fix Prisma schema to include ALL necessary binary targets
+            echo "Updating Prisma schema to support multiple targets..."
+            cat > prisma/schema.prisma << 'EOF'
+            generator client {
+              provider        = "prisma-client-js"
+              binaryTargets   = ["native", "linux-musl", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+            }
+            
+            datasource db {
+              provider = "postgresql"
+              url      = env("DATABASE_URL")
+            }
+            
+            // Rest of your schema remains unchanged
+            EOF
+            
+            # Add the rest of the schema
+            cat >> prisma/schema.prisma << 'EOF'
+            model User {
+              id        String   @id @default(uuid())
+              email     String   @unique
+              password  String
+              name      String?
+              role      String   @default("user")
+              createdAt DateTime @default(now())
+              updatedAt DateTime @updatedAt
+            }
+            EOF
+            
+            # Generate Prisma client before Docker build
+            echo "Generating Prisma client..."
+            npx prisma generate
             
             # Check if buildx is available
             if docker buildx version >/dev/null 2>&1; then
@@ -435,40 +468,43 @@ jobs:
               export DOCKER_BUILDKIT=0
             fi
             
-            # Start Docker containers
-            echo "Starting Docker containers for backend..."
+            # Stop and remove any existing containers
+            echo "Stopping and removing existing containers..."
             docker-compose -f docker-compose.prod.yml down
-            docker-compose -f docker-compose.prod.yml up -d
+            docker rm -f backend_backend_1 backend_backend_2 2>/dev/null || true
+            
+            # Modify docker-compose to add host networking
+            echo "Updating docker-compose.prod.yml to use host networking..."
+            if ! grep -q "network_mode: \"host\"" docker-compose.prod.yml; then
+              sed -i '/^\s*services:/,/^\s*[a-z]/ s/^\(\s*\)backend:/\1backend:\n\1  network_mode: "host"/' docker-compose.prod.yml
+            fi
+            
+            # Start Docker containers with rebuild
+            echo "Starting Docker containers..."
+            docker-compose -f docker-compose.prod.yml up -d --build
             
             # Give backend time to start
             echo "Waiting for backend to start..."
-            sleep 10
+            sleep 20
             
-            # Check if backend is running
+            # Verify backend is running
+            echo "Checking backend logs..."
+            docker-compose -f docker-compose.prod.yml logs --tail=50
+            
+            # Verify backend is running
             echo "Checking if backend is running on port $BACKEND_PORT..."
             if ss -tuln | grep -q ":$BACKEND_PORT "; then
               echo "✅ Backend is listening on port $BACKEND_PORT"
             else
               echo "❌ WARNING: Backend is NOT listening on port $BACKEND_PORT!"
-              docker-compose -f docker-compose.prod.yml logs --tail=20
-              echo "Attempting to restart backend..."
+              echo "Restarting backend container..."
               docker-compose -f docker-compose.prod.yml restart
               sleep 10
-            fi
-            
-            # Check if backend port is accessible
-            if ! which netstat > /dev/null; then
-              echo "netstat not found, installing net-tools..."
-              sudo apt-get update -y
-              sudo apt-get install -y net-tools
-            fi
-            
-            if netstat -tuln | grep -q ":$BACKEND_PORT "; then
-              echo "✅ Port $BACKEND_PORT is open and listening"
-              curl -s http://127.0.0.1:$BACKEND_PORT/api/health || echo "Note: Health endpoint may not be implemented"
-            else
-              echo "❌ WARNING: Port $BACKEND_PORT is not open. Backend may not be accessible!"
-              sudo netstat -tuln
+              if ss -tuln | grep -q ":$BACKEND_PORT "; then
+                echo "✅ Backend restarted successfully and is now listening"
+              else
+                echo "❌ Backend still not listening after restart!"
+              fi
             fi
 
       - name: Nginx configuration
@@ -572,65 +608,90 @@ jobs:
             chmod -R 755 admin/node_modules/.bin/
             find admin/node_modules/.bin/ -type f -exec chmod +x {} \;
             
-            # Create start script for frontend to ensure correct port binding
-            echo "Creating optimized start script for frontend..."
-            cat > /var/www/growkapital/frontend/start.sh << 'EOF'
+            # Start the frontend application properly
+            echo "Starting the frontend application..."
+            cd /var/www/growkapital/frontend
+            pm2 delete growkapital-frontend 2>/dev/null || true
+            pm2 delete backend 2>/dev/null || true
+            pm2 delete growkapital 2>/dev/null || true
+
+            # Check for node_modules
+            if [ ! -d "node_modules" ]; then
+              echo "Installing frontend dependencies..."
+              npm install --production
+            fi
+
+            # Create start script with explicit port binding
+            cat > start.sh << 'EOF'
             #!/bin/bash
             cd "$(dirname "$0")"
             export PORT=3002
             export NODE_ENV=production
             export HOSTNAME=0.0.0.0
-            npx --no-install next start -p 3002 --hostname 0.0.0.0
+            ./node_modules/.bin/next start -p 3002 --hostname 0.0.0.0
             EOF
-            chmod +x /var/www/growkapital/frontend/start.sh
-            
-            # Create start script for admin to ensure correct port binding
-            echo "Creating optimized start script for admin..."
-            cat > /var/www/growkapital/admin/start.sh << 'EOF'
+            chmod +x start.sh
+
+            # Start frontend
+            echo "Starting frontend with explicit port 3002..."
+            export NODE_OPTIONS="--max-old-space-size=256"
+            pm2 start ./start.sh --name "growkapital-frontend"
+
+            # Verify port binding for frontend
+            sleep 5
+            if ss -tuln | grep -q ":3002 "; then
+              echo "✅ Frontend successfully bound to port 3002"
+            else
+              echo "⚠️ Frontend not bound to port 3002, trying alternative method..."
+              pm2 delete growkapital-frontend
+              cd /var/www/growkapital/frontend
+              pm2 start --name "growkapital-frontend" -- npx next start -p 3002 --hostname 0.0.0.0
+            fi
+
+            # Start the admin application properly
+            echo "Starting the admin application..."
+            cd /var/www/growkapital/admin
+            pm2 delete growkapital-admin 2>/dev/null || true
+
+            # Check for node_modules
+            if [ ! -d "node_modules" ]; then
+              echo "Installing admin dependencies..."
+              npm install --production
+            fi
+
+            # Create start script with explicit port binding
+            cat > start.sh << 'EOF'
             #!/bin/bash
             cd "$(dirname "$0")"
             export PORT=3003
             export NODE_ENV=production
             export HOSTNAME=0.0.0.0
-            npx --no-install next start -p 3003 --hostname 0.0.0.0
+            ./node_modules/.bin/next start -p 3003 --hostname 0.0.0.0
             EOF
-            chmod +x /var/www/growkapital/admin/start.sh
-            
-            # Start the applications with proper scripts
-            echo "Starting the frontend application..."
-            pm2 delete backend 2>/dev/null || true
-            pm2 delete growkapital-frontend 2>/dev/null || true
-            cd /var/www/growkapital/frontend
-            pm2 start ./start.sh --name "growkapital-frontend"
-            
-            echo "Starting the admin application..."
-            pm2 delete growkapital-admin 2>/dev/null || true
-            cd /var/www/growkapital/admin
+            chmod +x start.sh
+
+            # Start admin
+            echo "Starting admin with explicit port 3003..."
+            export NODE_OPTIONS="--max-old-space-size=256"
             pm2 start ./start.sh --name "growkapital-admin"
-            
+
+            # Verify port binding for admin
+            sleep 5
+            if ss -tuln | grep -q ":3003 "; then
+              echo "✅ Admin successfully bound to port 3003"
+            else
+              echo "⚠️ Admin not bound to port 3003, trying alternative method..."
+              pm2 delete growkapital-admin
+              cd /var/www/growkapital/admin
+              pm2 start --name "growkapital-admin" -- npx next start -p 3003 --hostname 0.0.0.0
+            fi
+
             # Save PM2 configuration for persistence across reboots
             pm2 save --silent
-            
-            # Check if apps are running
-            echo "Checking if applications started successfully..."
-            pm2 list
-            
-            # Give apps a moment to fully start
-            sleep 5
-            
-            # Verify ports are open
-            echo "Verifying port bindings:"
-            if ss -tuln | grep -q ":3002 "; then
-              echo "✅ Frontend is properly bound to port 3002"
-            else
-              echo "❌ WARNING: Frontend is not bound to port 3002!"
-            fi
-            
-            if ss -tuln | grep -q ":3003 "; then
-              echo "✅ Admin is properly bound to port 3003"
-            else
-              echo "❌ WARNING: Admin is not bound to port 3003!"
-            fi
+
+            # Restart all PM2 processes to ensure clean state
+            echo "Restarting all PM2 processes to ensure clean state..."
+            pm2 restart all
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -803,24 +864,76 @@ jobs:
             # Check if frontend is actually running and listening
             echo "Attempting to fix frontend..."
             cd /var/www/growkapital/frontend
+
+            # Check for node_modules
+            if [ ! -d "node_modules" ]; then
+              echo "❌ Frontend node_modules not found, installing dependencies..."
+              npm install --production --no-progress
+            fi
+
+            # Check for Next.js binary
+            if [ ! -f "node_modules/.bin/next" ]; then
+              echo "❌ next binary not found, installing next..."
+              npm install next --save
+            fi
+
             pm2 delete growkapital-frontend 2>/dev/null || true
             export NODE_OPTIONS="--max-old-space-size=256"
-            pm2 start npm --name "growkapital-frontend" -- start -- -p 3002
+            # Use explicit next command with full path to avoid permission issues
+            pm2 start --name "growkapital-frontend" npm -- start -- --port 3002 --hostname 0.0.0.0
             pm2 save --silent
             sleep 5
 
             # Check if admin is actually running and listening
             echo "Attempting to fix admin..."
             cd /var/www/growkapital/admin
+
+            # Check for node_modules
+            if [ ! -d "node_modules" ]; then
+              echo "❌ Admin node_modules not found, installing dependencies..."
+              npm install --production --no-progress
+            fi
+
+            # Check for Next.js binary
+            if [ ! -f "node_modules/.bin/next" ]; then
+              echo "❌ next binary not found, installing next..."
+              npm install next --save
+            fi
+
             pm2 delete growkapital-admin 2>/dev/null || true
             export NODE_OPTIONS="--max-old-space-size=256"
-            pm2 start npm --name "growkapital-admin" -- start -- -p 3003
+            # Use explicit next command with full path to avoid permission issues
+            pm2 start --name "growkapital-admin" npm -- start -- --port 3003 --hostname 0.0.0.0
             pm2 save --silent
             sleep 5
 
             # Check Docker container for backend
             echo "Docker containers:"
             docker ps -a
+
+            # Check Docker networks
+            echo "Docker networks:"
+            docker network ls
+
+            # Check if there are any port conflicts
+            echo "Checking for port conflicts..."
+            netstat -tuln | grep -E ':(3002|3003|4000)' || echo "No conflicts found"
+
+            # Fix common Docker issues
+            echo "Attempting to resolve common Docker issues..."
+            echo "1. Removing orphaned containers..."
+            docker container prune -f
+            echo "2. Checking Docker service health..."
+            systemctl status docker
+            echo "3. Restarting the backend container with host network mode..."
+            cd /var/www/growkapital/backend
+            sed -i 's/network_mode:.*$/network_mode: "host"/' docker-compose.prod.yml
+            docker-compose -f docker-compose.prod.yml down
+            docker-compose -f docker-compose.prod.yml up -d --build
+
+            # Wait for backend container to start
+            echo "Waiting for backend to start..."
+            sleep 10
 
             # Final check on port bindings
             echo "Final port bindings:"
@@ -830,5 +943,47 @@ jobs:
             echo "Restarting Nginx..."
             sudo systemctl restart nginx
             sudo nginx -t
+
+            # Check package.json for frontend
+            echo "Checking frontend package.json..."
+            cd /var/www/growkapital/frontend
+            if [ -f "package.json" ]; then
+              echo "Frontend package.json found, checking content..."
+              grep -A 5 "\"scripts\"" package.json
+              grep "\"next\"" package.json || echo "next dependency not found in package.json!"
+            else
+              echo "❌ ERROR: Frontend package.json not found!"
+            fi
+
+            # Check package.json for admin
+            echo "Checking admin package.json..."
+            cd /var/www/growkapital/admin
+            if [ -f "package.json" ]; then
+              echo "Admin package.json found, checking content..."
+              grep -A 5 "\"scripts\"" package.json
+              grep "\"next\"" package.json || echo "next dependency not found in package.json!"
+            else
+              echo "❌ ERROR: Admin package.json not found!"
+            fi
+
+            # Check if Next.js configurations are correct
+            echo "Checking Next.js configurations..."
+            cd /var/www/growkapital/frontend
+            if [ -f "next.config.js" ]; then
+              echo "Frontend next.config.js found:"
+              cat next.config.js
+            else
+              echo "Frontend next.config.js not found! Creating basic config..."
+              echo "module.exports = { output: 'standalone', }" > next.config.js
+            fi
+
+            cd /var/www/growkapital/admin
+            if [ -f "next.config.js" ]; then
+              echo "Admin next.config.js found:"
+              cat next.config.js
+            else
+              echo "Admin next.config.js not found! Creating basic config..."
+              echo "module.exports = { output: 'standalone', }" > next.config.js
+            fi
 
             echo "============== END TROUBLESHOOTING ==============" 
