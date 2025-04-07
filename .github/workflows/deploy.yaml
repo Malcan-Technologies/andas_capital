@@ -403,7 +403,7 @@ jobs:
             # Note: We're only checking existence, not displaying sensitive values
             if grep -q "PORT" .env && grep -q "DATABASE_URL" .env && grep -q "JWT_SECRET" .env; then
               echo "✓ Backend environment includes required variables"
-              BACKEND_PORT=$(grep "PORT" .env | cut -d '=' -f2 || echo "4000")
+              BACKEND_PORT=$(grep "PORT" .env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
               echo "Backend configured to use port: $BACKEND_PORT"
             else
               echo "⚠️ WARNING: Backend environment missing critical variables!"
@@ -446,7 +446,7 @@ jobs:
             
             if netstat -tuln | grep -q ":$BACKEND_PORT "; then
               echo "✅ Port $BACKEND_PORT is open and listening"
-              curl -s http://localhost:$BACKEND_PORT/api/health || echo "Note: Health endpoint may not be implemented"
+              curl -s http://127.0.0.1:$BACKEND_PORT/api/health || echo "Note: Health endpoint may not be implemented"
             else
               echo "❌ WARNING: Port $BACKEND_PORT is not open. Backend may not be accessible!"
               sudo netstat -tuln
@@ -493,10 +493,11 @@ jobs:
             fi
             
             # Get backend port for checking Nginx config
-            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 || echo "4000")
+            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
+            echo "Detected backend port: [$BACKEND_PORT]"
             
             # Check if nginx is using the correct ports
-            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://localhost:3002"; then
+            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://127.0.0.1:3002"; then
               echo "✓ Nginx config correctly uses port 3002 for frontend"
             else
               echo "✗ WARNING: Nginx config is not using port 3002 for frontend!"
@@ -504,7 +505,7 @@ jobs:
               echo "$NGINX_CONFIG" | grep -A1 "# Proxy settings for main application" | grep "proxy_pass"
             fi
             
-            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://localhost:3003"; then
+            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://127.0.0.1:3003"; then
               echo "✓ Nginx config correctly uses port 3003 for admin"
             else
               echo "✗ WARNING: Nginx config is not using port 3003 for admin!"
@@ -514,7 +515,7 @@ jobs:
             
             # Check if nginx is properly configured for backend API
             if [ ! -z "$BACKEND_PORT" ]; then
-              if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://localhost:$BACKEND_PORT"; then
+              if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://127.0.0.1:$BACKEND_PORT"; then
                 echo "✓ Nginx config correctly uses port $BACKEND_PORT for backend API"
               else
                 echo "⚠️ WARNING: Nginx configuration may not match backend port!"
@@ -614,7 +615,7 @@ jobs:
             fi
             
             # Check direct port access
-            DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3002/login || echo "Failed")
+            DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo "Failed")
             echo "Login page via direct port status: $DIRECT_STATUS"
             if [ "$DIRECT_STATUS" = "200" ]; then
               echo "✓ Login page is accessible via direct port"
@@ -729,7 +730,7 @@ jobs:
               echo "Deployment completed successfully"
             else
               echo "No changes detected, deployment completed"
-            fi
+            fi 
 
       - name: Troubleshoot 502 Bad Gateway
         uses: appleboy/ssh-action@v1.0.3
@@ -787,7 +788,7 @@ jobs:
             fi
             
             # Check backend port (from env file or default to 4000)
-            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 || echo "4000")
+            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
             echo "Port $BACKEND_PORT (backend) status:"
             if ss -tuln | grep -q ":$BACKEND_PORT "; then
               echo "✅ Backend is listening on port $BACKEND_PORT"
@@ -876,8 +877,8 @@ jobs:
             
             # Final connectivity test
             echo "Final connection tests:"
-            curl -I http://localhost:3002/ || echo "Cannot connect to frontend on port 3002"
-            curl -I http://localhost:3003/ || echo "Cannot connect to admin on port 3003"
-            curl -I http://localhost:$BACKEND_PORT/api/health || echo "Cannot connect to backend on port $BACKEND_PORT"
+            curl -I http://127.0.0.1:3002/ || echo "Cannot connect to frontend on port 3002"
+            curl -I http://127.0.0.1:3003/ || echo "Cannot connect to admin on port 3003"
+            curl -I http://127.0.0.1:$BACKEND_PORT/api/health || echo "Cannot connect to backend on port $BACKEND_PORT"
             
             echo "============== END TROUBLESHOOTING ==============" 
