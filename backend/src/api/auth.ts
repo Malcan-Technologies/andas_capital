@@ -7,6 +7,7 @@ import {
 	AuthRequest,
 } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import * as bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -234,6 +235,57 @@ router.post("/logout", authenticateToken, async (req: AuthRequest, res) => {
 		return res.json({ message: "Logged out successfully" });
 	} catch (error) {
 		return res.status(500).json({ message: "Error logging out" });
+	}
+});
+
+/**
+ * @swagger
+ * /api/auth/test-bcrypt:
+ *   get:
+ *     summary: Test bcrypt functionality
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Bcrypt test results
+ */
+router.get("/test-bcrypt", async (req, res) => {
+	try {
+		// Generate a test password hash
+		const testPassword = "test123";
+		console.log("Testing bcrypt with password:", testPassword);
+
+		// Test direct hashing
+		let error = null;
+		let hashResult = null;
+		let compareResult = null;
+
+		try {
+			console.log("Attempting to hash password...");
+			const hashedPassword = await bcrypt.hash(testPassword, 10);
+			hashResult = { success: true, hash: hashedPassword };
+
+			console.log("Attempting to compare password...");
+			const isMatch = await bcrypt.compare(testPassword, hashedPassword);
+			compareResult = { success: true, isMatch };
+		} catch (e) {
+			error = {
+				message: e instanceof Error ? e.message : "Unknown error",
+				stack: e instanceof Error ? e.stack : undefined,
+			};
+			console.error("Bcrypt test error:", error);
+		}
+
+		return res.json({
+			message: "Bcrypt test completed",
+			error,
+			hashResult,
+			compareResult,
+			nodeVersion: process.version,
+			bcryptVersion: require("bcryptjs/package.json").version,
+		});
+	} catch (error) {
+		console.error("Test bcrypt error:", error);
+		return res.status(500).json({ message: "Error testing bcrypt" });
 	}
 });
 

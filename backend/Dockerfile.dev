@@ -8,10 +8,13 @@ RUN apk add --no-cache openssl python3 make g++
 # Create uploads directory
 RUN mkdir -p uploads
 
-# Install dependencies
+# Copy package files first for better caching
 COPY package*.json ./
 COPY prisma ./prisma/
+
+# Install dependencies and rebuild bcrypt
 RUN npm install
+RUN npm rebuild bcrypt --build-from-source
 
 # Copy source code
 COPY . .

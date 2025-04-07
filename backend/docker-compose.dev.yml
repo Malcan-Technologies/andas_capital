@@ -26,8 +26,10 @@ services:
         ports:
             - "${PORT}:${PORT}"
         volumes:
-            - .:/app
+            - ./:/app:cached
             - /app/node_modules
+            # Named volume for bcrypt to ensure it's not wiped out
+            - bcrypt_modules:/app/node_modules/bcrypt
         environment:
             - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/kapital?schema=public
             - JWT_SECRET=${JWT_SECRET}
@@ -40,3 +42,4 @@ services:
 
 volumes:
     postgres_data:
+    bcrypt_modules:

@@ -15,20 +15,34 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3001;
 
+// Determine if we're in development mode
+const isDevelopment = process.env.NODE_ENV !== "production";
+
 // Middleware
 app.use(
 	cors({
-		origin: [
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:3002",
-		],
+		origin: isDevelopment
+			? [
+					"http://localhost:3000",
+					"http://localhost:3001",
+					"http://localhost:3002",
+			  ]
+			: ["https://growkapital.com", "https://admin.growkapital.com"],
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization"],
+		exposedHeaders: ["Authorization"],
 	})
 );
 app.use(express.json());
+
+// Log all requests in development mode
+if (isDevelopment) {
+	app.use((req, res, next) => {
+		console.log(`${req.method} ${req.path} - Body:`, req.body);
+		next();
+	});
+}
 
 // Swagger UI
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
