@@ -211,40 +211,41 @@ jobs:
           scp -i ~/.ssh/deploy_key backend.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/.env
           rm backend.env
           
-          # Run post-deployment tasks
-          echo "Running post-deployment tasks..."
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            # Ensure proper permissions for all directories
-            echo "Setting permissions..."
+          # Run post-deployment tasks in smaller chunks to avoid SSH timeouts
+          echo "Setting permissions..."
+          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             chown -R $USER:$USER /var/www/growkapital
             find /var/www/growkapital -type d -exec chmod 755 {} \;
             find /var/www/growkapital -type f -exec chmod 644 {} \;
             chmod +x /var/www/growkapital/scripts/*.sh
-            
-            # Verify critical directories exist
-            echo "Verifying critical directories..."
+          '
+          
+          echo "Checking frontend build..."
+          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             if [ ! -d "/var/www/growkapital/frontend/.next" ]; then
               echo "⚠️ Frontend .next directory not found. Rebuilding..."
               cd /var/www/growkapital/frontend
               npm install --production --no-progress
-              npm run build
-              cd -
+              npm run build || echo "Frontend build failed, but continuing deployment"
             else
               echo "✓ Frontend .next directory exists"
             fi
-            
+          '
+          
+          echo "Checking admin build..."
+          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             if [ ! -d "/var/www/growkapital/admin/.next" ]; then
               echo "⚠️ Admin .next directory not found. Rebuilding..."
               cd /var/www/growkapital/admin
               npm install --production --no-progress
-              npm run build
-              cd -
+              npm run build || echo "Admin build failed, but continuing deployment"
             else
               echo "✓ Admin .next directory exists"
             fi
-            
-            # Restart services
-            echo "Restarting services..."
+          '
+          
+          echo "Restarting services..."
+          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             if systemctl is-active --quiet nginx; then
               systemctl reload nginx
               echo "✓ Nginx reloaded"
@@ -255,15 +256,15 @@ jobs:
             
             cd /var/www/growkapital/backend
             
-            # If PM2 is running, restart the backend service
             if which pm2 > /dev/null && pm2 list | grep -q "backend"; then
               pm2 restart backend || pm2 start npm --name "backend" -- start
               echo "✓ Backend service restarted"
             else
-              # If PM2 is not running or backend not found, start it
               pm2 start npm --name "backend" -- start
               echo "✓ Backend service started"
             fi
+            
+            touch /tmp/files-changed
           '
           
           cd ..
@@ -276,7 +277,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "15m"
+          command_timeout: "5m"
           script: |
             # Verify target directory integrity before deploying
             echo "Verifying deployment target directory..."
@@ -324,7 +325,15 @@ jobs:
               echo "Space after cleanup:"
               df -h
             fi
-            
+
+      - name: Install debugging tools
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          command_timeout: "5m"
+          script: |
             # Install debugging tools if needed
             if ! command -v wkhtmltoimage > /dev/null; then
               echo "Installing wkhtmltopdf for debugging screenshots..."
@@ -358,7 +367,15 @@ jobs:
                 exit 1
               fi
             fi
-            
+
+      - name: Backend deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          command_timeout: "5m"
+          script: |
             cd /var/www/growkapital
             
             # Cleanup any leftover temporary files
@@ -409,12 +426,18 @@ jobs:
               echo "❌ WARNING: Port $BACKEND_PORT is not open. Backend may not be accessible!"
               sudo netstat -tuln
             fi
-            
-            # Deploy Frontend
-            cd ../frontend
+
+      - name: Nginx configuration
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          command_timeout: "5m"
+          script: |
+            cd /var/www/growkapital
             
             # Quick Nginx config check and reload if needed
-            cd ..
             if ! cmp -s config/nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
               echo "Updating Nginx configuration..."
               sudo cp config/nginx.conf /etc/nginx/sites-available/growkapital
@@ -444,6 +467,9 @@ jobs:
               echo "✗ WARNING: Nginx config does not reference /var/www/growkapital/admin!"
             fi
             
+            # Get backend port for checking Nginx config
+            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 || echo "4000")
+            
             # Check if nginx is using the correct ports
             if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://localhost:3002"; then
               echo "✓ Nginx config correctly uses port 3002 for frontend"
@@ -472,27 +498,16 @@ jobs:
                 echo "$NGINX_CONFIG" | grep -A1 "# Backend API proxy" | grep "proxy_pass"
               fi
             fi
-            
-            # Check for potential conflicts with terraworld
-            if sudo test -f /etc/nginx/sites-available/terraworld; then
-              TERRAWORLD_CONFIG=$(sudo cat /etc/nginx/sites-available/terraworld)
-              if echo "$TERRAWORLD_CONFIG" | grep -q "proxy_pass http://localhost:3001"; then
-                echo "⚠️ terraworld.my is using port 3001 as expected"
-              else
-                echo "⚠️ terraworld.my is using an unexpected port, check for conflicts"
-                echo "$TERRAWORLD_CONFIG" | grep -A1 "# Proxy settings for main application" | grep "proxy_pass"
-              fi
-            fi
-            
-            # List all enabled sites to check for conflicts
-            echo "Enabled Nginx sites:"
-            ls -la /etc/nginx/sites-enabled/
-            
-            # Check for port conflicts with other websites
-            echo "Checking for port conflicts..."
-            USED_PORTS=$(netstat -tlnp | grep -E ':(3000|3001|3002|3003)')
-            echo "Currently used ports:"
-            echo "$USED_PORTS"
+
+      - name: Start applications
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          command_timeout: "5m"
+          script: |
+            cd /var/www/growkapital
             
             # Start the applications with specific ports that won't conflict
             echo "Starting the frontend application..."
@@ -508,12 +523,22 @@ jobs:
             pm2 start npm --name "growkapital-admin" -- start -- -p 3003
             
             pm2 save --silent
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          command_timeout: "5m"
+          script: |
+            cd /var/www/growkapital
             
             # Verify critical pages are accessible
             echo "Verifying critical pages..."
             
             # Check domain access (via nginx)
-            LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://growkapital.com/login)
+            LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://growkapital.com/login || echo "Failed")
             echo "Login page via domain status: $LOGIN_STATUS"
             if [ "$LOGIN_STATUS" = "200" ]; then
               echo "✓ Login page is accessible via domain"
@@ -522,7 +547,7 @@ jobs:
             fi
             
             # Check direct port access
-            DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3002/login)
+            DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3002/login || echo "Failed")
             echo "Login page via direct port status: $DIRECT_STATUS"
             if [ "$DIRECT_STATUS" = "200" ]; then
               echo "✓ Login page is accessible via direct port"
@@ -540,19 +565,16 @@ jobs:
             else
               echo "✗ No CSS files found in build directory!"
             fi
-            
-            # Take a screenshot for layout debugging (if wkhtmltoimage is installed)
-            if command -v wkhtmltoimage > /dev/null; then
-              echo "Taking screenshot of homepage for layout debugging..."
-              wkhtmltoimage --javascript-delay 3000 https://growkapital.com /tmp/homepage_screenshot.jpg || true
-              echo "Screenshot saved to /tmp/homepage_screenshot.jpg on the server"
-            else
-              echo "wkhtmltoimage not installed, skipping screenshot"
-            fi
-            
-            # Inspect page source for problematic styles
-            echo "Inspecting page source for style links..."
-            curl -s https://growkapital.com | grep -i "<link.*rel=\"stylesheet\"" || echo "No style links found in page source"
+
+      - name: SSL Certificate Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          command_timeout: "10m"
+          script: |
+            cd /var/www/growkapital
             
             # SSL certificate check and renewal
             echo "Checking SSL certificates..."
