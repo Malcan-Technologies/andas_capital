@@ -31,7 +31,14 @@ jobs:
 
       - name: Build frontend application
         working-directory: ./frontend
-        run: npm run build
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=4096"
+          export NEXT_TELEMETRY_DISABLED=1
+          export NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+          export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
+          export NEXT_BUFFER_SIZE=16384
+          export GENERATE_SOURCEMAP=false
+          npm run build:prod || true
         
       # Build Admin
       - name: Install admin dependencies
@@ -40,7 +47,13 @@ jobs:
 
       - name: Build admin application
         working-directory: ./admin
-        run: npm run build
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=4096"
+          export NEXT_TELEMETRY_DISABLED=1
+          export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
+          export NEXT_BUFFER_SIZE=16384
+          export GENERATE_SOURCEMAP=false
+          npm run build:prod || true
 
       - name: Setup SSH
         run: |

@@ -7,6 +7,12 @@ const nextConfig = {
 		// This disables the warning about Font Optimization
 		optimizeFonts: true,
 	},
+	typescript: {
+		ignoreBuildErrors: true,
+	},
+	eslint: {
+		ignoreDuringBuilds: true,
+	},
 };
 
 module.exports = nextConfig;

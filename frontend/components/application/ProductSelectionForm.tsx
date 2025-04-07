@@ -3,24 +3,10 @@ import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useSearchParams } from "next/navigation";
 import Cookies from "js-cookie";
+import { ProductType } from "@/types";
 
-interface Product {
-	id: string;
-	code: string;
-	name: string;
-	description: string;
-	minAmount: number;
-	maxAmount: number;
-	repaymentTerms: number[];
-	interestRate: number;
-	eligibility: string[];
-	features: string[];
-	lateFee: number;
-	originationFee: number;
-	legalFee: number;
-	applicationFee: number;
-	isActive: boolean;
-}
+// Define local Product interface for backward compatibility
+interface Product extends ProductType {}
 
 interface ProductSelectionFormProps {
 	products: Product[];

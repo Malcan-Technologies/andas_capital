@@ -19,26 +19,7 @@ import ReviewAndSubmitForm from "@/components/application/ReviewAndSubmitForm";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import Info from "@mui/icons-material/Info";
-
-interface Product {
-	id: string;
-	code: string;
-	name: string;
-	description: string;
-	minAmount: number;
-	maxAmount: number;
-	repaymentTerms: number[];
-	interestRate: number;
-	legalFee: number;
-	originationFee: number;
-	lateFee: number;
-	applicationFee: number;
-	eligibility: string[];
-	features: string[];
-	requiredDocuments: string[];
-	loanTypes: string[];
-	requirements: string[];
-}
+import { ProductType } from "@/types";
 
 const steps = [
 	"Select Product",
@@ -107,6 +88,9 @@ interface Document {
 	name: string;
 	status: string;
 }
+
+// Local interface for backward compatibility
+interface Product extends ProductType {}
 
 export default function ApplyPage() {
 	const router = useRouter();

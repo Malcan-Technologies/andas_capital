@@ -1,10 +1,20 @@
-export interface Product {
+export interface ProductType {
 	id: string;
 	code: string;
 	name: string;
+	description: string;
+	minAmount: number;
+	maxAmount: number;
+	repaymentTerms: number[];
 	interestRate: number;
-	originationFee: number;
 	legalFee: number;
-	applicationFee: number;
+	originationFee: number;
 	lateFee: number;
+	applicationFee: number;
+	eligibility: string[];
+	features: string[];
+	requiredDocuments?: string[];
+	loanTypes?: string[];
+	requirements?: string[];
+	isActive: boolean;
 }
