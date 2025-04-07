@@ -1051,9 +1051,15 @@ jobs:
               fi
               
               # Force renewal if there are issues
-              if ! curl -sI https://growkapital.com | grep -q "HTTP/.*200"; then
-                echo "⚠️ HTTPS check failed. Forcing certificate renewal..."
+              if ! curl -sI https://growkapital.com -o /dev/null -w "%{http_code}\n" | grep -q "200"; then
+                echo "⚠️ HTTPS check failed with non-200 status. Forcing certificate renewal..."
                 sudo certbot renew --force-renewal --nginx
+                sudo systemctl reload nginx
+              elif openssl x509 -checkend 2592000 -noout -in /etc/letsencrypt/live/growkapital.com/fullchain.pem; then
+                echo "✅ SSL certificate is valid and not expiring in the next 30 days. Skipping renewal."
+              else
+                echo "⚠️ SSL certificate will expire within 30 days. Allowing regular renewal..."
+                sudo certbot renew --nginx
                 sudo systemctl reload nginx
               fi
               
