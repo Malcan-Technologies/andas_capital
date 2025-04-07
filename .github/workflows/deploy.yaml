@@ -138,12 +138,57 @@ jobs:
             mkdir -p /tmp/new-deploy
             cd /tmp/new-deploy
             tar xzf /tmp/deploy.tar.gz
-            rsync -av --delete --exclude="node_modules" --exclude=".git" --exclude="node_modules_cache" . /var/www/growkapital/
+            
+            # Create backup of critical configuration files
+            echo "Creating backup of critical files..."
+            BACKUP_DIR="/var/www/growkapital/config_backup_$(date +%Y%m%d_%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+            
+            # Backup critical files before syncing
+            if [ -f "/var/www/growkapital/frontend/.env" ]; then
+              cp /var/www/growkapital/frontend/.env "$BACKUP_DIR/frontend.env"
+            fi
+            if [ -f "/var/www/growkapital/admin/.env.local" ]; then
+              cp /var/www/growkapital/admin/.env.local "$BACKUP_DIR/admin.env.local"
+            fi
+            if [ -f "/var/www/growkapital/backend/.env" ]; then
+              cp /var/www/growkapital/backend/.env "$BACKUP_DIR/backend.env"
+            fi
+            
+            # Selective rsync with extra precautions
+            echo "Syncing files to /var/www/growkapital..."
+            
+            # Frontend
+            echo "Syncing frontend files..."
+            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy/frontend/ /var/www/growkapital/frontend/
+            
+            # Admin
+            echo "Syncing admin files..."
+            rsync -av --delete --exclude="node_modules" --exclude=".env.local" /tmp/new-deploy/admin/ /var/www/growkapital/admin/
+            
+            # Backend
+            echo "Syncing backend files..."
+            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy/backend/ /var/www/growkapital/backend/
+            
+            # Config and scripts
+            echo "Syncing config and scripts..."
+            rsync -av /tmp/new-deploy/config/ /var/www/growkapital/config/
+            rsync -av /tmp/new-deploy/scripts/ /var/www/growkapital/scripts/
+            
             # Ensure proper permissions for Next.js static files
             chmod -R 755 /var/www/growkapital/frontend/.next/static
             chmod -R 755 /var/www/growkapital/frontend/public
             chmod -R 755 /var/www/growkapital/admin/.next/static
             chmod -R 755 /var/www/growkapital/admin/public
+            
+            # Verify and fix ownership if needed
+            OWNER=$(stat -c "%U:%G" /var/www/growkapital)
+            echo "Current ownership of /var/www/growkapital is $OWNER"
+            
+            if [ "$OWNER" != "$USER:$USER" ]; then
+              echo "Fixing ownership of deployment directory..."
+              sudo chown -R $USER:$USER /var/www/growkapital
+            fi
             
             # Verify public directories
             echo "Verifying public directories..."
@@ -173,6 +218,40 @@ jobs:
           key: ${{ secrets.SSH_KEYS }}
           command_timeout: "15m"
           script: |
+            # Verify target directory integrity before deploying
+            echo "Verifying deployment target directory..."
+            if [ ! -d "/var/www/growkapital" ]; then
+              echo "ERROR: Target directory /var/www/growkapital does not exist!"
+              echo "Creating directory structure..."
+              sudo mkdir -p /var/www/growkapital
+              sudo chown -R $USER:$USER /var/www/growkapital
+            fi
+            
+            # Install debugging tools if needed
+            if ! command -v wkhtmltoimage > /dev/null; then
+              echo "Installing wkhtmltopdf for debugging screenshots..."
+              sudo apt-get update
+              sudo apt-get install -y wkhtmltopdf
+            fi
+            
+            # Check for potential conflicts with other websites
+            echo "Checking for potential website conflicts..."
+            ls -la /var/www/
+            
+            # Verify this is the correct project by checking for unique identifiers
+            if [ -f "/var/www/growkapital/frontend/package.json" ]; then
+              echo "Verifying project identity..."
+              grep -q "growkapital" /var/www/growkapital/frontend/package.json
+              if [ $? -eq 0 ]; then
+                echo "✓ Confirmed target directory contains the correct project"
+              else
+                echo "WARNING: Target directory may contain a different project!"
+                echo "Project verification failed. Please check manually."
+                grep "name" /var/www/growkapital/frontend/package.json
+                exit 1
+              fi
+            fi
+            
             cd /var/www/growkapital
             
             # Cleanup any leftover temporary files
@@ -215,59 +294,6 @@ jobs:
             # Deploy Frontend
             cd ../frontend
             
-            # Check if app is already running
-            if pm2 list | grep -q "growkapital-frontend"; then
-              echo "Frontend is running, restarting..."
-              pm2 delete growkapital-frontend
-            else
-              echo "Frontend not running, will start fresh..."
-            fi
-            
-            # Memory-efficient dependency management
-            HASH_FILE="node_modules/.package-json-hash"
-            CURRENT_HASH=$(md5sum package.json | cut -d' ' -f1)
-            CACHED_HASH=$(cat $HASH_FILE 2>/dev/null || echo "")
-            
-            if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
-              echo "Installing frontend dependencies..."
-              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline --legacy-peer-deps
-              # Install required packages that might be missing
-              npm install --save framer-motion recharts --legacy-peer-deps
-              echo "$CURRENT_HASH" > "$HASH_FILE"
-            else
-              echo "Frontend dependencies are up to date, skipping installation"
-            fi
-            
-            # Create .env file from secrets
-            echo "${{ secrets.FRONTEND_ENV }}" > .env
-            
-            # Deploy Admin
-            cd ../admin
-            
-            # Check if admin app is already running
-            if pm2 list | grep -q "growkapital-admin"; then
-              echo "Admin is running, restarting..."
-              pm2 delete growkapital-admin
-            else
-              echo "Admin not running, will start fresh..."
-            fi
-            
-            # Memory-efficient dependency management
-            HASH_FILE="node_modules/.package-json-hash"
-            CURRENT_HASH=$(md5sum package.json | cut -d' ' -f1)
-            CACHED_HASH=$(cat $HASH_FILE 2>/dev/null || echo "")
-            
-            if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
-              echo "Installing admin dependencies..."
-              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline --legacy-peer-deps
-              echo "$CURRENT_HASH" > "$HASH_FILE"
-            else
-              echo "Admin dependencies are up to date, skipping installation"
-            fi
-            
-            # Create .env file from secrets
-            echo "${{ secrets.ADMIN_ENV }}" > .env.local
-            
             # Quick Nginx config check and reload if needed
             cd ..
             if ! cmp -s config/nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
@@ -282,28 +308,120 @@ jobs:
               fi
             fi
             
-            # Start the applications
-            cd frontend
-            echo "Starting the frontend application..."
-            pm2 start npm --name "growkapital-frontend" -- start
+            # Verify nginx configuration is pointing to the correct directories
+            echo "Verifying nginx configuration paths..."
+            NGINX_CONFIG=$(sudo cat /etc/nginx/sites-available/growkapital)
             
-            cd ../admin
+            if echo "$NGINX_CONFIG" | grep -q "/var/www/growkapital/frontend"; then
+              echo "✓ Nginx config correctly references /var/www/growkapital/frontend"
+            else
+              echo "✗ WARNING: Nginx config does not reference /var/www/growkapital/frontend!"
+              echo "This might be causing the layout issues - check for incorrect paths"
+            fi
+            
+            if echo "$NGINX_CONFIG" | grep -q "/var/www/growkapital/admin"; then
+              echo "✓ Nginx config correctly references /var/www/growkapital/admin"
+            else
+              echo "✗ WARNING: Nginx config does not reference /var/www/growkapital/admin!"
+            fi
+            
+            # Check if nginx is using the correct ports
+            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://localhost:3002"; then
+              echo "✓ Nginx config correctly uses port 3002 for frontend"
+            else
+              echo "✗ WARNING: Nginx config is not using port 3002 for frontend!"
+              echo "Current frontend proxy_pass:"
+              echo "$NGINX_CONFIG" | grep -A1 "# Proxy settings for main application" | grep "proxy_pass"
+            fi
+            
+            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://localhost:3003"; then
+              echo "✓ Nginx config correctly uses port 3003 for admin"
+            else
+              echo "✗ WARNING: Nginx config is not using port 3003 for admin!"
+              echo "Current admin proxy_pass:"
+              echo "$NGINX_CONFIG" | grep -A1 "# Proxy settings for admin application" | grep "proxy_pass"
+            fi
+            
+            # Check for potential conflicts with terraworld
+            if sudo test -f /etc/nginx/sites-available/terraworld; then
+              TERRAWORLD_CONFIG=$(sudo cat /etc/nginx/sites-available/terraworld)
+              if echo "$TERRAWORLD_CONFIG" | grep -q "proxy_pass http://localhost:3001"; then
+                echo "⚠️ terraworld.my is using port 3001 as expected"
+              else
+                echo "⚠️ terraworld.my is using an unexpected port, check for conflicts"
+                echo "$TERRAWORLD_CONFIG" | grep -A1 "# Proxy settings for main application" | grep "proxy_pass"
+              fi
+            fi
+            
+            # List all enabled sites to check for conflicts
+            echo "Enabled Nginx sites:"
+            ls -la /etc/nginx/sites-enabled/
+            
+            # Check for port conflicts with other websites
+            echo "Checking for port conflicts..."
+            USED_PORTS=$(netstat -tlnp | grep -E ':(3000|3001|3002|3003)')
+            echo "Currently used ports:"
+            echo "$USED_PORTS"
+            
+            # Start the applications with specific ports that won't conflict
+            echo "Starting the frontend application..."
+            # Use port 3002 for frontend to avoid conflict with terraworld
+            export PORT=3002
+            pm2 delete growkapital-frontend 2>/dev/null || true
+            pm2 start npm --name "growkapital-frontend" -- start -- -p 3002
+            
             echo "Starting the admin application..."
-            pm2 start npm --name "growkapital-admin" -- start
+            # Use port 3003 for admin to avoid conflict
+            export PORT=3003
+            pm2 delete growkapital-admin 2>/dev/null || true
+            pm2 start npm --name "growkapital-admin" -- start -- -p 3003
             
             pm2 save --silent
             
             # Verify critical pages are accessible
             echo "Verifying critical pages..."
+            
+            # Check domain access (via nginx)
             LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://growkapital.com/login)
-            echo "Login page status: $LOGIN_STATUS"
+            echo "Login page via domain status: $LOGIN_STATUS"
             if [ "$LOGIN_STATUS" = "200" ]; then
-              echo "✓ Login page is accessible"
+              echo "✓ Login page is accessible via domain"
             else
-              echo "✗ Login page returned status $LOGIN_STATUS"
+              echo "✗ Login page returned status $LOGIN_STATUS via domain"
+            fi
+            
+            # Check direct port access
+            DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3002/login)
+            echo "Login page via direct port status: $DIRECT_STATUS"
+            if [ "$DIRECT_STATUS" = "200" ]; then
+              echo "✓ Login page is accessible via direct port"
+            else
+              echo "✗ Login page returned status $DIRECT_STATUS via direct port"
               # Check Next.js server logs
               pm2 logs growkapital-frontend --lines 20 --nostream
             fi
+            
+            # Check CSS and layout files
+            echo "Checking for CSS and layout files..."
+            if [ -d "/var/www/growkapital/frontend/.next/static/css" ]; then
+              echo "✓ CSS files exist in build"
+              ls -la /var/www/growkapital/frontend/.next/static/css/ | head -5
+            else
+              echo "✗ No CSS files found in build directory!"
+            fi
+            
+            # Take a screenshot for layout debugging (if wkhtmltoimage is installed)
+            if command -v wkhtmltoimage > /dev/null; then
+              echo "Taking screenshot of homepage for layout debugging..."
+              wkhtmltoimage --javascript-delay 3000 https://growkapital.com /tmp/homepage_screenshot.jpg || true
+              echo "Screenshot saved to /tmp/homepage_screenshot.jpg on the server"
+            else
+              echo "wkhtmltoimage not installed, skipping screenshot"
+            fi
+            
+            # Inspect page source for problematic styles
+            echo "Inspecting page source for style links..."
+            curl -s https://growkapital.com | grep -i "<link.*rel=\"stylesheet\"" || echo "No style links found in page source"
             
             # Verify SSL certificate for both domains
             echo "Verifying SSL certificates..."
