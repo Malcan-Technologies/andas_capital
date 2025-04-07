@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as jwt from "jsonwebtoken";
+import { ParamsDictionary } from "express-serve-static-core";
+import { ParsedQs } from "qs";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const JWT_REFRESH_SECRET =
@@ -10,7 +12,8 @@ export interface JwtPayload {
 	phoneNumber: string;
 }
 
-export interface AuthRequest extends Request {
+export interface AuthRequest
+	extends Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>> {
 	user?: JwtPayload;
 }
 
