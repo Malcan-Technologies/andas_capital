@@ -9,6 +9,8 @@ import onboardingRoutes from "./api/onboarding";
 import productRoutes from "./api/products";
 import loanApplicationRoutes from "./api/loan-applications";
 import adminRoutes from "./api/admin";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 
@@ -47,6 +49,11 @@ if (isDevelopment) {
 // Swagger UI
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+	res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -54,6 +61,19 @@ app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/loan-applications", loanApplicationRoutes);
 app.use("/api/admin", adminRoutes);
+
+// Export Swagger specification to a JSON file
+// Create a directory for the Swagger JSON if it doesn't exist
+const swaggerDir = path.join(__dirname, "..", "swagger");
+if (!fs.existsSync(swaggerDir)) {
+	fs.mkdirSync(swaggerDir, { recursive: true });
+}
+
+// Write the Swagger specification to a JSON file
+fs.writeFileSync(
+	path.join(swaggerDir, "swagger.json"),
+	JSON.stringify(swaggerSpec, null, 2)
+);
 
 // Start server
 app.listen(port, () => {

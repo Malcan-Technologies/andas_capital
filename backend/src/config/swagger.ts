@@ -86,6 +86,38 @@ const options = {
 			},
 		],
 		paths: {
+			"/api/health": {
+				get: {
+					tags: ["System"],
+					summary: "Health check endpoint",
+					description: "Check if the API is running properly",
+					responses: {
+						200: {
+							description: "API is healthy",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "string",
+												example: "ok",
+											},
+											timestamp: {
+												type: "string",
+												format: "date-time",
+												example:
+													"2023-06-15T12:34:56.789Z",
+											},
+										},
+									},
+								},
+							},
+						},
+						500: { description: "API is unhealthy" },
+					},
+				},
+			},
 			"/api/admin/login": {
 				post: {
 					tags: ["Admin"],

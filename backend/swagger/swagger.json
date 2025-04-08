@@ -1,0 +1,1670 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Kapital API Documentation",
+    "version": "1.0.0",
+    "description": "API documentation for Kapital backend services"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001",
+      "description": "Development server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "AdminLogin": {
+        "type": "object",
+        "required": [
+          "phoneNumber",
+          "password"
+        ],
+        "properties": {
+          "phoneNumber": {
+            "type": "string",
+            "example": "+60123456789"
+          },
+          "password": {
+            "type": "string",
+            "example": "password123"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DashboardStats": {
+        "type": "object",
+        "properties": {
+          "totalUsers": {
+            "type": "number"
+          },
+          "totalApplications": {
+            "type": "number"
+          },
+          "totalLoans": {
+            "type": "number"
+          },
+          "totalLoanAmount": {
+            "type": "number"
+          },
+          "recentApplications": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "user": {
+                  "type": "object",
+                  "properties": {
+                    "fullName": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "LoanApplication": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the loan application"
+          },
+          "userId": {
+            "type": "string",
+            "description": "ID of the user who created the application"
+          },
+          "productId": {
+            "type": "string",
+            "description": "ID of the selected loan product"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Loan amount requested"
+          },
+          "term": {
+            "type": "number",
+            "description": "Loan term in months"
+          },
+          "purpose": {
+            "type": "string",
+            "description": "Purpose of the loan"
+          },
+          "monthlyRepayment": {
+            "type": "number",
+            "description": "Monthly repayment amount"
+          },
+          "interestRate": {
+            "type": "number",
+            "description": "Interest rate percentage"
+          },
+          "lateFee": {
+            "type": "number",
+            "description": "Late fee amount"
+          },
+          "originationFee": {
+            "type": "number",
+            "description": "Origination fee amount"
+          },
+          "legalFee": {
+            "type": "number",
+            "description": "Legal fee amount"
+          },
+          "applicationFee": {
+            "type": "number",
+            "description": "Application fee amount"
+          },
+          "netDisbursement": {
+            "type": "number",
+            "description": "Net amount to be disbursed after fees"
+          },
+          "urlLink": {
+            "type": "string",
+            "description": "Unique URL link for the application"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "INCOMPLETE",
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "DISBURSED",
+              "CLOSED"
+            ],
+            "description": "Current status of the application"
+          },
+          "appStep": {
+            "type": "number",
+            "description": "Current step in the application process (0-4)"
+          },
+          "acceptTerms": {
+            "type": "boolean",
+            "description": "Whether the user has accepted the terms"
+          },
+          "paidAppFee": {
+            "type": "boolean",
+            "description": "Whether the application fee has been paid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the application was created"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the application was last updated"
+          },
+          "product": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Document"
+            }
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the product"
+          },
+          "code": {
+            "type": "string",
+            "description": "Product code"
+          },
+          "name": {
+            "type": "string",
+            "description": "Product name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Product description"
+          },
+          "minAmount": {
+            "type": "number",
+            "description": "Minimum loan amount"
+          },
+          "maxAmount": {
+            "type": "number",
+            "description": "Maximum loan amount"
+          },
+          "repaymentTerms": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Available repayment terms in months"
+          },
+          "interestRate": {
+            "type": "number",
+            "description": "Interest rate percentage"
+          },
+          "eligibility": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Eligibility criteria"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the product is active"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the product was created"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the product was last updated"
+          }
+        }
+      },
+      "ProductInput": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Product code"
+          },
+          "name": {
+            "type": "string",
+            "description": "Product name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Product description"
+          },
+          "minAmount": {
+            "type": "number",
+            "description": "Minimum loan amount"
+          },
+          "maxAmount": {
+            "type": "number",
+            "description": "Maximum loan amount"
+          },
+          "repaymentTerms": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Available repayment terms in months"
+          },
+          "interestRate": {
+            "type": "number",
+            "description": "Interest rate percentage"
+          },
+          "eligibility": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Eligibility criteria"
+          },
+          "lateFee": {
+            "type": "number",
+            "description": "Late payment fee percentage"
+          },
+          "originationFee": {
+            "type": "number",
+            "description": "Origination fee percentage"
+          },
+          "legalFee": {
+            "type": "number",
+            "description": "Legal fee amount"
+          },
+          "applicationFee": {
+            "type": "number",
+            "description": "Application fee amount"
+          },
+          "requiredDocuments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required document types"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Product features"
+          },
+          "loanTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Available loan purpose types"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the product is active"
+          }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the document"
+          },
+          "loanApplicationId": {
+            "type": "string",
+            "description": "ID of the loan application this document belongs to"
+          },
+          "documentType": {
+            "type": "string",
+            "description": "Type of document"
+          },
+          "documentUrl": {
+            "type": "string",
+            "description": "URL to the document"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED"
+            ],
+            "description": "Status of the document verification"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the document was created"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the document was last updated"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health check endpoint",
+        "description": "Check if the API is running properly",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2023-06-15T12:34:56.789Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "API is unhealthy"
+          }
+        }
+      }
+    },
+    "/api/admin/login": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin login",
+        "description": "Login endpoint for admin users",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminLogin"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful login",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "example": "ADMIN"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "403": {
+            "description": "Not an admin user"
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get all users",
+        "description": "Get a list of all users (admin only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not authorized as admin"
+          }
+        }
+      }
+    },
+    "/api/admin/users/{id}": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update a user",
+        "description": "Update a user's information (admin only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "phoneNumber": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "USER",
+                      "ADMIN"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not authorized as admin"
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Delete a user",
+        "description": "Delete a user from the system (admin only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "User deleted successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not authorized as admin"
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/admin/dashboard": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get dashboard statistics",
+        "description": "Get overview statistics for the admin dashboard",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardStats"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not authorized as admin"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login with phone number and password",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phoneNumber",
+                  "password"
+                ],
+                "properties": {
+                  "phoneNumber": {
+                    "type": "string",
+                    "example": "+1234567890"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "admin123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "phoneNumber": {
+                      "type": "string"
+                    },
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string"
+                    },
+                    "isOnboardingComplete": {
+                      "type": "boolean"
+                    },
+                    "onboardingStep": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "summary": "Refresh access token using refresh token",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refreshToken"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New access token generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string"
+                    },
+                    "isOnboardingComplete": {
+                      "type": "boolean"
+                    },
+                    "onboardingStep": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid refresh token"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/auth/test-bcrypt": {
+      "get": {
+        "summary": "Test bcrypt functionality",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Bcrypt test results"
+          }
+        }
+      }
+    },
+    "/api/loan-applications": {
+      "post": {
+        "summary": "Create a new loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "productId",
+                  "amount",
+                  "term",
+                  "purpose"
+                ],
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "description": "ID of the selected loan product"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Loan amount requested"
+                  },
+                  "term": {
+                    "type": "number",
+                    "description": "Loan term in months"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "description": "Purpose of the loan"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Loan application created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get all loan applications for the current user",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of loan applications retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LoanApplication"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}": {
+      "get": {
+        "summary": "Get a loan application by ID or URL link",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID or URL link"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan application retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Loan application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID or URL link"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "description": "Updated loan amount"
+                  },
+                  "term": {
+                    "type": "number",
+                    "description": "Updated loan term in months"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "description": "Updated loan purpose"
+                  },
+                  "acceptTerms": {
+                    "type": "boolean",
+                    "description": "Whether the user has accepted the terms"
+                  },
+                  "paidAppFee": {
+                    "type": "boolean",
+                    "description": "Whether the application fee has been paid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Loan application updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Loan application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/step": {
+      "patch": {
+        "summary": "Update application step",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID or URL link"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "step"
+                ],
+                "properties": {
+                  "step": {
+                    "type": "number",
+                    "description": "New application step (0-4)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Application step updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Loan application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/status": {
+      "patch": {
+        "summary": "Update application status",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID or URL link"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "INCOMPLETE",
+                      "PENDING",
+                      "APPROVED",
+                      "REJECTED",
+                      "DISBURSED",
+                      "CLOSED"
+                    ],
+                    "description": "New application status"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Application status updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Loan application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/documents": {
+      "post": {
+        "summary": "Upload documents for a loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "documents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Documents uploaded successfully"
+          },
+          "404": {
+            "description": "Loan application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get documents for a loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Documents retrieved successfully"
+          },
+          "404": {
+            "description": "Loan application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/documents/{documentId}": {
+      "patch": {
+        "summary": "Update a document's status",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID"
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Document ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "APPROVED",
+                      "REJECTED"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document status updated successfully"
+          },
+          "404": {
+            "description": "Loan application or document not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/products": {
+      "get": {
+        "summary": "Get all active products or a specific product by code",
+        "tags": [
+          "Products"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Product code to filter by"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active products or a single product if code is provided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new product",
+        "tags": [
+          "Products"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product created successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/products/{id}": {
+      "patch": {
+        "summary": "Update a product",
+        "tags": [
+          "Products"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Product ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a product",
+        "tags": [
+          "Products"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Product ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "summary": "Get current user information",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User information retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "phoneNumber": {
+                      "type": "string"
+                    },
+                    "fullName": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "dateOfBirth": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "address1": {
+                      "type": "string"
+                    },
+                    "address2": {
+                      "type": "string"
+                    },
+                    "city": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "postalCode": {
+                      "type": "string"
+                    },
+                    "employmentStatus": {
+                      "type": "string"
+                    },
+                    "employerName": {
+                      "type": "string"
+                    },
+                    "monthlyIncome": {
+                      "type": "string"
+                    },
+                    "bankName": {
+                      "type": "string"
+                    },
+                    "accountNumber": {
+                      "type": "string"
+                    },
+                    "isOnboardingComplete": {
+                      "type": "boolean"
+                    },
+                    "onboardingStep": {
+                      "type": "number"
+                    },
+                    "kycStatus": {
+                      "type": "string"
+                    },
+                    "lastLoginAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - No token provided"
+          },
+          "403": {
+            "description": "Forbidden - Invalid token"
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update current user information",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "dateOfBirth": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "address1": {
+                    "type": "string"
+                  },
+                  "address2": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "postalCode": {
+                    "type": "string"
+                  },
+                  "employmentStatus": {
+                    "type": "string"
+                  },
+                  "employerName": {
+                    "type": "string"
+                  },
+                  "monthlyIncome": {
+                    "type": "string"
+                  },
+                  "bankName": {
+                    "type": "string"
+                  },
+                  "accountNumber": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User information updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Admin",
+      "description": "API endpoints for Admin dashboard"
+    },
+    {
+      "name": "Auth",
+      "description": "API endpoints for managing user authentication"
+    },
+    {
+      "name": "Loan Applications",
+      "description": "API endpoints for managing loan applications"
+    },
+    {
+      "name": "Products",
+      "description": "API endpoints for managing loan products"
+    },
+    {
+      "name": "Users",
+      "description": "API endpoints for managing logged-in user's data"
+    }
+  ]
+}

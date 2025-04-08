@@ -270,6 +270,9 @@ jobs:
               pm2 start pnpm --name "growkapital-admin" -- start -- --port 3003 --hostname 0.0.0.0
               pm2 save
             fi
+            
+            # Mark nginx for reload
+            touch /tmp/nginx-reload-needed
           '
 
       - name: Deploy backend
@@ -350,13 +353,33 @@ jobs:
             # Check backend
             if [ "${{ env.BACKEND_CHANGED }}" = "true" ]; then
               echo "Verifying backend..."
-              BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health || echo "Failed")
+              
+              # Try multiple times with a delay
+              MAX_RETRIES=5
+              RETRY_COUNT=0
+              BACKEND_STATUS="Failed"
+              
+              while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$BACKEND_STATUS" = "Failed" ]; do
+                if [ $RETRY_COUNT -gt 0 ]; then
+                  echo "Retry $RETRY_COUNT of $MAX_RETRIES..."
+                  sleep 10
+                fi
+                
+                BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health || echo "Failed")
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+              done
+              
               echo "Backend status: $BACKEND_STATUS"
               if [ "$BACKEND_STATUS" = "200" ]; then
                 echo "✅ Backend is accessible"
               else
                 echo "❌ Backend returned status $BACKEND_STATUS"
+                echo "Checking backend logs..."
                 docker logs backend_backend_1 --tail 20
+                echo "Checking backend container status..."
+                docker ps | grep backend
+                echo "Checking nginx configuration for backend..."
+                grep -A 5 "proxy_pass.*4001" /etc/nginx/sites-enabled/*
               fi
             fi
             
