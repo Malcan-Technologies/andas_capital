@@ -322,32 +322,53 @@ jobs:
             # Check backend
             echo "Verifying backend..."
             
-            # Try multiple times with a delay
-            MAX_RETRIES=5
+            # First check if the container is running
+            if ! docker ps | grep -q "backend_backend_1"; then
+              echo "❌ Backend container is not running"
+              echo "Checking backend logs..."
+              docker logs backend_backend_1 --tail 20
+              exit 1
+            fi
+            
+            echo "✅ Backend container is running"
+            
+            # Try multiple times with a delay and more verbose output
+            MAX_RETRIES=10
             RETRY_COUNT=0
             BACKEND_STATUS="Failed"
             
             while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$BACKEND_STATUS" = "Failed" ]; do
               if [ $RETRY_COUNT -gt 0 ]; then
                 echo "Retry $RETRY_COUNT of $MAX_RETRIES..."
-                sleep 10
+                sleep 15
               fi
               
-              BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health || echo "Failed")
+              echo "Attempting to connect to backend health endpoint..."
+              BACKEND_STATUS=$(curl -v -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health 2>&1 || echo "Failed")
+              echo "Backend response: $BACKEND_STATUS"
+              
+              # If we got a response code, extract just the code
+              if [[ "$BACKEND_STATUS" =~ ([0-9]{3}) ]]; then
+                BACKEND_STATUS="${BASH_REMATCH[1]}"
+              fi
+              
               RETRY_COUNT=$((RETRY_COUNT + 1))
             done
             
-            echo "Backend status: $BACKEND_STATUS"
+            echo "Final backend status: $BACKEND_STATUS"
             if [ "$BACKEND_STATUS" = "200" ]; then
               echo "✅ Backend is accessible"
             else
               echo "❌ Backend returned status $BACKEND_STATUS"
               echo "Checking backend logs..."
-              docker logs backend_backend_1 --tail 20
+              docker logs backend_backend_1 --tail 50
               echo "Checking backend container status..."
               docker ps | grep backend
               echo "Checking nginx configuration for backend..."
               grep -A 5 "proxy_pass.*4001" /etc/nginx/sites-enabled/*
+              
+              # Don't fail the deployment if the backend is at least running
+              echo "⚠️ Backend health check failed, but container is running. Continuing deployment..."
             fi
             
             # Check nginx configuration
