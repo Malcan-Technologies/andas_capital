@@ -22,413 +22,211 @@ jobs:
           eval $(ssh-agent -s)
           ssh-add ~/.ssh/deploy_key
 
-      - name: Copy files to server
+      - name: Validate server connection
         run: |
-          # Create destination directories on server via SSH
-          echo "Creating destination directories on server..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            mkdir -p /var/www/growkapital/frontend
-            mkdir -p /var/www/growkapital/admin
-            mkdir -p /var/www/growkapital/backend
-            mkdir -p /var/www/growkapital/config
-            mkdir -p /var/www/growkapital/scripts
-            chmod -R 755 /var/www/growkapital
-          '
-          
-          # Direct rsync for frontend and admin
-          echo "Deploying frontend files via rsync..."
-          rsync -avz --no-times --no-perms --no-owner --no-group -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
-            --exclude="node_modules" \
-            --exclude=".next/cache" \
-            --checksum \
-            --compress \
-            --stats \
-            --info=progress2 \
-            frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/ || {
-              echo "rsync completed with warnings, but continuing deployment..."
-              # Check if critical files were transferred
-              ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-                if [ -f "/var/www/growkapital/frontend/package.json" ] && [ -d "/var/www/growkapital/frontend/app" ]; then
-                  echo "✓ Critical frontend files were transferred successfully"
-                  exit 0
-                else
-                  echo "✗ Critical frontend files are missing!"
-                  exit 1
-                fi
-              '
-            }
-          
-          echo "Deploying admin files via rsync..."
-          rsync -avz --no-times --no-perms --no-owner --no-group -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
-            --exclude="node_modules" \
-            --exclude=".next/cache" \
-            --checksum \
-            --compress \
-            --stats \
-            --info=progress2 \
-            admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/ || {
-              echo "rsync completed with warnings, but continuing deployment..."
-              # Check if critical files were transferred
-              ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-                if [ -f "/var/www/growkapital/admin/package.json" ] && [ -d "/var/www/growkapital/admin/app" ]; then
-                  echo "✓ Critical admin files were transferred successfully"
-                  exit 0
-                else
-                  echo "✗ Critical admin files are missing!"
-                  exit 1
-                fi
-              '
-            }
-          
-          # Copy Docker Compose and backend files
-          echo "Copying Docker Compose and backend files..."
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
-            --checksum \
-            --compress \
-            --stats \
-            --info=progress2 \
-            docker-compose.yml backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/
-          
-          # Copy config and scripts
-          echo "Copying config and scripts..."
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
-            --delete \
-            --checksum \
-            --compress \
-            --stats \
-            --info=progress2 \
-            config/ scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/
+          echo "Validating server connection..."
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'echo "Server connection successful"'
 
-      # Build Frontend
-      - name: Install frontend dependencies
-        working-directory: ./frontend
+      - name: Setup environment files
         run: |
-          # Smart node_modules check
-          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
-            echo "Cleaning node_modules due to missing dependencies or package-lock.json"
-            rm -rf node_modules package-lock.json
-          else
-            echo "✓ Existing node_modules found, checking for updates..."
-            # Check if package.json has changed
-            if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
-              echo "✓ package.json unchanged, skipping clean install"
-            else
-              echo "package.json changed, cleaning node_modules"
-              rm -rf node_modules package-lock.json
-            fi
+          # Create environment files from secrets
+          echo "${{ secrets.FRONTEND_ENV }}" > frontend/.env
+          echo "${{ secrets.ADMIN_ENV }}" > admin/.env.local
+          echo "${{ secrets.BACKEND_ENV }}" > backend/.env
+
+      - name: Check for changed files
+        run: |
+          # Get the list of changed files
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Determine which components need deployment
+          FRONTEND_CHANGED=false
+          ADMIN_CHANGED=false
+          BACKEND_CHANGED=false
+          
+          if echo "$CHANGED_FILES" | grep -q "^frontend/"; then
+            FRONTEND_CHANGED=true
           fi
           
-          # Save package.json hash for future checks
-          md5sum package.json > .package.json.hash
-          
-          # Install dependencies with modern flags and handle conflicts
-          if [ ! -d "node_modules" ]; then
-            echo "Performing fresh install..."
-            # First install critical dependencies
-            npm install tailwindcss postcss autoprefixer --save-dev
-            # Install all dependencies from package-lock.json with legacy peer deps
-            npm ci --omit=dev --omit=optional --legacy-peer-deps || {
-              echo "npm ci failed, falling back to npm install..."
-              npm install --omit=dev --omit=optional --legacy-peer-deps
-            }
-          else
-            echo "Updating existing dependencies..."
-            npm install --omit=dev --omit=optional --legacy-peer-deps
-          fi
-
-      - name: Build frontend application
-        working-directory: ./frontend
-        run: |
-          # Create temporary .env file for build
-          echo "${{ secrets.FRONTEND_ENV }}" > .env.build
-          
-          # Extract API URL from secrets for build environment  
-          FRONTEND_API_URL=$(grep NEXT_PUBLIC_API_URL .env.build | cut -d '=' -f2 || echo "https://growkapital.com/api")
-          
-          echo "Using Frontend API URL: $FRONTEND_API_URL"
-          
-          export NODE_OPTIONS="--max-old-space-size=4096"
-          export NEXT_TELEMETRY_DISABLED=1
-          export NEXT_PUBLIC_API_URL=$FRONTEND_API_URL
-          export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
-          export NEXT_BUFFER_SIZE=16384
-          export GENERATE_SOURCEMAP=false
-          # Disable static optimization for dynamic routes
-          export NEXT_DISABLE_STATIC_OPTIMIZATION=1
-          # Skip prerendering for pages with useSearchParams
-          export NEXT_SKIP_PRERENDER=1
-          
-          # Run build with error handling
-          npm run build:prod || {
-            echo "Build failed with errors, but continuing deployment..."
-            # Create minimal .next directory if it doesn't exist
-            mkdir -p .next/static
-            touch .next/static/.gitkeep
-          }
-          rm .env.build  # Clean up temporary file
-        
-      # Build Admin
-      - name: Install admin dependencies
-        working-directory: ./admin
-        run: |
-          # Smart node_modules check
-          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
-            echo "Cleaning node_modules due to missing dependencies or package-lock.json"
-            rm -rf node_modules package-lock.json
-          else
-            echo "✓ Existing node_modules found, checking for updates..."
-            # Check if package.json has changed
-            if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
-              echo "✓ package.json unchanged, skipping clean install"
-            else
-              echo "package.json changed, cleaning node_modules"
-              rm -rf node_modules package-lock.json
-            fi
+          if echo "$CHANGED_FILES" | grep -q "^admin/"; then
+            ADMIN_CHANGED=true
           fi
           
-          # Save package.json hash for future checks
-          md5sum package.json > .package.json.hash
-          
-          # Install dependencies with legacy peer deps
-          if [ ! -d "node_modules" ]; then
-            echo "Performing fresh install..."
-            # First install date-fns at a compatible version
-            npm install date-fns@3.2.0 --save-exact
-            # Then install the rest with legacy peer deps
-            npm install --legacy-peer-deps
-          else
-            echo "Updating existing dependencies..."
-            npm install --legacy-peer-deps
+          if echo "$CHANGED_FILES" | grep -q "^backend/"; then
+            BACKEND_CHANGED=true
           fi
+          
+          # If no specific changes detected, assume all need deployment
+          if [ "$FRONTEND_CHANGED" = "false" ] && [ "$ADMIN_CHANGED" = "false" ] && [ "$BACKEND_CHANGED" = "false" ]; then
+            echo "No specific changes detected, deploying all components"
+            FRONTEND_CHANGED=true
+            ADMIN_CHANGED=true
+            BACKEND_CHANGED=true
+          fi
+          
+          echo "FRONTEND_CHANGED=$FRONTEND_CHANGED" >> $GITHUB_ENV
+          echo "ADMIN_CHANGED=$ADMIN_CHANGED" >> $GITHUB_ENV
+          echo "BACKEND_CHANGED=$BACKEND_CHANGED" >> $GITHUB_ENV
 
-      - name: Build admin application
-        working-directory: ./admin
+      - name: Deploy frontend
+        if: env.FRONTEND_CHANGED == 'true'
         run: |
-          # Create temporary .env file for build
-          echo "${{ secrets.ADMIN_ENV }}" > .env.build
+          echo "Deploying frontend..."
           
-          # Extract API URL from secrets for build environment  
-          ADMIN_API_URL=$(grep NEXT_PUBLIC_API_URL .env.build | cut -d '=' -f2 || echo "https://growkapital.com/api")
+          # Create destination directory
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/frontend'
           
-          echo "Using Admin API URL: $ADMIN_API_URL"
+          # Copy frontend files
+          rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
-          export NODE_OPTIONS="--max-old-space-size=4096"
-          export NEXT_TELEMETRY_DISABLED=1
-          export NEXT_PUBLIC_API_URL=$ADMIN_API_URL
-          export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
-          export NEXT_BUFFER_SIZE=16384
-          export GENERATE_SOURCEMAP=false
-          # Disable static optimization for dynamic routes
-          export NEXT_DISABLE_STATIC_OPTIMIZATION=1
-          # Skip prerendering for pages with useSearchParams
-          export NEXT_SKIP_PRERENDER=1
+          # Copy environment file
+          scp -i ~/.ssh/deploy_key frontend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
-          # Run build with error handling
-          npm run build:prod || {
-            echo "Admin build failed with errors, but continuing deployment..."
-            # Create minimal .next directory if it doesn't exist
-            mkdir -p .next/static
-            touch .next/static/.gitkeep
-          }
-          rm .env.build  # Clean up temporary file
-
-      - name: Copy built files to server
-        run: |
-          # Copy built frontend files
-          echo "Copying built frontend files..."
-          rsync -avz --exclude="node_modules" --exclude=".next/cache" frontend/.next/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/.next/
-          
-          echo "Copying built admin files..."
-          rsync -avz --exclude="node_modules" --exclude=".next/cache" admin/.next/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/.next/
-          
-          # Install node_modules on server
-          echo "Installing node_modules on server..."
+          # Install dependencies and build on server
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital/frontend
-            npm install --legacy-peer-deps
             
-            cd /var/www/growkapital/admin
-            npm install --legacy-peer-deps
+            # Check if node_modules exists and is up to date
+            if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
+              echo "Installing frontend dependencies..."
+              npm install --legacy-peer-deps
+            else
+              echo "Checking if dependencies need updating..."
+              if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
+                echo "✓ package.json unchanged, skipping install"
+              else
+                echo "package.json changed, updating dependencies"
+                npm install --legacy-peer-deps
+                md5sum package.json > .package.json.hash
+              fi
+            fi
+            
+            # Build frontend
+            echo "Building frontend..."
+            export NODE_OPTIONS="--max-old-space-size=4096"
+            export NEXT_TELEMETRY_DISABLED=1
+            export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
+            export NEXT_BUFFER_SIZE=16384
+            export GENERATE_SOURCEMAP=false
+            export NEXT_DISABLE_STATIC_OPTIMIZATION=1
+            export NEXT_SKIP_PRERENDER=1
+            
+            npm run build:prod || {
+              echo "Build failed with errors, but continuing deployment..."
+              mkdir -p .next/static
+              touch .next/static/.gitkeep
+            }
+            
+            # Start or restart the frontend service
+            if pm2 list | grep -q "growkapital-frontend"; then
+              echo "Restarting frontend service..."
+              pm2 restart growkapital-frontend
+            else
+              echo "Starting frontend service..."
+              pm2 start npm --name "growkapital-frontend" -- start -- --port 3002 --hostname 0.0.0.0
+              pm2 save
+            fi
           '
 
-      - name: Handle environment files
+      - name: Deploy admin
+        if: env.ADMIN_CHANGED == 'true'
         run: |
-          # Handle environment files
-          echo "Setting up environment files..."
+          echo "Deploying admin..."
           
-          # Frontend .env
-          echo "${{ secrets.FRONTEND_ENV }}" > frontend.env
-          scp -i ~/.ssh/deploy_key frontend.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/.env
-          rm frontend.env
+          # Create destination directory
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/admin'
           
-          # Admin .env.local
-          echo "${{ secrets.ADMIN_ENV }}" > admin.env
-          scp -i ~/.ssh/deploy_key admin.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/.env.local
-          rm admin.env
+          # Copy admin files
+          rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
-          # Backend .env
-          echo "${{ secrets.BACKEND_ENV }}" > backend.env
-          scp -i ~/.ssh/deploy_key backend.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/.env
-          rm backend.env
-
-      - name: Deploy
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
-          script: |
-            # Verify target directory integrity before deploying
-            echo "Verifying deployment target directory..."
-            if [ ! -d "/var/www/growkapital" ]; then
-              echo "ERROR: Target directory /var/www/growkapital does not exist!"
-              echo "Creating directory structure..."
-              sudo mkdir -p /var/www/growkapital
-              sudo chown -R $USER:$USER /var/www/growkapital
-            fi
+          # Copy environment file
+          scp -i ~/.ssh/deploy_key admin/.env.local ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
+          
+          # Install dependencies and build on server
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd /var/www/growkapital/admin
             
-            # Check disk space
-            echo "Checking disk space..."
-            df -h
-            
-            # Clean up disk space if needed
-            FREE_SPACE_KB=$(df -k / | awk 'NR==2 {print $4}')
-            echo "Free space: ${FREE_SPACE_KB}KB"
-            
-            if [ ${FREE_SPACE_KB} -lt 1048576 ]; then  # Less than 1GB free
-              echo "Low disk space detected, cleaning up..."
-              
-              # Clean Docker
-              echo "Cleaning Docker resources..."
-              docker system prune -af --volumes || true
-              
-              # Clean npm caches
-              echo "Cleaning npm caches..."
-              npm cache clean --force || true
-              
-              # Clean temporary files
-              echo "Cleaning temporary files..."
-              sudo rm -rf /tmp/* || true
-              
-              # Clean old logs
-              echo "Cleaning old logs..."
-              sudo find /var/log -type f -name "*.gz" -delete || true
-              sudo find /var/log -type f -name "*.1" -delete || true
-              sudo find /var/log -type f -name "*.old" -delete || true
-              
-              # Clean old deployments
-              echo "Cleaning old deployment backups..."
-              find /var/www/growkapital -name "config_backup_*" -type d -mtime +7 -exec rm -rf {} \; 2>/dev/null || true
-              
-              # Check space after cleanup
-              echo "Space after cleanup:"
-              df -h
-            fi
-
-      - name: Install debugging tools
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
-          script: |
-            # Install debugging tools if needed
-            if ! command -v wkhtmltoimage > /dev/null; then
-              echo "Installing wkhtmltopdf for debugging screenshots..."
-              sudo apt-get update
-              sudo apt-get install -y wkhtmltopdf
-            fi
-            
-            # Check for potential conflicts with other websites
-            echo "Checking for potential website conflicts..."
-            ls -la /var/www/
-            
-            # Verify this is the correct project by checking for unique identifiers
-            if [ -f "/var/www/growkapital/frontend/package.json" ]; then
-              echo "Verifying project identity..."
-              if grep -q "\"name\":" /var/www/growkapital/frontend/package.json; then
-                PROJECT_NAME=$(grep "\"name\":" /var/www/growkapital/frontend/package.json | cut -d '"' -f 4)
-                echo "Found project name: $PROJECT_NAME"
-                
-                # Accept either "growkapital", "growkapital-frontend", or just "frontend"
-                if [[ "$PROJECT_NAME" == "growkapital"* || "$PROJECT_NAME" == "frontend" ]]; then
-                  echo "✓ Confirmed target directory contains the correct project"
-                else
-                  echo "WARNING: Target directory may contain a different project!"
-                  echo "Project verification failed. Please check manually."
-                  grep "name" /var/www/growkapital/frontend/package.json
-                  exit 1
-                fi
-              else
-                echo "WARNING: Couldn't determine project name from package.json!"
-                cat /var/www/growkapital/frontend/package.json | head -5
-                exit 1
-              fi
-            fi
-
-      - name: Backend deployment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
-          script: |
-            cd /var/www/growkapital
-            
-            # Cleanup any leftover temporary files
-            rm -rf /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config
-            
-            # Memory optimization: Clear system cache
-            sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
-            
-            # Deploy Backend
-            cd backend
-            
-            # Create .env file from secrets
-            echo "${{ secrets.BACKEND_ENV }}" > .env
-            
-            # Check and update Dockerfile.prod to skip TypeScript errors if needed
-            if [ -f "Dockerfile.prod" ]; then
-              echo "Ensuring Dockerfile.prod skips TypeScript errors..."
-              if ! grep -q "skipLibCheck" Dockerfile.prod; then
-                # Add TypeScript skip configuration if not present
-                sed -i '/RUN npx prisma generate/a \\\nRUN echo \\"{ \\\\\\"compilerOptions\\\\\\": { \\\\\\"skipLibCheck\\\\\\": true, \\\\\\"noEmitOnError\\\\\\": false } }\\" > tsconfig.build.json\nRUN npm run build || mkdir -p dist && cp -r src/* dist/' Dockerfile.prod
-                echo "Updated Dockerfile.prod to skip TypeScript errors"
-              fi
-            fi
-            
-            # Verify critical backend environment variables
-            echo "Checking backend environment configuration..."
-            # Note: We're only checking existence, not displaying sensitive values
-            if grep -q "PORT" .env && grep -q "DATABASE_URL" .env && grep -q "JWT_SECRET" .env; then
-              echo "✓ Backend environment includes required variables"
-              # Extract PORT value and ensure it's just the number
-              BACKEND_PORT=$(grep "^PORT=" .env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
-              # Verify it's a valid number and not concatenated values
-              if ! [[ "$BACKEND_PORT" =~ ^[0-9]+$ ]]; then
-                echo "WARNING: PORT value '$BACKEND_PORT' is not a valid number. Using default 4000."
-                BACKEND_PORT="4000"
-              fi
-              echo "Backend configured to use port: $BACKEND_PORT"
+            # Check if node_modules exists and is up to date
+            if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
+              echo "Installing admin dependencies..."
+              npm install --legacy-peer-deps
             else
-              echo "⚠️ WARNING: Backend environment missing critical variables!"
-              grep -v "PASSWORD\|SECRET" .env | grep "=" || echo "No readable variables found"
-              BACKEND_PORT="4000"
+              echo "Checking if dependencies need updating..."
+              if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
+                echo "✓ package.json unchanged, skipping install"
+              else
+                echo "package.json changed, updating dependencies"
+                npm install --legacy-peer-deps
+                md5sum package.json > .package.json.hash
+              fi
             fi
             
-            # Check Docker build tools and run Docker Compose for backend
-            echo "Starting backend with Docker Compose..."
-            cd /var/www/growkapital/backend
-            docker-compose -f docker-compose.prod.yml up -d --build backend postgres
+            # Build admin
+            echo "Building admin..."
+            export NODE_OPTIONS="--max-old-space-size=4096"
+            export NEXT_TELEMETRY_DISABLED=1
+            export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
+            export NEXT_BUFFER_SIZE=16384
+            export GENERATE_SOURCEMAP=false
+            export NEXT_DISABLE_STATIC_OPTIMIZATION=1
+            export NEXT_SKIP_PRERENDER=1
             
-            # Wait for backend to start
-            echo "Waiting for backend to start..."
+            npm run build:prod || {
+              echo "Build failed with errors, but continuing deployment..."
+              mkdir -p .next/static
+              touch .next/static/.gitkeep
+            }
+            
+            # Start or restart the admin service
+            if pm2 list | grep -q "growkapital-admin"; then
+              echo "Restarting admin service..."
+              pm2 restart growkapital-admin
+            else
+              echo "Starting admin service..."
+              pm2 start npm --name "growkapital-admin" -- start -- --port 3003 --hostname 0.0.0.0
+              pm2 save
+            fi
+          '
+
+      - name: Deploy backend
+        if: env.BACKEND_CHANGED == 'true'
+        run: |
+          echo "Deploying backend..."
+          
+          # Create destination directory
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/backend'
+          
+          # Copy backend files
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          
+          # Copy environment file
+          scp -i ~/.ssh/deploy_key backend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          
+          # Build and restart backend containers
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd /var/www/growkapital/backend
+            
+            # Stop existing containers
+            echo "Stopping existing backend containers..."
+            docker-compose -f docker-compose.prod.yml down || true
+            
+            # Build and start containers
+            echo "Building and starting backend containers..."
+            docker-compose -f docker-compose.prod.yml up -d --build
+            
+            # Wait for containers to start
+            echo "Waiting for containers to start..."
             sleep 10
             
-            # Check if backend is running
+            # Check if containers are running
             if docker ps | grep -q "growkapital_backend"; then
               echo "✅ Backend container is running"
             else
@@ -437,7 +235,6 @@ jobs:
               exit 1
             fi
             
-            # Check if postgres is running
             if docker ps | grep -q "growkapital_postgres"; then
               echo "✅ Postgres container is running"
             else
@@ -445,266 +242,60 @@ jobs:
               docker logs growkapital_postgres
               exit 1
             fi
+          '
 
       - name: Verify deployment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
-          script: |
-            cd /var/www/growkapital
-            
-            # Verify critical pages are accessible
-            echo "Verifying critical pages..."
-            
-            # Check domain access (via nginx)
-            LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://growkapital.com/login || echo "Failed")
-            echo "Login page via domain status: $LOGIN_STATUS"
-            if [ "$LOGIN_STATUS" = "200" ]; then
-              echo "✓ Login page is accessible via domain"
-            else
-              echo "✗ Login page returned status $LOGIN_STATUS via domain"
-            fi
-            
-            # Check direct port access
-            DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo "Failed")
-            echo "Login page via direct port status: $DIRECT_STATUS"
-            if [ "$DIRECT_STATUS" = "200" ]; then
-              echo "✓ Login page is accessible via direct port"
-            else
-              echo "✗ Login page returned status $DIRECT_STATUS via direct port"
-              # Check Next.js server logs
-              pm2 logs growkapital-frontend --lines 20 --nostream
-            fi
-            
-            # Check CSS and layout files
-            echo "Checking for CSS and layout files..."
-            if [ -d "/var/www/growkapital/frontend/.next/static/css" ]; then
-              echo "✓ CSS files exist in build"
-              ls -la /var/www/growkapital/frontend/.next/static/css/ | head -5
-            else
-              echo "✗ No CSS files found in build directory!"
-            fi
-
-      - name: SSL Certificate Check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "10m"
-          script: |
-            cd /var/www/growkapital
-            
-            # SSL certificate check and renewal
-            echo "Checking SSL certificates..."
-            if [ ! -d "/etc/letsencrypt/live/growkapital.com" ]; then
-              echo "⚠️ SSL certificate directory not found! Running certbot to get new certificate..."
-              sudo certbot --nginx -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --agree-tos --non-interactive --email ${{ secrets.SSL_EMAIL }} || {
-                echo "❌ Failed to obtain SSL certificates automatically"
-                echo "Manual command: sudo certbot --nginx -d growkapital.com -d www.growkapital.com -d admin.growkapital.com"
-              }
-            fi
-            
-            # Check if SSL certificates are properly configured in Nginx
-            echo "Checking Nginx SSL configuration..."
-            if sudo grep -q "ssl_certificate" /etc/nginx/sites-available/growkapital; then
-              echo "✓ SSL certificates are configured in Nginx"
-              
-              # Check if certificates are valid
-              echo "Checking certificate validity..."
-              if sudo openssl x509 -noout -dates -in /etc/letsencrypt/live/growkapital.com/fullchain.pem | grep -q "notAfter"; then
-                echo "✓ SSL certificates are valid"
-                sudo openssl x509 -noout -dates -in /etc/letsencrypt/live/growkapital.com/fullchain.pem
+        run: |
+          echo "Verifying deployment..."
+          
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            # Check frontend
+            if [ "${{ env.FRONTEND_CHANGED }}" = "true" ]; then
+              echo "Verifying frontend..."
+              FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo "Failed")
+              echo "Frontend status: $FRONTEND_STATUS"
+              if [ "$FRONTEND_STATUS" = "200" ]; then
+                echo "✅ Frontend is accessible"
               else
-                echo "✗ SSL certificates are invalid or missing!"
-                echo "Running certbot renewal..."
-                sudo certbot renew --nginx --non-interactive
-              fi
-            else
-              echo "✗ No SSL certificate paths found in Nginx config!"
-              echo "Adding SSL configuration manually..."
-              
-              # Backup current config
-              sudo cp /etc/nginx/sites-available/growkapital /etc/nginx/sites-available/growkapital.bak
-              
-              # Add SSL configuration if missing
-              sudo sed -i '/server_name growkapital.com www.growkapital.com;/a \
-              \    ssl_certificate /etc/letsencrypt/live/growkapital.com/fullchain.pem;\
-              \    ssl_certificate_key /etc/letsencrypt/live/growkapital.com/privkey.pem;\
-              \    ssl_trusted_certificate /etc/letsencrypt/live/growkapital.com/chain.pem;' /etc/nginx/sites-available/growkapital
-              
-              # Check if edit was successful
-              if sudo grep -q "ssl_certificate" /etc/nginx/sites-available/growkapital; then
-                echo "✓ Successfully added SSL certificate paths to Nginx config"
-                sudo nginx -t && sudo systemctl reload nginx
-              else
-                echo "✗ Failed to add SSL certificate paths to Nginx config"
-                echo "Restoring backup..."
-                sudo cp /etc/nginx/sites-available/growkapital.bak /etc/nginx/sites-available/growkapital
+                echo "❌ Frontend returned status $FRONTEND_STATUS"
+                pm2 logs growkapital-frontend --lines 10 --nostream
               fi
             fi
             
-            if [ -f "/tmp/files-changed" ]; then
-              rm -f "/tmp/files-changed"
-              echo "Deployment completed successfully"
+            # Check admin
+            if [ "${{ env.ADMIN_CHANGED }}" = "true" ]; then
+              echo "Verifying admin..."
+              ADMIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login || echo "Failed")
+              echo "Admin status: $ADMIN_STATUS"
+              if [ "$ADMIN_STATUS" = "200" ]; then
+                echo "✅ Admin is accessible"
+              else
+                echo "❌ Admin returned status $ADMIN_STATUS"
+                pm2 logs growkapital-admin --lines 10 --nostream
+              fi
+            fi
             
-              echo "No changes detected, deployment completed"
-            fi 
-
-      - name: Troubleshoot 502 Bad Gateway
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
-          script: |
-            echo "============== TROUBLESHOOTING 502 BAD GATEWAY ==============="
-            echo "Checking permissions and application status..."
-
-            # Check file permissions in critical directories
-            echo "Checking file permissions..."
-            ls -la /var/www/growkapital/frontend/node_modules/.bin/next 2>/dev/null || echo "Frontend next binary not found!"
-            ls -la /var/www/growkapital/admin/node_modules/.bin/next 2>/dev/null || echo "Admin next binary not found!"
-
-            # Check PM2 processes status
-            echo "PM2 processes:"
-            pm2 list
-
-            # Kill any 'backend' process not in a container if it exists
-            echo "Removing any standalone backend processes..."
-            pm2 delete backend 2>/dev/null || true
-
-            # Check port bindings
-            echo "Port bindings:"
-            ss -tuln | grep -E ':(3002|3003|4000)'
-
-            # Check if frontend is actually running and listening
-            echo "Attempting to fix frontend..."
-            cd /var/www/growkapital/frontend
-
-            # Check for node_modules
-            if [ ! -d "node_modules" ]; then
-              echo "❌ Frontend node_modules not found, installing dependencies..."
-              npm install --production --no-progress
+            # Check backend
+            if [ "${{ env.BACKEND_CHANGED }}" = "true" ]; then
+              echo "Verifying backend..."
+              BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4000/api/health || echo "Failed")
+              echo "Backend status: $BACKEND_STATUS"
+              if [ "$BACKEND_STATUS" = "200" ]; then
+                echo "✅ Backend is accessible"
+              else
+                echo "❌ Backend returned status $BACKEND_STATUS"
+                docker logs growkapital_backend --tail 20
+              fi
             fi
-
-            # Check for Next.js binary
-            if [ ! -f "node_modules/.bin/next" ]; then
-              echo "❌ next binary not found, installing next..."
-              npm install next --save
-            fi
-
-            pm2 delete growkapital-frontend 2>/dev/null || true
-            export NODE_OPTIONS="--max-old-space-size=256"
-            # Use explicit next command with full path to avoid permission issues
-            pm2 start --name "growkapital-frontend" npm -- start -- --port 3002 --hostname 0.0.0.0
-            pm2 save --silent
-            sleep 5
-
-            # Check if admin is actually running and listening
-            echo "Attempting to fix admin..."
-            cd /var/www/growkapital/admin
-
-            # Check for node_modules
-            if [ ! -d "node_modules" ]; then
-              echo "❌ Admin node_modules not found, installing dependencies..."
-              npm install --production --no-progress
-            fi
-
-            # Check for Next.js binary
-            if [ ! -f "node_modules/.bin/next" ]; then
-              echo "❌ next binary not found, installing next..."
-              npm install next --save
-            fi
-
-            pm2 delete growkapital-admin 2>/dev/null || true
-            export NODE_OPTIONS="--max-old-space-size=256"
-            # Use explicit next command with full path to avoid permission issues
-            pm2 start --name "growkapital-admin" npm -- start -- --port 3003 --hostname 0.0.0.0
-            pm2 save --silent
-            sleep 5
-
-            # Check Docker container for backend
-            echo "Docker containers:"
-            docker ps -a
-
-            # Check Docker networks
-            echo "Docker networks:"
-            docker network ls
-
-            # Check if there are any port conflicts
-            echo "Checking for port conflicts..."
-            netstat -tuln | grep -E ':(3002|3003|4000)' || echo "No conflicts found"
-
-            # Fix common Docker issues
-            echo "Attempting to resolve common Docker issues..."
-            echo "1. Removing orphaned containers..."
-            docker container prune -f
-            echo "2. Checking Docker service health..."
-            systemctl status docker
-            echo "3. Restarting the backend container with host network mode..."
-            cd /var/www/growkapital/backend
-            sed -i 's/network_mode:.*$/network_mode: "host"/' docker-compose.prod.yml
-            docker-compose -f docker-compose.prod.yml down
-            docker-compose -f docker-compose.prod.yml up -d --build
-
-            # Wait for backend container to start
-            echo "Waiting for backend to start..."
-            sleep 10
-
-            # Final check on port bindings
-            echo "Final port bindings:"
-            ss -tuln | grep -E ':(3002|3003|4000)'
-
-            # Restart Nginx
-            echo "Restarting Nginx..."
-            sudo systemctl restart nginx
+            
+            # Check nginx configuration
+            echo "Checking nginx configuration..."
             sudo nginx -t
-
-            # Check package.json for frontend
-            echo "Checking frontend package.json..."
-            cd /var/www/growkapital/frontend
-            if [ -f "package.json" ]; then
-              echo "Frontend package.json found, checking content..."
-              grep -A 5 "\"scripts\"" package.json
-              grep "\"next\"" package.json || echo "next dependency not found in package.json!"
-            else
-              echo "❌ ERROR: Frontend package.json not found!"
+            
+            # Reload nginx if needed
+            if [ -f "/tmp/nginx-reload-needed" ]; then
+              echo "Reloading nginx..."
+              sudo systemctl reload nginx
+              rm -f "/tmp/nginx-reload-needed"
             fi
-
-            # Check package.json for admin
-            echo "Checking admin package.json..."
-            cd /var/www/growkapital/admin
-            if [ -f "package.json" ]; then
-              echo "Admin package.json found, checking content..."
-              grep -A 5 "\"scripts\"" package.json
-              grep "\"next\"" package.json || echo "next dependency not found in package.json!"
-            else
-              echo "❌ ERROR: Admin package.json not found!"
-            fi
-
-            # Check if Next.js configurations are correct
-            echo "Checking Next.js configurations..."
-            cd /var/www/growkapital/frontend
-            if [ -f "next.config.js" ]; then
-              echo "Frontend next.config.js found:"
-              cat next.config.js
-            else
-              echo "Frontend next.config.js not found! Creating basic config..."
-              echo "module.exports = { output: 'standalone', }" > next.config.js
-            fi
-
-            cd /var/www/growkapital/admin
-            if [ -f "next.config.js" ]; then
-              echo "Admin next.config.js found:"
-              cat next.config.js
-            else
-              echo "Admin next.config.js not found! Creating basic config..."
-              echo "module.exports = { output: 'standalone', }" > next.config.js
-            fi
-
-            echo "============== END TROUBLESHOOTING ==============" 
+          ' 
