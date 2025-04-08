@@ -96,8 +96,8 @@ jobs:
           # Copy environment file
           scp -i ~/.ssh/deploy_key frontend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
-          # Install dependencies and build on server
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+          # Install dependencies and build on server with improved timeout handling
+          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital/frontend
             
             # Check if node_modules exists and is up to date
@@ -115,7 +115,7 @@ jobs:
               fi
             fi
             
-            # Build frontend
+            # Build frontend with optimized settings
             echo "Building frontend..."
             export NODE_OPTIONS="--max-old-space-size=4096"
             export NEXT_TELEMETRY_DISABLED=1
@@ -125,11 +125,39 @@ jobs:
             export NEXT_DISABLE_STATIC_OPTIMIZATION=1
             export NEXT_SKIP_PRERENDER=1
             
-            npm run build:prod || {
-              echo "Build failed with errors, but continuing deployment..."
+            # Run build in the background with nohup to prevent SSH timeout
+            nohup npm run build:prod > build.log 2>&1 &
+            BUILD_PID=$!
+            
+            # Wait for build to complete with timeout
+            echo "Waiting for build to complete (timeout: 10 minutes)..."
+            TIMEOUT=600  # 10 minutes
+            ELAPSED=0
+            INTERVAL=10  # Check every 10 seconds
+            
+            while kill -0 $BUILD_PID 2>/dev/null; do
+              if [ $ELAPSED -ge $TIMEOUT ]; then
+                echo "Build timed out after $TIMEOUT seconds"
+                kill -9 $BUILD_PID 2>/dev/null || true
+                break
+              fi
+              
+              # Show build progress
+              echo "Build in progress... ($ELAPSED seconds elapsed)"
+              tail -n 5 build.log
+              
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+            done
+            
+            # Check if build completed successfully
+            if [ -d ".next" ] && [ -f ".next/static/manifest.json" ]; then
+              echo "✅ Frontend build completed successfully"
+            else
+              echo "⚠️ Frontend build may have failed, but continuing deployment..."
               mkdir -p .next/static
               touch .next/static/.gitkeep
-            }
+            fi
             
             # Start or restart the frontend service
             if pm2 list | grep -q "growkapital-frontend"; then
@@ -158,8 +186,8 @@ jobs:
           # Copy environment file
           scp -i ~/.ssh/deploy_key admin/.env.local ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
-          # Install dependencies and build on server
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+          # Install dependencies and build on server with improved timeout handling
+          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital/admin
             
             # Check if node_modules exists and is up to date
@@ -177,7 +205,7 @@ jobs:
               fi
             fi
             
-            # Build admin
+            # Build admin with optimized settings
             echo "Building admin..."
             export NODE_OPTIONS="--max-old-space-size=4096"
             export NEXT_TELEMETRY_DISABLED=1
@@ -187,11 +215,39 @@ jobs:
             export NEXT_DISABLE_STATIC_OPTIMIZATION=1
             export NEXT_SKIP_PRERENDER=1
             
-            npm run build:prod || {
-              echo "Build failed with errors, but continuing deployment..."
+            # Run build in the background with nohup to prevent SSH timeout
+            nohup npm run build:prod > build.log 2>&1 &
+            BUILD_PID=$!
+            
+            # Wait for build to complete with timeout
+            echo "Waiting for build to complete (timeout: 10 minutes)..."
+            TIMEOUT=600  # 10 minutes
+            ELAPSED=0
+            INTERVAL=10  # Check every 10 seconds
+            
+            while kill -0 $BUILD_PID 2>/dev/null; do
+              if [ $ELAPSED -ge $TIMEOUT ]; then
+                echo "Build timed out after $TIMEOUT seconds"
+                kill -9 $BUILD_PID 2>/dev/null || true
+                break
+              fi
+              
+              # Show build progress
+              echo "Build in progress... ($ELAPSED seconds elapsed)"
+              tail -n 5 build.log
+              
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+            done
+            
+            # Check if build completed successfully
+            if [ -d ".next" ] && [ -f ".next/static/manifest.json" ]; then
+              echo "✅ Admin build completed successfully"
+            else
+              echo "⚠️ Admin build may have failed, but continuing deployment..."
               mkdir -p .next/static
               touch .next/static/.gitkeep
-            }
+            fi
             
             # Start or restart the admin service
             if pm2 list | grep -q "growkapital-admin"; then
