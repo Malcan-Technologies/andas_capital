@@ -249,16 +249,51 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital/backend
             
+            # Check if Docker is installed
+            if ! command -v docker &> /dev/null; then
+              echo "❌ Docker is not installed. Please install Docker first."
+              exit 1
+            fi
+            
             # Check if Docker Compose is installed
             if ! command -v docker-compose &> /dev/null; then
               echo "Docker Compose not found. Installing Docker Compose..."
               
-              # Install Docker Compose
-              sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
+              # Try to install Docker Compose using package manager first
+              if command -v apt-get &> /dev/null; then
+                echo "Installing Docker Compose using apt..."
+                sudo apt-get update
+                sudo apt-get install -y docker-compose-plugin
+                sudo ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+              elif command -v yum &> /dev/null; then
+                echo "Installing Docker Compose using yum..."
+                sudo yum install -y docker-compose-plugin
+                sudo ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+              else
+                # Fallback to direct download
+                echo "Installing Docker Compose using direct download..."
+                COMPOSE_VERSION="v2.24.5"
+                COMPOSE_ARCH=$(uname -m)
+                if [ "$COMPOSE_ARCH" = "x86_64" ]; then
+                  COMPOSE_ARCH="x86_64"
+                elif [ "$COMPOSE_ARCH" = "aarch64" ]; then
+                  COMPOSE_ARCH="aarch64"
+                else
+                  echo "Unsupported architecture: $COMPOSE_ARCH"
+                  exit 1
+                fi
+                
+                sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${COMPOSE_ARCH}" -o /usr/local/bin/docker-compose
+                sudo chmod +x /usr/local/bin/docker-compose
+              fi
               
               # Verify installation
-              docker-compose --version
+              if ! command -v docker-compose &> /dev/null; then
+                echo "❌ Failed to install Docker Compose. Please install it manually."
+                exit 1
+              fi
+              
+              echo "✅ Docker Compose installed successfully: $(docker-compose --version)"
             fi
             
             # Stop existing containers if they exist
@@ -271,7 +306,13 @@ jobs:
             export NODE_OPTIONS="--no-type-check"
             # Ensure we're using Dockerfile.prod
             export DOCKER_BUILDKIT=1
-            docker-compose -f docker-compose.prod.yml up -d --build
+            
+            # Try to build and start containers
+            if ! docker-compose -f docker-compose.prod.yml up -d --build; then
+              echo "❌ Failed to build and start containers. Showing logs:"
+              docker-compose -f docker-compose.prod.yml logs
+              exit 1
+            fi
             
             # Wait for containers to start
             echo "Waiting for containers to start..."
