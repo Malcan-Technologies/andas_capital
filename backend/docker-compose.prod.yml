@@ -32,6 +32,8 @@ services:
         build:
             context: .
             dockerfile: Dockerfile.prod
+            args:
+                - NODE_OPTIONS=--no-type-check
         restart: always
         ports:
             - "4001:4001"

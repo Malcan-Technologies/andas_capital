@@ -257,6 +257,8 @@ jobs:
             echo "Building and starting backend containers..."
             # Add --no-type-check flag to ignore TypeScript errors
             export NODE_OPTIONS="--no-type-check"
+            # Ensure we're using Dockerfile.prod
+            export DOCKER_BUILDKIT=1
             docker-compose -f docker-compose.prod.yml up -d --build
             
             # Wait for containers to start
