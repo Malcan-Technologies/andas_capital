@@ -350,7 +350,7 @@ jobs:
             
             # Reload nginx
             echo "Reloading nginx..."
-            sudo systemctl reload nginx
+                sudo systemctl reload nginx
           '
 
       - name: Verify deployment
