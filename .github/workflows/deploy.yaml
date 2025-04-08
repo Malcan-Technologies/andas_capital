@@ -249,6 +249,18 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital/backend
             
+            # Check if Docker Compose is installed
+            if ! command -v docker-compose &> /dev/null; then
+              echo "Docker Compose not found. Installing Docker Compose..."
+              
+              # Install Docker Compose
+              sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              
+              # Verify installation
+              docker-compose --version
+            fi
+            
             # Stop existing containers if they exist
             echo "Stopping existing backend containers..."
             docker-compose -f docker-compose.prod.yml down || true
