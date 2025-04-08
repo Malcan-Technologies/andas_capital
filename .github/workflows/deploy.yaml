@@ -34,100 +34,21 @@ jobs:
           echo "${{ secrets.ADMIN_ENV }}" > admin/.env.local
           echo "${{ secrets.BACKEND_ENV }}" > backend/.env
 
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v41
-        with:
-          files: |
-            frontend/**
-            admin/**
-            backend/**
-            config/**
-
-      - name: Set deployment flags
-        run: |
-          # Check if any frontend files changed
-          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^frontend/"; then
-            echo "FRONTEND_CHANGED=true" >> $GITHUB_ENV
-          else
-            echo "FRONTEND_CHANGED=false" >> $GITHUB_ENV
-          fi
-          
-          # Check if any admin files changed
-          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^admin/"; then
-            echo "ADMIN_CHANGED=true" >> $GITHUB_ENV
-          else
-            echo "ADMIN_CHANGED=false" >> $GITHUB_ENV
-          fi
-          
-          # Check if any backend files changed
-          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^backend/"; then
-            echo "BACKEND_CHANGED=true" >> $GITHUB_ENV
-          else
-            echo "BACKEND_CHANGED=false" >> $GITHUB_ENV
-          fi
-          
-          # Check if any config files changed
-          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^config/"; then
-            echo "CONFIG_CHANGED=true" >> $GITHUB_ENV
-          else
-            echo "CONFIG_CHANGED=false" >> $GITHUB_ENV
-          fi
-          
-          # If no specific changes detected, assume all need deployment
-          if [ "${{ env.FRONTEND_CHANGED }}" = "false" ] && [ "${{ env.ADMIN_CHANGED }}" = "false" ] && [ "${{ env.BACKEND_CHANGED }}" = "false" ] && [ "${{ env.CONFIG_CHANGED }}" = "false" ]; then
-            echo "No specific changes detected, deploying all components"
-            echo "FRONTEND_CHANGED=true" >> $GITHUB_ENV
-            echo "ADMIN_CHANGED=true" >> $GITHUB_ENV
-            echo "BACKEND_CHANGED=true" >> $GITHUB_ENV
-            echo "CONFIG_CHANGED=true" >> $GITHUB_ENV
-          fi
-          
-          # Print the changed files for debugging
-          echo "Changed files:"
-          echo "${{ steps.changed-files.outputs.all_changed_files }}"
-
       - name: Deploy frontend
-        if: env.FRONTEND_CHANGED == 'true'
         run: |
           echo "Deploying frontend..."
           
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/frontend'
           
-          # Always copy environment file
+          # Copy environment file
           scp -i ~/.ssh/deploy_key frontend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
-          # Check if we need to copy all files or just changed ones
-          if [ "${{ steps.changed-files.outputs.all_changed_files }}" = "all" ]; then
-            echo "Copying all frontend files..."
-            rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
-              -e "ssh -i ~/.ssh/deploy_key" \
-              frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
-          else
-            echo "Copying only changed frontend files..."
-            # Create a temporary file with the list of changed files
-            echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep "^frontend/" > changed-frontend-files.txt
-            
-            # Copy each changed file individually
-            while IFS= read -r file; do
-              if [ -n "$file" ]; then
-                echo "Copying: $file"
-                # Create the directory structure if it doesn't exist
-                ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /var/www/growkapital/$(dirname $file)"
-                # Copy the file
-                scp -i ~/.ssh/deploy_key $file ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/$file
-              fi
-            done < changed-frontend-files.txt
-            
-            # If no files were copied, fall back to copying all files
-            if [ ! -s changed-frontend-files.txt ]; then
-              echo "No specific frontend files changed, copying all files..."
-              rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
-                -e "ssh -i ~/.ssh/deploy_key" \
-                frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
-            fi
-          fi
+          # Copy all frontend files
+          echo "Copying all frontend files..."
+          rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
           # Install dependencies and build on server with improved timeout handling
           ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -210,17 +131,16 @@ jobs:
           '
 
       - name: Deploy admin
-        if: env.ADMIN_CHANGED == 'true'
         run: |
           echo "Deploying admin..."
           
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/admin'
           
-          # Always copy environment file
+          # Copy environment file
           scp -i ~/.ssh/deploy_key admin/.env.local ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
-          # For admin, we'll do a fresh copy of all files to ensure consistency
+          # Copy all admin files
           echo "Copying all admin files..."
           rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
             -e "ssh -i ~/.ssh/deploy_key" \
@@ -310,46 +230,20 @@ jobs:
           '
 
       - name: Deploy backend
-        if: env.BACKEND_CHANGED == 'true'
         run: |
           echo "Deploying backend..."
           
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/backend'
           
-          # Always copy environment file
+          # Copy environment file
           scp -i ~/.ssh/deploy_key backend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
           
-          # Check if we need to copy all files or just changed ones
-          if [ "${{ steps.changed-files.outputs.all_changed_files }}" = "all" ]; then
-            echo "Copying all backend files..."
-            rsync -avz --delete --exclude="node_modules" --exclude="dist" \
-              -e "ssh -i ~/.ssh/deploy_key" \
-              backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
-          else
-            echo "Copying only changed backend files..."
-            # Create a temporary file with the list of changed files
-            echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep "^backend/" > changed-backend-files.txt
-            
-            # Copy each changed file individually
-            while IFS= read -r file; do
-              if [ -n "$file" ]; then
-                echo "Copying: $file"
-                # Create the directory structure if it doesn't exist
-                ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /var/www/growkapital/$(dirname $file)"
-                # Copy the file
-                scp -i ~/.ssh/deploy_key $file ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/$file
-              fi
-            done < changed-backend-files.txt
-            
-            # If no files were copied, fall back to copying all files
-            if [ ! -s changed-backend-files.txt ]; then
-              echo "No specific backend files changed, copying all files..."
-              rsync -avz --delete --exclude="node_modules" --exclude="dist" \
-                -e "ssh -i ~/.ssh/deploy_key" \
-                backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
-            fi
-          fi
+          # Copy all backend files
+          echo "Copying all backend files..."
+          rsync -avz --delete --exclude="node_modules" --exclude="dist" \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
           
           # Build and start backend containers
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -380,47 +274,17 @@ jobs:
           '
 
       - name: Deploy config files
-        if: env.CONFIG_CHANGED == 'true'
         run: |
           echo "Deploying config files..."
           
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/config'
           
-          # Always copy nginx configuration
-          echo "Copying nginx configuration..."
-          scp -i ~/.ssh/deploy_key config/nginx.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
-          
-          # Check if we need to copy all files or just changed ones
-          if [ "${{ steps.changed-files.outputs.all_changed_files }}" = "all" ]; then
-            echo "Copying all config files..."
-            rsync -avz --delete \
-              -e "ssh -i ~/.ssh/deploy_key" \
-              config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
-          else
-            echo "Copying only changed config files..."
-            # Create a temporary file with the list of changed files
-            echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep "^config/" > changed-config-files.txt
-            
-            # Copy each changed file individually
-            while IFS= read -r file; do
-              if [ -n "$file" ]; then
-                echo "Copying: $file"
-                # Create the directory structure if it doesn't exist
-                ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /var/www/growkapital/$(dirname $file)"
-                # Copy the file
-                scp -i ~/.ssh/deploy_key $file ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/$file
-              fi
-            done < changed-config-files.txt
-            
-            # If no files were copied, fall back to copying all files
-            if [ ! -s changed-config-files.txt ]; then
-              echo "No specific config files changed, copying all files..."
-              rsync -avz --delete \
-                -e "ssh -i ~/.ssh/deploy_key" \
-                config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
-            fi
-          fi
+          # Copy all config files
+          echo "Copying all config files..."
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
           
           # Apply nginx configuration with improved error handling
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -458,62 +322,56 @@ jobs:
           
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             # Check frontend
-            if [ "${{ env.FRONTEND_CHANGED }}" = "true" ]; then
-              echo "Verifying frontend..."
-              FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo "Failed")
-              echo "Frontend status: $FRONTEND_STATUS"
-              if [ "$FRONTEND_STATUS" = "200" ]; then
-                echo "✅ Frontend is accessible"
-              else
-                echo "❌ Frontend returned status $FRONTEND_STATUS"
-                pm2 logs growkapital-frontend --lines 10 --nostream
-              fi
+            echo "Verifying frontend..."
+            FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo "Failed")
+            echo "Frontend status: $FRONTEND_STATUS"
+            if [ "$FRONTEND_STATUS" = "200" ]; then
+              echo "✅ Frontend is accessible"
+            else
+              echo "❌ Frontend returned status $FRONTEND_STATUS"
+              pm2 logs growkapital-frontend --lines 10 --nostream
             fi
             
             # Check admin
-            if [ "${{ env.ADMIN_CHANGED }}" = "true" ]; then
-              echo "Verifying admin..."
-              ADMIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login || echo "Failed")
-              echo "Admin status: $ADMIN_STATUS"
-              if [ "$ADMIN_STATUS" = "200" ]; then
-                echo "✅ Admin is accessible"
-              else
-                echo "❌ Admin returned status $ADMIN_STATUS"
-                pm2 logs growkapital-admin --lines 10 --nostream
-              fi
+            echo "Verifying admin..."
+            ADMIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login || echo "Failed")
+            echo "Admin status: $ADMIN_STATUS"
+            if [ "$ADMIN_STATUS" = "200" ]; then
+              echo "✅ Admin is accessible"
+            else
+              echo "❌ Admin returned status $ADMIN_STATUS"
+              pm2 logs growkapital-admin --lines 10 --nostream
             fi
             
             # Check backend
-            if [ "${{ env.BACKEND_CHANGED }}" = "true" ]; then
-              echo "Verifying backend..."
-              
-              # Try multiple times with a delay
-              MAX_RETRIES=5
-              RETRY_COUNT=0
-              BACKEND_STATUS="Failed"
-              
-              while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$BACKEND_STATUS" = "Failed" ]; do
-                if [ $RETRY_COUNT -gt 0 ]; then
-                  echo "Retry $RETRY_COUNT of $MAX_RETRIES..."
-                  sleep 10
-                fi
-                
-                BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health || echo "Failed")
-                RETRY_COUNT=$((RETRY_COUNT + 1))
-              done
-              
-              echo "Backend status: $BACKEND_STATUS"
-              if [ "$BACKEND_STATUS" = "200" ]; then
-                echo "✅ Backend is accessible"
-              else
-                echo "❌ Backend returned status $BACKEND_STATUS"
-                echo "Checking backend logs..."
-                docker logs backend_backend_1 --tail 20
-                echo "Checking backend container status..."
-                docker ps | grep backend
-                echo "Checking nginx configuration for backend..."
-                grep -A 5 "proxy_pass.*4001" /etc/nginx/sites-enabled/*
+            echo "Verifying backend..."
+            
+            # Try multiple times with a delay
+            MAX_RETRIES=5
+            RETRY_COUNT=0
+            BACKEND_STATUS="Failed"
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$BACKEND_STATUS" = "Failed" ]; do
+              if [ $RETRY_COUNT -gt 0 ]; then
+                echo "Retry $RETRY_COUNT of $MAX_RETRIES..."
+                sleep 10
               fi
+              
+              BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health || echo "Failed")
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+            done
+            
+            echo "Backend status: $BACKEND_STATUS"
+            if [ "$BACKEND_STATUS" = "200" ]; then
+              echo "✅ Backend is accessible"
+            else
+              echo "❌ Backend returned status $BACKEND_STATUS"
+              echo "Checking backend logs..."
+              docker logs backend_backend_1 --tail 20
+              echo "Checking backend container status..."
+              docker ps | grep backend
+              echo "Checking nginx configuration for backend..."
+              grep -A 5 "proxy_pass.*4001" /etc/nginx/sites-enabled/*
             fi
             
             # Check nginx configuration
