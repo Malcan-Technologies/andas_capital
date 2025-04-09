@@ -176,7 +176,6 @@ jobs:
             echo "Running database migrations and seed..."
             docker compose -f docker-compose.prod.yml exec -T backend npx prisma migrate deploy
             docker compose -f docker-compose.prod.yml exec -T backend npx prisma db seed
-            
           '
 
       - name: Deploy config files
@@ -220,23 +219,19 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             # Check frontend
             echo "Verifying frontend..."
-            FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo "Failed")
-            echo "Frontend status: $FRONTEND_STATUS"
-            if [ "$FRONTEND_STATUS" = "200" ]; then
+            if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login | grep -q "200"; then
               echo "✅ Frontend is accessible"
             else
-              echo "❌ Frontend returned status $FRONTEND_STATUS"
+              echo "❌ Frontend is not accessible"
               pm2 logs growkapital-frontend --lines 10 --nostream
             fi
             
             # Check admin
             echo "Verifying admin..."
-            ADMIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login || echo "Failed")
-            echo "Admin status: $ADMIN_STATUS"
-            if [ "$ADMIN_STATUS" = "200" ]; then
+            if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login | grep -q "200"; then
               echo "✅ Admin is accessible"
             else
-              echo "❌ Admin returned status $ADMIN_STATUS"
+              echo "❌ Admin is not accessible"
               pm2 logs growkapital-admin --lines 10 --nostream
             fi
             
@@ -253,42 +248,31 @@ jobs:
             
             echo "✅ Backend container is running"
             
-            # Try multiple times with a delay and more verbose output
-            MAX_RETRIES=10
+            # Simple health check with retries
+            MAX_RETRIES=5
             RETRY_COUNT=0
-            BACKEND_STATUS="Failed"
+            BACKEND_OK=false
             
-            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$BACKEND_STATUS" = "Failed" ]; do
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$BACKEND_OK" = "false" ]; do
               if [ $RETRY_COUNT -gt 0 ]; then
                 echo "Retry $RETRY_COUNT of $MAX_RETRIES..."
-                sleep 15
+                sleep 10
               fi
               
-              echo "Attempting to connect to backend health endpoint..."
-              BACKEND_STATUS=$(curl -v -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health 2>&1 || echo "Failed")
-              echo "Backend response: $BACKEND_STATUS"
-              
-              # If we got a response code, extract just the code
-              if [[ "$BACKEND_STATUS" =~ ([0-9]{3}) ]]; then
-                BACKEND_STATUS="${BASH_REMATCH[1]}"
+              echo "Checking backend health endpoint..."
+              if curl -s http://127.0.0.1:4001/api/health | grep -q "ok"; then
+                BACKEND_OK=true
+                echo "✅ Backend is accessible"
+              else
+                echo "Backend health check failed, retrying..."
+                RETRY_COUNT=$((RETRY_COUNT + 1))
               fi
-              
-              RETRY_COUNT=$((RETRY_COUNT + 1))
             done
             
-            echo "Final backend status: $BACKEND_STATUS"
-            if [ "$BACKEND_STATUS" = "200" ]; then
-              echo "✅ Backend is accessible"
-            else
-              echo "❌ Backend returned status $BACKEND_STATUS"
+            if [ "$BACKEND_OK" = "false" ]; then
+              echo "❌ Backend health check failed after $MAX_RETRIES attempts"
               echo "Checking backend logs..."
               docker logs backend-backend-1 --tail 50
-              echo "Checking backend container status..."
-              docker ps | grep backend
-              echo "Checking nginx configuration for backend..."
-              grep -A 5 "proxy_pass.*4001" /etc/nginx/sites-enabled/*
-              
-              # Don't fail the deployment if the backend is at least running
               echo "⚠️ Backend health check failed, but container is running. Continuing deployment..."
             fi
             
