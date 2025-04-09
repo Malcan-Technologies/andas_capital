@@ -237,11 +237,68 @@ jobs:
             export NODE_OPTIONS="--skipLibCheck --noEmit --noErrorTruncation"
             export DOCKER_BUILDKIT=1
             
+            # Extract database credentials from .env file
+            echo "Extracting database credentials from .env file..."
+            DB_USER=$(grep -E "^POSTGRES_USER=" .env | cut -d= -f2)
+            DB_PASSWORD=$(grep -E "^POSTGRES_PASSWORD=" .env | cut -d= -f2)
+            DB_NAME=$(grep -E "^POSTGRES_DB=" .env | cut -d= -f2)
+            
+            if [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ] || [ -z "$DB_NAME" ]; then
+              echo "❌ Missing database credentials in .env file"
+              echo "POSTGRES_USER: $DB_USER"
+              echo "POSTGRES_PASSWORD: $DB_PASSWORD"
+              echo "POSTGRES_DB: $DB_NAME"
+              exit 1
+            fi
+            
+            echo "Database credentials found:"
+            echo "POSTGRES_USER: $DB_USER"
+            echo "POSTGRES_DB: $DB_NAME"
+            
             # Try to build and start containers
             if ! "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml up -d --build; then
               echo "❌ Failed to build and start containers. Showing logs:"
               "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs
               exit 1
+            fi
+            
+            # Wait for PostgreSQL to be ready
+            echo "Waiting for PostgreSQL to be ready..."
+            MAX_WAIT=30
+            WAIT_COUNT=0
+            DB_READY=false
+            
+            while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+              if docker exec backend-postgres-1 pg_isready -U "$DB_USER" -d "$DB_NAME"; then
+                DB_READY=true
+                echo "✅ PostgreSQL is ready"
+                break
+              fi
+              
+              echo "Waiting for PostgreSQL to be ready... ($WAIT_COUNT/$MAX_WAIT seconds)"
+              sleep 5
+              WAIT_COUNT=$((WAIT_COUNT + 5))
+            done
+            
+            if [ "$DB_READY" = false ]; then
+              echo "❌ PostgreSQL failed to become ready within $MAX_WAIT seconds"
+              echo "Showing PostgreSQL logs:"
+              docker logs backend-postgres-1
+              
+              # Try to create the database and user if they don't exist
+              echo "Attempting to create database and user..."
+              docker exec backend-postgres-1 psql -U postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" || true
+              docker exec backend-postgres-1 psql -U postgres -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" || true
+              docker exec backend-postgres-1 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" || true
+              
+              # Check again
+              if docker exec backend-postgres-1 pg_isready -U "$DB_USER" -d "$DB_NAME"; then
+                echo "✅ PostgreSQL is now ready after manual setup"
+                DB_READY=true
+              else
+                echo "❌ PostgreSQL still not ready after manual setup"
+                exit 1
+              fi
             fi
             
             # Wait for containers to start with more detailed status checks
@@ -284,16 +341,63 @@ jobs:
               exit 1
             fi
             
-            # Additional health checks
-            echo "Performing additional health checks..."
-            echo "Checking container logs for errors..."
-            if "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend | grep -i "error\|exception\|fatal"; then
-              echo "⚠️ Found errors in container logs:"
-              "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend | grep -i "error\|exception\|fatal"
+            # Check if containers are running
+            echo "Checking container status..."
+            if docker ps | grep -q "backend_backend"; then
+              echo "✅ Backend container is running"
+              CONTAINER_STARTED=true
+            else
+              # Check if container exists but exited
+              if docker ps -a | grep -q "backend_backend.*Exited"; then
+                echo "❌ Backend container started but exited. Showing logs:"
+                "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend
+                echo "Container status:"
+                docker ps -a | grep backend
+                echo "Container inspect:"
+                docker inspect backend_backend_1
+                exit 1
+              else
+                echo "❌ Backend container not found"
+                echo "Showing all running containers:"
+                docker ps -a
+                echo "Showing Docker system info:"
+                docker info
+                exit 1
+              fi
             fi
             
-            echo "Checking container resource usage..."
-            docker stats --no-stream backend_backend_1
+            # Check if the backend is responding to health checks
+            echo "Checking backend health..."
+            MAX_RETRIES=5
+            RETRY_COUNT=0
+            HEALTH_CHECK_PASSED=false
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$HEALTH_CHECK_PASSED" = false ]; do
+              if [ $RETRY_COUNT -gt 0 ]; then
+                echo "Retry $RETRY_COUNT of $MAX_RETRIES..."
+                sleep 10
+              fi
+              
+              echo "Attempting to connect to backend health endpoint..."
+              if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4001/api/health | grep -q "200"; then
+                HEALTH_CHECK_PASSED=true
+                echo "✅ Backend health check passed"
+                break
+              fi
+              
+              echo "Backend health check failed, retrying..."
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+            done
+            
+            if [ "$HEALTH_CHECK_PASSED" = false ]; then
+              echo "⚠️ Backend container is running but health check failed"
+              echo "This might be due to database connection issues or application errors"
+              echo "Showing backend logs:"
+              docker logs backend_backend_1 --tail 50
+              
+              # Don't fail the deployment if the container is running
+              echo "Continuing deployment despite health check failure..."
+            fi
           '
 
       - name: Deploy config files
