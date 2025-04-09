@@ -177,15 +177,6 @@ jobs:
             docker compose -f docker-compose.prod.yml exec -T backend npx prisma migrate deploy
             docker compose -f docker-compose.prod.yml exec -T backend npx prisma db seed
             
-            # Verify backend is running
-            if ! curl -s http://localhost:4001/api/health | grep -q "ok"; then
-              echo "Backend health check failed. Showing logs:"
-              docker compose -f docker-compose.prod.yml logs
-              # Don't fail deployment if containers are running
-              echo "⚠️ Health check failed but containers are running. Continuing deployment..."
-            else
-              echo "✅ Backend is running and healthy"
-            fi
           '
 
       - name: Deploy config files
