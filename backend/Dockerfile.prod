@@ -48,14 +48,11 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy compiled JavaScript
 COPY --from=builder /app/dist ./dist
 
-# Debug: Check if dist directory exists in production stage
-RUN echo "Dist directory in production:" && ls -la dist/ || echo "Dist directory not found in production"
-
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chmod 777 uploads
 
 # Expose the port the app runs on
 EXPOSE 4001
 
-# Start the application
+# Start the application directly
 CMD ["node", "dist/src/index.js"] 

@@ -3,9 +3,9 @@ const nextConfig = {
 	reactStrictMode: true,
 	swcMinify: true,
 	output: "standalone",
+	optimizeFonts: true,
 	experimental: {
-		// This disables the warning about Font Optimization
-		optimizeFonts: true,
+		// Other experimental options can go here
 	},
 	typescript: {
 		ignoreBuildErrors: true,

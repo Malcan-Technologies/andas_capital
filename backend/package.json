@@ -13,7 +13,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
-    "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts",
     "tsc": "tsc"
   },
   "keywords": [],
@@ -49,6 +49,6 @@
     "typescript": "^5.0.3"
   },
   "prisma": {
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"
   }
 }
