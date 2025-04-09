@@ -11,25 +11,31 @@ import loanApplicationRoutes from "./api/loan-applications";
 import adminRoutes from "./api/admin";
 import fs from "fs";
 import path from "path";
+import prisma from "../lib/prisma";
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 4001;
 
 // Determine if we're in development mode
 const isDevelopment = process.env.NODE_ENV !== "production";
 
+// Get CORS origins from environment variable or use defaults
+const corsOrigins = process.env.CORS_ORIGIN
+	? process.env.CORS_ORIGIN.split(",")
+	: isDevelopment
+	? [
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:3002",
+	  ]
+	: ["https://growkapital.com", "https://admin.growkapital.com"];
+
 // Middleware
 app.use(
 	cors({
-		origin: isDevelopment
-			? [
-					"http://localhost:3000",
-					"http://localhost:3001",
-					"http://localhost:3002",
-			  ]
-			: ["https://growkapital.com", "https://admin.growkapital.com"],
+		origin: corsOrigins,
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization"],
@@ -50,8 +56,25 @@ if (isDevelopment) {
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check endpoint
-app.get("/api/health", (_req, res) => {
-	res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/api/health", async (_req, res) => {
+	try {
+		// Check database connectivity
+		await prisma.$queryRaw`SELECT 1`;
+
+		res.status(200).json({
+			status: "ok",
+			timestamp: new Date().toISOString(),
+			database: "connected",
+		});
+	} catch (error) {
+		console.error("Health check failed:", error);
+		res.status(500).json({
+			status: "error",
+			timestamp: new Date().toISOString(),
+			database: "disconnected",
+			error: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
 });
 
 // Routes
@@ -75,10 +98,14 @@ fs.writeFileSync(
 	JSON.stringify(swaggerSpec, null, 2)
 );
 
+// Get base URL from environment or use default, ensuring no trailing slash
+const baseUrl = (process.env.BASE_URL || `http://localhost:${port}`).replace(
+	/\/$/,
+	""
+);
+
 // Start server
 app.listen(port, () => {
 	console.log(`Server is running on port ${port}`);
-	console.log(
-		`API Documentation available at http://localhost:${port}/api-docs`
-	);
+	console.log(`API Documentation available at ${baseUrl}/api-docs`);
 });
