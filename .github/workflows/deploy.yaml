@@ -172,6 +172,11 @@ jobs:
             echo "Waiting for containers to be healthy..."
             sleep 30
             
+            # Run database migrations and seed
+            echo "Running database migrations and seed..."
+            docker compose -f docker-compose.prod.yml exec -T backend npx prisma migrate deploy
+            docker compose -f docker-compose.prod.yml exec -T backend npx prisma db seed
+            
             # Verify backend is running
             if ! curl -s http://localhost:4001/api/health | grep -q "ok"; then
               echo "Backend health check failed. Showing logs:"
