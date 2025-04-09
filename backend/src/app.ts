@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
-import { swaggerSpec } from "./config/swagger";
+import { swaggerSpec, baseUrl } from "./config/swagger";
 import authRoutes from "./api/auth";
 import userRoutes from "./api/users";
 import onboardingRoutes from "./api/onboarding";
@@ -94,6 +94,17 @@ const swaggerDir = path.join(__dirname, "..", "swagger");
 if (!fs.existsSync(swaggerDir)) {
 	fs.mkdirSync(swaggerDir, { recursive: true });
 }
+
+// Update the server URL based on the environment
+(swaggerSpec as any).servers = [
+	{
+		url: baseUrl,
+		description:
+			process.env.NODE_ENV === "production"
+				? "Production server"
+				: "Local development server",
+	},
+];
 
 // Write the Swagger specification to a JSON file
 fs.writeFileSync(
