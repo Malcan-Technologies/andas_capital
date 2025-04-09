@@ -278,11 +278,27 @@ jobs:
             
             echo "✅ PostgreSQL container is running"
             
+            # Check if the default postgres user exists
+            if docker exec backend-postgres-1 psql -U postgres -c "SELECT 1" 2>/dev/null; then
+              echo "✅ Default postgres user exists"
+              POSTGRES_USER_EXISTS=true
+            else
+              echo "⚠️ Default postgres user does not exist, using our custom user"
+              POSTGRES_USER_EXISTS=false
+            fi
+            
             # Wait for PostgreSQL to be ready
             while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-              # Check if we can connect to PostgreSQL with the default postgres user
-              if docker exec backend-postgres-1 pg_isready -U postgres 2>/dev/null; then
-                echo "✅ PostgreSQL is accepting connections with default postgres user"
+              # Try to connect with our custom user first
+              if docker exec backend-postgres-1 pg_isready -U "$DB_USER" -d "$DB_NAME" 2>/dev/null; then
+                DB_READY=true
+                echo "✅ PostgreSQL is ready with user $DB_USER and database $DB_NAME"
+                break
+              fi
+              
+              # If that fails and we have the default postgres user, try to set up our user
+              if [ "$POSTGRES_USER_EXISTS" = true ]; then
+                echo "Attempting to set up database with default postgres user..."
                 
                 # Check if our specific user exists
                 if docker exec backend-postgres-1 psql -U postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" 2>/dev/null | grep -q 1; then
@@ -303,13 +319,11 @@ jobs:
                 # Grant privileges
                 echo "Granting privileges to $DB_USER on $DB_NAME..."
                 docker exec backend-postgres-1 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null
-                
-                # Now check if we can connect with our user
-                if docker exec backend-postgres-1 pg_isready -U "$DB_USER" -d "$DB_NAME" 2>/dev/null; then
-                  DB_READY=true
-                  echo "✅ PostgreSQL is ready with user $DB_USER and database $DB_NAME"
-                  break
-                fi
+              else
+                # If we don't have the default postgres user, try to create our user directly
+                echo "Attempting to create user and database directly..."
+                docker exec backend-postgres-1 psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' SUPERUSER;" 2>/dev/null || true
+                docker exec backend-postgres-1 psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null || true
               fi
               
               echo "Waiting for PostgreSQL to be ready... ($WAIT_COUNT/$MAX_WAIT seconds)"
@@ -333,20 +347,20 @@ jobs:
             CONTAINER_STARTED=false
             
             while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-              if docker ps | grep -q "backend_backend"; then
+              if docker ps | grep -q "backend-backend"; then
                 CONTAINER_STARTED=true
                 echo "✅ Backend container is running"
                 break
               fi
               
               # Check if container exists but exited
-              if docker ps -a | grep -q "backend_backend.*Exited"; then
+              if docker ps -a | grep -q "backend-backend.*Exited"; then
                 echo "❌ Backend container started but exited. Showing logs:"
                 "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend
                 echo "Container status:"
                 docker ps -a | grep backend
                 echo "Container inspect:"
-                docker inspect backend_backend_1
+                docker inspect backend-backend-1
                 exit 1
               fi
               
@@ -368,18 +382,18 @@ jobs:
             
             # Check if containers are running
             echo "Checking container status..."
-            if docker ps | grep -q "backend_backend"; then
+            if docker ps | grep -q "backend-backend"; then
               echo "✅ Backend container is running"
               CONTAINER_STARTED=true
             else
               # Check if container exists but exited
-              if docker ps -a | grep -q "backend_backend.*Exited"; then
+              if docker ps -a | grep -q "backend-backend.*Exited"; then
                 echo "❌ Backend container started but exited. Showing logs:"
                 "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend
                 echo "Container status:"
                 docker ps -a | grep backend
                 echo "Container inspect:"
-                docker inspect backend_backend_1
+                docker inspect backend-backend-1
                 exit 1
               else
                 echo "❌ Backend container not found"
@@ -418,7 +432,7 @@ jobs:
               echo "⚠️ Backend container is running but health check failed"
               echo "This might be due to database connection issues or application errors"
               echo "Showing backend logs:"
-              docker logs backend_backend_1 --tail 50
+              docker logs backend-backend-1 --tail 50
               
               # Don't fail the deployment if the container is running
               echo "Continuing deployment despite health check failure..."
@@ -490,10 +504,10 @@ jobs:
             echo "Verifying backend..."
             
             # First check if the container is running
-            if ! docker ps | grep -q "backend_backend_1"; then
+            if ! docker ps | grep -q "backend-backend-1"; then
               echo "❌ Backend container is not running"
               echo "Checking backend logs..."
-              docker logs backend_backend_1 --tail 20
+              docker logs backend-backend-1 --tail 20
               exit 1
             fi
             
@@ -528,7 +542,7 @@ jobs:
             else
               echo "❌ Backend returned status $BACKEND_STATUS"
               echo "Checking backend logs..."
-              docker logs backend_backend_1 --tail 50
+              docker logs backend-backend-1 --tail 50
               echo "Checking backend container status..."
               docker ps | grep backend
               echo "Checking nginx configuration for backend..."
