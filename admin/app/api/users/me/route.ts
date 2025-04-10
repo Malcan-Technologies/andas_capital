@@ -17,9 +17,9 @@ export async function GET(request: Request) {
 
 		console.log(
 			"API /users/me - Calling backend:",
-			`${backendUrl}/api/users/me`
+			`${backendUrl}/api/admin/me`
 		);
-		const response = await fetch(`${backendUrl}/api/users/me`, {
+		const response = await fetch(`${backendUrl}/api/admin/me`, {
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${token}`,

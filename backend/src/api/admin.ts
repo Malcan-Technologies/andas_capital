@@ -183,36 +183,73 @@ router.get(
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
-			const [totalUsers, totalApplications, recentApplications] =
-				await Promise.all([
-					prisma.user.count(),
-					prisma.loanApplication.count(),
-					prisma.loanApplication.findMany({
-						take: 5,
-						orderBy: {
-							createdAt: "desc",
-						},
-						include: {
-							user: {
-								select: {
-									fullName: true,
-									email: true,
-								},
-							},
-						},
-					}),
-				]);
+			// Get all users count
+			const totalUsers = await prisma.user.count();
 
-			// For now, use the same value for totalLoans as totalApplications
-			const totalLoans = totalApplications;
-			// Mock total loan amount (you can implement real calculation later)
-			const totalLoanAmount = 1000000;
+			// Get applications that need review (status = PENDING_APPROVAL)
+			const pendingReviewApplications =
+				await prisma.loanApplication.count({
+					where: {
+						status: "PENDING_APPROVAL",
+					},
+				});
+
+			// Get approved loans count (status = APPROVED or DISBURSED)
+			const approvedLoans = await prisma.loanApplication.count({
+				where: {
+					status: {
+						in: ["APPROVED", "DISBURSED"],
+					},
+				},
+			});
+
+			// Get disbursed loans count (status = DISBURSED only)
+			const disbursedLoans = await prisma.loanApplication.count({
+				where: {
+					status: "DISBURSED",
+				},
+			});
+
+			// Get total disbursed amount (sum loan amounts where status = DISBURSED)
+			const disbursedLoanDetails = await prisma.loanApplication.findMany({
+				where: {
+					status: "DISBURSED",
+				},
+				select: {
+					amount: true,
+				},
+			});
+
+			// Calculate total disbursed amount
+			const totalDisbursedAmount = disbursedLoanDetails.reduce(
+				(sum, loan) => {
+					return sum + (loan.amount || 0);
+				},
+				0
+			);
+
+			// Get recent applications
+			const recentApplications = await prisma.loanApplication.findMany({
+				take: 5,
+				orderBy: {
+					createdAt: "desc",
+				},
+				include: {
+					user: {
+						select: {
+							fullName: true,
+							email: true,
+						},
+					},
+				},
+			});
 
 			res.json({
 				totalUsers,
-				totalApplications,
-				totalLoans,
-				totalLoanAmount,
+				pendingReviewApplications,
+				approvedLoans,
+				disbursedLoans,
+				totalDisbursedAmount,
 				recentApplications,
 			});
 		} catch (error) {
@@ -650,6 +687,538 @@ router.get(
 		} catch (error) {
 			console.error("Admin profile error:", error);
 			return res.status(500).json({ error: "Server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications:
+ *   get:
+ *     summary: Get all loan applications (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of loan applications
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/LoanApplication'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+// Get all loan applications (admin only)
+// @ts-ignore
+router.get(
+	"/applications",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			console.log("Fetching all applications for admin");
+
+			const applications = await prisma.loanApplication.findMany({
+				orderBy: {
+					createdAt: "desc",
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+					documents: {
+						select: {
+							id: true,
+							type: true,
+							status: true,
+							fileUrl: true,
+							createdAt: true,
+						},
+					},
+				},
+			});
+
+			console.log(`Found ${applications.length} applications`);
+			return res.json(applications);
+		} catch (error) {
+			console.error("Error fetching applications:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}:
+ *   get:
+ *     summary: Get a specific loan application (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     responses:
+ *       200:
+ *         description: Loan application details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Get a specific loan application (admin only)
+// @ts-ignore
+router.get(
+	"/applications/:id",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			console.log(`Fetching application details for ID: ${id}`);
+
+			// Check if we're looking up by urlLink instead of ID
+			let application = null;
+
+			// First try to find by ID
+			application = await prisma.loanApplication.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+							dateOfBirth: true,
+							employmentStatus: true,
+							employerName: true,
+							monthlyIncome: true,
+							bankName: true,
+							accountNumber: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+							minAmount: true,
+							maxAmount: true,
+							description: true,
+							interestRate: true,
+							repaymentTerms: true,
+						},
+					},
+					documents: {
+						select: {
+							id: true,
+							type: true,
+							status: true,
+							fileUrl: true,
+							createdAt: true,
+							updatedAt: true,
+						},
+						orderBy: {
+							createdAt: "desc",
+						},
+					},
+				},
+			});
+
+			// If not found by ID, try to find by urlLink
+			if (!application) {
+				application = await prisma.loanApplication.findUnique({
+					where: { urlLink: id },
+					include: {
+						user: {
+							select: {
+								id: true,
+								fullName: true,
+								phoneNumber: true,
+								email: true,
+								dateOfBirth: true,
+								employmentStatus: true,
+								employerName: true,
+								monthlyIncome: true,
+								bankName: true,
+								accountNumber: true,
+							},
+						},
+						product: {
+							select: {
+								id: true,
+								name: true,
+								code: true,
+								minAmount: true,
+								maxAmount: true,
+								description: true,
+								interestRate: true,
+								repaymentTerms: true,
+							},
+						},
+						documents: {
+							select: {
+								id: true,
+								type: true,
+								status: true,
+								fileUrl: true,
+								createdAt: true,
+								updatedAt: true,
+							},
+							orderBy: {
+								createdAt: "desc",
+							},
+						},
+					},
+				});
+			}
+
+			if (!application) {
+				console.log(`Application not found for ID or URL: ${id}`);
+				return res
+					.status(404)
+					.json({ message: "Application not found" });
+			}
+
+			console.log(
+				`Found application with ${application.documents.length} documents`
+			);
+			return res.json(application);
+		} catch (error) {
+			console.error("Error fetching application:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/status:
+ *   patch:
+ *     summary: Update loan application status (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [INCOMPLETE, PENDING_APP_FEE, PENDING_KYC, PENDING_APPROVAL, APPROVED, DISBURSED, REJECTED, WITHDRAWN]
+ *     responses:
+ *       200:
+ *         description: Application status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       400:
+ *         description: Invalid status value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Update loan application status (admin only)
+// @ts-ignore
+router.patch(
+	"/applications/:id/status",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { status } = req.body;
+
+			const validStatuses = [
+				"INCOMPLETE",
+				"PENDING_APP_FEE",
+				"PENDING_KYC",
+				"PENDING_APPROVAL",
+				"APPROVED",
+				"DISBURSED",
+				"REJECTED",
+				"WITHDRAWN",
+			];
+
+			if (!validStatuses.includes(status)) {
+				return res
+					.status(400)
+					.json({ message: "Invalid status value" });
+			}
+
+			const application = await prisma.loanApplication.update({
+				where: { id },
+				data: { status },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+							dateOfBirth: true,
+							address1: true,
+							address2: true,
+							city: true,
+							state: true,
+							zipCode: true,
+							employmentStatus: true,
+							employerName: true,
+							monthlyIncome: true,
+							bankName: true,
+							accountNumber: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+							description: true,
+							interestRate: true,
+							repaymentTerms: true,
+						},
+					},
+					documents: {
+						select: {
+							id: true,
+							type: true,
+							status: true,
+							fileUrl: true,
+							createdAt: true,
+							updatedAt: true,
+						},
+					},
+				},
+			});
+
+			// TODO: Send notification to user about status change
+
+			res.json(application);
+		} catch (error) {
+			console.error("Error updating application status:", error);
+			if (error.code === "P2025") {
+				return res
+					.status(404)
+					.json({ message: "Application not found" });
+			}
+			res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/documents/{id}/status:
+ *   patch:
+ *     summary: Update document status (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The document ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [PENDING, APPROVED, REJECTED]
+ *     responses:
+ *       200:
+ *         description: Document status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Document'
+ *       400:
+ *         description: Invalid status value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ */
+// Update document status (admin only)
+router.patch(
+	"/documents/:id/status",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { status } = req.body;
+
+			const validStatuses = ["PENDING", "APPROVED", "REJECTED"];
+
+			if (!validStatuses.includes(status)) {
+				return res
+					.status(400)
+					.json({ message: "Invalid status value" });
+			}
+
+			const document = await prisma.userDocument.update({
+				where: { id },
+				data: { status },
+			});
+
+			// TODO: Send notification to user about document status change
+
+			return res.json(document);
+		} catch (error) {
+			console.error("Error updating document status:", error);
+			if (error.code === "P2025") {
+				return res.status(404).json({ message: "Document not found" });
+			}
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans:
+ *   get:
+ *     summary: Get all approved and disbursed loan applications
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved loans
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/LoanApplication'
+ *       401:
+ *         description: Unauthorized, token is invalid or missing
+ *       403:
+ *         description: Forbidden, user is not an admin
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/loans",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			// Get user data from database to check role instead of relying on req.user.role
+			const user = await prisma.user.findUnique({
+				where: { id: req.user?.userId },
+				select: { role: true },
+			});
+
+			if (!user || user.role !== "ADMIN") {
+				return res.status(403).json({
+					success: false,
+					message: "Forbidden. User is not an admin.",
+				});
+			}
+
+			const loans = await prisma.loanApplication.findMany({
+				where: {
+					status: {
+						in: ["APPROVED", "DISBURSED"],
+					},
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: true,
+					documents: true,
+				},
+				orderBy: {
+					createdAt: "desc",
+				},
+			});
+
+			return res.status(200).json({
+				success: true,
+				data: loans,
+			});
+		} catch (error) {
+			console.error("Error fetching loans:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch loans",
+				error: (error as Error).message,
+			});
 		}
 	}
 );

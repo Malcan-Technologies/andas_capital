@@ -138,8 +138,31 @@ export const fetchWithAdminTokenRefresh = async <T>(
 		"Content-Type": "application/json",
 	};
 
+	// Determine the full URL to use
+	let fullUrl = url;
+
+	// If this is a relative URL starting with /api (not for Next.js API routes)
+	// then we need to decide where to route it
+	if (
+		url.startsWith("/api/") &&
+		!url.startsWith("/api/users/") &&
+		!url.startsWith("/api/admin/refresh")
+	) {
+		// For API calls to endpoints in this app, we use the relative URL
+		// For direct backend API calls, we prepend the backend URL
+		const isBackendEndpoint = url.includes("/api/admin/");
+
+		if (isBackendEndpoint) {
+			// These should go to the backend
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+			fullUrl = `${backendUrl}${url}`;
+		}
+	}
+
+	console.log(`Fetching: ${fullUrl}`);
+
 	// Make the initial request
-	let response = await fetch(url, { ...options, headers });
+	let response = await fetch(fullUrl, { ...options, headers });
 
 	// If unauthorized, try to refresh the token and retry the request
 	if (response.status === 401 || response.status === 403) {
@@ -153,7 +176,7 @@ export const fetchWithAdminTokenRefresh = async <T>(
 		headers["Authorization"] = `Bearer ${newAccessToken}`;
 
 		// Retry the request
-		response = await fetch(url, { ...options, headers });
+		response = await fetch(fullUrl, { ...options, headers });
 	}
 
 	if (!response.ok) {
@@ -181,9 +204,9 @@ export const checkAdminAuth = async (): Promise<boolean> => {
 			return !!newToken;
 		}
 
-		// Verify token validity by making a request to /api/users/me
+		// Verify token validity by making a request to /api/admin/me
 		try {
-			console.log("checkAdminAuth - Verifying token with /api/users/me");
+			console.log("checkAdminAuth - Verifying token with /api/admin/me");
 			interface UserData {
 				id: string;
 				fullName?: string;
@@ -193,7 +216,7 @@ export const checkAdminAuth = async (): Promise<boolean> => {
 			}
 
 			const userData = await fetchWithAdminTokenRefresh<UserData>(
-				"/api/users/me"
+				"/api/admin/me"
 			);
 			console.log("checkAdminAuth - User data:", userData);
 
