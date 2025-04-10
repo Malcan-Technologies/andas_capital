@@ -94,6 +94,9 @@ export default function AdminApplicationsPage() {
 	const [viewDialogOpen, setViewDialogOpen] = useState(false);
 	const [selectedApplication, setSelectedApplication] =
 		useState<LoanApplication | null>(null);
+	const [selectedDocument, setSelectedDocument] = useState<Document | null>(
+		null
+	);
 
 	// Replace single status filter with multiple filters
 	const [selectedFilters, setSelectedFilters] = useState<string[]>([
@@ -321,9 +324,13 @@ export default function AdminApplicationsPage() {
 			return fileUrl;
 		}
 
-		// For relative URLs, prepend the backend URL
+		// For relative URLs, use the loan-applications API endpoint instead of direct file access
+		if (selectedApplication) {
+			return `${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${selectedApplication.id}/documents/${selectedDocument?.id}`;
+		}
+
+		// Fallback to old method if no application is selected (this shouldn't happen in normal usage)
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-		// Remove any leading slash from the fileUrl to avoid double slashes
 		const cleanFileUrl = fileUrl.startsWith("/")
 			? fileUrl.substring(1)
 			: fileUrl;
@@ -1116,6 +1123,11 @@ export default function AdminApplicationsPage() {
 																	target="_blank"
 																	rel="noopener noreferrer"
 																	className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+																	onClick={() =>
+																		setSelectedDocument(
+																			doc
+																		)
+																	}
 																>
 																	<svg
 																		className="h-4 w-4 mr-2"
@@ -1149,6 +1161,11 @@ export default function AdminApplicationsPage() {
 																	)}
 																	download
 																	className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+																	onClick={() =>
+																		setSelectedDocument(
+																			doc
+																		)
+																	}
 																>
 																	<svg
 																		className="h-4 w-4 mr-2"

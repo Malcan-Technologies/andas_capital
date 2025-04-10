@@ -761,14 +761,7 @@ export default function AdminLoansPage() {
 																		"http"
 																	)
 																		? doc.fileUrl
-																		: `${
-																				process
-																					.env
-																					.NEXT_PUBLIC_API_URL
-																		  }/${doc.fileUrl.replace(
-																				/^\//,
-																				""
-																		  )}`
+																		: `${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${selectedLoan.id}/documents/${doc.id}`
 																}
 																target="_blank"
 																rel="noopener noreferrer"
@@ -782,14 +775,7 @@ export default function AdminLoansPage() {
 																		"http"
 																	)
 																		? doc.fileUrl
-																		: `${
-																				process
-																					.env
-																					.NEXT_PUBLIC_API_URL
-																		  }/${doc.fileUrl.replace(
-																				/^\//,
-																				""
-																		  )}`
+																		: `${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${selectedLoan.id}/documents/${doc.id}`
 																}
 																download
 																className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
