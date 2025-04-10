@@ -9,6 +9,7 @@ export default function TokenRefresher() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const [isRefreshing, setIsRefreshing] = useState(false);
+	const [lastRefreshAttempt, setLastRefreshAttempt] = useState(0);
 
 	useEffect(() => {
 		// Helper to check if we're on a protected route
@@ -31,6 +32,106 @@ export default function TokenRefresher() {
 			// Try to refresh the token immediately if we have refresh token but no access token
 			handleTokenRefresh();
 		}
+
+		// Handle visibility change (when user returns from another tab or sleep)
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === "visible" && isProtectedRoute()) {
+				// Check how long since last refresh attempt
+				const currentTime = Date.now();
+				// Only try refresh if it's been at least 5 seconds since last attempt
+				if (currentTime - lastRefreshAttempt > 5000) {
+					console.log(
+						"Admin page became visible, checking token status"
+					);
+
+					const token = AdminTokenStorage.getAccessToken();
+					if (!token) {
+						// No token, try refresh if we have refresh token
+						const refreshToken =
+							AdminTokenStorage.getRefreshToken();
+						if (refreshToken) {
+							handleTokenRefresh();
+						} else {
+							router.push("/login");
+						}
+						return;
+					}
+
+					// Check if token is expired or about to expire
+					try {
+						const payload = JSON.parse(atob(token.split(".")[1]));
+						const expirationTime = payload.exp * 1000;
+						const currentTime = Date.now();
+
+						if (
+							expirationTime < currentTime ||
+							expirationTime - currentTime < 10 * 60 * 1000
+						) {
+							console.log(
+								"Admin token expired or expiring soon on visibility change"
+							);
+							handleTokenRefresh();
+						}
+					} catch (error) {
+						console.error(
+							"Error decoding admin token on visibility change:",
+							error
+						);
+						// If we can't decode the token, try to refresh it anyway
+						handleTokenRefresh();
+					}
+				}
+			}
+		};
+
+		// Handle network reconnection
+		const handleOnline = () => {
+			if (isProtectedRoute()) {
+				// Check how long since last refresh attempt
+				const currentTime = Date.now();
+				// Only try refresh if it's been at least 5 seconds since last attempt
+				if (currentTime - lastRefreshAttempt > 5000) {
+					console.log(
+						"Network connection restored, checking admin token"
+					);
+
+					const token = AdminTokenStorage.getAccessToken();
+					if (token) {
+						// Check if token is valid
+						try {
+							const payload = JSON.parse(
+								atob(token.split(".")[1])
+							);
+							const expirationTime = payload.exp * 1000;
+							const currentTime = Date.now();
+
+							if (
+								expirationTime < currentTime ||
+								expirationTime - currentTime < 10 * 60 * 1000
+							) {
+								console.log(
+									"Admin token expired or expiring soon on network reconnection"
+								);
+								handleTokenRefresh();
+							}
+						} catch (error) {
+							handleTokenRefresh();
+						}
+					} else {
+						// No token, try refresh if we have refresh token
+						const refreshToken =
+							AdminTokenStorage.getRefreshToken();
+						if (refreshToken) {
+							handleTokenRefresh();
+						}
+					}
+				}
+			}
+		};
+
+		// Set up event listeners
+		document.addEventListener("visibilitychange", handleVisibilityChange);
+		window.addEventListener("online", handleOnline);
 
 		// Set up regular token refresh - check every minute
 		const intervalId = setInterval(() => {
@@ -57,13 +158,23 @@ export default function TokenRefresher() {
 			}
 		}, 60000); // Check every minute
 
-		return () => clearInterval(intervalId);
-	}, [pathname, router]);
+		// Cleanup event listeners
+		return () => {
+			document.removeEventListener(
+				"visibilitychange",
+				handleVisibilityChange
+			);
+			window.removeEventListener("online", handleOnline);
+			clearInterval(intervalId);
+		};
+	}, [pathname, router, lastRefreshAttempt]);
 
 	const handleTokenRefresh = async () => {
 		if (isRefreshing) return; // Prevent multiple simultaneous refresh attempts
 
 		setIsRefreshing(true);
+		setLastRefreshAttempt(Date.now());
+
 		try {
 			const refreshToken = AdminTokenStorage.getRefreshToken();
 			if (!refreshToken) {
@@ -79,7 +190,15 @@ export default function TokenRefresher() {
 			}
 		} catch (error) {
 			console.error("Admin token refresh failed:", error);
-			router.push("/login");
+
+			// Don't redirect to login on network errors - might be temporary
+			if (error instanceof TypeError && error.message.includes("fetch")) {
+				console.log(
+					"Network error during admin token refresh, will retry later"
+				);
+			} else {
+				router.push("/login");
+			}
 		} finally {
 			setIsRefreshing(false);
 		}
