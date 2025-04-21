@@ -66,7 +66,7 @@ export default function AdminLayout({
 				try {
 					console.log("AdminLayout - Fetching user data");
 					const userData = await fetchWithAdminTokenRefresh<any>(
-						"/api/users/me"
+						"/api/admin/me"
 					);
 					console.log("AdminLayout - User data:", userData);
 

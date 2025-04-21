@@ -250,7 +250,7 @@ export default function Navbar({
 												Business Solutions
 											</h3>
 											<div className="space-y-4">
-												<Link
+												{/* <Link
 													href="/pay-advance"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
 												>
@@ -275,7 +275,7 @@ export default function Navbar({
 															employees
 														</p>
 													</div>
-												</Link>
+												</Link> */}
 												<Link
 													href="/equipment-financing"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
@@ -418,7 +418,7 @@ export default function Navbar({
 														</p>
 													</div>
 												</Link>
-												<Link
+												{/* <Link
 													href="/products"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
 												>
@@ -438,7 +438,7 @@ export default function Navbar({
 															financing solutions
 														</p>
 													</div>
-												</Link>
+												</Link> */}
 											</div>
 										</div>
 
