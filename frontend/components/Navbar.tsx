@@ -397,7 +397,7 @@ export default function Navbar({
 														</p>
 													</div>
 												</Link>
-												<Link
+												{/* <Link
 													href="/products"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
 												>
@@ -417,7 +417,7 @@ export default function Navbar({
 															property collateral
 														</p>
 													</div>
-												</Link>
+												</Link> */}
 												{/* <Link
 													href="/products"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
