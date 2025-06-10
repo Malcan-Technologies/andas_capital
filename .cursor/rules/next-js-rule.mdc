@@ -44,4 +44,9 @@ Key Conventions
   - Use only for Web API access in small components.
   - Avoid for data fetching or state management.
 
+Additional notes  
+- My backend is deployed using Docker.
+- My frontend is written in NextJS
+- Authentication is handled using refresh tokens in the backend
+
 Follow Next.js docs for Data Fetching, Rendering, and Routing.

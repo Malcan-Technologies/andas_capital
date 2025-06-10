@@ -1,4 +1,4 @@
-#!/bin/bash
+rm #!/bin/bash
 
 # Stop and remove containers
 docker compose -f docker-compose.dev.yml down
