@@ -1,15 +1,4 @@
 import { useState, useEffect, Suspense } from "react";
-import {
-	Box,
-	Button,
-	TextField,
-	Typography,
-	FormControl,
-	FormLabel,
-	RadioGroup,
-	FormControlLabel,
-	Radio,
-} from "@mui/material";
 import { useSearchParams } from "next/navigation";
 
 interface PersonalInfo {
@@ -218,208 +207,255 @@ function PersonalInfoVerificationFormContent({
 	};
 
 	return (
-		<Box component="form" onSubmit={handleSubmit} className="space-y-6">
-			<Typography variant="h6" className="text-gray-900 mb-4">
+		<form onSubmit={handleSubmit} className="space-y-6">
+			<h2 className="text-xl font-semibold text-white mb-6">
 				Verify Personal Information
-			</Typography>
+			</h2>
 
-			<div className="space-y-4">
-				<TextField
-					fullWidth
-					label="Full Name"
-					value={formValues.fullName}
-					onChange={handleChange("fullName")}
-					error={!!errors.fullName}
-					helperText={errors.fullName}
-					className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-				/>
+			<div className="space-y-6">
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Full Name
+					</label>
+					<input
+						type="text"
+						value={formValues.fullName}
+						onChange={handleChange("fullName")}
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+						placeholder="Enter your full name"
+					/>
+					{errors.fullName && (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.fullName}
+						</p>
+					)}
+				</div>
 
-				<TextField
-					fullWidth
-					label="Email"
-					type="email"
-					value={formValues.email}
-					onChange={handleChange("email")}
-					error={!!errors.email}
-					helperText={errors.email}
-					className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-				/>
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Email
+					</label>
+					<input
+						type="email"
+						value={formValues.email}
+						onChange={handleChange("email")}
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+						placeholder="Enter your email address"
+					/>
+					{errors.email && (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.email}
+						</p>
+					)}
+				</div>
 
-				<TextField
-					fullWidth
-					label="Phone Number"
-					value={formValues.phoneNumber}
-					onChange={handleChange("phoneNumber")}
-					error={!!errors.phoneNumber}
-					helperText={errors.phoneNumber}
-					className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-				/>
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Phone Number
+					</label>
+					<input
+						type="text"
+						value={formValues.phoneNumber}
+						onChange={handleChange("phoneNumber")}
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+						placeholder="Enter your phone number"
+					/>
+					{errors.phoneNumber && (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.phoneNumber}
+						</p>
+					)}
+				</div>
 
-				<FormControl component="fieldset">
-					<FormLabel component="legend">Employment Status</FormLabel>
-					<RadioGroup
-						value={formValues.employmentStatus}
-						onChange={handleChange("employmentStatus")}
-					>
-						<FormControlLabel
-							value="Employed"
-							control={
-								<Radio
-									sx={{
-										"&.Mui-checked": {
-											color: "rgb(79, 70, 229)",
-										},
-									}}
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-3">
+						Employment Status
+					</label>
+					<div className="space-y-3">
+						{[
+							"Employed",
+							"Self-Employed",
+							"Business Owner",
+							"Unemployed",
+						].map((status) => (
+							<label key={status} className="flex items-center">
+								<input
+									type="radio"
+									name="employmentStatus"
+									value={status}
+									checked={
+										formValues.employmentStatus === status
+									}
+									onChange={handleChange("employmentStatus")}
+									className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-500 focus:ring-2"
 								/>
-							}
-							label="Employed"
-						/>
-						<FormControlLabel
-							value="Self-Employed"
-							control={
-								<Radio
-									sx={{
-										"&.Mui-checked": {
-											color: "rgb(79, 70, 229)",
-										},
-									}}
-								/>
-							}
-							label="Self-Employed"
-						/>
-						<FormControlLabel
-							value="Business Owner"
-							control={
-								<Radio
-									sx={{
-										"&.Mui-checked": {
-											color: "rgb(79, 70, 229)",
-										},
-									}}
-								/>
-							}
-							label="Business Owner"
-						/>
-						<FormControlLabel
-							value="Unemployed"
-							control={
-								<Radio
-									sx={{
-										"&.Mui-checked": {
-											color: "rgb(79, 70, 229)",
-										},
-									}}
-								/>
-							}
-							label="Unemployed"
-						/>
-					</RadioGroup>
-				</FormControl>
+								<span className="ml-3 text-gray-300">
+									{status}
+								</span>
+							</label>
+						))}
+					</div>
+					{errors.employmentStatus && (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.employmentStatus}
+						</p>
+					)}
+				</div>
 
 				{(formValues.employmentStatus === "Employed" ||
 					formValues.employmentStatus === "Business Owner") && (
-					<TextField
-						fullWidth
-						label={
-							formValues.employmentStatus === "Business Owner"
+					<div>
+						<label className="block text-sm font-medium text-gray-300 mb-2">
+							{formValues.employmentStatus === "Business Owner"
 								? "Company Name"
-								: "Employer Name"
-						}
-						value={formValues.employerName}
-						onChange={handleChange("employerName")}
-						error={!!errors.employerName}
-						helperText={errors.employerName}
-						className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-					/>
+								: "Employer Name"}
+						</label>
+						<input
+							type="text"
+							value={formValues.employerName || ""}
+							onChange={handleChange("employerName")}
+							className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+							placeholder={`Enter your ${
+								formValues.employmentStatus === "Business Owner"
+									? "company"
+									: "employer"
+							} name`}
+						/>
+						{errors.employerName && (
+							<p className="mt-1 text-sm text-red-400">
+								{errors.employerName}
+							</p>
+						)}
+					</div>
 				)}
 
-				<TextField
-					fullWidth
-					label="Monthly Income"
-					value={formValues.monthlyIncome}
-					onChange={handleChange("monthlyIncome")}
-					error={!!errors.monthlyIncome}
-					helperText={errors.monthlyIncome}
-					type="text"
-					InputProps={{
-						startAdornment: (
-							<Typography className="text-gray-500 mr-1">
-								RM
-							</Typography>
-						),
-					}}
-					className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-				/>
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Monthly Income
+					</label>
+					<div className="relative">
+						<span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+							RM
+						</span>
+						<input
+							type="text"
+							value={formValues.monthlyIncome}
+							onChange={handleChange("monthlyIncome")}
+							className="w-full pl-12 pr-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+							placeholder="Enter your monthly income"
+						/>
+					</div>
+					{errors.monthlyIncome && (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.monthlyIncome}
+						</p>
+					)}
+				</div>
 
-				<TextField
-					fullWidth
-					label="Address Line 1"
-					value={formValues.address1}
-					onChange={handleChange("address1")}
-					error={!!errors.address1}
-					helperText={errors.address1}
-					className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-				/>
-
-				<TextField
-					fullWidth
-					label="Address Line 2 (Optional)"
-					value={formValues.address2}
-					onChange={handleChange("address2")}
-					className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-				/>
-
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<TextField
-						fullWidth
-						label="City"
-						value={formValues.city}
-						onChange={handleChange("city")}
-						error={!!errors.city}
-						helperText={errors.city}
-						className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Address Line 1
+					</label>
+					<input
+						type="text"
+						value={formValues.address1}
+						onChange={handleChange("address1")}
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+						placeholder="Enter your address"
 					/>
+					{errors.address1 && (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.address1}
+						</p>
+					)}
+				</div>
 
-					<TextField
-						fullWidth
-						label="State"
-						value={formValues.state}
-						onChange={handleChange("state")}
-						error={!!errors.state}
-						helperText={errors.state}
-						className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Address Line 2 (Optional)
+					</label>
+					<input
+						type="text"
+						value={formValues.address2 || ""}
+						onChange={handleChange("address2")}
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+						placeholder="Apartment, suite, etc. (optional)"
 					/>
 				</div>
 
-				<TextField
-					fullWidth
-					label="Postal Code"
-					value={formValues.postalCode}
-					onChange={handleChange("postalCode")}
-					error={!!errors.postalCode}
-					helperText={errors.postalCode}
-					className="[&_.MuiOutlinedInput-root.Mui-focused_.MuiOutlinedInput-notchedOutline]:border-indigo-600"
-				/>
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div>
+						<label className="block text-sm font-medium text-gray-300 mb-2">
+							City
+						</label>
+						<input
+							type="text"
+							value={formValues.city}
+							onChange={handleChange("city")}
+							className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+							placeholder="Enter your city"
+						/>
+						{errors.city && (
+							<p className="mt-1 text-sm text-red-400">
+								{errors.city}
+							</p>
+						)}
+					</div>
+
+					<div>
+						<label className="block text-sm font-medium text-gray-300 mb-2">
+							State
+						</label>
+						<input
+							type="text"
+							value={formValues.state}
+							onChange={handleChange("state")}
+							className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+							placeholder="Enter your state"
+						/>
+						{errors.state && (
+							<p className="mt-1 text-sm text-red-400">
+								{errors.state}
+							</p>
+						)}
+					</div>
+				</div>
+
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Postal Code
+					</label>
+					<input
+						type="text"
+						value={formValues.postalCode}
+						onChange={handleChange("postalCode")}
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+						placeholder="Enter your postal code"
+					/>
+					{errors.postalCode && (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.postalCode}
+						</p>
+					)}
+				</div>
 			</div>
 
-			<Box className="flex justify-between pt-6">
-				<Button
+			<div className="flex justify-between pt-6">
+				<button
 					type="button"
-					variant="outlined"
 					onClick={handleBack}
-					className="text-gray-700 border-gray-300 hover:bg-gray-50"
+					className="px-6 py-3 bg-gray-800/50 backdrop-blur-md border border-gray-600/50 text-gray-300 rounded-lg hover:bg-gray-700/60 hover:border-gray-500/60 transition-all duration-200 font-medium"
 				>
 					Back
-				</Button>
-				<Button
+				</button>
+				<button
 					type="submit"
-					variant="contained"
-					className="bg-indigo-600 hover:bg-indigo-700 text-white"
+					className="px-6 py-3 bg-blue-600/80 backdrop-blur-md border border-blue-500/50 text-white rounded-lg hover:bg-blue-600/90 hover:border-blue-400/60 transition-all duration-200 font-medium"
 				>
 					Continue
-				</Button>
-			</Box>
-		</Box>
+				</button>
+			</div>
+		</form>
 	);
 }
 
@@ -427,7 +463,13 @@ export default function PersonalInfoVerificationForm(
 	props: PersonalInfoVerificationFormProps
 ) {
 	return (
-		<Suspense fallback={<div>Loading...</div>}>
+		<Suspense
+			fallback={
+				<div className="flex items-center justify-center py-8">
+					<div className="text-white">Loading...</div>
+				</div>
+			}
+		>
 			<PersonalInfoVerificationFormContent {...props} />
 		</Suspense>
 	);

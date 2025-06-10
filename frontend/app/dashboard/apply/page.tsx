@@ -2,14 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-	Stepper,
-	Step,
-	StepLabel,
-	Paper,
-	Typography,
-	Button,
-} from "@mui/material";
+// Material-UI imports removed - using custom dark theme components
 import Cookies from "js-cookie";
 import ProductSelectionForm from "@/components/application/ProductSelectionForm";
 import ApplicationDetailsForm from "@/components/application/ApplicationDetailsForm";
@@ -183,13 +176,7 @@ function ApplyPageContent() {
 	useEffect(() => {
 		const fetchProducts = async () => {
 			try {
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/products`
-				);
-				if (!response.ok) {
-					throw new Error("Failed to fetch products");
-				}
-				const data = await response.json();
+				const data = await fetchWithTokenRefresh<any>("/api/products");
 				setProducts(data);
 			} catch (error) {
 				console.error("Error fetching products:", error);
@@ -728,89 +715,118 @@ function ApplyPageContent() {
 	};
 
 	return (
-		<div className="min-h-screen bg-gray-50">
+		<div className="min-h-screen bg-gray-900">
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<div className="flex items-center justify-between mb-8">
 					<div>
-						<h1 className="text-2xl font-semibold text-gray-900">
+						<h1 className="text-2xl font-semibold text-white">
 							Apply for a Loan
 						</h1>
-						<p className="mt-1 text-sm text-gray-500">
+						<p className="mt-1 text-sm text-gray-400">
 							Complete the steps below to submit your loan
 							application
 						</p>
 					</div>
-					<Button
-						variant="outlined"
+					<button
 						onClick={() => router.push("/dashboard")}
-						className="text-gray-700 border-gray-300 hover:bg-gray-50"
-						startIcon={<ArrowBack />}
+						className="inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg text-gray-300 bg-gray-800/50 backdrop-blur-md hover:bg-gray-700/50 transition-colors"
 					>
+						<ArrowBack className="h-4 w-4 mr-2" />
 						Back to Dashboard
-					</Button>
+					</button>
 				</div>
 
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 					<div className="lg:col-span-2">
-						<Paper className="p-6 mb-6">
-							<Stepper
-								activeStep={activeStep}
-								alternativeLabel
-								className="[&_.MuiStepLabel-root]:text-indigo-600 [&_.MuiStepIcon-root]:text-indigo-200 [&_.MuiStepIcon-root.Mui-active]:text-indigo-600 [&_.MuiStepIcon-root.Mui-completed]:text-indigo-600"
-							>
-								{steps.map((label) => (
-									<Step key={label}>
-										<StepLabel>{label}</StepLabel>
-									</Step>
+						{/* Custom Stepper */}
+						<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 mb-6">
+							<div className="flex items-center justify-between">
+								{steps.map((label, index) => (
+									<div
+										key={label}
+										className="flex items-center"
+									>
+										<div className="flex flex-col items-center">
+											<div
+												className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
+													index < activeStep
+														? "bg-blue-600 border-blue-600 text-white"
+														: index === activeStep
+														? "bg-blue-600/20 border-blue-400 text-blue-400"
+														: "bg-gray-700 border-gray-600 text-gray-400"
+												}`}
+											>
+												{index < activeStep ? (
+													<CheckCircle className="h-5 w-5" />
+												) : (
+													index + 1
+												)}
+											</div>
+											<span
+												className={`mt-2 text-xs font-medium text-center max-w-[80px] ${
+													index <= activeStep
+														? "text-blue-400"
+														: "text-gray-500"
+												}`}
+											>
+												{label}
+											</span>
+										</div>
+										{index < steps.length - 1 && (
+											<div
+												className={`w-16 h-0.5 mx-4 ${
+													index < activeStep
+														? "bg-blue-600"
+														: "bg-gray-600"
+												}`}
+											/>
+										)}
+									</div>
 								))}
-							</Stepper>
-						</Paper>
-						<Paper className="p-6">
+							</div>
+						</div>
+
+						{/* Main Content */}
+						<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6">
 							{renderStepContent(activeStep)}
-						</Paper>
+						</div>
 					</div>
 
 					<div className="lg:col-span-1">
 						{activeStep === 0 && selectedProductDetails && (
-							<Paper className="p-6 sticky top-8">
-								{/* <Typography
-									variant="h6"
-									className="text-gray-900 mb-4"
-								>
-									Product Details
-								</Typography> */}
+							<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 sticky top-8">
 								<div className="space-y-4">
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Product
-										</Typography>
-										<Typography className="text-gray-900 font-medium">
+										</p>
+										<p className="text-white font-medium">
 											{selectedProductDetails.name}
-										</Typography>
+										</p>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Amount Range
-										</Typography>
-										<Typography className="text-gray-900 font-medium">
+										</p>
+										<p className="text-white font-medium">
 											RM
 											{selectedProductDetails.minAmount.toLocaleString()}{" "}
 											- RM
 											{selectedProductDetails.maxAmount.toLocaleString()}
-										</Typography>
+										</p>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Description
-										</Typography>
-										<Typography className="text-gray-600">
+										</p>
+										<p className="text-gray-300">
 											{selectedProductDetails.description}
-										</Typography>
+										</p>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Features
-										</Typography>
+										</p>
 										<ul className="mt-1 space-y-1">
 											{selectedProductDetails.features.map(
 												(feature, index) => (
@@ -818,19 +834,19 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<CheckCircle className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-														<Typography className="text-gray-600">
+														<CheckCircle className="h-5 w-5 text-green-400 mr-2 mt-0.5" />
+														<p className="text-gray-300">
 															{feature}
-														</Typography>
+														</p>
 													</li>
 												)
 											)}
 										</ul>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Requirements
-										</Typography>
+										</p>
 										<ul className="mt-1 space-y-1">
 											{selectedProductDetails.eligibility.map(
 												(req, index) => (
@@ -838,58 +854,55 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<Info className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
-														<Typography className="text-gray-600">
+														<Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
+														<p className="text-gray-300">
 															{req}
-														</Typography>
+														</p>
 													</li>
 												)
 											)}
 										</ul>
 									</div>
 								</div>
-							</Paper>
+							</div>
 						)}
 						{activeStep > 0 && selectedProductDetails && (
-							<Paper className="p-6 sticky top-8">
-								<Typography
-									variant="h6"
-									className="text-gray-900 mb-4"
-								>
+							<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 sticky top-8">
+								<h3 className="text-lg font-semibold text-white mb-4">
 									Product Details
-								</Typography>
+								</h3>
 								<div className="space-y-4">
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Product
-										</Typography>
-										<Typography className="text-gray-900 font-medium">
+										</p>
+										<p className="text-white font-medium">
 											{selectedProductDetails.name}
-										</Typography>
+										</p>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Amount Range
-										</Typography>
-										<Typography className="text-gray-900 font-medium">
+										</p>
+										<p className="text-white font-medium">
 											RM
 											{selectedProductDetails.minAmount.toLocaleString()}{" "}
 											- RM
 											{selectedProductDetails.maxAmount.toLocaleString()}
-										</Typography>
+										</p>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Description
-										</Typography>
-										<Typography className="text-gray-600">
+										</p>
+										<p className="text-gray-300">
 											{selectedProductDetails.description}
-										</Typography>
+										</p>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Features
-										</Typography>
+										</p>
 										<ul className="mt-1 space-y-1">
 											{selectedProductDetails.features.map(
 												(feature, index) => (
@@ -897,19 +910,19 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<CheckCircle className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-														<Typography className="text-gray-600">
+														<CheckCircle className="h-5 w-5 text-green-400 mr-2 mt-0.5" />
+														<p className="text-gray-300">
 															{feature}
-														</Typography>
+														</p>
 													</li>
 												)
 											)}
 										</ul>
 									</div>
 									<div>
-										<Typography className="text-sm text-gray-500">
+										<p className="text-sm text-gray-400">
 											Requirements
-										</Typography>
+										</p>
 										<ul className="mt-1 space-y-1">
 											{selectedProductDetails.eligibility.map(
 												(req, index) => (
@@ -917,17 +930,17 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<Info className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
-														<Typography className="text-gray-600">
+														<Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
+														<p className="text-gray-300">
 															{req}
-														</Typography>
+														</p>
 													</li>
 												)
 											)}
 										</ul>
 									</div>
 								</div>
-							</Paper>
+							</div>
 						)}
 					</div>
 				</div>
@@ -938,7 +951,13 @@ function ApplyPageContent() {
 
 export default function ApplyPage() {
 	return (
-		<Suspense fallback={<div>Loading...</div>}>
+		<Suspense
+			fallback={
+				<div className="min-h-screen bg-gray-900 flex items-center justify-center">
+					<div className="text-white">Loading...</div>
+				</div>
+			}
+		>
 			<ApplyPageContent />
 		</Suspense>
 	);

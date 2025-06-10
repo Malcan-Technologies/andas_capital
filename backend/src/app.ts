@@ -8,7 +8,10 @@ import userRoutes from "./api/users";
 import onboardingRoutes from "./api/onboarding";
 import productRoutes from "./api/products";
 import loanApplicationRoutes from "./api/loan-applications";
+import loanRoutes from "./api/loans";
 import adminRoutes from "./api/admin";
+import walletRoutes from "./api/wallet";
+import notificationsRoutes from "./api/notifications";
 import fs from "fs";
 import path from "path";
 import prisma from "../lib/prisma";
@@ -84,7 +87,10 @@ app.use("/api/users", userRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/loan-applications", loanApplicationRoutes);
+app.use("/api/loans", loanRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/notifications", notificationsRoutes);
 
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useSearchParams } from "next/navigation";
 import Cookies from "js-cookie";
@@ -119,79 +118,52 @@ export default function ProductSelectionForm({
 	};
 
 	return (
-		<Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
-			<Box
-				sx={{
-					display: "grid",
-					gridTemplateColumns: "repeat(2, 1fr)",
-					gap: 2,
-					mb: 3,
-				}}
-			>
+		<form onSubmit={handleSubmit} className="w-full">
+			<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 				{activeProducts.map((product) => (
-					<Card
+					<div
 						key={product.id}
-						sx={{
-							cursor: "pointer",
-							border:
-								selected === product.id
-									? "2px solid #1976d2"
-									: "none",
-							"&:hover": {
-								border: "2px solid #1976d2",
-							},
-						}}
+						className={`bg-gray-800/50 backdrop-blur-md border rounded-xl p-6 cursor-pointer transition-all hover:border-blue-400 ${
+							selected === product.id
+								? "border-blue-400 bg-blue-900/20"
+								: "border-gray-700/50"
+						}`}
 						onClick={() => handleSelect(product.id)}
 					>
-						<CardContent>
-							<Box
-								sx={{
-									display: "flex",
-									justifyContent: "space-between",
-									alignItems: "center",
-									mb: 2,
-								}}
-							>
-								<Typography variant="h6" component="div">
-									{product.name}
-								</Typography>
-								{selected === product.id && (
-									<CheckCircleIcon color="primary" />
-								)}
-							</Box>
-							<Typography
-								variant="body2"
-								color="text.secondary"
-								sx={{ mb: 2 }}
-							>
-								{product.description}
-							</Typography>
-							<Typography variant="body2">
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-semibold text-white">
+								{product.name}
+							</h3>
+							{selected === product.id && (
+								<CheckCircleIcon className="text-blue-400" />
+							)}
+						</div>
+						<p className="text-gray-300 text-sm mb-4">
+							{product.description}
+						</p>
+						<div className="space-y-2">
+							<p className="text-sm text-gray-400">
 								Loan Amount: RM
 								{product.minAmount.toLocaleString()} - RM
 								{product.maxAmount.toLocaleString()}
-							</Typography>
-							<Typography variant="body2">
+							</p>
+							<p className="text-sm text-gray-400">
 								Interest Rate: {product.interestRate}% per month
-							</Typography>
-						</CardContent>
-					</Card>
+							</p>
+						</div>
+					</div>
 				))}
-			</Box>
-			{error && (
-				<Typography color="error" sx={{ mb: 2 }}>
-					{error}
-				</Typography>
-			)}
-			<Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-				<Button
+			</div>
+			{error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+			<div className="flex justify-end">
+				<button
 					type="submit"
-					variant="contained"
 					disabled={!selected || loading}
+					className="px-6 py-3 bg-blue-600/80 backdrop-blur-md border border-blue-500/50 text-white rounded-lg hover:bg-blue-600/90 hover:border-blue-400/60 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
 				>
 					{loading ? "Processing..." : "Continue"}
-				</Button>
-			</Box>
-		</Box>
+				</button>
+			</div>
+		</form>
 	);
 }

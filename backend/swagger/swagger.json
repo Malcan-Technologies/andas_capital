@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:3001",
+      "url": "http://localhost:4001",
       "description": "Local development server"
     }
   ],
@@ -1943,6 +1943,329 @@
         }
       }
     },
+    "/api/loans": {
+      "get": {
+        "summary": "Get user's active loans",
+        "tags": [
+          "Loans"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of user's active loans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "loans": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "principalAmount": {
+                            "type": "number"
+                          },
+                          "outstandingBalance": {
+                            "type": "number"
+                          },
+                          "interestRate": {
+                            "type": "number"
+                          },
+                          "term": {
+                            "type": "integer"
+                          },
+                          "monthlyPayment": {
+                            "type": "number"
+                          },
+                          "nextPaymentDue": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "disbursedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "application": {
+                            "type": "object",
+                            "properties": {
+                              "product": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loans/{id}": {
+      "get": {
+        "summary": "Get specific loan details",
+        "tags": [
+          "Loans"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan details"
+          },
+          "404": {
+            "description": "Loan not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loans/{id}/repayments": {
+      "get": {
+        "summary": "Get loan repayment history",
+        "tags": [
+          "Loans"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan repayment history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "repayments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "number"
+                          },
+                          "principalAmount": {
+                            "type": "number"
+                          },
+                          "interestAmount": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "dueDate": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "paidAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Loan not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "summary": "Get user's notifications",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page number for pagination"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Number of items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of notifications"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Mark notifications as read",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "notificationIds"
+                ],
+                "properties": {
+                  "notificationIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notifications marked as read"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}": {
+      "delete": {
+        "summary": "Delete a notification",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The notification ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Notification not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
     "/api/products": {
       "get": {
         "summary": "Get all active products or a specific product by code",
@@ -2291,6 +2614,10 @@
     {
       "name": "Loan Applications",
       "description": "API endpoints for managing loan applications"
+    },
+    {
+      "name": "Loans",
+      "description": "API endpoints for managing user loans"
     },
     {
       "name": "Products",

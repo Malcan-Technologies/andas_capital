@@ -18,6 +18,165 @@ import {
 	DialogContent,
 	DialogActions,
 } from "@mui/material";
+
+// Override Material-UI styles for dark theme
+const darkThemeOverrides = {
+	"& .MuiTypography-root": {
+		color: "white !important",
+	},
+	"& .MuiTypography-h6": {
+		color: "white !important",
+	},
+	"& .MuiTypography-subtitle1": {
+		color: "white !important",
+	},
+	"& .MuiTypography-body2": {
+		color: "#D1D5DB !important",
+	},
+	"& .MuiButton-root": {
+		color: "white !important",
+		backgroundColor: "rgba(59, 130, 246, 0.8) !important",
+		backdropFilter: "blur(12px) !important",
+		border: "1px solid rgba(59, 130, 246, 0.5) !important",
+		borderRadius: "8px !important",
+		padding: "12px 24px !important",
+		fontWeight: "500 !important",
+		transition: "all 0.2s ease !important",
+		boxShadow: "none !important",
+		"&:hover": {
+			backgroundColor: "rgba(59, 130, 246, 0.9) !important",
+			borderColor: "rgba(96, 165, 250, 0.6) !important",
+			boxShadow: "none !important",
+		},
+	},
+	"& .MuiButton-outlined": {
+		color: "rgb(209, 213, 219) !important",
+		backgroundColor: "rgba(31, 41, 55, 0.5) !important",
+		backdropFilter: "blur(12px) !important",
+		borderColor: "rgba(107, 114, 128, 0.5) !important",
+		borderRadius: "8px !important",
+		padding: "12px 24px !important",
+		fontWeight: "500 !important",
+		transition: "all 0.2s ease !important",
+		"&:hover": {
+			backgroundColor: "rgba(55, 65, 81, 0.6) !important",
+			borderColor: "rgba(156, 163, 175, 0.6) !important",
+		},
+	},
+	"& .MuiButton-contained": {
+		color: "white !important",
+		backgroundColor: "rgba(59, 130, 246, 0.8) !important",
+		backdropFilter: "blur(12px) !important",
+		border: "1px solid rgba(59, 130, 246, 0.5) !important",
+		borderRadius: "8px !important",
+		padding: "12px 24px !important",
+		fontWeight: "500 !important",
+		transition: "all 0.2s ease !important",
+		boxShadow: "none !important",
+		"&:hover": {
+			backgroundColor: "rgba(59, 130, 246, 0.9) !important",
+			borderColor: "rgba(96, 165, 250, 0.6) !important",
+			boxShadow: "none !important",
+		},
+	},
+	"& .MuiButton-sizeSmall": {
+		padding: "8px 16px !important",
+		fontSize: "0.875rem !important",
+	},
+	"& .MuiListItem-root": {
+		backgroundColor: "#374151 !important",
+		border: "1px solid #4B5563 !important",
+		borderRadius: "8px !important",
+		marginBottom: "16px !important",
+	},
+	"& .MuiListItemText-primary": {
+		color: "white !important",
+	},
+	"& .MuiListItemText-secondary": {
+		color: "#9CA3AF !important",
+	},
+	"& .MuiIconButton-root": {
+		color: "#9CA3AF !important",
+		"&:hover": {
+			color: "#F87171 !important",
+			backgroundColor: "#7F1D1D20 !important",
+		},
+	},
+	"& .MuiCircularProgress-root": {
+		color: "#60A5FA !important",
+	},
+	"& .MuiAlert-root": {
+		backgroundColor: "#374151 !important",
+		color: "white !important",
+		border: "1px solid #4B5563 !important",
+	},
+	"& .MuiDialogTitle-root": {
+		color: "white",
+		backgroundColor: "rgba(31, 41, 55, 0.95)",
+		backdropFilter: "blur(20px)",
+	},
+	"& .MuiDialogContent-root": {
+		backgroundColor: "rgba(31, 41, 55, 0.95)",
+		backdropFilter: "blur(20px)",
+		color: "white",
+	},
+	"& .MuiDialogActions-root": {
+		backgroundColor: "rgba(31, 41, 55, 0.95)",
+		backdropFilter: "blur(20px)",
+		padding: "24px",
+	},
+	"& .MuiDialog-paper": {
+		backgroundColor: "rgba(31, 41, 55, 0.95) !important",
+		backdropFilter: "blur(20px) !important",
+		border: "1px solid rgba(75, 85, 99, 0.3) !important",
+		borderRadius: "12px !important",
+		boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5) !important",
+	},
+	"& .MuiBackdrop-root": {
+		backgroundColor: "rgba(0, 0, 0, 0.8) !important",
+		backdropFilter: "blur(4px) !important",
+	},
+	// Override specific classes for file upload areas
+	"& .bg-gray-50": {
+		backgroundColor: "#374151 !important",
+	},
+	"& .bg-white": {
+		backgroundColor: "#4B5563 !important",
+	},
+	"& .text-gray-900": {
+		color: "white !important",
+	},
+	"& .text-gray-600": {
+		color: "#D1D5DB !important",
+	},
+	"& .text-gray-400": {
+		color: "#9CA3AF !important",
+	},
+	"& .text-red-600": {
+		color: "#F87171 !important",
+	},
+	"& .text-green-600": {
+		color: "#34D399 !important",
+	},
+	"& .text-indigo-600": {
+		color: "#60A5FA !important",
+	},
+	"& .border-indigo-600": {
+		borderColor: "#60A5FA !important",
+	},
+	"& .hover\\:bg-indigo-50:hover": {
+		backgroundColor: "#1E3A8A20 !important",
+	},
+	"& .bg-blue-50": {
+		backgroundColor: "#1E3A8A20 !important",
+	},
+	"& .text-blue-700": {
+		color: "#60A5FA !important",
+	},
+	"& .ring-blue-700\\/10": {
+		"--tw-ring-color": "rgb(96 165 250 / 0.1) !important",
+	},
+};
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -554,35 +713,44 @@ export default function DocumentUploadForm({
 
 	if (loading) {
 		return (
-			<Box className="flex justify-center items-center min-h-[200px]">
-				<CircularProgress />
-			</Box>
+			<div className="flex justify-center items-center min-h-[200px]">
+				<div className="flex flex-col items-center space-y-4">
+					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+					<p className="text-gray-300">Loading documents...</p>
+				</div>
+			</div>
 		);
 	}
 
 	if (error) {
 		return (
-			<Box className="space-y-6">
-				<Typography variant="h6" className="text-gray-900 mb-4">
+			<div className="space-y-6">
+				<h2 className="text-xl font-semibold text-white mb-4">
 					Upload Documents
-				</Typography>
-				<Alert severity="error">{error}</Alert>
-				<Box className="flex justify-between pt-6">
-					<Button
+				</h2>
+				<div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
+					<p className="text-red-400">{error}</p>
+				</div>
+				<div className="flex justify-between pt-6">
+					<button
 						type="button"
-						variant="outlined"
 						onClick={handleBack}
-						className="text-gray-700 border-gray-300 hover:bg-gray-50"
+						className="px-6 py-2 border border-gray-600 rounded-lg text-gray-300 bg-gray-800/50 backdrop-blur-md hover:bg-gray-700/50 transition-colors"
 					>
 						Back
-					</Button>
-				</Box>
-			</Box>
+					</button>
+				</div>
+			</div>
 		);
 	}
 
 	return (
-		<Box component="form" onSubmit={handleSubmit} className="space-y-6">
+		<Box
+			component="form"
+			onSubmit={handleSubmit}
+			className="space-y-6"
+			sx={darkThemeOverrides}
+		>
 			<div className="flex items-center gap-3 mb-4">
 				<Typography variant="h6" className="text-gray-900">
 					Document Upload - {productName}
@@ -840,27 +1008,77 @@ export default function DocumentUploadForm({
 				onClose={() => setShowConfirmDialog(false)}
 				maxWidth="sm"
 				fullWidth
+				sx={{
+					"& .MuiDialog-paper": {
+						backgroundColor: "rgba(31, 41, 55, 0.95)",
+						backdropFilter: "blur(20px)",
+						border: "1px solid rgba(75, 85, 99, 0.3)",
+						borderRadius: "12px",
+						boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+					},
+					"& .MuiBackdrop-root": {
+						backgroundColor: "rgba(0, 0, 0, 0.8)",
+						backdropFilter: "blur(4px)",
+					},
+					"& .MuiDialogTitle-root": {
+						color: "white",
+						backgroundColor: "rgba(31, 41, 55, 0.95)",
+						backdropFilter: "blur(20px)",
+					},
+					"& .MuiDialogContent-root": {
+						backgroundColor: "rgba(31, 41, 55, 0.95)",
+						backdropFilter: "blur(20px)",
+						color: "white",
+					},
+					"& .MuiDialogActions-root": {
+						backgroundColor: "rgba(31, 41, 55, 0.95)",
+						backdropFilter: "blur(20px)",
+						padding: "24px",
+					},
+					"& .MuiTypography-root": {
+						color: "white",
+					},
+					"& .MuiButton-outlined": {
+						color: "rgb(209, 213, 219)",
+						backgroundColor: "rgba(31, 41, 55, 0.5)",
+						backdropFilter: "blur(12px)",
+						borderColor: "rgba(107, 114, 128, 0.5)",
+						"&:hover": {
+							backgroundColor: "rgba(55, 65, 81, 0.6)",
+							borderColor: "rgba(156, 163, 175, 0.6)",
+						},
+					},
+					"& .MuiButton-contained": {
+						color: "white",
+						backgroundColor: "rgba(59, 130, 246, 0.8)",
+						backdropFilter: "blur(12px)",
+						border: "1px solid rgba(59, 130, 246, 0.5)",
+						boxShadow: "none",
+						"&:hover": {
+							backgroundColor: "rgba(59, 130, 246, 0.9)",
+							borderColor: "rgba(96, 165, 250, 0.6)",
+							boxShadow: "none",
+						},
+					},
+				}}
 			>
-				<DialogTitle className="text-gray-900">
+				<DialogTitle>
 					{confirmDialogType === "none"
 						? "Continue Without Documents?"
 						: "Continue With Incomplete Documents?"}
 				</DialogTitle>
 				<DialogContent>
-					<Typography className="text-gray-600">
+					<Typography>
 						{confirmDialogType === "none"
 							? "While document upload is optional, providing complete documentation at this stage will help us process your application faster. You can always upload documents later."
 							: "You haven't uploaded all the requested documents. While you can continue with incomplete documentation, providing all documents at this stage will help us process your application faster. You can always upload the remaining documents later."}
 					</Typography>
 					{confirmDialogType === "incomplete" && (
 						<Box className="mt-4">
-							<Typography
-								variant="subtitle2"
-								className="text-gray-900 mb-2"
-							>
+							<Typography variant="subtitle2" className="mb-2">
 								Missing Documents:
 							</Typography>
-							<ul className="list-disc pl-5 text-gray-600">
+							<ul className="list-disc pl-5">
 								{documents
 									.filter(
 										(doc) =>
@@ -875,11 +1093,10 @@ export default function DocumentUploadForm({
 						</Box>
 					)}
 				</DialogContent>
-				<DialogActions className="p-6">
+				<DialogActions>
 					<Button
 						onClick={() => setShowConfirmDialog(false)}
 						variant="outlined"
-						className="text-gray-700 border-gray-300 hover:bg-gray-50"
 					>
 						Go Back
 					</Button>
@@ -889,7 +1106,6 @@ export default function DocumentUploadForm({
 							submitDocuments();
 						}}
 						variant="contained"
-						className="bg-indigo-600 hover:bg-indigo-700 text-white"
 					>
 						{confirmDialogType === "none"
 							? "Continue Without Documents"

@@ -3,7 +3,22 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
-import { PencilIcon } from "@heroicons/react/24/outline";
+import {
+	PencilIcon,
+	UserCircleIcon,
+	HomeIcon,
+	BriefcaseIcon,
+	BanknotesIcon,
+	ShieldCheckIcon,
+	ClockIcon,
+	CalendarIcon,
+	PhoneIcon,
+	EnvelopeIcon,
+	MapPinIcon,
+	BuildingOfficeIcon,
+	CurrencyDollarIcon,
+	IdentificationIcon,
+} from "@heroicons/react/24/outline";
 import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 
 interface UserProfile {
@@ -146,9 +161,11 @@ export default function ProfilePage() {
 
 	if (loading) {
 		return (
-			<DashboardLayout title="Profile">
+			<DashboardLayout
+				userName={profile?.fullName?.split(" ")[0] || "User"}
+			>
 				<div className="flex items-center justify-center h-full">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
 				</div>
 			</DashboardLayout>
 		);
@@ -156,9 +173,9 @@ export default function ProfilePage() {
 
 	if (!profile) {
 		return (
-			<DashboardLayout title="Profile">
-				<div className="bg-white shadow rounded-lg p-6">
-					<p className="text-gray-500">
+			<DashboardLayout userName="User">
+				<div className="bg-gradient-to-br from-red-700/70 via-red-700/70 to-rose-800/70 rounded-2xl p-6 backdrop-blur-md">
+					<p className="text-white">
 						Failed to load profile information.
 					</p>
 				</div>
@@ -198,10 +215,10 @@ export default function ProfilePage() {
 
 	const renderBadge = (status: boolean, label: string) => (
 		<span
-			className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+			className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
 				status
-					? "bg-green-100 text-green-800"
-					: "bg-yellow-100 text-yellow-800"
+					? "bg-green-500/20 text-green-200 border border-green-400/20"
+					: "bg-yellow-500/20 text-yellow-200 border border-yellow-400/20"
 			}`}
 		>
 			<span
@@ -216,7 +233,7 @@ export default function ProfilePage() {
 	const renderEditButton = (section: EditingSections) => (
 		<button
 			onClick={() => handleEdit(section)}
-			className="text-indigo-600 hover:text-indigo-500 flex items-center text-sm font-medium"
+			className="text-blue-200 hover:text-blue-100 flex items-center text-sm font-medium bg-white/5 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-md border border-white/10"
 		>
 			<PencilIcon className="h-4 w-4 mr-1" />
 			Edit
@@ -224,17 +241,17 @@ export default function ProfilePage() {
 	);
 
 	const renderSaveButtons = () => (
-		<div className="flex justify-end space-x-3 mt-4">
+		<div className="flex justify-end space-x-3 mt-6">
 			<button
 				onClick={handleCancel}
-				className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+				className="px-6 py-3 text-sm font-medium text-white/80 hover:text-white bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-md"
 				disabled={saving}
 			>
 				Cancel
 			</button>
 			<button
 				onClick={handleSave}
-				className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+				className="px-6 py-3 text-sm font-medium text-white bg-blue-500/80 hover:bg-blue-500/90 rounded-lg transition-colors backdrop-blur-md border border-blue-400/50"
 				disabled={saving}
 			>
 				{saving ? "Saving..." : "Save Changes"}
@@ -249,7 +266,7 @@ export default function ProfilePage() {
 		options?: readonly string[]
 	) => (
 		<div>
-			<label className="block text-sm font-medium text-gray-500">
+			<label className="block text-sm font-medium text-blue-100 mb-2">
 				{label}
 			</label>
 			{options ? (
@@ -257,7 +274,7 @@ export default function ProfilePage() {
 					name={name}
 					value={String(formData[name] || "")}
 					onChange={handleInputChange}
-					className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+					className="block w-full rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/50 focus:border-blue-500/50 focus:ring-blue-500/50 text-base py-3 px-4 backdrop-blur-md transition-colors"
 				>
 					<option value="">Select {label}</option>
 					{options.map((option) => (
@@ -272,325 +289,269 @@ export default function ProfilePage() {
 					name={name}
 					value={String(formData[name] || "")}
 					onChange={handleInputChange}
-					className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+					className="block w-full rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/50 focus:border-blue-500/50 focus:ring-blue-500/50 text-base py-3 px-4 backdrop-blur-md transition-colors"
 				/>
 			)}
 		</div>
 	);
 
-	return (
-		<DashboardLayout
-			title="Profile"
-			userName={profile.fullName?.split(" ")[0] || "User"}
-		>
-			<div className="space-y-6">
-				{/* Personal Information */}
-				<div className="bg-white shadow rounded-lg">
-					<div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-						<h2 className="text-lg font-medium text-gray-900">
-							Personal Information
+	const renderInfoCard = (
+		title: string,
+		icon: React.ReactNode,
+		section: EditingSections,
+		content: React.ReactNode,
+		titleColor: string
+	) => (
+		<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 rounded-2xl shadow-2xl text-white overflow-hidden">
+			<div className="p-6">
+				<div className="flex justify-between items-center mb-6">
+					<div className="flex items-center space-x-3">
+						<div
+							className={`p-3 ${titleColor} rounded-xl backdrop-blur-md border border-white/20`}
+						>
+							{icon}
+						</div>
+						<h2 className={`text-xl font-bold ${titleColor}`}>
+							{title}
 						</h2>
-						{editingSection !== "personal" &&
-							renderEditButton("personal")}
 					</div>
-					<div className="px-6 py-4 space-y-4">
-						{editingSection === "personal" ? (
-							<div className="space-y-4">
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									{renderInput("fullName", "Full Name")}
-									{renderInput("email", "Email", "email")}
-									{renderInput(
-										"phoneNumber",
-										"Phone Number",
-										"tel"
-									)}
-									{renderInput(
-										"dateOfBirth",
-										"Date of Birth",
-										"date"
-									)}
-								</div>
-								{renderSaveButtons()}
-							</div>
-						) : (
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Full Name
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.fullName || "Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Email
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.email || "Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Phone Number
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.phoneNumber}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Date of Birth
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.dateOfBirth
-											? formatDate(profile.dateOfBirth)
-											: "Not provided"}
-									</p>
-								</div>
-							</div>
-						)}
-					</div>
+					{editingSection !== section && renderEditButton(section)}
 				</div>
+				{content}
+			</div>
+		</div>
+	);
+
+	const renderField = (
+		label: string,
+		value: string | null,
+		icon?: React.ReactNode
+	) => (
+		<div className="flex items-center space-x-3 bg-white/5 p-4 rounded-lg border border-white/10">
+			{icon && <div className="flex-shrink-0 text-blue-200">{icon}</div>}
+			<div>
+				<label className="block text-sm font-medium text-blue-100">
+					{label}
+				</label>
+				<p className="mt-2 text-base text-white">
+					{value || "Not provided"}
+				</p>
+			</div>
+		</div>
+	);
+
+	return (
+		<DashboardLayout userName={profile.fullName?.split(" ")[0] || "User"}>
+			<div className="max-w-7xl mx-auto space-y-6">
+				{/* Personal Information */}
+				{renderInfoCard(
+					"Personal Information",
+					<UserCircleIcon className="h-8 w-8 text-white" />,
+					"personal",
+					editingSection === "personal" ? (
+						<div className="space-y-6">
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+								{renderInput("fullName", "Full Name")}
+								{renderInput("email", "Email", "email")}
+								{renderInput(
+									"phoneNumber",
+									"Phone Number",
+									"tel"
+								)}
+								{renderInput(
+									"dateOfBirth",
+									"Date of Birth",
+									"date"
+								)}
+							</div>
+							{renderSaveButtons()}
+						</div>
+					) : (
+						<div className="space-y-4">
+							{renderField(
+								"Full Name",
+								profile.fullName,
+								<IdentificationIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Email",
+								profile.email,
+								<EnvelopeIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Phone Number",
+								profile.phoneNumber,
+								<PhoneIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Date of Birth",
+								profile.dateOfBirth
+									? formatDate(profile.dateOfBirth)
+									: null,
+								<CalendarIcon className="h-5 w-5" />
+							)}
+						</div>
+					),
+					"text-violet-300"
+				)}
 
 				{/* Address */}
-				<div className="bg-white shadow rounded-lg">
-					<div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-						<h2 className="text-lg font-medium text-gray-900">
-							Address
-						</h2>
-						{editingSection !== "address" &&
-							renderEditButton("address")}
-					</div>
-					<div className="px-6 py-4 space-y-4">
-						{editingSection === "address" ? (
-							<div className="space-y-4">
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div className="md:col-span-2">
-										{renderInput(
-											"address1",
-											"Address Line 1"
-										)}
-									</div>
-									<div className="md:col-span-2">
-										{renderInput(
-											"address2",
-											"Address Line 2"
-										)}
-									</div>
-									{renderInput("city", "City")}
-									{renderInput("state", "State")}
-									{renderInput("postalCode", "Postal Code")}
+				{renderInfoCard(
+					"Address",
+					<HomeIcon className="h-8 w-8 text-white" />,
+					"address",
+					editingSection === "address" ? (
+						<div className="space-y-6">
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+								<div className="md:col-span-2">
+									{renderInput("address1", "Address Line 1")}
 								</div>
-								{renderSaveButtons()}
+								<div className="md:col-span-2">
+									{renderInput("address2", "Address Line 2")}
+								</div>
+								{renderInput("city", "City")}
+								{renderInput("state", "State")}
+								{renderInput("postalCode", "Postal Code")}
 							</div>
-						) : (
+							{renderSaveButtons()}
+						</div>
+					) : (
+						<div className="space-y-4">
+							{renderField(
+								"Address Line 1",
+								profile.address1,
+								<MapPinIcon className="h-5 w-5" />
+							)}
+							{renderField("Address Line 2", profile.address2)}
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-500">
-										Address Line 1
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.address1 || "Not provided"}
-									</p>
-								</div>
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-500">
-										Address Line 2
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.address2 || "Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										City
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.city || "Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										State
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.state || "Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Postal Code
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.postalCode || "Not provided"}
-									</p>
-								</div>
+								{renderField("City", profile.city)}
+								{renderField("State", profile.state)}
+								{renderField("Postal Code", profile.postalCode)}
 							</div>
-						)}
-					</div>
-				</div>
+						</div>
+					),
+					"text-blue-300"
+				)}
 
 				{/* Employment */}
-				<div className="bg-white shadow rounded-lg">
-					<div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-						<h2 className="text-lg font-medium text-gray-900">
-							Employment Information
-						</h2>
-						{editingSection !== "employment" &&
-							renderEditButton("employment")}
-					</div>
-					<div className="px-6 py-4 space-y-4">
-						{editingSection === "employment" ? (
-							<div className="space-y-4">
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									{renderInput(
-										"employmentStatus",
-										"Employment Status",
-										"text",
-										employmentStatuses
+				{renderInfoCard(
+					"Employment Information",
+					<BriefcaseIcon className="h-8 w-8 text-white" />,
+					"employment",
+					editingSection === "employment" ? (
+						<div className="space-y-6">
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+								{renderInput(
+									"employmentStatus",
+									"Employment Status",
+									"text",
+									employmentStatuses
+								)}
+								{formData.employmentStatus &&
+									formData.employmentStatus !== "Student" &&
+									formData.employmentStatus !==
+										"Unemployed" && (
+										<>
+											{renderInput(
+												"employerName",
+												"Employer Name"
+											)}
+										</>
 									)}
-									{formData.employmentStatus &&
-										formData.employmentStatus !==
-											"Student" &&
-										formData.employmentStatus !==
-											"Unemployed" && (
-											<>
-												{renderInput(
-													"employerName",
-													"Employer Name"
-												)}
-											</>
-										)}
-									{renderInput(
-										"monthlyIncome",
-										"Monthly Income",
-										"text",
-										incomeRanges
-									)}
-								</div>
-								{renderSaveButtons()}
+								{renderInput(
+									"monthlyIncome",
+									"Monthly Income",
+									"text",
+									incomeRanges
+								)}
 							</div>
-						) : (
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Employment Status
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.employmentStatus ||
-											"Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Employer Name
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.employerName || "Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Monthly Income
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.monthlyIncome ||
-											"Not provided"}
-									</p>
-								</div>
-							</div>
-						)}
-					</div>
-				</div>
+							{renderSaveButtons()}
+						</div>
+					) : (
+						<div className="space-y-4">
+							{renderField(
+								"Employment Status",
+								profile.employmentStatus,
+								<BriefcaseIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Employer Name",
+								profile.employerName,
+								<BuildingOfficeIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Monthly Income",
+								profile.monthlyIncome,
+								<CurrencyDollarIcon className="h-5 w-5" />
+							)}
+						</div>
+					),
+					"text-emerald-300"
+				)}
 
 				{/* Banking Information */}
-				<div className="bg-white shadow rounded-lg">
-					<div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-						<h2 className="text-lg font-medium text-gray-900">
-							Banking Information
-						</h2>
-						{editingSection !== "banking" &&
-							renderEditButton("banking")}
-					</div>
-					<div className="px-6 py-4 space-y-4">
-						{editingSection === "banking" ? (
-							<div className="space-y-4">
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									{renderInput("bankName", "Bank Name")}
-									{renderInput(
-										"accountNumber",
-										"Account Number"
-									)}
-								</div>
-								{renderSaveButtons()}
+				{renderInfoCard(
+					"Banking Information",
+					<BanknotesIcon className="h-8 w-8 text-white" />,
+					"banking",
+					editingSection === "banking" ? (
+						<div className="space-y-6">
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+								{renderInput("bankName", "Bank Name")}
+								{renderInput("accountNumber", "Account Number")}
 							</div>
-						) : (
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Bank Name
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.bankName || "Not provided"}
-									</p>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-500">
-										Account Number
-									</label>
-									<p className="mt-1 text-sm text-gray-900">
-										{profile.accountNumber
-											? "••••" +
-											  profile.accountNumber.slice(-4)
-											: "Not provided"}
-									</p>
-								</div>
-							</div>
-						)}
-					</div>
-				</div>
+							{renderSaveButtons()}
+						</div>
+					) : (
+						<div className="space-y-4">
+							{renderField(
+								"Bank Name",
+								profile.bankName,
+								<BanknotesIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Account Number",
+								profile.accountNumber
+									? "••••" + profile.accountNumber.slice(-4)
+									: null,
+								<ShieldCheckIcon className="h-5 w-5" />
+							)}
+						</div>
+					),
+					"text-amber-300"
+				)}
 
 				{/* Account Information */}
-				<div className="bg-white shadow rounded-lg">
-					<div className="px-6 py-4 border-b border-gray-200">
-						<h2 className="text-lg font-medium text-gray-900">
-							Account Information
-						</h2>
-					</div>
-					<div className="px-6 py-4 space-y-4">
+				{renderInfoCard(
+					"Account Information",
+					<ClockIcon className="h-8 w-8 text-white" />,
+					null,
+					<div className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							<div>
-								<label className="block text-sm font-medium text-gray-500">
-									Member Since
-								</label>
-								<p className="mt-1 text-sm text-gray-900">
-									{formatDate(profile.createdAt)}
-								</p>
-							</div>
-							<div>
-								<label className="block text-sm font-medium text-gray-500">
-									Last Updated
-								</label>
-								<p className="mt-1 text-sm text-gray-900">
-									{formatDate(profile.updatedAt)}
-								</p>
-							</div>
-							<div>
-								<label className="block text-sm font-medium text-gray-500">
-									Last Login
-								</label>
-								<p className="mt-1 text-sm text-gray-900">
-									{profile.lastLoginAt
-										? formatDateTime(profile.lastLoginAt)
-										: "Not available"}
-								</p>
-							</div>
-							<div>
-								<label className="block text-sm font-medium text-gray-500">
+							{renderField(
+								"Member Since",
+								formatDate(profile.createdAt),
+								<CalendarIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Last Updated",
+								formatDate(profile.updatedAt),
+								<ClockIcon className="h-5 w-5" />
+							)}
+							{renderField(
+								"Last Login",
+								profile.lastLoginAt
+									? formatDateTime(profile.lastLoginAt)
+									: "Not available",
+								<ClockIcon className="h-5 w-5" />
+							)}
+						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="bg-white/5 p-4 rounded-lg border border-white/10">
+								<label className="block text-sm font-medium text-blue-100 mb-2">
 									Onboarding Status
 								</label>
-								<div className="mt-1">
+								<div className="mt-2">
 									{renderBadge(
 										profile.isOnboardingComplete,
 										profile.isOnboardingComplete
@@ -599,11 +560,11 @@ export default function ProfilePage() {
 									)}
 								</div>
 							</div>
-							<div>
-								<label className="block text-sm font-medium text-gray-500">
+							<div className="bg-white/5 p-4 rounded-lg border border-white/10">
+								<label className="block text-sm font-medium text-blue-100 mb-2">
 									KYC Status
 								</label>
-								<div className="mt-1">
+								<div className="mt-2">
 									{renderBadge(
 										profile.kycStatus,
 										profile.kycStatus
@@ -613,8 +574,9 @@ export default function ProfilePage() {
 								</div>
 							</div>
 						</div>
-					</div>
-				</div>
+					</div>,
+					"text-gray-300"
+				)}
 			</div>
 		</DashboardLayout>
 	);

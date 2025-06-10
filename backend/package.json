@@ -46,7 +46,7 @@
     "nodemon": "^3.1.0",
     "prisma": "^5.0.0",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.0.3"
+    "typescript": "^5.8.3"
   },
   "prisma": {
     "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"

@@ -22,5 +22,9 @@ COPY . .
 # Generate Prisma client
 RUN npm run prisma:generate
 
-# Start development server
-CMD ["npm", "run", "dev"] 
+# Copy and make startup script executable
+COPY start-dev.sh ./
+RUN chmod +x start-dev.sh
+
+# Start development server with our custom script
+CMD ["./start-dev.sh"] 

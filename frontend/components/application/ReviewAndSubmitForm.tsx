@@ -9,6 +9,80 @@ import {
 	Paper,
 	Link,
 } from "@mui/material";
+
+// Override Material-UI styles for dark theme
+const darkThemeOverrides = {
+	"& .MuiTypography-root": {
+		color: "white !important",
+	},
+	"& .MuiTypography-h6": {
+		color: "white !important",
+	},
+	"& .MuiTypography-root.text-blue-400": {
+		color: "#60a5fa !important",
+	},
+	"& .MuiTypography-root.text-green-400": {
+		color: "#4ade80 !important",
+	},
+	"& .MuiTypography-root.text-purple-400": {
+		color: "#c084fc !important",
+	},
+	"& .MuiButton-root": {
+		color: "white !important",
+		backgroundColor: "rgba(59, 130, 246, 0.8) !important",
+		backdropFilter: "blur(12px) !important",
+		border: "1px solid rgba(59, 130, 246, 0.5) !important",
+		borderRadius: "8px !important",
+		padding: "12px 24px !important",
+		fontWeight: "500 !important",
+		transition: "all 0.2s ease !important",
+		boxShadow: "none !important",
+		"&:hover": {
+			backgroundColor: "rgba(59, 130, 246, 0.9) !important",
+			borderColor: "rgba(96, 165, 250, 0.6) !important",
+			boxShadow: "none !important",
+		},
+	},
+	"& .MuiButton-outlined": {
+		color: "rgb(209, 213, 219) !important",
+		backgroundColor: "rgba(31, 41, 55, 0.5) !important",
+		backdropFilter: "blur(12px) !important",
+		borderColor: "rgba(107, 114, 128, 0.5) !important",
+		"&:hover": {
+			backgroundColor: "rgba(55, 65, 81, 0.6) !important",
+			borderColor: "rgba(156, 163, 175, 0.6) !important",
+		},
+	},
+	"& .MuiButton-contained": {
+		color: "white !important",
+		backgroundColor: "rgba(59, 130, 246, 0.8) !important",
+		backdropFilter: "blur(12px) !important",
+		border: "1px solid rgba(59, 130, 246, 0.5) !important",
+		boxShadow: "none !important",
+		"&:hover": {
+			backgroundColor: "rgba(59, 130, 246, 0.9) !important",
+			borderColor: "rgba(96, 165, 250, 0.6) !important",
+			boxShadow: "none !important",
+		},
+	},
+	"& .MuiFormControlLabel-label": {
+		color: "white !important",
+	},
+	"& .MuiCheckbox-root": {
+		color: "white !important",
+	},
+	"& .MuiPaper-root": {
+		backgroundColor: "rgba(31, 41, 55, 0.8) !important",
+		backdropFilter: "blur(12px) !important",
+		border: "1px solid rgba(75, 85, 99, 0.3) !important",
+		borderRadius: "12px !important",
+		color: "white !important",
+	},
+	"& .MuiAlert-root": {
+		backgroundColor: "#374151 !important",
+		color: "white !important",
+	},
+};
 import InfoIcon from "@mui/icons-material/Info";
 import { useSearchParams } from "next/navigation";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -499,7 +573,12 @@ function ReviewAndSubmitFormContent({
 	}
 
 	return (
-		<Box component="form" onSubmit={handleSubmit} className="space-y-6">
+		<Box
+			component="form"
+			onSubmit={handleSubmit}
+			className="space-y-6"
+			sx={darkThemeOverrides}
+		>
 			<Typography variant="h6" className="text-gray-900 mb-4">
 				Review Application
 			</Typography>
@@ -512,7 +591,7 @@ function ReviewAndSubmitFormContent({
 
 			<div className="space-y-6">
 				<Paper className="p-6">
-					<Typography variant="h6" className="text-gray-900 mb-6">
+					<Typography variant="h6" className="text-blue-400 mb-6">
 						Loan Details
 					</Typography>
 					<div className="space-y-6">
@@ -740,115 +819,130 @@ function ReviewAndSubmitFormContent({
 
 								<div className="pt-4 border-t border-gray-200">
 									<div className="space-y-4">
-										<div className="flex justify-between">
-											<div className="flex items-center gap-1">
-												<Typography className="text-gray-900 font-bold">
-													Net Loan Disbursement
-												</Typography>
-												<Tooltip.Provider>
-													<Tooltip.Root
-														open={
-															openTooltip ===
-															"disbursement"
-														}
-														onOpenChange={() =>
-															handleTooltipClick(
+										{/* Net Loan Disbursement - Highlighted */}
+										<div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-lg p-4">
+											<div className="flex justify-between items-center">
+												<div className="flex items-center gap-1">
+													<Typography className="text-green-400 font-normal text-lg">
+														Net Loan Disbursement
+													</Typography>
+													<Tooltip.Provider>
+														<Tooltip.Root
+															open={
+																openTooltip ===
 																"disbursement"
-															)
-														}
-													>
-														<Tooltip.Trigger
-															asChild
+															}
+															onOpenChange={() =>
+																handleTooltipClick(
+																	"disbursement"
+																)
+															}
 														>
-															<InfoIcon
-																className="text-gray-400 cursor-pointer"
-																fontSize="small"
-																onClick={() =>
-																	handleTooltipClick(
-																		"disbursement"
-																	)
-																}
-															/>
-														</Tooltip.Trigger>
-														<Tooltip.Portal>
-															<Tooltip.Content
-																className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																sideOffset={5}
+															<Tooltip.Trigger
+																asChild
 															>
-																The actual
-																amount you will
-																receive after
-																deducting the
-																origination fee
-																and legal fee
-																from your loan
-																amount.
-																<Tooltip.Arrow className="fill-gray-800" />
-															</Tooltip.Content>
-														</Tooltip.Portal>
-													</Tooltip.Root>
-												</Tooltip.Provider>
-											</div>
-											<Typography className="text-green-600 font-bold">
-												{formatCurrency(
-													fees.netDisbursement
-												)}
-											</Typography>
-										</div>
-										<div className="flex justify-between pt-2">
-											<div className="flex items-center gap-1">
-												<Typography className="text-gray-900 font-bold">
-													Monthly Repayment
+																<InfoIcon
+																	className="text-gray-400 cursor-pointer"
+																	fontSize="small"
+																	onClick={() =>
+																		handleTooltipClick(
+																			"disbursement"
+																		)
+																	}
+																/>
+															</Tooltip.Trigger>
+															<Tooltip.Portal>
+																<Tooltip.Content
+																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																	sideOffset={
+																		5
+																	}
+																>
+																	The actual
+																	amount you
+																	will receive
+																	after
+																	deducting
+																	the
+																	origination
+																	fee and
+																	legal fee
+																	from your
+																	loan amount.
+																	<Tooltip.Arrow className="fill-gray-800" />
+																</Tooltip.Content>
+															</Tooltip.Portal>
+														</Tooltip.Root>
+													</Tooltip.Provider>
+												</div>
+												<Typography className="text-green-400 font-normal text-xl">
+													{formatCurrency(
+														fees.netDisbursement
+													)}
 												</Typography>
-												<Tooltip.Provider>
-													<Tooltip.Root
-														open={
-															openTooltip ===
-															"repayment"
-														}
-														onOpenChange={() =>
-															handleTooltipClick(
-																"repayment"
-															)
-														}
-													>
-														<Tooltip.Trigger
-															asChild
-														>
-															<InfoIcon
-																className="text-gray-400 cursor-pointer"
-																fontSize="small"
-																onClick={() =>
-																	handleTooltipClick(
-																		"repayment"
-																	)
-																}
-															/>
-														</Tooltip.Trigger>
-														<Tooltip.Portal>
-															<Tooltip.Content
-																className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																sideOffset={5}
-															>
-																The amount you
-																need to pay each
-																month, which
-																includes both
-																principal and
-																interest.
-																<Tooltip.Arrow className="fill-gray-800" />
-															</Tooltip.Content>
-														</Tooltip.Portal>
-													</Tooltip.Root>
-												</Tooltip.Provider>
 											</div>
-											<Typography className="text-red-600 font-bold">
-												(
-												{formatCurrency(
-													monthlyRepayment
-												)}
-												)
-											</Typography>
+										</div>
+
+										{/* Monthly Repayment - Highlighted */}
+										<div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-lg p-4">
+											<div className="flex justify-between items-center">
+												<div className="flex items-center gap-1">
+													<Typography className="text-purple-400 font-normal text-lg">
+														Monthly Repayment
+													</Typography>
+													<Tooltip.Provider>
+														<Tooltip.Root
+															open={
+																openTooltip ===
+																"repayment"
+															}
+															onOpenChange={() =>
+																handleTooltipClick(
+																	"repayment"
+																)
+															}
+														>
+															<Tooltip.Trigger
+																asChild
+															>
+																<InfoIcon
+																	className="text-gray-400 cursor-pointer"
+																	fontSize="small"
+																	onClick={() =>
+																		handleTooltipClick(
+																			"repayment"
+																		)
+																	}
+																/>
+															</Tooltip.Trigger>
+															<Tooltip.Portal>
+																<Tooltip.Content
+																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																	sideOffset={
+																		5
+																	}
+																>
+																	The amount
+																	you need to
+																	pay each
+																	month, which
+																	includes
+																	both
+																	principal
+																	and
+																	interest.
+																	<Tooltip.Arrow className="fill-gray-800" />
+																</Tooltip.Content>
+															</Tooltip.Portal>
+														</Tooltip.Root>
+													</Tooltip.Provider>
+												</div>
+												<Typography className="text-purple-400 font-normal text-xl">
+													{formatCurrency(
+														monthlyRepayment
+													)}
+												</Typography>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -858,7 +952,7 @@ function ReviewAndSubmitFormContent({
 				</Paper>
 
 				<Paper className="p-6">
-					<Typography variant="h6" className="text-gray-900 mb-6">
+					<Typography variant="h6" className="text-blue-400 mb-6">
 						Personal Information
 					</Typography>
 					<div className="space-y-4">
@@ -935,7 +1029,11 @@ function ReviewAndSubmitFormContent({
 				</Paper>
 
 				<Paper className="p-6">
-					<Typography variant="h6" gutterBottom>
+					<Typography
+						variant="h6"
+						className="text-blue-400"
+						gutterBottom
+					>
 						Documents
 					</Typography>
 					<Typography

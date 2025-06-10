@@ -21,7 +21,7 @@ export default function CreditScoreGauge({
 	size = 300,
 }: CreditScoreGaugeProps) {
 	return (
-		<div className="flex flex-col items-center">
+		<div className="flex flex-col items-center ">
 			<GaugeComponent
 				type="semicircle"
 				arc={{
@@ -56,7 +56,7 @@ export default function CreditScoreGauge({
 								Math.round(value).toString(),
 							style: {
 								fontSize: "12px",
-								fill: "#666666",
+								fill: "#ffffff",
 								textShadow: "none",
 							},
 						},
@@ -70,10 +70,8 @@ export default function CreditScoreGauge({
 			/>
 			{score && (
 				<div className="space-y-1 text-center">
-					<div className="text-2xl font-bold text-gray-900">
-						{score}
-					</div>
-					<div className="text-sm text-gray-500">Powered by CTOS</div>
+					<div className="text-2xl font-bold text-white">{score}</div>
+					<div className="text-sm text-gray-200">Powered by CTOS</div>
 				</div>
 			)}
 		</div>

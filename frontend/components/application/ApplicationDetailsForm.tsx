@@ -1,17 +1,4 @@
 import { useState, useEffect, Suspense } from "react";
-import {
-	Box,
-	Button,
-	TextField,
-	Typography,
-	MenuItem,
-	FormHelperText,
-	FormControl,
-	InputLabel,
-	Select,
-	Paper,
-} from "@mui/material";
-import { SelectChangeEvent } from "@mui/material/Select";
 import { useSearchParams } from "next/navigation";
 
 interface Product {
@@ -144,7 +131,7 @@ function ApplicationDetailsFormContent({
 		setErrors((prev) => ({ ...prev, [name]: "" }));
 	};
 
-	const handleSelectChange = (e: SelectChangeEvent<string>) => {
+	const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		const { name, value } = e.target;
 		setFormValues((prev) => ({ ...prev, [name]: value }));
 		setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -255,114 +242,126 @@ function ApplicationDetailsFormContent({
 	};
 
 	return (
-		<Box component="form" onSubmit={handleSubmit} className="space-y-6">
-			<Typography variant="h6" className="text-gray-900 mb-4">
+		<form onSubmit={handleSubmit} className="space-y-6">
+			<h2 className="text-xl font-semibold text-white mb-6">
 				Loan Details for {selectedProduct.name}
-			</Typography>
+			</h2>
 
-			<div className="space-y-4">
-				<TextField
-					fullWidth
-					label="Loan Amount"
-					name="loanAmount"
-					value={formValues.loanAmount}
-					onChange={handleChange}
-					error={!!errors.loanAmount}
-					helperText={
-						errors.loanAmount ||
-						`Enter amount between RM ${selectedProduct.minAmount.toLocaleString()} and RM ${selectedProduct.maxAmount.toLocaleString()}`
-					}
-					type="number"
-					inputProps={{
-						min: selectedProduct.minAmount,
-						max: selectedProduct.maxAmount,
-						step: 100,
-					}}
-				/>
+			<div className="space-y-6">
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Loan Amount
+					</label>
+					<input
+						type="number"
+						name="loanAmount"
+						value={formValues.loanAmount}
+						onChange={handleChange}
+						min={selectedProduct.minAmount}
+						max={selectedProduct.maxAmount}
+						step={100}
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+						placeholder="Enter loan amount"
+					/>
+					{errors.loanAmount ? (
+						<p className="mt-1 text-sm text-red-400">
+							{errors.loanAmount}
+						</p>
+					) : (
+						<p className="mt-1 text-sm text-gray-400">
+							Enter amount between RM{" "}
+							{selectedProduct.minAmount.toLocaleString()} and RM{" "}
+							{selectedProduct.maxAmount.toLocaleString()}
+						</p>
+					)}
+				</div>
 
 				{(selectedProduct.loanTypes ?? []).length > 0 && (
-					<FormControl fullWidth error={!!errors.loanPurpose}>
-						<InputLabel>Loan Purpose</InputLabel>
-						<Select
+					<div>
+						<label className="block text-sm font-medium text-gray-300 mb-2">
+							Loan Purpose
+						</label>
+						<select
 							name="loanPurpose"
 							value={formValues.loanPurpose}
 							onChange={handleSelectChange}
-							label="Loan Purpose"
+							className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
 						>
+							<option value="">Select loan purpose</option>
 							{(selectedProduct.loanTypes ?? []).map((type) => (
-								<MenuItem key={type} value={type}>
+								<option key={type} value={type}>
 									{type}
-								</MenuItem>
+								</option>
 							))}
-						</Select>
+						</select>
 						{errors.loanPurpose && (
-							<FormHelperText>
+							<p className="mt-1 text-sm text-red-400">
 								{errors.loanPurpose}
-							</FormHelperText>
+							</p>
 						)}
-					</FormControl>
+					</div>
 				)}
 
-				<FormControl fullWidth error={!!errors.loanTerm}>
-					<InputLabel>Loan Term</InputLabel>
-					<Select
+				<div>
+					<label className="block text-sm font-medium text-gray-300 mb-2">
+						Loan Term
+					</label>
+					<select
 						name="loanTerm"
 						value={formValues.loanTerm}
 						onChange={handleSelectChange}
-						label="Loan Term"
+						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
 					>
+						<option value="">Select loan term</option>
 						{selectedProduct.repaymentTerms.map((term) => (
-							<MenuItem key={term} value={term.toString()}>
+							<option key={term} value={term.toString()}>
 								{formatTermDisplay(term)}
-							</MenuItem>
+							</option>
 						))}
-					</Select>
+					</select>
 					{errors.loanTerm && (
-						<FormHelperText>{errors.loanTerm}</FormHelperText>
+						<p className="mt-1 text-sm text-red-400">
+							{errors.loanTerm}
+						</p>
 					)}
-				</FormControl>
+				</div>
 
 				{formValues.loanAmount && formValues.loanTerm && (
-					<Paper className="p-4 bg-gray-50">
-						<Typography
-							variant="subtitle2"
-							className="text-gray-600"
-						>
+					<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6">
+						<h3 className="text-sm font-medium text-gray-300 mb-2">
 							Estimated Monthly Repayment
-						</Typography>
-						<Typography variant="h6" className="text-indigo-600">
+						</h3>
+						<p className="text-2xl font-semibold text-blue-400">
 							RM{" "}
 							{calculateMonthlyRepayment(
 								parseFloat(formValues.loanAmount),
 								parseInt(formValues.loanTerm)
 							)}
-						</Typography>
-						<Typography variant="caption" className="text-gray-500">
+						</p>
+						<p className="text-sm text-gray-400 mt-1">
 							*Based on {selectedProduct.interestRate}% monthly
 							interest rate (flat)
-						</Typography>
-					</Paper>
+						</p>
+					</div>
 				)}
 			</div>
 
-			<Box className="flex justify-between pt-6">
-				<Button
+			<div className="flex justify-between pt-6">
+				<button
 					type="button"
-					variant="outlined"
 					onClick={handleBack}
-					className="text-gray-700 border-gray-300 hover:bg-gray-50"
+					className="px-6 py-3 bg-gray-800/50 backdrop-blur-md border border-gray-600/50 text-gray-300 rounded-lg hover:bg-gray-700/60 hover:border-gray-500/60 transition-all duration-200 font-medium"
 				>
 					Back
-				</Button>
-				<Button
+				</button>
+				<button
 					type="submit"
-					variant="contained"
-					className="bg-indigo-600 hover:bg-indigo-700 text-white"
+					className="px-6 py-3 bg-blue-600/80 backdrop-blur-md border border-blue-500/50 text-white rounded-lg hover:bg-blue-600/90 hover:border-blue-400/60 transition-all duration-200 font-medium"
 				>
 					Continue
-				</Button>
-			</Box>
-		</Box>
+				</button>
+			</div>
+		</form>
 	);
 }
 

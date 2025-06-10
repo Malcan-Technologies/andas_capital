@@ -2,26 +2,17 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TokenStorage } from "@/lib/authUtils";
+import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { User } from "lucide-react";
 
 export default function UserProfileButton() {
-	const [isOpen, setIsOpen] = useState(false);
-	const dropdownRef = useRef<HTMLDivElement>(null);
 	const router = useRouter();
-
-	useEffect(() => {
-		function handleClickOutside(event: MouseEvent) {
-			if (
-				dropdownRef.current &&
-				!dropdownRef.current.contains(event.target as Node)
-			) {
-				setIsOpen(false);
-			}
-		}
-
-		document.addEventListener("mousedown", handleClickOutside);
-		return () =>
-			document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
 
 	const handleLogout = async () => {
 		// Clear tokens using our utility
@@ -45,43 +36,35 @@ export default function UserProfileButton() {
 	};
 
 	return (
-		<div className="relative" ref={dropdownRef}>
-			<button
-				onClick={() => setIsOpen(!isOpen)}
-				className="flex items-center justify-center w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-			>
-				<svg
-					className="w-6 h-6"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="relative bg-gray-800 hover:bg-gray-700 text-gray-100 hover:text-white transition-colors"
 				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={2}
-						d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-					/>
-				</svg>
-			</button>
-
-			{isOpen && (
-				<div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+					<User className="h-5 w-5" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent
+				align="end"
+				className="w-48 bg-gray-800/95 backdrop-blur-lg border-gray-700"
+			>
+				<DropdownMenuItem asChild>
 					<Link
 						href="/dashboard/profile"
-						className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-						onClick={() => setIsOpen(false)}
+						className="w-full cursor-pointer text-gray-100 hover:text-white hover:bg-gray-700 focus:bg-gray-700 focus:text-white"
 					>
 						Profile
 					</Link>
-					<button
-						onClick={handleLogout}
-						className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-					>
-						Logout
-					</button>
-				</div>
-			)}
-		</div>
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onClick={handleLogout}
+					className="cursor-pointer text-gray-100 hover:text-white hover:bg-gray-700 focus:bg-gray-700 focus:text-white"
+				>
+					Logout
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
