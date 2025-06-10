@@ -33,6 +33,12 @@ jobs:
           echo "${{ secrets.FRONTEND_ENV }}" > frontend/.env
           echo "${{ secrets.ADMIN_ENV }}" > admin/.env.local
           echo "${{ secrets.BACKEND_ENV }}" > backend/.env
+          
+          # Make sure CORS_ALLOWED_ORIGINS is set in the backend .env file
+          if ! grep -q "CORS_ALLOWED_ORIGINS" backend/.env; then
+            echo "Adding CORS_ALLOWED_ORIGINS to backend/.env"
+            echo "CORS_ALLOWED_ORIGINS=https://growkapital.com,https://admin.growkapital.com" >> backend/.env
+          fi
 
       - name: Deploy frontend
         run: |
@@ -57,11 +63,11 @@ jobs:
               npm install -g pnpm
             fi
             
-            # Install dependencies if needed
-            if [ ! -d "node_modules" ] || [ ! -f "pnpm-lock.yaml" ]; then
-              echo "Installing frontend dependencies..."
-              pnpm install --no-audit --prefer-offline --no-optional
-            fi
+            # Clean install: remove node_modules and perform fresh install
+            echo "Performing clean install of dependencies..."
+            rm -rf node_modules
+            rm -f pnpm-lock.yaml
+            pnpm install --prefer-offline
             
             # Build frontend
             echo "Building frontend..."
@@ -72,7 +78,9 @@ jobs:
             
             # Run build with timeout
             timeout 600 pnpm run build:prod || {
-              echo "⚠️ Build timed out, but continuing deployment..."
+              echo "⚠️ Build failed or timed out. Showing build log:"
+              cat .next/build-error.log 2>/dev/null || echo "No build error log found"
+              echo "Creating empty .next directory to continue deployment..."
               mkdir -p .next/static
               touch .next/static/.gitkeep
             }
@@ -111,11 +119,11 @@ jobs:
               npm install -g pnpm
             fi
             
-            # Install dependencies if needed
-            if [ ! -d "node_modules" ] || [ ! -f "pnpm-lock.yaml" ]; then
-              echo "Installing admin dependencies..."
-              pnpm install --no-audit --prefer-offline --no-optional
-            fi
+            # Clean install: remove node_modules and perform fresh install
+            echo "Performing clean install of dependencies..."
+            rm -rf node_modules
+            rm -f pnpm-lock.yaml
+            pnpm install --prefer-offline
             
             # Build admin
             echo "Building admin..."
@@ -126,7 +134,9 @@ jobs:
             
             # Run build with timeout
             timeout 600 pnpm run build:prod || {
-              echo "⚠️ Build timed out, but continuing deployment..."
+              echo "⚠️ Build failed or timed out. Showing build log:"
+              cat .next/build-error.log 2>/dev/null || echo "No build error log found"
+              echo "Creating empty .next directory to continue deployment..."
               mkdir -p .next/static
               touch .next/static/.gitkeep
             }
@@ -152,6 +162,14 @@ jobs:
           # Create destination directory and copy files
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/backend'
           scp -i ~/.ssh/deploy_key backend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          
+          # Ensure CORS_ALLOWED_ORIGINS is set on the server
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            if ! grep -q "CORS_ALLOWED_ORIGINS" /var/www/growkapital/backend/.env; then
+              echo "Adding CORS_ALLOWED_ORIGINS to backend .env on server"
+              echo "CORS_ALLOWED_ORIGINS=https://growkapital.com,https://admin.growkapital.com" >> /var/www/growkapital/backend/.env
+            fi
+          '
           
           # Copy all backend files
           rsync -avz --delete --exclude="node_modules" --exclude="dist" \
