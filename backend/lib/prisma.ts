@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
 // Initialize Prisma Client with error handling
-const prisma = new PrismaClient({
+export const prisma = new PrismaClient({
 	log: ["query", "info", "warn", "error"],
 });
 
@@ -17,4 +17,5 @@ prisma
 		// This allows the application to retry the connection later
 	});
 
+// For backwards compatibility
 export default prisma;

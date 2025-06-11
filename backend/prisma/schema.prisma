@@ -1,252 +1,252 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
-}
-
-enum WalletTransactionStatus {
-    PENDING
-    APPROVED
-    REJECTED
-}
-
-enum NotificationType {
-    SYSTEM // For automatic system notifications
-    MARKETING // For marketing notifications
-}
-
-enum NotificationPriority {
-    LOW
-    MEDIUM
-    HIGH
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Product {
-    id                String            @id @default(cuid())
-    code              String            @unique
-    name              String
-    description       String
-    minAmount         Float
-    maxAmount         Float
-    repaymentTerms    Json
-    interestRate      Float
-    eligibility       Json[]
-    lateFee           Float
-    originationFee    Float
-    legalFee          Float
-    applicationFee    Float
-    requiredDocuments Json[]
-    features          Json[]
-    loanTypes         Json[]
-    isActive          Boolean           @default(true)
-    createdAt         DateTime          @default(now())
-    updatedAt         DateTime          @updatedAt
-    applications      LoanApplication[]
+  id                String            @id @default(cuid())
+  code              String            @unique
+  name              String
+  description       String
+  minAmount         Float
+  maxAmount         Float
+  repaymentTerms    Json
+  interestRate      Float
+  eligibility       Json[]
+  lateFee           Float
+  originationFee    Float
+  legalFee          Float
+  applicationFee    Float
+  requiredDocuments Json[]
+  features          Json[]
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  loanTypes         Json[]
+  applications      LoanApplication[]
 
-    @@map("products")
+  @@map("products")
 }
 
 model User {
-    id                   String              @id @default(cuid())
-    phoneNumber          String              @unique
-    password             String
-    refreshToken         String?
-    fullName             String?
-    dateOfBirth          DateTime?
-    email                String?             @unique
-    address1             String?
-    address2             String?
-    city                 String?
-    state                String?
-    zipCode              String?
-    country              String?
-    nationality          String?
-    idNumber             String?
-    idType               String?
-    idExpiry             DateTime?
-    employmentStatus     String?
-    employerName         String?
-    monthlyIncome        String?
-    bankName             String?
-    accountNumber        String?
-    role                 String              @default("USER")
-    isOnboardingComplete Boolean             @default(false)
-    onboardingStep       Int                 @default(0)
-    kycStatus            Boolean             @default(false)
-    lastLoginAt          DateTime?           @updatedAt
-    createdAt            DateTime            @default(now())
-    updatedAt            DateTime            @updatedAt
-    applications         LoanApplication[]
-    loans                Loan[]
-    notifications        Notification[]
-    documents            UserDocument[]
-    walletTransactions   WalletTransaction[]
-    wallet               Wallet?
+  id                   String              @id @default(cuid())
+  phoneNumber          String              @unique
+  password             String
+  refreshToken         String?
+  fullName             String?
+  dateOfBirth          DateTime?
+  email                String?             @unique
+  address1             String?
+  address2             String?
+  city                 String?
+  state                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  country              String?
+  idExpiry             DateTime?
+  idNumber             String?
+  idType               String?
+  nationality          String?
+  role                 String              @default("USER")
+  zipCode              String?
+  lastLoginAt          DateTime?           @updatedAt
+  accountNumber        String?
+  bankName             String?
+  employerName         String?
+  employmentStatus     String?
+  monthlyIncome        String?
+  isOnboardingComplete Boolean             @default(false)
+  kycStatus            Boolean             @default(false)
+  onboardingStep       Int                 @default(0)
+  applications         LoanApplication[]
+  loans                Loan[]
+  notifications        Notification[]
+  documents            UserDocument[]
+  walletTransactions   WalletTransaction[]
+  wallet               Wallet?
 
-    @@map("users")
+  @@map("users")
 }
 
 model Wallet {
-    id                     String              @id @default(cuid())
-    userId                 String              @unique
-    balance                Float               @default(0)
-    availableForWithdrawal Float               @default(0)
-    totalDeposits          Float               @default(0)
-    totalWithdrawals       Float               @default(0)
-    createdAt              DateTime            @default(now())
-    updatedAt              DateTime            @updatedAt
-    transactions           WalletTransaction[]
-    user                   User                @relation(fields: [userId], references: [id])
+  id                     String              @id @default(cuid())
+  userId                 String              @unique
+  balance                Float               @default(0)
+  availableForWithdrawal Float               @default(0)
+  totalDeposits          Float               @default(0)
+  totalWithdrawals       Float               @default(0)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  transactions           WalletTransaction[]
+  user                   User                @relation(fields: [userId], references: [id])
 
-    @@map("wallets")
+  @@map("wallets")
 }
 
 model WalletTransaction {
-    id          String                  @id @default(cuid())
-    userId      String
-    walletId    String
-    loanId      String?
-    type        String
-    amount      Float
-    status      WalletTransactionStatus @default(PENDING)
-    description String
-    reference   String?
-    metadata    Json?
-    processedAt DateTime?
-    createdAt   DateTime                @default(now())
-    updatedAt   DateTime                @updatedAt
-    loan        Loan?                   @relation(fields: [loanId], references: [id])
-    user        User                    @relation(fields: [userId], references: [id])
-    wallet      Wallet                  @relation(fields: [walletId], references: [id])
+  id          String                  @id @default(cuid())
+  userId      String
+  walletId    String
+  loanId      String?
+  type        String
+  amount      Float
+  description String
+  reference   String?
+  metadata    Json?
+  processedAt DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  status      WalletTransactionStatus @default(PENDING)
+  loan        Loan?                   @relation(fields: [loanId], references: [id])
+  user        User                    @relation(fields: [userId], references: [id])
+  wallet      Wallet                  @relation(fields: [walletId], references: [id])
 
-    @@map("wallet_transactions")
+  @@map("wallet_transactions")
 }
 
 model Loan {
-    id                 String              @id @default(cuid())
-    userId             String
-    applicationId      String              @unique
-    principalAmount    Float
-    outstandingBalance Float
-    interestRate       Float
-    term               Int
-    monthlyPayment     Float
-    nextPaymentDue     DateTime?
-    status             String              @default("ACTIVE")
-    disbursedAt        DateTime?
-    createdAt          DateTime            @default(now())
-    updatedAt          DateTime            @updatedAt
-    repayments         LoanRepayment[]
-    application        LoanApplication     @relation(fields: [applicationId], references: [id])
-    user               User                @relation(fields: [userId], references: [id])
-    walletTransactions WalletTransaction[]
+  id                 String              @id @default(cuid())
+  userId             String
+  applicationId      String              @unique
+  principalAmount    Float
+  outstandingBalance Float
+  interestRate       Float
+  term               Int
+  monthlyPayment     Float
+  nextPaymentDue     DateTime?
+  status             String              @default("ACTIVE")
+  disbursedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  repayments         LoanRepayment[]
+  application        LoanApplication     @relation(fields: [applicationId], references: [id])
+  user               User                @relation(fields: [userId], references: [id])
+  walletTransactions WalletTransaction[]
 
-    @@map("loans")
+  @@map("loans")
 }
 
 model LoanRepayment {
-    id              String    @id @default(cuid())
-    loanId          String
-    amount          Float
-    principalAmount Float
-    interestAmount  Float
-    status          String    @default("PENDING")
-    dueDate         DateTime
-    paidAt          DateTime?
-    createdAt       DateTime  @default(now())
-    updatedAt       DateTime  @updatedAt
-    loan            Loan      @relation(fields: [loanId], references: [id])
+  id              String    @id @default(cuid())
+  loanId          String
+  amount          Float
+  principalAmount Float
+  interestAmount  Float
+  status          String    @default("PENDING")
+  dueDate         DateTime
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  loan            Loan      @relation(fields: [loanId], references: [id])
 
-    @@map("loan_repayments")
+  @@map("loan_repayments")
 }
 
 model LoanApplication {
-    id               String         @id @default(cuid())
-    userId           String
-    productId        String
-    amount           Float?
-    term             Int?
-    purpose          String?
-    monthlyRepayment Float?
-    interestRate     Float?
-    lateFee          Float?
-    originationFee   Float?
-    legalFee         Float?
-    applicationFee   Float?
-    netDisbursement  Float?
-    acceptTerms      Boolean        @default(false)
-    paidAppFee       Boolean        @default(false)
-    appStep          Int            @default(0)
-    urlLink          String?        @unique
-    status           String         @default("INCOMPLETE")
-    createdAt        DateTime       @default(now())
-    updatedAt        DateTime       @updatedAt
-    product          Product        @relation(fields: [productId], references: [id])
-    user             User           @relation(fields: [userId], references: [id])
-    loan             Loan?
-    documents        UserDocument[]
+  id               String         @id @default(cuid())
+  userId           String
+  productId        String
+  amount           Float?
+  term             Int?
+  status           String         @default("INCOMPLETE")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  acceptTerms      Boolean        @default(false)
+  appStep          Int            @default(0)
+  applicationFee   Float?
+  interestRate     Float?
+  lateFee          Float?
+  legalFee         Float?
+  monthlyRepayment Float?
+  netDisbursement  Float?
+  originationFee   Float?
+  paidAppFee       Boolean        @default(false)
+  purpose          String?
+  urlLink          String?        @unique
+  product          Product        @relation(fields: [productId], references: [id])
+  user             User           @relation(fields: [userId], references: [id])
+  loan             Loan?
+  documents        UserDocument[]
 
-    @@map("loan_applications")
+  @@map("loan_applications")
 }
 
 model UserDocument {
-    id            String           @id @default(cuid())
-    userId        String
-    applicationId String?
-    type          String
-    status        String           @default("PENDING")
-    fileUrl       String
-    createdAt     DateTime         @default(now())
-    updatedAt     DateTime         @updatedAt
-    application   LoanApplication? @relation(fields: [applicationId], references: [id])
-    user          User             @relation(fields: [userId], references: [id])
+  id            String           @id @default(cuid())
+  userId        String
+  applicationId String?
+  type          String
+  status        String           @default("PENDING")
+  fileUrl       String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  application   LoanApplication? @relation(fields: [applicationId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
 
-    @@map("user_documents")
+  @@map("user_documents")
 }
 
 model NotificationTemplate {
-    id           String           @id @default(cuid())
-    code         String           @unique // e.g., "PAYMENT_REMINDER", "LOAN_DISBURSED"
-    title        String
-    message      String
-    type         NotificationType
-    createdAt    DateTime         @default(now())
-    updatedAt    DateTime         @updatedAt
-    Notification Notification[]
+  id           String           @id @default(cuid())
+  code         String           @unique
+  title        String
+  message      String
+  type         NotificationType
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  Notification Notification[]
 
-    @@map("notification_templates")
+  @@map("notification_templates")
 }
 
 model Notification {
-    id         String                @id @default(cuid())
-    userId     String
-    templateId String?
-    type       NotificationType
-    priority   NotificationPriority  @default(LOW)
-    title      String
-    message    String
-    link       String? // Optional link for the notification
-    metadata   Json? // Additional data specific to the notification
-    isRead     Boolean               @default(false)
-    expiresAt  DateTime?
-    createdAt  DateTime              @default(now())
-    updatedAt  DateTime              @updatedAt
-    user       User                  @relation(fields: [userId], references: [id])
-    template   NotificationTemplate? @relation(fields: [templateId], references: [id])
+  id         String                @id @default(cuid())
+  userId     String
+  title      String
+  message    String
+  isRead     Boolean               @default(false)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  expiresAt  DateTime?
+  metadata   Json?
+  priority   NotificationPriority  @default(LOW)
+  templateId String?
+  type       NotificationType
+  link       String?
+  template   NotificationTemplate? @relation(fields: [templateId], references: [id])
+  user       User                  @relation(fields: [userId], references: [id])
 
-    @@map("notifications")
+  @@map("notifications")
 }
 
 model NotificationGroup {
-    id          String   @id @default(cuid())
-    name        String
-    description String?
-    filters     Json // Criteria for user targeting (e.g., loan status, user type)
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  filters     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-    @@map("notification_groups")
+  @@map("notification_groups")
+}
+
+enum WalletTransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  SYSTEM
+  MARKETING
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
 }

@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "CommonJS",
-    "lib": ["ES2022", "ESNext.AsyncIterable"],
+    "lib": ["ES2022", "ESNext.AsyncIterable", "DOM"],
     "skipLibCheck": true,
     "sourceMap": true,
     "outDir": "./dist",
@@ -27,5 +27,5 @@
     }
   },
   "exclude": ["node_modules", "dist"],
-  "include": ["./src/**/*.ts", "./prisma/**/*.ts"]
+  "include": ["./src/**/*.ts", "./prisma/**/*.ts", "./lib/**/*.ts"]
 } 

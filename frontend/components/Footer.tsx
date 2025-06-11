@@ -37,14 +37,6 @@ export default function Footer() {
 						<ul className="space-y-3">
 							<li>
 								<Link
-									href="/credit-score+"
-									className="text-gray-300 hover:text-white"
-								>
-									Credit Score+
-								</Link>
-							</li>
-							<li>
-								<Link
 									href="/pay-advance"
 									className="text-gray-300 hover:text-white"
 								>

@@ -26,7 +26,7 @@ type NavbarProps = {
 	bgStyle?: string;
 };
 
-type ActiveMenu = "none" | "borrow" | "credit" | "resources";
+type ActiveMenu = "none" | "borrow" | "resources";
 
 export default function Navbar({
 	bgStyle = "bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900",
@@ -130,23 +130,6 @@ export default function Navbar({
 									<div
 										className={`transition-transform duration-200 ${
 											activeMenu === "borrow"
-												? "rotate-180"
-												: ""
-										}`}
-									>
-										<MdKeyboardArrowDown size={16} />
-									</div>
-								</button>
-							</div>
-							<div className="relative">
-								<button
-									onClick={() => handleMenuClick("credit")}
-									className="text-gray-200 hover:text-white dark:text-gray-200 dark:hover:text-white transition-colors flex items-center gap-1"
-								>
-									Solutions
-									<div
-										className={`transition-transform duration-200 ${
-											activeMenu === "credit"
 												? "rotate-180"
 												: ""
 										}`}
@@ -348,27 +331,6 @@ export default function Navbar({
 														</p>
 													</div>
 												</Link>
-												<Link
-													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
-												>
-													<div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-														<MdCreditCard
-															size={24}
-															color="#2563EB"
-														/>
-													</div>
-													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-															Business Line of
-															Credit
-														</h4>
-														<p className="text-sm text-gray-500">
-															Flexible credit for
-															managing cash flow
-														</p>
-													</div>
-												</Link>
 											</div>
 										</div>
 
@@ -467,135 +429,6 @@ export default function Navbar({
 												className="inline-block text-blue-600 hover:text-blue-700 font-medium"
 											>
 												See all products →
-											</Link>
-										</div>
-									</div>
-								)}
-
-								{activeMenu === "credit" && (
-									<div className="grid grid-cols-3 gap-8">
-										{/* Credit Solutions Column */}
-										<div>
-											<h3 className="text-lg font-semibold text-gray-900 mb-4">
-												Credit Solutions
-											</h3>
-											<div className="space-y-4">
-												<Link
-													href="/credit-score+"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
-												>
-													<div className="w-12 h-12 rounded-xl bg-[#F5D23A]/20 flex items-center justify-center flex-shrink-0">
-														<MdShowChart
-															size={24}
-															color="#F5D23A"
-														/>
-													</div>
-													<div>
-														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-900 group-hover:text-[#F5D23A] transition-colors">
-																Credit Score+
-															</h4>
-															<span className="text-xs px-2 py-0.5 bg-[#F5D23A]/20 text-[#F5D23A] rounded-full">
-																New
-															</span>
-														</div>
-														<p className="text-sm text-gray-500">
-															Build your credit
-															score with
-															consistent payments
-														</p>
-													</div>
-												</Link>
-											</div>
-										</div>
-
-										{/* Benefits Column */}
-										<div>
-											<h3 className="text-lg font-semibold text-gray-900 mb-4">
-												Benefits
-											</h3>
-											<div className="space-y-3">
-												<div className="flex items-center gap-3 text-gray-600">
-													<svg
-														className="w-5 h-5 text-[#F5D23A]"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth={2}
-															d="M5 13l4 4L19 7"
-														/>
-													</svg>
-													<span>
-														Monthly CTOS reporting
-													</span>
-												</div>
-												<div className="flex items-center gap-3 text-gray-600">
-													<svg
-														className="w-5 h-5 text-[#F5D23A]"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth={2}
-															d="M5 13l4 4L19 7"
-														/>
-													</svg>
-													<span>
-														Get your savings back
-													</span>
-												</div>
-												<div className="flex items-center gap-3 text-gray-600">
-													<svg
-														className="w-5 h-5 text-[#F5D23A]"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth={2}
-															d="M5 13l4 4L19 7"
-														/>
-													</svg>
-													<span>
-														30% CTOS report discount
-													</span>
-												</div>
-											</div>
-										</div>
-
-										{/* CTA Column */}
-										<div className="bg-gray-50 rounded-xl p-6">
-											<div className="relative h-24 mb-4">
-												<Image
-													src="/credit-building.svg"
-													alt="Credit building"
-													fill
-													className="object-contain object-left"
-												/>
-											</div>
-											<div className="mb-4">
-												<h3 className="text-lg font-semibold text-gray-900 mb-2">
-													Ready to build credit?
-												</h3>
-												<p className="text-sm text-gray-600">
-													Start building your credit
-													score today
-												</p>
-											</div>
-											<Link
-												href="/credit-score+"
-												className="inline-block text-[#F5D23A] hover:text-[#D4B32F] font-medium"
-											>
-												Learn more →
 											</Link>
 										</div>
 									</div>
@@ -802,66 +635,6 @@ export default function Navbar({
 
 							{/* Mobile Menu Links */}
 							<div className="space-y-8">
-								{/* Credit Solutions Section */}
-								<div onClick={(e) => e.stopPropagation()}>
-									<button
-										onClick={() =>
-											toggleMobileSection("credit")
-										}
-										className="flex items-center justify-between w-full text-left text-xl font-semibold text-gray-900 py-4 border-b border-gray-100"
-									>
-										<span>Credit Solutions</span>
-										<MdKeyboardArrowDown
-											size={24}
-											className={`transform transition-transform ${
-												activeMobileSections.includes(
-													"credit"
-												)
-													? "rotate-180"
-													: ""
-											}`}
-										/>
-									</button>
-									<div
-										className={`space-y-4 transition-all duration-200 overflow-hidden ${
-											activeMobileSections.includes(
-												"credit"
-											)
-												? "max-h-[1000px] opacity-100 mt-6"
-												: "max-h-0 opacity-0"
-										}`}
-									>
-										<Link
-											href="/credit-score+"
-											className="flex items-center gap-4 text-gray-600 hover:text-[#F5D23A] p-2"
-											onClick={() =>
-												setMobileMenuOpen(false)
-											}
-										>
-											<div className="w-10 h-10 rounded-xl bg-[#F5D23A]/20 flex items-center justify-center flex-shrink-0">
-												<MdShowChart
-													size={20}
-													color="#F5D23A"
-												/>
-											</div>
-											<div>
-												<div className="flex items-center gap-2">
-													<span className="font-semibold">
-														Credit Score+
-													</span>
-													<span className="text-xs px-2 py-0.5 bg-[#F5D23A]/20 text-[#F5D23A] rounded-full">
-														New
-													</span>
-												</div>
-												<p className="text-sm text-gray-500">
-													Build your credit score with
-													consistent payments
-												</p>
-											</div>
-										</Link>
-									</div>
-								</div>
-
 								{/* Borrow Section */}
 								<div onClick={(e) => e.stopPropagation()}>
 									<button
@@ -1033,30 +806,6 @@ export default function Navbar({
 														</p>
 													</div>
 												</Link>
-												{/* <Link
-													href="/products"
-													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
-													onClick={() =>
-														setMobileMenuOpen(false)
-													}
-												>
-													<div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-														<MdCreditCard
-															size={20}
-															color="#2563EB"
-														/>
-													</div>
-													<div>
-														<span className="font-semibold">
-															Business Line of
-															Credit
-														</span>
-														<p className="text-sm text-gray-500">
-															Flexible credit for
-															cash flow
-														</p>
-													</div>
-												</Link> */}
 											</div>
 										</div>
 
