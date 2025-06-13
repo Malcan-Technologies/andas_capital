@@ -690,7 +690,7 @@ function AdminApplicationsPageContent() {
 			const response = await fetch(
 				`/api/admin/applications/${selectedApplication.id}/status`,
 				{
-					method: "POST",
+					method: "PATCH",
 					headers: {
 						"Content-Type": "application/json",
 						Authorization: `Bearer ${localStorage.getItem(
