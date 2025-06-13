@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import Link from "next/link";
@@ -54,7 +54,7 @@ interface DisbursementData {
 	};
 }
 
-export default function DisbursementsPage() {
+function DisbursementsContent() {
 	const searchParams = useSearchParams();
 	const [disbursements, setDisbursements] = useState<DisbursementData[]>([]);
 	const [filteredDisbursements, setFilteredDisbursements] = useState<
@@ -757,5 +757,13 @@ export default function DisbursementsPage() {
 				</div>
 			</div>
 		</AdminLayout>
+	);
+}
+
+export default function DisbursementsPage() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<DisbursementsContent />
+		</Suspense>
 	);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import Link from "next/link";
@@ -72,7 +72,7 @@ interface LoanData {
 	}>;
 }
 
-export default function ActiveLoansPage() {
+function ActiveLoansContent() {
 	const searchParams = useSearchParams();
 	const [loans, setLoans] = useState<LoanData[]>([]);
 	const [filteredLoans, setFilteredLoans] = useState<LoanData[]>([]);
@@ -799,5 +799,13 @@ export default function ActiveLoansPage() {
 				</div>
 			</div>
 		</AdminLayout>
+	);
+}
+
+export default function ActiveLoansPage() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<ActiveLoansContent />
+		</Suspense>
 	);
 }
