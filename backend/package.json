@@ -14,6 +14,8 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts",
+    "prisma:fix": "bash scripts/fix-prisma-client.sh",
+    "prisma:verify": "node scripts/verify-prisma-client.js",
     "tsc": "tsc"
   },
   "keywords": [],
