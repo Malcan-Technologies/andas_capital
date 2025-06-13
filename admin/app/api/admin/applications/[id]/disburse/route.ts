@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { AdminTokenStorage } from "../../../../../../lib/authUtils";
+
+// Force dynamic rendering for this route
+export const dynamic = "force-dynamic";
 
 export async function POST(
 	request: Request,
@@ -8,7 +10,7 @@ export async function POST(
 	try {
 		const { id } = params;
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-		const token = AdminTokenStorage.getAccessToken();
+		const token = request.headers.get("authorization")?.split(" ")[1];
 
 		console.log(
 			`Admin API Disburse: Processing disbursement for application ${id}`

@@ -6,6 +6,11 @@ import Cookies from "js-cookie";
 export const AdminTokenStorage = {
 	// Access token functions
 	getAccessToken: (): string | null => {
+		// Check if we're in a browser environment
+		if (typeof window === "undefined") {
+			return null;
+		}
+
 		return (
 			localStorage.getItem("adminToken") ||
 			Cookies.get("adminToken") ||
@@ -15,17 +20,32 @@ export const AdminTokenStorage = {
 
 	// 15 minutes expiration, matching the JWT expiration in the backend
 	setAccessToken: (token: string, expiresInDays: number = 0.01): void => {
+		// Check if we're in a browser environment
+		if (typeof window === "undefined") {
+			return;
+		}
+
 		localStorage.setItem("adminToken", token);
 		Cookies.set("adminToken", token, { expires: expiresInDays });
 	},
 
 	removeAccessToken: (): void => {
+		// Check if we're in a browser environment
+		if (typeof window === "undefined") {
+			return;
+		}
+
 		localStorage.removeItem("adminToken");
 		Cookies.remove("adminToken");
 	},
 
 	// Refresh token functions
 	getRefreshToken: (): string | null => {
+		// Check if we're in a browser environment
+		if (typeof window === "undefined") {
+			return null;
+		}
+
 		return (
 			localStorage.getItem("adminRefreshToken") ||
 			Cookies.get("adminRefreshToken") ||
@@ -35,11 +55,21 @@ export const AdminTokenStorage = {
 
 	// 90 days expiration, matching the backend JWT refresh token expiration
 	setRefreshToken: (token: string, expiresInDays: number = 90): void => {
+		// Check if we're in a browser environment
+		if (typeof window === "undefined") {
+			return;
+		}
+
 		localStorage.setItem("adminRefreshToken", token);
 		Cookies.set("adminRefreshToken", token, { expires: expiresInDays });
 	},
 
 	removeRefreshToken: (): void => {
+		// Check if we're in a browser environment
+		if (typeof window === "undefined") {
+			return;
+		}
+
 		localStorage.removeItem("adminRefreshToken");
 		Cookies.remove("adminRefreshToken");
 	},
@@ -146,16 +176,14 @@ export const fetchWithAdminTokenRefresh = async <T>(
 	if (
 		url.startsWith("/api/") &&
 		!url.startsWith("/api/users/") &&
-		!url.startsWith("/api/admin/refresh")
+		!url.startsWith("/api/admin/refresh") &&
+		!url.startsWith("/api/admin/login") &&
+		!url.startsWith("/api/admin/logout")
 	) {
-		// For API calls to endpoints in this app, we use the relative URL
-		// For direct backend API calls, we prepend the backend URL
-		const isBackendEndpoint = url.includes("/api/admin/");
+		// For API calls to admin endpoints, route them to the backend
+		const isAdminEndpoint = url.includes("/api/admin/");
 
-		// Exception: history endpoint should use frontend API route
-		const isHistoryEndpoint = url.includes("/history");
-
-		if (isBackendEndpoint && !isHistoryEndpoint) {
+		if (isAdminEndpoint) {
 			// These should go to the backend
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			fullUrl = `${backendUrl}${url}`;

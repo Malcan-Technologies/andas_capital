@@ -147,9 +147,29 @@ export default function PendingDecisionPage() {
 			const applicationsWithHistory = await Promise.all(
 				data.map(async (app) => {
 					try {
-						const history = await fetchWithAdminTokenRefresh<
-							ApplicationHistory[]
+						const historyData = await fetchWithAdminTokenRefresh<
+							| {
+									applicationId: string;
+									currentStatus: string;
+									timeline: ApplicationHistory[];
+							  }
+							| ApplicationHistory[]
 						>(`/api/admin/applications/${app.id}/history`);
+
+						// Handle both old array format and new object format
+						let history: ApplicationHistory[] = [];
+						if (Array.isArray(historyData)) {
+							// Old format - direct array
+							history = historyData;
+						} else if (
+							historyData &&
+							typeof historyData === "object" &&
+							"timeline" in historyData
+						) {
+							// New format - object with timeline property
+							history = historyData.timeline || [];
+						}
+
 						return { ...app, history };
 					} catch (historyError) {
 						console.error(
@@ -188,12 +208,32 @@ export default function PendingDecisionPage() {
 					const applicationsWithHistory = await Promise.all(
 						pendingApps.map(async (app) => {
 							try {
-								const history =
+								const historyData =
 									await fetchWithAdminTokenRefresh<
-										ApplicationHistory[]
+										| {
+												applicationId: string;
+												currentStatus: string;
+												timeline: ApplicationHistory[];
+										  }
+										| ApplicationHistory[]
 									>(
 										`/api/admin/applications/${app.id}/history`
 									);
+
+								// Handle both old array format and new object format
+								let history: ApplicationHistory[] = [];
+								if (Array.isArray(historyData)) {
+									// Old format - direct array
+									history = historyData;
+								} else if (
+									historyData &&
+									typeof historyData === "object" &&
+									"timeline" in historyData
+								) {
+									// New format - object with timeline property
+									history = historyData.timeline || [];
+								}
+
 								return { ...app, history };
 							} catch (historyError) {
 								console.error(
@@ -417,17 +457,36 @@ export default function PendingDecisionPage() {
 		setIsLoadingAudit(true);
 		try {
 			// Use the fetchWithAdminTokenRefresh utility to make authenticated requests
-			const data = await fetchWithAdminTokenRefresh<AuditTrailEntry[]>(
-				`/api/admin/applications/${selectedApp.id}/history`
-			);
+			const data = await fetchWithAdminTokenRefresh<
+				| {
+						applicationId: string;
+						currentStatus: string;
+						timeline: AuditTrailEntry[];
+				  }
+				| AuditTrailEntry[]
+			>(`/api/admin/applications/${selectedApp.id}/history`);
 			console.log(
 				"Frontend - Received audit trail data:",
 				JSON.stringify(data, null, 2)
 			);
 			console.log("Frontend - Data type:", typeof data);
 			console.log("Frontend - Is array:", Array.isArray(data));
-			console.log("Frontend - Data length:", data?.length);
-			setAuditTrail(data);
+
+			// Handle both old array format and new object format
+			let timeline: AuditTrailEntry[] = [];
+			if (Array.isArray(data)) {
+				// Old format - direct array
+				timeline = data;
+			} else if (data && typeof data === "object" && "timeline" in data) {
+				// New format - object with timeline property
+				timeline = data.timeline || [];
+			}
+
+			console.log(
+				"Frontend - Extracted timeline length:",
+				timeline.length
+			);
+			setAuditTrail(timeline);
 		} catch (error) {
 			console.error("Failed to fetch audit trail:", error);
 			console.error("Error: Failed to load audit trail");

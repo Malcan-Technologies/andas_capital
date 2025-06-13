@@ -183,9 +183,29 @@ export default function PendingDisbursementPage() {
 				filteredData.map(async (app) => {
 					try {
 						// Fetch history data
-						const history = await fetchWithAdminTokenRefresh<
-							ApplicationHistory[]
+						const historyData = await fetchWithAdminTokenRefresh<
+							| {
+									applicationId: string;
+									currentStatus: string;
+									timeline: ApplicationHistory[];
+							  }
+							| ApplicationHistory[]
 						>(`/api/admin/applications/${app.id}/history`);
+
+						// Handle both old array format and new object format
+						let history: ApplicationHistory[] = [];
+						if (Array.isArray(historyData)) {
+							// Old format - direct array
+							history = historyData;
+						} else if (
+							historyData &&
+							typeof historyData === "object" &&
+							"timeline" in historyData
+						) {
+							// New format - object with timeline property
+							history = historyData.timeline || [];
+						}
+
 						return { ...app, history };
 					} catch (historyError) {
 						console.error(
@@ -261,9 +281,28 @@ export default function PendingDisbursementPage() {
 
 	const fetchApplicationHistory = async (applicationId: string) => {
 		try {
-			const history = await fetchWithAdminTokenRefresh<
-				ApplicationHistory[]
+			const historyData = await fetchWithAdminTokenRefresh<
+				| {
+						applicationId: string;
+						currentStatus: string;
+						timeline: ApplicationHistory[];
+				  }
+				| ApplicationHistory[]
 			>(`/api/admin/applications/${applicationId}/history`);
+
+			// Handle both old array format and new object format
+			let history: ApplicationHistory[] = [];
+			if (Array.isArray(historyData)) {
+				// Old format - direct array
+				history = historyData;
+			} else if (
+				historyData &&
+				typeof historyData === "object" &&
+				"timeline" in historyData
+			) {
+				// New format - object with timeline property
+				history = historyData.timeline || [];
+			}
 
 			// Update the selected application's history
 			if (selectedApp && selectedApp.id === applicationId) {

@@ -280,9 +280,30 @@ export default function AdminApplicationsPage() {
 				const applicationsWithHistory = await Promise.all(
 					applicationsData.map(async (app) => {
 						try {
-							const history = await fetchWithAdminTokenRefresh<
-								LoanApplicationHistory[]
-							>(`/api/admin/applications/${app.id}/history`);
+							const historyData =
+								await fetchWithAdminTokenRefresh<
+									| {
+											applicationId: string;
+											currentStatus: string;
+											timeline: LoanApplicationHistory[];
+									  }
+									| LoanApplicationHistory[]
+								>(`/api/admin/applications/${app.id}/history`);
+
+							// Handle both old array format and new object format
+							let history: LoanApplicationHistory[] = [];
+							if (Array.isArray(historyData)) {
+								// Old format - direct array
+								history = historyData;
+							} else if (
+								historyData &&
+								typeof historyData === "object" &&
+								"timeline" in historyData
+							) {
+								// New format - object with timeline property
+								history = historyData.timeline || [];
+							}
+
 							return { ...app, history };
 						} catch (historyError) {
 							console.error(
@@ -419,9 +440,29 @@ export default function AdminApplicationsPage() {
 	// Function to fetch updated history for an application
 	const fetchApplicationHistory = async (applicationId: string) => {
 		try {
-			const history = await fetchWithAdminTokenRefresh<
-				LoanApplicationHistory[]
+			const historyData = await fetchWithAdminTokenRefresh<
+				| {
+						applicationId: string;
+						currentStatus: string;
+						timeline: LoanApplicationHistory[];
+				  }
+				| LoanApplicationHistory[]
 			>(`/api/admin/applications/${applicationId}/history`);
+
+			// Handle both old array format and new object format
+			let history: LoanApplicationHistory[] = [];
+			if (Array.isArray(historyData)) {
+				// Old format - direct array
+				history = historyData;
+			} else if (
+				historyData &&
+				typeof historyData === "object" &&
+				"timeline" in historyData
+			) {
+				// New format - object with timeline property
+				history = historyData.timeline || [];
+			}
+
 			return history;
 		} catch (error) {
 			console.error(

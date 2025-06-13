@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { AdminTokenStorage } from "../../../../../../lib/authUtils";
+
+// Force dynamic rendering for this route
+export const dynamic = "force-dynamic";
 
 export async function POST(
 	request: Request,
@@ -22,7 +24,7 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 	try {
 		const { id } = params;
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-		const token = AdminTokenStorage.getAccessToken();
+		const token = request.headers.get("authorization")?.split(" ")[1];
 
 		console.log(
 			`Admin API Status: Processing status update for application ${id}`

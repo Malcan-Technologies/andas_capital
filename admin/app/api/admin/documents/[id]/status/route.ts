@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { AdminTokenStorage } from "../../../../../../lib/authUtils";
+
+// Force dynamic rendering for this route
+export const dynamic = "force-dynamic";
 
 export async function PATCH(
 	request: Request,
@@ -18,7 +20,7 @@ export async function PATCH(
 		}
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-		const token = AdminTokenStorage.getAccessToken();
+		const token = request.headers.get("authorization")?.split(" ")[1];
 
 		if (!token) {
 			return NextResponse.json(

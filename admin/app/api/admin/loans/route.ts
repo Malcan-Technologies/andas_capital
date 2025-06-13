@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AdminTokenStorage, fetchWithAdminTokenRefresh } from "@/lib/authUtils";
+
+// Force dynamic rendering for this route
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
 	try {
-		const accessToken = AdminTokenStorage.getAccessToken();
-		if (!accessToken) {
+		const token = request.headers.get("authorization")?.split(" ")[1];
+		if (!token) {
 			console.error("Admin Loans - No access token found");
 			return NextResponse.json(
 				{ message: "Unauthorized" },
@@ -14,18 +16,26 @@ export async function GET(request: NextRequest) {
 
 		console.log("Admin Loans - Fetching loans data");
 
-		// Use any as intermediate type since we're handling the response manually
-		const data = await fetchWithAdminTokenRefresh<any>(
+		const response = await fetch(
 			`${process.env.NEXT_PUBLIC_API_URL}/api/admin/loans`,
 			{
 				method: "GET",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${accessToken}`,
+					Authorization: `Bearer ${token}`,
 				},
 			}
 		);
 
+		if (!response.ok) {
+			const errorData = await response.json();
+			return NextResponse.json(
+				{ message: errorData.error || "Failed to fetch loans" },
+				{ status: response.status }
+			);
+		}
+
+		const data = await response.json();
 		console.log("Admin Loans - Successfully fetched loans");
 		return NextResponse.json(data);
 	} catch (error: any) {
