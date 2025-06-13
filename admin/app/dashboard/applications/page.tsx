@@ -33,6 +33,7 @@ import {
 	ClipboardDocumentCheckIcon,
 	PencilSquareIcon,
 	ArrowLeftIcon,
+	XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 interface LoanApplication {
@@ -445,6 +446,24 @@ function AdminApplicationsPageContent() {
 
 		return matchesSearch && matchesStatus;
 	});
+
+	// Auto-select the first application when filtered results change
+	useEffect(() => {
+		// Auto-select the first application if there are results and no application is currently selected or selected application is not in filtered results
+		if (
+			filteredApplications.length > 0 &&
+			(!selectedApplication ||
+				!filteredApplications.find(
+					(app) => app.id === selectedApplication.id
+				))
+		) {
+			setSelectedApplication(filteredApplications[0]);
+		}
+		// Clear selection if no results
+		else if (filteredApplications.length === 0) {
+			setSelectedApplication(null);
+		}
+	}, [filteredApplications, selectedApplication]);
 
 	// Handle filter toggle
 	const toggleFilter = (status: string) => {
@@ -901,14 +920,15 @@ function AdminApplicationsPageContent() {
 						placeholder="Search by applicant name, email, or purpose..."
 						value={search}
 						onChange={(e) => setSearch(e.target.value)}
-						className="block w-full pl-10 pr-3 py-2 border border-gray-600 rounded-lg bg-gray-800/50 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="block w-full pl-10 pr-10 py-2 border border-gray-600 rounded-lg bg-gray-800/50 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 					/>
 					{search && (
 						<button
 							onClick={() => setSearch("")}
-							className="absolute inset-y-0 right-0 pr-3 flex items-center"
+							className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+							title="Clear search"
 						>
-							<XCircleIcon className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+							<XMarkIcon className="h-4 w-4" />
 						</button>
 					)}
 				</div>

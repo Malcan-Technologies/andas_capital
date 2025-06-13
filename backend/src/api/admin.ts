@@ -2106,11 +2106,9 @@ router.get(
 				});
 			}
 
-			const loans = await prisma.loanApplication.findMany({
+			const loans = await prisma.loan.findMany({
 				where: {
-					status: {
-						in: ["APPROVED", "ACTIVE"],
-					},
+					status: "ACTIVE",
 				},
 				include: {
 					user: {
@@ -2121,8 +2119,46 @@ router.get(
 							email: true,
 						},
 					},
-					product: true,
-					documents: true,
+					application: {
+						include: {
+							product: {
+								select: {
+									id: true,
+									name: true,
+									code: true,
+								},
+							},
+							user: {
+								select: {
+									id: true,
+									fullName: true,
+									email: true,
+									phoneNumber: true,
+									employmentStatus: true,
+									employerName: true,
+									monthlyIncome: true,
+									bankName: true,
+									accountNumber: true,
+								},
+							},
+						},
+					},
+					repayments: {
+						select: {
+							id: true,
+							amount: true,
+							principalAmount: true,
+							interestAmount: true,
+							status: true,
+							dueDate: true,
+							paidAt: true,
+							createdAt: true,
+						},
+						orderBy: {
+							dueDate: "desc",
+						},
+						take: 10,
+					},
 				},
 				orderBy: {
 					createdAt: "desc",
@@ -3671,6 +3707,12 @@ router.get(
 									id: true,
 									name: true,
 									code: true,
+								},
+							},
+							loan: {
+								select: {
+									id: true,
+									status: true,
 								},
 							},
 						},

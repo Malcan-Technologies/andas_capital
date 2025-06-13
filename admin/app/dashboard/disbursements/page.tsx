@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import Link from "next/link";
 import {
@@ -13,6 +14,7 @@ import {
 	ExclamationTriangleIcon,
 	ClockIcon,
 	CreditCardIcon,
+	XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -45,10 +47,15 @@ interface DisbursementData {
 			name: string;
 			code: string;
 		};
+		loan?: {
+			id: string;
+			status: string;
+		} | null;
 	};
 }
 
 export default function DisbursementsPage() {
+	const searchParams = useSearchParams();
 	const [disbursements, setDisbursements] = useState<DisbursementData[]>([]);
 	const [filteredDisbursements, setFilteredDisbursements] = useState<
 		DisbursementData[]
@@ -69,6 +76,14 @@ export default function DisbursementsPage() {
 	useEffect(() => {
 		fetchDisbursements();
 	}, []);
+
+	// Handle URL search parameter
+	useEffect(() => {
+		const searchParam = searchParams.get("search");
+		if (searchParam) {
+			setSearchTerm(searchParam);
+		}
+	}, [searchParams]);
 
 	const fetchDisbursements = async () => {
 		try {
@@ -115,29 +130,67 @@ export default function DisbursementsPage() {
 		// Apply search filter
 		if (searchTerm) {
 			const search = searchTerm.toLowerCase();
-			filtered = filtered.filter(
+
+			// First, check for exact application ID match
+			const exactApplicationMatch = filtered.find(
 				(disbursement) =>
-					disbursement.referenceNumber
-						.toLowerCase()
-						.includes(search) ||
-					disbursement.application.user.fullName
-						?.toLowerCase()
-						.includes(search) ||
-					disbursement.application.user.email
-						?.toLowerCase()
-						.includes(search) ||
-					disbursement.application.user.phoneNumber
-						.toLowerCase()
-						.includes(search) ||
-					disbursement.application.product.name
-						.toLowerCase()
-						.includes(search) ||
-					disbursement.disbursedBy.toLowerCase().includes(search)
+					disbursement.applicationId.toLowerCase() === search
 			);
+
+			if (exactApplicationMatch) {
+				// If exact application ID match found, show only that disbursement
+				filtered = [exactApplicationMatch];
+			} else {
+				// Otherwise, do partial matching across all fields
+				filtered = filtered.filter(
+					(disbursement) =>
+						disbursement.referenceNumber
+							.toLowerCase()
+							.includes(search) ||
+						disbursement.applicationId
+							.toLowerCase()
+							.includes(search) ||
+						disbursement.application.user.fullName
+							?.toLowerCase()
+							.includes(search) ||
+						disbursement.application.user.email
+							?.toLowerCase()
+							.includes(search) ||
+						disbursement.application.user.phoneNumber
+							.toLowerCase()
+							.includes(search) ||
+						disbursement.application.product.name
+							.toLowerCase()
+							.includes(search) ||
+						disbursement.disbursedBy.toLowerCase().includes(search)
+				);
+			}
 		}
 
 		setFilteredDisbursements(filtered);
+		return filtered;
 	}, [disbursements, searchTerm, statusFilter]);
+
+	// Handle auto-selection separately to avoid circular dependency
+	useEffect(() => {
+		const filtered = filteredDisbursements;
+
+		// Auto-select the first disbursement if there are results and no disbursement is currently selected or selected disbursement is not in filtered results
+		if (
+			filtered.length > 0 &&
+			(!selectedDisbursement ||
+				!filtered.find(
+					(disbursement) =>
+						disbursement.id === selectedDisbursement.id
+				))
+		) {
+			setSelectedDisbursement(filtered[0]);
+		}
+		// Clear selection if no results
+		else if (filtered.length === 0) {
+			setSelectedDisbursement(null);
+		}
+	}, [filteredDisbursements, selectedDisbursement]);
 
 	useEffect(() => {
 		filterDisbursements();
@@ -282,11 +335,20 @@ export default function DisbursementsPage() {
 						</div>
 						<input
 							type="text"
-							className="block w-full pl-10 pr-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-							placeholder="Search by reference, customer name, email, or product"
+							className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+							placeholder="Search by reference, application ID, customer name, email, or product"
 							value={searchTerm}
 							onChange={handleSearch}
 						/>
+						{searchTerm && (
+							<button
+								onClick={() => setSearchTerm("")}
+								className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+								title="Clear search"
+							>
+								<XMarkIcon className="h-4 w-4" />
+							</button>
+						)}
 					</div>
 					<div className="flex space-x-2">
 						<button
@@ -666,13 +728,15 @@ export default function DisbursementsPage() {
 
 								{/* Action Buttons */}
 								<div className="flex flex-wrap gap-3">
-									<Link
-										href={`/dashboard/loans?search=${selectedDisbursement.referenceNumber}`}
-										className="px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors flex items-center"
-									>
-										<CreditCardIcon className="h-5 w-5 mr-2" />
-										View Active Loan
-									</Link>
+									{selectedDisbursement.application.id && (
+										<Link
+											href={`/dashboard/loans?search=${selectedDisbursement.application.id}`}
+											className="px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors flex items-center"
+										>
+											<CreditCardIcon className="h-5 w-5 mr-2" />
+											View Active Loan
+										</Link>
+									)}
 								</div>
 							</div>
 						</div>

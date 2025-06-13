@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import Link from "next/link";
 import {
@@ -15,6 +16,7 @@ import {
 	DocumentTextIcon,
 	ChevronRightIcon,
 	EyeIcon,
+	XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -71,6 +73,7 @@ interface LoanData {
 }
 
 export default function ActiveLoansPage() {
+	const searchParams = useSearchParams();
 	const [loans, setLoans] = useState<LoanData[]>([]);
 	const [filteredLoans, setFilteredLoans] = useState<LoanData[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -83,6 +86,14 @@ export default function ActiveLoansPage() {
 	useEffect(() => {
 		fetchActiveLoans();
 	}, []);
+
+	// Handle URL search parameter
+	useEffect(() => {
+		const searchParam = searchParams.get("search");
+		if (searchParam) {
+			setSearchTerm(searchParam);
+		}
+	}, [searchParams]);
 
 	const fetchActiveLoans = async () => {
 		try {
@@ -136,26 +147,65 @@ export default function ActiveLoansPage() {
 		// Apply search filter
 		if (searchTerm) {
 			const search = searchTerm.toLowerCase();
-			filtered = filtered.filter(
+
+			// First, check for exact loan ID match (full ID or truncated ID) or application ID match
+			const exactLoanMatch = filtered.find(
 				(loan) =>
-					loan.user.fullName.toLowerCase().includes(search) ||
-					loan.user.email.toLowerCase().includes(search) ||
-					loan.id.toLowerCase().includes(search) ||
-					(loan.application?.product?.name &&
-						loan.application.product.name
-							.toLowerCase()
-							.includes(search)) ||
-					(loan.application?.purpose &&
-						loan.application.purpose.toLowerCase().includes(search))
+					loan.id.toLowerCase() === search ||
+					loan.id.toLowerCase().substring(0, 8) === search ||
+					(loan.applicationId &&
+						loan.applicationId.toLowerCase() === search)
 			);
+
+			if (exactLoanMatch) {
+				// If exact loan ID match found, show only that loan
+				filtered = [exactLoanMatch];
+			} else {
+				// Otherwise, do partial matching across all fields
+				filtered = filtered.filter(
+					(loan) =>
+						loan.user.fullName.toLowerCase().includes(search) ||
+						loan.user.email.toLowerCase().includes(search) ||
+						loan.id.toLowerCase().includes(search) ||
+						(loan.applicationId &&
+							loan.applicationId
+								.toLowerCase()
+								.includes(search)) ||
+						(loan.application?.product?.name &&
+							loan.application.product.name
+								.toLowerCase()
+								.includes(search)) ||
+						(loan.application?.purpose &&
+							loan.application.purpose
+								.toLowerCase()
+								.includes(search))
+				);
+			}
 		}
 
 		setFilteredLoans(filtered);
 	}, [loans, searchTerm, statusFilter]);
 
+	// Apply filters whenever dependencies change
 	useEffect(() => {
 		filterLoans();
 	}, [filterLoans]);
+
+	// Handle auto-selection separately to avoid circular dependency
+	useEffect(() => {
+		// Auto-select the first loan if there are results and no loan is currently selected or selected loan is not in filtered results
+		if (
+			filteredLoans.length > 0 &&
+			(!selectedLoan ||
+				!filteredLoans.find((loan) => loan.id === selectedLoan.id))
+		) {
+			setSelectedLoan(filteredLoans[0]);
+		}
+		// Clear selection if no results
+		else if (filteredLoans.length === 0) {
+			setSelectedLoan(null);
+		}
+	}, [filteredLoans, selectedLoan]);
 
 	const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
 		setSearchTerm(e.target.value);
@@ -304,11 +354,20 @@ export default function ActiveLoansPage() {
 						</div>
 						<input
 							type="text"
-							className="block w-full pl-10 pr-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+							className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
 							placeholder="Search by name, email, loan ID, or purpose"
 							value={searchTerm}
 							onChange={handleSearch}
 						/>
+						{searchTerm && (
+							<button
+								onClick={() => setSearchTerm("")}
+								className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+								title="Clear search"
+							>
+								<XMarkIcon className="h-4 w-4" />
+							</button>
+						)}
 					</div>
 					<div className="flex space-x-2">
 						<button
@@ -711,13 +770,15 @@ export default function ActiveLoansPage() {
 										<ArrowsRightLeftIcon className="h-5 w-5 mr-2" />
 										View Repayments
 									</Link>
-									<Link
-										href={`/dashboard/applications/${selectedLoan.applicationId}`}
-										className="px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors flex items-center"
-									>
-										<DocumentTextIcon className="h-5 w-5 mr-2" />
-										View Application
-									</Link>
+									{selectedLoan.applicationId && (
+										<Link
+											href={`/dashboard/disbursements?search=${selectedLoan.applicationId}`}
+											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
+										>
+											<BanknotesIcon className="h-5 w-5 mr-2" />
+											View Disbursement
+										</Link>
+									)}
 								</div>
 							</div>
 						</div>
