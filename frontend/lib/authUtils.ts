@@ -6,22 +6,29 @@ import Cookies from "js-cookie";
 export const TokenStorage = {
 	// Access token functions
 	getAccessToken: (): string | null => {
+		if (typeof window === "undefined") return Cookies.get("token") || null;
 		return localStorage.getItem("token") || Cookies.get("token") || null;
 	},
 
 	// Note: expiresInDays=0.01 is approximately 15 minutes, matching the JWT expiration in the backend
 	setAccessToken: (token: string, expiresInDays: number = 0.01): void => {
-		localStorage.setItem("token", token);
+		if (typeof window !== "undefined") {
+			localStorage.setItem("token", token);
+		}
 		Cookies.set("token", token, { expires: expiresInDays });
 	},
 
 	removeAccessToken: (): void => {
-		localStorage.removeItem("token");
+		if (typeof window !== "undefined") {
+			localStorage.removeItem("token");
+		}
 		Cookies.remove("token");
 	},
 
 	// Refresh token functions
 	getRefreshToken: (): string | null => {
+		if (typeof window === "undefined")
+			return Cookies.get("refreshToken") || null;
 		return (
 			localStorage.getItem("refreshToken") ||
 			Cookies.get("refreshToken") ||
@@ -31,12 +38,16 @@ export const TokenStorage = {
 
 	// 90 days expiration, matching the backend JWT refresh token expiration
 	setRefreshToken: (token: string, expiresInDays: number = 90): void => {
-		localStorage.setItem("refreshToken", token);
+		if (typeof window !== "undefined") {
+			localStorage.setItem("refreshToken", token);
+		}
 		Cookies.set("refreshToken", token, { expires: expiresInDays });
 	},
 
 	removeRefreshToken: (): void => {
-		localStorage.removeItem("refreshToken");
+		if (typeof window !== "undefined") {
+			localStorage.removeItem("refreshToken");
+		}
 		Cookies.remove("refreshToken");
 	},
 

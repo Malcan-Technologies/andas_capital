@@ -65,7 +65,7 @@ RUN chmod +x ./scripts/migrate-db.sh
 RUN mkdir -p uploads && chmod 777 uploads
 
 # Expose the port the app runs on
-EXPOSE 4001
+EXPOSE 4000
 
 # Start the application (migrations will be run separately)
 CMD ["node", "dist/src/index.js"] 

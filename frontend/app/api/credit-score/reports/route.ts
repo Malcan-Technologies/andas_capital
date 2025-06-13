@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
 
+// Force dynamic rendering for this route
+export const dynamic = "force-dynamic";
+
 export async function GET() {
 	try {
 		// For now, return mock data since we haven't integrated with CTOS yet

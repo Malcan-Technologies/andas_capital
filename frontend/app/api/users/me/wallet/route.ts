@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { TokenStorage } from "@/lib/authUtils";
+
+// Force dynamic rendering for this route
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
 	try {
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-		const token = TokenStorage.getAccessToken();
+
+		// Get token from Authorization header instead of localStorage
+		const authHeader = request.headers.get("authorization");
+		const token = authHeader?.replace("Bearer ", "");
 
 		if (!token) {
 			return NextResponse.json(
