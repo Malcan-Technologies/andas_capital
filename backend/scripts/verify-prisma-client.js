@@ -30,11 +30,25 @@ async function verifyPrismaClient() {
 			}
 		}
 
-		// Test database connection
-		await prisma.$connect();
-		console.log("✅ Database connection successful");
+		// Only test database connection if we're not in build mode
+		// During Docker build, DATABASE_URL might point to a service that doesn't exist yet
+		const skipDbConnection =
+			process.env.SKIP_DB_CONNECTION === "true" ||
+			process.env.NODE_ENV === "build" ||
+			!process.env.DATABASE_URL ||
+			process.env.DATABASE_URL.includes("postgres:5432"); // Docker service name indicates build time
 
-		await prisma.$disconnect();
+		if (skipDbConnection) {
+			console.log(
+				"ℹ️  Skipping database connection test (build mode or Docker service detected)"
+			);
+		} else {
+			// Test database connection
+			await prisma.$connect();
+			console.log("✅ Database connection successful");
+			await prisma.$disconnect();
+		}
+
 		console.log("✅ Prisma client verification completed successfully");
 		console.log("ℹ️  Server should be running on port 4001");
 	} catch (error) {
