@@ -3,506 +3,558 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import Link from "next/link";
 import {
-	MdArrowDownward,
+	MdArrowForward,
+	MdCheck,
+	MdSecurity,
+	MdSpeed,
+	MdLocationOn,
+	MdBusinessCenter,
+	MdVerifiedUser,
+	MdPeople,
+	MdTrendingUp,
+	MdAccountBalance,
 	MdBolt,
 	MdShield,
 	MdGroups,
-	MdCheck,
-	MdSpeed,
-	MdTrendingUp,
-	MdSecurity,
 } from "react-icons/md";
 
 export default function About() {
 	return (
-		<div className="min-h-screen bg-white dark:bg-white text-black dark:text-black">
+		<div className="min-h-screen bg-offwhite text-gray-700 font-body w-full">
 			<Navbar bgStyle="bg-transparent" />
 
 			{/* Hero Section */}
-			<section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900">
-				{/* Animated background elements */}
+			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 w-full">
+				{/* Gradient background elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute w-[800px] h-[800px] bg-purple-800/20 rounded-full blur-3xl -top-[400px] -left-[400px] animate-pulse"></div>
-					<div className="absolute w-[600px] h-[600px] bg-indigo-800/20 rounded-full blur-3xl top-[20%] right-[10%] animate-pulse delay-700"></div>
-					<div className="absolute w-[500px] h-[500px] bg-blue-800/20 rounded-full blur-3xl bottom-[-200px] left-[30%] animate-pulse delay-1000"></div>
+					<div className="absolute w-[500px] h-[500px] bg-purple-primary/10 rounded-full blur-3xl -top-32 -left-32"></div>
+					<div className="absolute w-[700px] h-[700px] bg-purple-primary/5 rounded-full blur-3xl top-1/2 left-1/2"></div>
+					<div className="absolute w-[400px] h-[400px] bg-purple-primary/8 rounded-full blur-3xl -bottom-32 -right-32"></div>
 				</div>
 
-				{/* Grid pattern overlay */}
-				<div
-					className="absolute inset-0"
-					style={{
-						backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-						opacity: 0.1,
-					}}
-				></div>
-
 				{/* Content */}
-				<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
-					<div className="text-center max-w-4xl mx-auto">
-						<motion.div
-							initial={{ opacity: 0, y: 20 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.8 }}
-						>
-							<h1 className="text-6xl md:text-8xl font-bold text-white mb-8 leading-tight">
-								Financial Solutions
-								<span className="block bg-gradient-to-r from-purple-300 to-indigo-300 bg-clip-text text-transparent">
-									for the 21st Century
+				<div className="relative w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-32">
+					<div className="grid lg:grid-cols-2 gap-12 items-center">
+						<div className="text-center lg:text-left">
+							<h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold tracking-tight text-white mb-6 leading-tight">
+								About Kapital
+								<br />
+								<span className="text-purple-300">
+									Malaysia's Financial Future
 								</span>
 							</h1>
-						</motion.div>
-						<motion.div
-							initial={{ opacity: 0, y: 20 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.8, delay: 0.2 }}
-						>
-							<p className="text-2xl md:text-3xl text-purple-200 mb-12 leading-relaxed">
-								We&apos;re revolutionizing business financing in
+							<p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-gray-300 mb-8 lg:mb-12 font-body leading-relaxed">
+								We're revolutionizing business financing in
 								Malaysia through technology, transparency, and
 								trust. Our mission is to empower everyone with
 								accessible, fair, and innovative financial
 								solutions.
 							</p>
-						</motion.div>
-						<motion.div
-							initial={{ opacity: 0, y: 20 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.8, delay: 0.4 }}
-							className="flex flex-col md:flex-row gap-4 justify-center"
-						>
-							{/* <a
-								href="/apply"
-								className="inline-flex items-center justify-center bg-white text-purple-900 px-8 py-4 rounded-full font-semibold hover:bg-purple-50 transition-all group"
-							>
-								Get Started
-								<svg
-									className="ml-2 w-5 h-5 transform group-hover:translate-x-1 transition-transform"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
+							<div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+								<Link
+									href="/signup"
+									className="bg-purple-primary text-white hover:bg-purple-700 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
 								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M17 8l4 4m0 0l-4 4m4-4H3"
+									Join Us Today
+									<MdArrowForward
+										size={20}
+										className="ml-2"
 									/>
-								</svg>
-							</a>
-							<a
-								href="#our-mission"
-								className="inline-flex items-center justify-center border-2 border-white text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 transition-colors"
-							>
-								Learn More
-							</a> */}
-						</motion.div>
-					</div>
-				</div>
-
-				{/* Scroll indicator */}
-				<div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex flex-col items-center text-white/60">
-					<span className="text-sm mb-2">Scroll to explore</span>
-					<div className="animate-bounce">
-						<MdArrowDownward size={24} />
-					</div>
-				</div>
-			</section>
-
-			{/* Mission Section */}
-			<section id="our-mission" className="py-20 bg-white">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="grid md:grid-cols-2 gap-12 items-center">
-						<div>
-							<h2 className="text-4xl md:text-5xl font-bold mb-6">
-								Our Mission
-							</h2>
-							<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto pb-6">
-								At Kapital, we believe that access to capital
-								should be fast, fair, and transparent.
-								We&apos;re committed to empowering people and
-								businesses with the financial tools they need to
-								grow and succeed.
-							</p>
-							<div className="space-y-4">
-								<div className="flex items-start gap-4">
-									<div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-										<MdBolt size={24} color="#9333EA" />
-									</div>
-									<div>
-										<h3 className="text-2xl font-semibold mb-3">
-											Fast Decisions
-										</h3>
-										<p className="text-lg text-gray-600 dark:text-gray-600">
-											Get loan decisions in as little as
-											24 hours with our streamlined
-											application process.
-										</p>
-									</div>
-								</div>
-								<div className="flex items-start gap-4">
-									<div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-										<MdShield size={24} color="#4F46E5" />
-									</div>
-									<div>
-										<h3 className="text-2xl font-semibold mb-3">
-											Secure & Transparent
-										</h3>
-										<p className="text-lg text-gray-600 dark:text-gray-600">
-											Bank-grade security with clear terms
-											and no hidden fees.
-										</p>
-									</div>
-								</div>
+								</Link>
+								<Link
+									href="/contact"
+									className="bg-white/10 backdrop-blur-md text-white hover:bg-white/20 border border-white/20 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
+								>
+									Contact Us
+								</Link>
 							</div>
 						</div>
-						<div className="relative h-[250px] md:h-[400px] rounded-2xl overflow-hidden shadow-xl">
-							<Image
-								src="/hero-image.jpg"
-								alt="Kapital team working"
-								fill
-								className="object-cover"
-							/>
-						</div>
-					</div>
-				</div>
-			</section>
 
-			{/* Stats Section */}
-			<section className="pb-8 bg-gradient-to-b from-white to-purple-50">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					{/* <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-						<div className="text-center p-8 bg-white rounded-2xl shadow-sm">
-							<div className="text-4xl font-bold text-purple-600 mb-2">
-								RM 30M+
-							</div>
-							<p className="text-gray-600">Loans Disbursed</p>
-						</div>
-						<div className="text-center p-8 bg-white rounded-2xl shadow-sm">
-							<div className="text-4xl font-bold text-indigo-600 mb-2">
-								500+
-							</div>
-							<p className="text-gray-600">Clients Served</p>
-						</div>
-						<div className="text-center p-8 bg-white rounded-2xl shadow-sm">
-							<div className="text-4xl font-bold text-blue-600 mb-2">
-								4.9/5
-							</div>
-							<p className="text-gray-600">Customer Rating</p>
-						</div>
-					</div> */}
-				</div>
-			</section>
-
-			{/* Values Section */}
-			<section className="py-8 bg-purple-50">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="text-center mb-16">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
-							Our Values
-						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
-							The principles that guide everything we do at
-							Kapital.
-						</p>
-					</div>
-					<div className="grid md:grid-cols-2 gap-12 items-center">
-						<div className="relative h-[300px] md:h-[500px]">
+						{/* Hero Image */}
+						<div className="relative h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]">
 							<Image
 								src="/values.svg"
-								alt="Our company values illustration"
+								alt="Our Values and Mission"
 								fill
 								className="object-contain"
 								priority
 							/>
 						</div>
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-							<div className="p-6">
-								<div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-4">
-									<MdGroups size={24} color="#9333EA" />
+					</div>
+				</div>
+			</section>
+
+			{/* Mission & Values Section */}
+			<section className="relative py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					{/* Mission Statement */}
+					<div className="text-center mb-8 lg:mb-12">
+						<div className="inline-flex items-center px-4 py-2 bg-purple-primary/10 rounded-full mb-6 sm:mb-8 border border-purple-primary/20">
+							<span className="text-xs sm:text-sm font-semibold text-purple-primary">
+								Our Mission
+							</span>
+						</div>
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 leading-tight px-4">
+							Building the
+							<br />
+							<span className="text-purple-primary">
+								Future of Finance
+							</span>
+							<br />
+							in Malaysia
+						</h2>
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body leading-relaxed px-4 max-w-none lg:max-w-5xl">
+							At Kapital, we believe that access to capital should
+							be fast, fair, and transparent. We're committed to
+							empowering people and businesses with the financial
+							tools they need to grow and succeed.
+						</p>
+					</div>
+
+					{/* Mission Features Card */}
+					<div className="bg-white rounded-xl lg:rounded-2xl p-4 sm:p-6 lg:p-8 shadow-xl border border-gray-100 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0">
+						{/* Background Pattern */}
+						<div className="absolute inset-0 opacity-5">
+							<div className="absolute w-40 h-40 bg-purple-primary rounded-full blur-3xl -top-10 -right-10"></div>
+							<div className="absolute w-32 h-32 bg-blue-tertiary rounded-full blur-2xl -bottom-8 -left-8"></div>
+						</div>
+
+						<div className="relative">
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+								{/* Fast Decisions */}
+								<div className="text-center group">
+									<div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-primary/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-purple-primary/20 transition-colors">
+										<MdBolt
+											size={24}
+											className="text-purple-primary sm:w-7 sm:h-7"
+										/>
+									</div>
+									<div className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary mb-1">
+										24-48 Hours
+									</div>
+									<div className="text-sm sm:text-base text-gray-700 font-semibold mb-2">
+										Fast Decisions
+									</div>
+									<div className="text-sm text-gray-500">
+										Get loan decisions quickly with our
+										streamlined process
+									</div>
 								</div>
-								<h3 className="text-2xl font-semibold mb-3">
-									Transparency
-								</h3>
-								<p className="text-lg text-gray-600 dark:text-gray-600">
-									Clear communication and no hidden fees or
-									terms.
-								</p>
-							</div>
-							<div className="p-6">
-								<div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mb-4">
-									<MdSpeed size={24} color="#4F46E5" />
+
+								{/* Secure & Transparent */}
+								<div className="text-center group">
+									<div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-tertiary/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-tertiary/20 transition-colors">
+										<MdShield
+											size={24}
+											className="text-blue-tertiary sm:w-7 sm:h-7"
+										/>
+									</div>
+									<div className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-tertiary mb-1">
+										100%
+									</div>
+									<div className="text-sm sm:text-base text-gray-700 font-semibold mb-2">
+										Transparent
+									</div>
+									<div className="text-sm text-gray-500">
+										Bank-grade security with clear terms and
+										no hidden fees
+									</div>
 								</div>
-								<h3 className="text-2xl font-semibold mb-3">
-									Innovation
-								</h3>
-								<p className="text-lg text-gray-600 dark:text-gray-600">
-									Continuously improving our technology and
-									processes.
-								</p>
-							</div>
-							<div className="p-6">
-								<div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-									<MdTrendingUp size={24} color="#2563EB" />
+
+								{/* Licensed Provider */}
+								<div className="text-center group">
+									<div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-primary/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-purple-primary/20 transition-colors">
+										<MdVerifiedUser
+											size={24}
+											className="text-purple-primary sm:w-7 sm:h-7"
+										/>
+									</div>
+									<div className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary mb-1">
+										Licensed
+									</div>
+									<div className="text-sm sm:text-base text-gray-700 font-semibold mb-2">
+										in Malaysia
+									</div>
+									<div className="text-sm text-gray-500">
+										Fully regulated fintech provider you can
+										trust
+									</div>
 								</div>
-								<h3 className="text-2xl font-semibold mb-3">
-									Customer First
-								</h3>
-								<p className="text-lg text-gray-600 dark:text-gray-600">
-									Everything we do is focused on our
-									customers&apos; success.
-								</p>
-							</div>
-							<div className="p-6">
-								<div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-4">
-									<MdSecurity size={24} color="#9333EA" />
-								</div>
-								<h3 className="text-2xl font-semibold mb-3">
-									Trust
-								</h3>
-								<p className="text-lg text-gray-600 dark:text-gray-600">
-									Building long-term relationships based on
-									reliability.
-								</p>
 							</div>
 						</div>
 					</div>
 				</div>
 			</section>
 
-			{/* Team Section
-			<section className="py-20 bg-white">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="text-center mb-16">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6">
-							Our Leadership Team
+			{/* Our Values Section */}
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gray-50/50 w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					<div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+						{/* Content */}
+						<div className="order-2 lg:order-1">
+							<div className="inline-flex items-center px-4 py-2 bg-blue-tertiary/10 rounded-full mb-4 sm:mb-6 border border-blue-tertiary/20">
+								<span className="text-xs sm:text-sm font-semibold text-blue-tertiary">
+									Our Core Values
+								</span>
+							</div>
+							<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 text-gray-700 leading-tight">
+								What Drives
+								<br />
+								<span className="text-purple-primary">
+									Everything We Do
+								</span>
+							</h2>
+							<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mb-8 lg:mb-12 font-body leading-relaxed">
+								The principles that guide everything we do at
+								Kapital, ensuring we deliver the best possible
+								experience for our customers.
+							</p>
+
+							{/* Values List */}
+							<div className="space-y-4 lg:space-y-6">
+								<div className="flex items-start space-x-4">
+									<div className="flex-shrink-0 w-6 h-6 bg-purple-primary/10 rounded-full flex items-center justify-center mt-1">
+										<MdCheck
+											size={16}
+											className="text-purple-primary"
+										/>
+									</div>
+									<div>
+										<h4 className="text-lg lg:text-xl font-heading font-semibold text-gray-700 mb-1">
+											Transparency First
+										</h4>
+										<p className="text-base lg:text-lg text-gray-500 font-body">
+											Clear communication and no hidden
+											fees or terms in everything we do
+										</p>
+									</div>
+								</div>
+								<div className="flex items-start space-x-4">
+									<div className="flex-shrink-0 w-6 h-6 bg-blue-tertiary/10 rounded-full flex items-center justify-center mt-1">
+										<MdCheck
+											size={16}
+											className="text-blue-tertiary"
+										/>
+									</div>
+									<div>
+										<h4 className="text-lg lg:text-xl font-heading font-semibold text-gray-700 mb-1">
+											Continuous Innovation
+										</h4>
+										<p className="text-base lg:text-lg text-gray-500 font-body">
+											Always improving our technology and
+											processes to serve you better
+										</p>
+									</div>
+								</div>
+								<div className="flex items-start space-x-4">
+									<div className="flex-shrink-0 w-6 h-6 bg-purple-primary/10 rounded-full flex items-center justify-center mt-1">
+										<MdCheck
+											size={16}
+											className="text-purple-primary"
+										/>
+									</div>
+									<div>
+										<h4 className="text-lg lg:text-xl font-heading font-semibold text-gray-700 mb-1">
+											Customer Success Focus
+										</h4>
+										<p className="text-base lg:text-lg text-gray-500 font-body">
+											Everything we do is focused on
+											helping our customers grow and
+											succeed
+										</p>
+									</div>
+								</div>
+								<div className="flex items-start space-x-4">
+									<div className="flex-shrink-0 w-6 h-6 bg-blue-tertiary/10 rounded-full flex items-center justify-center mt-1">
+										<MdCheck
+											size={16}
+											className="text-blue-tertiary"
+										/>
+									</div>
+									<div>
+										<h4 className="text-lg lg:text-xl font-heading font-semibold text-gray-700 mb-1">
+											Trust & Reliability
+										</h4>
+										<p className="text-base lg:text-lg text-gray-500 font-body">
+											Building long-term relationships
+											based on consistent, reliable
+											service
+										</p>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Large Hero Image */}
+						<div className="order-1 lg:order-2 relative">
+							<div className="relative h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]">
+								<Image
+									src="/team.svg"
+									alt="Our Team Values"
+									fill
+									className="object-contain"
+									priority
+								/>
+							</div>
+
+							{/* Subtle floating elements */}
+							<div className="absolute -top-4 -right-4 w-16 h-16 bg-purple-primary/10 rounded-full blur-xl"></div>
+							<div className="absolute -bottom-4 -left-4 w-20 h-20 bg-blue-tertiary/10 rounded-full blur-xl"></div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			{/* Why Choose Us Section */}
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					<div className="text-center mb-8 lg:mb-12">
+						<div className="inline-flex items-center px-4 py-2 bg-blue-tertiary/10 rounded-full mb-4 sm:mb-6 border border-blue-tertiary/20">
+							<span className="text-xs sm:text-sm font-semibold text-blue-tertiary">
+								Why Choose Us
+							</span>
+						</div>
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
+							The Kapital Advantage
 						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto">
-							Meet the experienced professionals leading
-							Kapital&apos;s mission to transform business
-							financing in Malaysia.
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-5xl">
+							What sets us apart in Malaysia's financial services
+							landscape
 						</p>
 					</div>
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-						<div className="bg-white rounded-2xl p-6 text-center">
-							<div className="relative w-32 h-32 mx-auto mb-4">
-								<Image
-									src="/team-1.jpg"
-									alt="Team member"
-									fill
-									className="object-cover rounded-full"
+
+					{/* Features Grid */}
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
+						{/* Licensed & Regulated */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdSecurity
+									size={28}
+									className="text-purple-primary"
 								/>
 							</div>
-							<h3 className="text-2xl font-semibold mb-3">
-								Sarah Chen
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Licensed & Regulated
 							</h3>
-							<p className="text-xl text-purple-600 mb-4">
-								Chief Executive Officer
-							</p>
-							<p className="text-lg text-gray-600">
-								Former investment banker with 15+ years of
-								experience in financial services.
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Fully licensed fintech provider operating under
+								Malaysian financial regulations
 							</p>
 						</div>
-						<div className="bg-white rounded-2xl p-6 text-center">
-							<div className="relative w-32 h-32 mx-auto mb-4">
-								<Image
-									src="/team-2.jpg"
-									alt="Team member"
-									fill
-									className="object-cover rounded-full"
+
+						{/* Technology Driven */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdTrendingUp
+									size={28}
+									className="text-blue-tertiary"
 								/>
 							</div>
-							<h3 className="text-2xl font-semibold mb-3">
-								David Lim
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Technology Driven
 							</h3>
-							<p className="text-xl text-purple-600 mb-4">
-								Chief Technology Officer
-							</p>
-							<p className="text-lg text-gray-600">
-								Tech veteran with experience at leading fintech
-								companies in Southeast Asia.
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								AI-powered credit decisions and real-time
+								dashboard insights for better outcomes
 							</p>
 						</div>
-						<div className="bg-white rounded-2xl p-6 text-center">
-							<div className="relative w-32 h-32 mx-auto mb-4">
-								<Image
-									src="/team-3.jpg"
-									alt="Team member"
-									fill
-									className="object-cover rounded-full"
+
+						{/* Local Expertise */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdLocationOn
+									size={28}
+									className="text-purple-primary"
 								/>
 							</div>
-							<h3 className="text-2xl font-semibold mb-3">
-								Aisha Rahman
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Local Expertise
 							</h3>
-							<p className="text-xl text-purple-600 mb-4">
-								Chief Risk Officer
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Malaysian team with deep understanding of local
+								business needs and market conditions
 							</p>
-							<p className="text-lg text-gray-600">
-								20+ years of risk management experience in
-								banking and fintech.
+						</div>
+
+						{/* Fast Processing */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdSpeed
+									size={28}
+									className="text-blue-tertiary"
+								/>
+							</div>
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Lightning Fast
+							</h3>
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								24-48 hour approval process with instant credit
+								decisions and same-day disbursement
+							</p>
+						</div>
+
+						{/* Comprehensive Solutions */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdBusinessCenter
+									size={28}
+									className="text-purple-primary"
+								/>
+							</div>
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Complete Solutions
+							</h3>
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Loans, investments, and analytics - everything
+								you need for financial success
+							</p>
+						</div>
+
+						{/* Customer Support */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdPeople
+									size={28}
+									className="text-blue-tertiary"
+								/>
+							</div>
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Expert Support
+							</h3>
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Dedicated support team to guide you through
+								every step of your financial journey
 							</p>
 						</div>
 					</div>
 				</div>
-			</section> */}
+			</section>
 
-			{/* Careers Section */}
-			<section className="py-20 bg-gradient-to-b from-white to-purple-50">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="text-center mb-16">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
-							Join Our Team
-						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
-							Be part of our mission to transform financial
-							services in Malaysia. We&apos;re always looking for
-							talented individuals to join our team.
-						</p>
-					</div>
-					<div className="grid md:grid-cols-2 gap-8 items-center">
-						{/* Image Section - Shown first on mobile */}
-						<div className="md:order-2 relative h-[250px] md:h-[400px]">
-							<Image
-								src="/team.svg"
-								alt="Happy team members"
-								fill
-								className="object-contain"
-								priority
-							/>
+			{/* Join Our Team Section */}
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gray-50/50 w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					<div className="bg-white rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 xl:p-16 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0 border border-gray-200 shadow-lg">
+						{/* Subtle background elements */}
+						<div className="absolute inset-0 overflow-hidden">
+							<div className="absolute w-[500px] h-[500px] bg-purple-primary/3 rounded-full blur-3xl -top-32 -left-32"></div>
+							<div className="absolute w-[400px] h-[400px] bg-blue-tertiary/3 rounded-full blur-3xl -bottom-32 -right-32"></div>
 						</div>
-						{/* Content Section */}
-						<div className="md:order-1 bg-white rounded-2xl p-8 shadow-sm">
-							<div className="flex items-start gap-4 mb-6">
-								<div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-									<MdBolt size={24} color="#9333EA" />
+
+						<div className="relative">
+							<div className="text-center mb-8 lg:mb-12">
+								<div className="inline-flex items-center px-4 py-2 bg-purple-primary/10 rounded-full mb-4 sm:mb-6 border border-purple-primary/20">
+									<span className="text-xs sm:text-sm font-semibold text-purple-primary">
+										Careers
+									</span>
 								</div>
+								<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
+									Join Our Mission
+								</h2>
+								<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-4xl">
+									Be part of our mission to transform
+									financial services in Malaysia. We're always
+									looking for talented individuals to join our
+									team.
+								</p>
+							</div>
+
+							<div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+								{/* Benefits */}
 								<div>
-									<h3 className="text-2xl font-semibold mb-3">
+									<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-6 text-gray-700">
 										Why Work With Us?
 									</h3>
-									<ul className="space-y-4 text-lg text-gray-600 dark:text-gray-600">
+									<div className="space-y-4">
 										{[
 											"Competitive compensation and benefits",
 											"Professional growth opportunities",
 											"Flexible work arrangements",
 											"Inclusive and diverse workplace",
+											"Impact-driven work environment",
+											"Cutting-edge technology stack",
 										].map((benefit, index) => (
-											<li
+											<div
 												key={index}
-												className="flex items-center gap-2"
+												className="flex items-center gap-3"
 											>
-												<MdCheck
-													size={20}
-													color="#9333EA"
-												/>
-												<span>{benefit}</span>
-											</li>
+												<div className="w-5 h-5 bg-purple-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+													<MdCheck
+														size={14}
+														className="text-purple-primary"
+													/>
+												</div>
+												<span className="text-lg text-gray-600">
+													{benefit}
+												</span>
+											</div>
 										))}
-									</ul>
+									</div>
+									<div className="mt-8">
+										<button
+											disabled
+											className="bg-gray-200 text-gray-500 px-6 py-3 rounded-xl font-semibold cursor-not-allowed inline-flex items-center"
+										>
+											All Positions Currently Filled
+										</button>
+									</div>
+								</div>
+
+								{/* Image */}
+								<div className="relative h-[300px] lg:h-[400px]">
+									<Image
+										src="/team.svg"
+										alt="Join Our Team"
+										fill
+										className="object-contain"
+									/>
 								</div>
 							</div>
-							<button
-								disabled
-								className="inline-block w-full text-center bg-gray-300 text-gray-500 px-6 py-3 rounded-full font-semibold cursor-not-allowed"
-							>
-								All Positions Filled
-							</button>
 						</div>
 					</div>
 				</div>
 			</section>
 
-			{/* Features section
-			<section className="py-20 bg-gradient-to-b from-white to-purple-50">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="text-center mb-16">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6">
-							Our Features
-						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
-							Discover the key features that make us stand out.
-						</p>
-					</div>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-						<div className="p-6 rounded-lg bg-white dark:bg-gray-800 shadow-lg">
-							<div className="mb-4">
-								<MdBolt size={24} color="#9333EA" />
-							</div>
-							<h3 className="text-xl font-semibold mb-2">
-								Fast & Efficient
-							</h3>
-							<p className="text-gray-600 dark:text-gray-400">
-								Quick decisions and streamlined processes for
-								your financial needs.
+			{/* Call to Action Section */}
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					<div className="bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 text-center relative overflow-hidden shadow-xl mx-2 sm:mx-4 lg:mx-0">
+						<div className="absolute inset-0 bg-black/10"></div>
+						<div className="relative">
+							<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-white px-4">
+								Ready to Experience
+								<br />
+								the Future of Finance?
+							</h2>
+							<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/90 mb-8 sm:mb-10 lg:mb-12 mx-auto font-body px-4 max-w-none lg:max-w-5xl">
+								Join thousands of Malaysians who trust Kapital
+								for their financial needs
 							</p>
-						</div>
-						<div className="p-6 rounded-lg bg-white dark:bg-gray-800 shadow-lg">
-							<div className="mb-4">
-								<MdShield size={24} color="#4F46E5" />
+							<div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+								<Link
+									href="/signup"
+									className="bg-white text-purple-primary hover:bg-gray-100 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
+								>
+									Get Started Today
+									<MdArrowForward
+										size={18}
+										className="ml-2 lg:w-5 lg:h-5"
+									/>
+								</Link>
+								<Link
+									href="/contact"
+									className="bg-white/10 backdrop-blur-md text-white hover:bg-white/20 border border-white/20 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
+								>
+									Contact Us
+								</Link>
 							</div>
-							<h3 className="text-xl font-semibold mb-2">
-								Secure & Reliable
-							</h3>
-							<p className="text-gray-600 dark:text-gray-400">
-								Your data and transactions are protected with
-								enterprise-grade security.
-							</p>
-						</div>
-						<div className="p-6 rounded-lg bg-white dark:bg-gray-800 shadow-lg">
-							<div className="mb-4">
-								<MdGroups size={24} color="#9333EA" />
-							</div>
-							<h3 className="text-xl font-semibold mb-2">
-								Expert Support
-							</h3>
-							<p className="text-gray-600 dark:text-gray-400">
-								Our team of financial experts is here to guide
-								you every step of the way.
-							</p>
-						</div>
-						<div className="p-6 rounded-lg bg-white dark:bg-gray-800 shadow-lg">
-							<div className="mb-4">
-								<MdSpeed size={24} color="#4F46E5" />
-							</div>
-							<h3 className="text-xl font-semibold mb-2">
-								Real-time Analytics
-							</h3>
-							<p className="text-gray-600 dark:text-gray-400">
-								Monitor your financial performance with advanced
-								analytics tools.
-							</p>
-						</div>
-						<div className="p-6 rounded-lg bg-white dark:bg-gray-800 shadow-lg">
-							<div className="mb-4">
-								<MdTrendingUp size={24} color="#2563EB" />
-							</div>
-							<h3 className="text-xl font-semibold mb-2">
-								Growth Focus
-							</h3>
-							<p className="text-gray-600 dark:text-gray-400">
-								Solutions designed to help your business scale
-								and succeed.
-							</p>
-						</div>
-						<div className="p-6 rounded-lg bg-white dark:bg-gray-800 shadow-lg">
-							<div className="mb-4">
-								<MdSecurity size={24} color="#9333EA" />
-							</div>
-							<h3 className="text-xl font-semibold mb-2">
-								Compliance First
-							</h3>
-							<p className="text-gray-600 dark:text-gray-400">
-								Stay compliant with regulatory requirements and
-								industry standards.
-							</p>
 						</div>
 					</div>
 				</div>
-			</section> */}
+			</section>
 
+			{/* Footer */}
 			<Footer />
 		</div>
 	);

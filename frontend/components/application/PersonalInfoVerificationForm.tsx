@@ -207,255 +207,282 @@ function PersonalInfoVerificationFormContent({
 	};
 
 	return (
-		<form onSubmit={handleSubmit} className="space-y-6">
-			<h2 className="text-xl font-semibold text-white mb-6">
-				Verify Personal Information
-			</h2>
-
-			<div className="space-y-6">
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-2">
-						Full Name
-					</label>
-					<input
-						type="text"
-						value={formValues.fullName}
-						onChange={handleChange("fullName")}
-						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-						placeholder="Enter your full name"
-					/>
-					{errors.fullName && (
-						<p className="mt-1 text-sm text-red-400">
-							{errors.fullName}
-						</p>
-					)}
+		<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+			<form onSubmit={handleSubmit} className="space-y-6">
+				<div className="flex items-center space-x-2 mb-6">
+					<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+						<svg
+							className="h-5 w-5 text-purple-primary"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+					</div>
+					<h2 className="text-lg font-heading text-purple-primary font-semibold">
+						Verify Personal Information
+					</h2>
 				</div>
 
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-2">
-						Email
-					</label>
-					<input
-						type="email"
-						value={formValues.email}
-						onChange={handleChange("email")}
-						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-						placeholder="Enter your email address"
-					/>
-					{errors.email && (
-						<p className="mt-1 text-sm text-red-400">
-							{errors.email}
-						</p>
-					)}
-				</div>
+				<div className="space-y-6">
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Full Name
+						</label>
+						<input
+							type="text"
+							value={formValues.fullName}
+							onChange={handleChange("fullName")}
+							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+							placeholder="Enter your full name"
+						/>
+						{errors.fullName && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.fullName}
+							</p>
+						)}
+					</div>
 
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-2">
-						Phone Number
-					</label>
-					<input
-						type="text"
-						value={formValues.phoneNumber}
-						onChange={handleChange("phoneNumber")}
-						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-						placeholder="Enter your phone number"
-					/>
-					{errors.phoneNumber && (
-						<p className="mt-1 text-sm text-red-400">
-							{errors.phoneNumber}
-						</p>
-					)}
-				</div>
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Email
+						</label>
+						<input
+							type="email"
+							value={formValues.email}
+							onChange={handleChange("email")}
+							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+							placeholder="Enter your email address"
+						/>
+						{errors.email && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.email}
+							</p>
+						)}
+					</div>
 
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-3">
-						Employment Status
-					</label>
-					<div className="space-y-3">
-						{[
-							"Employed",
-							"Self-Employed",
-							"Business Owner",
-							"Unemployed",
-						].map((status) => (
-							<label key={status} className="flex items-center">
-								<input
-									type="radio"
-									name="employmentStatus"
-									value={status}
-									checked={
-										formValues.employmentStatus === status
-									}
-									onChange={handleChange("employmentStatus")}
-									className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-500 focus:ring-2"
-								/>
-								<span className="ml-3 text-gray-300">
-									{status}
-								</span>
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Phone Number
+						</label>
+						<input
+							type="text"
+							value={formValues.phoneNumber}
+							onChange={handleChange("phoneNumber")}
+							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+							placeholder="Enter your phone number"
+						/>
+						{errors.phoneNumber && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.phoneNumber}
+							</p>
+						)}
+					</div>
+
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-3 font-body">
+							Employment Status
+						</label>
+						<div className="space-y-3">
+							{[
+								"Employed",
+								"Self-Employed",
+								"Business Owner",
+								"Unemployed",
+							].map((status) => (
+								<label
+									key={status}
+									className="flex items-center"
+								>
+									<input
+										type="radio"
+										name="employmentStatus"
+										value={status}
+										checked={
+											formValues.employmentStatus ===
+											status
+										}
+										onChange={handleChange(
+											"employmentStatus"
+										)}
+										className="w-4 h-4 text-purple-primary bg-white border-gray-300 focus:ring-purple-primary focus:ring-2"
+									/>
+									<span className="ml-3 text-gray-700 font-body">
+										{status}
+									</span>
+								</label>
+							))}
+						</div>
+						{errors.employmentStatus && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.employmentStatus}
+							</p>
+						)}
+					</div>
+
+					{(formValues.employmentStatus === "Employed" ||
+						formValues.employmentStatus === "Business Owner") && (
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								{formValues.employmentStatus ===
+								"Business Owner"
+									? "Company Name"
+									: "Employer Name"}
 							</label>
-						))}
-					</div>
-					{errors.employmentStatus && (
-						<p className="mt-1 text-sm text-red-400">
-							{errors.employmentStatus}
-						</p>
+							<input
+								type="text"
+								value={formValues.employerName || ""}
+								onChange={handleChange("employerName")}
+								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder={`Enter your ${
+									formValues.employmentStatus ===
+									"Business Owner"
+										? "company"
+										: "employer"
+								} name`}
+							/>
+							{errors.employerName && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.employerName}
+								</p>
+							)}
+						</div>
 					)}
-				</div>
 
-				{(formValues.employmentStatus === "Employed" ||
-					formValues.employmentStatus === "Business Owner") && (
 					<div>
-						<label className="block text-sm font-medium text-gray-300 mb-2">
-							{formValues.employmentStatus === "Business Owner"
-								? "Company Name"
-								: "Employer Name"}
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Monthly Income
 						</label>
-						<input
-							type="text"
-							value={formValues.employerName || ""}
-							onChange={handleChange("employerName")}
-							className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-							placeholder={`Enter your ${
-								formValues.employmentStatus === "Business Owner"
-									? "company"
-									: "employer"
-							} name`}
-						/>
-						{errors.employerName && (
-							<p className="mt-1 text-sm text-red-400">
-								{errors.employerName}
-							</p>
-						)}
-					</div>
-				)}
-
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-2">
-						Monthly Income
-					</label>
-					<div className="relative">
-						<span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
-							RM
-						</span>
-						<input
-							type="text"
-							value={formValues.monthlyIncome}
-							onChange={handleChange("monthlyIncome")}
-							className="w-full pl-12 pr-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-							placeholder="Enter your monthly income"
-						/>
-					</div>
-					{errors.monthlyIncome && (
-						<p className="mt-1 text-sm text-red-400">
-							{errors.monthlyIncome}
-						</p>
-					)}
-				</div>
-
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-2">
-						Address Line 1
-					</label>
-					<input
-						type="text"
-						value={formValues.address1}
-						onChange={handleChange("address1")}
-						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-						placeholder="Enter your address"
-					/>
-					{errors.address1 && (
-						<p className="mt-1 text-sm text-red-400">
-							{errors.address1}
-						</p>
-					)}
-				</div>
-
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-2">
-						Address Line 2 (Optional)
-					</label>
-					<input
-						type="text"
-						value={formValues.address2 || ""}
-						onChange={handleChange("address2")}
-						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-						placeholder="Apartment, suite, etc. (optional)"
-					/>
-				</div>
-
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div>
-						<label className="block text-sm font-medium text-gray-300 mb-2">
-							City
-						</label>
-						<input
-							type="text"
-							value={formValues.city}
-							onChange={handleChange("city")}
-							className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-							placeholder="Enter your city"
-						/>
-						{errors.city && (
-							<p className="mt-1 text-sm text-red-400">
-								{errors.city}
+						<div className="relative">
+							<span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-body">
+								RM
+							</span>
+							<input
+								type="text"
+								value={formValues.monthlyIncome}
+								onChange={handleChange("monthlyIncome")}
+								className="w-full pl-12 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder="Enter your monthly income"
+							/>
+						</div>
+						{errors.monthlyIncome && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.monthlyIncome}
 							</p>
 						)}
 					</div>
 
 					<div>
-						<label className="block text-sm font-medium text-gray-300 mb-2">
-							State
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Address Line 1
 						</label>
 						<input
 							type="text"
-							value={formValues.state}
-							onChange={handleChange("state")}
-							className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-							placeholder="Enter your state"
+							value={formValues.address1}
+							onChange={handleChange("address1")}
+							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+							placeholder="Enter your address"
 						/>
-						{errors.state && (
-							<p className="mt-1 text-sm text-red-400">
-								{errors.state}
+						{errors.address1 && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.address1}
+							</p>
+						)}
+					</div>
+
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Address Line 2 (Optional)
+						</label>
+						<input
+							type="text"
+							value={formValues.address2 || ""}
+							onChange={handleChange("address2")}
+							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+							placeholder="Apartment, suite, etc. (optional)"
+						/>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								City
+							</label>
+							<input
+								type="text"
+								value={formValues.city}
+								onChange={handleChange("city")}
+								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder="Enter your city"
+							/>
+							{errors.city && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.city}
+								</p>
+							)}
+						</div>
+
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								State
+							</label>
+							<input
+								type="text"
+								value={formValues.state}
+								onChange={handleChange("state")}
+								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder="Enter your state"
+							/>
+							{errors.state && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.state}
+								</p>
+							)}
+						</div>
+					</div>
+
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Postal Code
+						</label>
+						<input
+							type="text"
+							value={formValues.postalCode}
+							onChange={handleChange("postalCode")}
+							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+							placeholder="Enter your postal code"
+						/>
+						{errors.postalCode && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.postalCode}
 							</p>
 						)}
 					</div>
 				</div>
 
-				<div>
-					<label className="block text-sm font-medium text-gray-300 mb-2">
-						Postal Code
-					</label>
-					<input
-						type="text"
-						value={formValues.postalCode}
-						onChange={handleChange("postalCode")}
-						className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
-						placeholder="Enter your postal code"
-					/>
-					{errors.postalCode && (
-						<p className="mt-1 text-sm text-red-400">
-							{errors.postalCode}
-						</p>
-					)}
+				<div className="flex justify-between pt-6">
+					<button
+						type="button"
+						onClick={handleBack}
+						className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body"
+					>
+						Back
+					</button>
+					<button
+						type="submit"
+						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body"
+					>
+						Continue
+					</button>
 				</div>
-			</div>
-
-			<div className="flex justify-between pt-6">
-				<button
-					type="button"
-					onClick={handleBack}
-					className="px-6 py-3 bg-gray-800/50 backdrop-blur-md border border-gray-600/50 text-gray-300 rounded-lg hover:bg-gray-700/60 hover:border-gray-500/60 transition-all duration-200 font-medium"
-				>
-					Back
-				</button>
-				<button
-					type="submit"
-					className="px-6 py-3 bg-blue-600/80 backdrop-blur-md border border-blue-500/50 text-white rounded-lg hover:bg-blue-600/90 hover:border-blue-400/60 transition-all duration-200 font-medium"
-				>
-					Continue
-				</button>
-			</div>
-		</form>
+			</form>
+		</div>
 	);
 }
 
@@ -466,7 +493,7 @@ export default function PersonalInfoVerificationForm(
 		<Suspense
 			fallback={
 				<div className="flex items-center justify-center py-8">
-					<div className="text-white">Loading...</div>
+					<div className="text-gray-700 font-body">Loading...</div>
 				</div>
 			}
 		>

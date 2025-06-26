@@ -13,7 +13,9 @@ interface ProductInput {
 	repaymentTerms: number[];
 	interestRate: number;
 	eligibility: string[];
-	lateFee: number;
+	lateFeeRate: number;
+	lateFeeFixedAmount: number;
+	lateFeeFrequencyDays: number;
 	originationFee: number;
 	legalFee: number;
 	applicationFee: number;
@@ -94,7 +96,9 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 					repaymentTerms: true,
 					interestRate: true,
 					eligibility: true,
-					lateFee: true,
+					lateFeeRate: true,
+					lateFeeFixedAmount: true,
+					lateFeeFrequencyDays: true,
 					originationFee: true,
 					legalFee: true,
 					applicationFee: true,
@@ -130,7 +134,9 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 				repaymentTerms: true,
 				interestRate: true,
 				eligibility: true,
-				lateFee: true,
+				lateFeeRate: true,
+				lateFeeFixedAmount: true,
+				lateFeeFrequencyDays: true,
 				originationFee: true,
 				legalFee: true,
 				applicationFee: true,
@@ -190,7 +196,9 @@ const createProduct: RequestHandler<{}, any, ProductInput> = async (
 				repaymentTerms: data.repaymentTerms,
 				interestRate: data.interestRate,
 				eligibility: data.eligibility,
-				lateFee: data.lateFee,
+				lateFeeRate: data.lateFeeRate,
+				lateFeeFixedAmount: data.lateFeeFixedAmount,
+				lateFeeFrequencyDays: data.lateFeeFrequencyDays,
 				originationFee: data.originationFee,
 				legalFee: data.legalFee,
 				applicationFee: data.applicationFee,
@@ -268,7 +276,9 @@ const updateProduct: RequestHandler<ProductParams, any, ProductInput> = async (
 				repaymentTerms: data.repaymentTerms,
 				interestRate: data.interestRate,
 				eligibility: data.eligibility,
-				lateFee: data.lateFee,
+				lateFeeRate: data.lateFeeRate,
+				lateFeeFixedAmount: data.lateFeeFixedAmount,
+				lateFeeFrequencyDays: data.lateFeeFrequencyDays,
 				originationFee: data.originationFee,
 				legalFee: data.legalFee,
 				applicationFee: data.applicationFee,

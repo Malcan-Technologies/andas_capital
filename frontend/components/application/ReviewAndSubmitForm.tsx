@@ -10,81 +10,100 @@ import {
 	Link,
 } from "@mui/material";
 
-// Override Material-UI styles for dark theme
-const darkThemeOverrides = {
+// Override Material-UI styles for light theme
+const lightThemeOverrides = {
 	"& .MuiTypography-root": {
-		color: "white !important",
+		color: "#374151 !important",
+		fontFamily: "Inter, sans-serif !important",
 	},
 	"& .MuiTypography-h6": {
-		color: "white !important",
+		color: "#374151 !important",
+		fontFamily: "Manrope, sans-serif !important",
+		fontWeight: "600 !important",
 	},
 	"& .MuiTypography-root.text-blue-400": {
-		color: "#60a5fa !important",
+		color: "#38BDF8 !important",
 	},
 	"& .MuiTypography-root.text-green-400": {
-		color: "#4ade80 !important",
+		color: "#059669 !important",
 	},
 	"& .MuiTypography-root.text-purple-400": {
-		color: "#c084fc !important",
+		color: "#7C3AED !important",
 	},
 	"& .MuiButton-root": {
 		color: "white !important",
-		backgroundColor: "rgba(59, 130, 246, 0.8) !important",
-		backdropFilter: "blur(12px) !important",
-		border: "1px solid rgba(59, 130, 246, 0.5) !important",
-		borderRadius: "8px !important",
+		backgroundColor: "#7C3AED !important",
+		borderRadius: "12px !important",
 		padding: "12px 24px !important",
 		fontWeight: "500 !important",
+		fontFamily: "Inter, sans-serif !important",
 		transition: "all 0.2s ease !important",
 		boxShadow: "none !important",
+		textTransform: "none !important",
 		"&:hover": {
-			backgroundColor: "rgba(59, 130, 246, 0.9) !important",
-			borderColor: "rgba(96, 165, 250, 0.6) !important",
+			backgroundColor: "#6D28D9 !important",
 			boxShadow: "none !important",
 		},
 	},
 	"& .MuiButton-outlined": {
-		color: "rgb(209, 213, 219) !important",
-		backgroundColor: "rgba(31, 41, 55, 0.5) !important",
-		backdropFilter: "blur(12px) !important",
-		borderColor: "rgba(107, 114, 128, 0.5) !important",
+		color: "#374151 !important",
+		backgroundColor: "white !important",
+		borderColor: "#D1D5DB !important",
+		borderRadius: "12px !important",
+		padding: "12px 24px !important",
+		fontWeight: "500 !important",
+		fontFamily: "Inter, sans-serif !important",
+		transition: "all 0.2s ease !important",
 		"&:hover": {
-			backgroundColor: "rgba(55, 65, 81, 0.6) !important",
-			borderColor: "rgba(156, 163, 175, 0.6) !important",
+			backgroundColor: "#F9FAFB !important",
+			borderColor: "#9CA3AF !important",
 		},
 	},
 	"& .MuiButton-contained": {
 		color: "white !important",
-		backgroundColor: "rgba(59, 130, 246, 0.8) !important",
-		backdropFilter: "blur(12px) !important",
-		border: "1px solid rgba(59, 130, 246, 0.5) !important",
+		backgroundColor: "#7C3AED !important",
+		borderRadius: "12px !important",
+		padding: "12px 24px !important",
+		fontWeight: "500 !important",
+		fontFamily: "Inter, sans-serif !important",
+		transition: "all 0.2s ease !important",
 		boxShadow: "none !important",
 		"&:hover": {
-			backgroundColor: "rgba(59, 130, 246, 0.9) !important",
-			borderColor: "rgba(96, 165, 250, 0.6) !important",
+			backgroundColor: "#6D28D9 !important",
 			boxShadow: "none !important",
+		},
+		"&:disabled": {
+			backgroundColor: "#9CA3AF !important",
+			color: "#6B7280 !important",
+			cursor: "not-allowed !important",
 		},
 	},
 	"& .MuiFormControlLabel-label": {
-		color: "white !important",
+		color: "#374151 !important",
+		fontFamily: "Inter, sans-serif !important",
 	},
 	"& .MuiCheckbox-root": {
-		color: "white !important",
+		color: "#7C3AED !important",
+		"&.Mui-checked": {
+			color: "#7C3AED !important",
+		},
 	},
 	"& .MuiPaper-root": {
-		backgroundColor: "rgba(31, 41, 55, 0.8) !important",
-		backdropFilter: "blur(12px) !important",
-		border: "1px solid rgba(75, 85, 99, 0.3) !important",
+		backgroundColor: "white !important",
+		border: "1px solid #E5E7EB !important",
 		borderRadius: "12px !important",
-		color: "white !important",
+		color: "#374151 !important",
+		boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1) !important",
 	},
 	"& .MuiAlert-root": {
-		backgroundColor: "#374151 !important",
-		color: "white !important",
+		backgroundColor: "#FEF2F2 !important",
+		color: "#DC2626 !important",
+		border: "1px solid #FECACA !important",
+		borderRadius: "12px !important",
 	},
 };
 import InfoIcon from "@mui/icons-material/Info";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import Cookies from "js-cookie";
 
@@ -145,6 +164,7 @@ function ReviewAndSubmitFormContent({
 	userData,
 }: ReviewAndSubmitFormProps) {
 	const searchParams = useSearchParams();
+	const router = useRouter();
 	const [termsAccepted, setTermsAccepted] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [productDetails, setProductDetails] = useState<ProductDetails | null>(
@@ -432,8 +452,9 @@ function ReviewAndSubmitFormContent({
 			// Call the onSubmit callback with the terms acceptance
 			onSubmit({ termsAccepted });
 
-			// Redirect to the dashboard page
-			window.location.href = "/dashboard";
+			// Use Next.js router for navigation instead of window.location
+			// This prevents context issues with React
+			router.push("/dashboard");
 		} catch (err) {
 			console.error("Error submitting application:", err);
 			setError(
@@ -490,17 +511,29 @@ function ReviewAndSubmitFormContent({
 	const handleBack = () => {
 		const currentStep = parseInt(searchParams.get("step") || "1", 10);
 		const newStep = Math.max(currentStep - 1, 1);
-		const newUrl = new URL(window.location.href);
-		newUrl.searchParams.set("step", newStep.toString());
-		window.location.href = newUrl.toString();
+		const applicationId = searchParams.get("applicationId");
+		const productCode = searchParams.get("productCode");
+
+		// Build the URL with proper query parameters
+		const params = new URLSearchParams();
+		if (applicationId) params.set("applicationId", applicationId);
+		if (productCode) params.set("productCode", productCode);
+		params.set("step", newStep.toString());
+
+		router.push(`/dashboard/apply?${params.toString()}`);
 	};
 
 	if (isLoading) {
 		console.log("Component is in loading state");
 		return (
-			<Box className="flex justify-center items-center p-6">
-				<Typography>Loading application details...</Typography>
-			</Box>
+			<div className="flex justify-center items-center min-h-[200px]">
+				<div className="flex flex-col items-center space-y-4">
+					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary"></div>
+					<p className="text-gray-700 font-body">
+						Loading application details...
+					</p>
+				</div>
+			</div>
 		);
 	}
 
@@ -551,648 +584,720 @@ function ReviewAndSubmitFormContent({
 		}
 
 		return (
-			<Box className="p-6">
-				<Alert severity="error" className="mb-4">
-					Failed to load application details. Please try again later.
-				</Alert>
+			<div className="space-y-6">
+				<h2 className="text-xl font-semibold text-gray-700 mb-4 font-heading">
+					Review Application
+				</h2>
+				<div className="bg-red-50 border border-red-200 rounded-xl p-4">
+					<p className="text-red-600 font-body">
+						Failed to load application details. Please try again
+						later.
+					</p>
+				</div>
 				{error && (
-					<Alert severity="info" className="mb-4">
-						Error details: {error}
-					</Alert>
+					<div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+						<p className="text-blue-600 font-body">
+							Error details: {error}
+						</p>
+					</div>
 				)}
-				<Button
-					variant="contained"
-					color="primary"
+				<button
 					onClick={() => window.location.reload()}
-					className="mt-4"
+					className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body"
 				>
 					Retry Loading
-				</Button>
-			</Box>
+				</button>
+			</div>
 		);
 	}
 
 	return (
-		<Box
-			component="form"
-			onSubmit={handleSubmit}
-			className="space-y-6"
-			sx={darkThemeOverrides}
-		>
-			<Typography variant="h6" className="text-gray-900 mb-4">
-				Review Application
-			</Typography>
+		<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+			<Box
+				component="form"
+				onSubmit={handleSubmit}
+				className="space-y-6"
+				sx={lightThemeOverrides}
+			>
+				{/* Consistent Header Design */}
+				<div className="flex items-center space-x-2 mb-6">
+					<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+						<svg
+							className="h-5 w-5 text-purple-primary"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+					</div>
+					<h2 className="text-lg font-heading text-purple-primary font-semibold">
+						Review Application
+					</h2>
+				</div>
 
-			{error && (
-				<Alert severity="error" className="mb-4">
-					{error}
-				</Alert>
-			)}
+				{error && (
+					<Alert severity="error" className="mb-4">
+						{error}
+					</Alert>
+				)}
 
-			<div className="space-y-6">
-				<Paper className="p-6">
-					<Typography variant="h6" className="text-blue-400 mb-6">
-						Loan Details
-					</Typography>
-					<div className="space-y-6">
+				<div className="space-y-6">
+					<Paper className="p-6">
+						<Typography variant="h6" className="text-blue-400 mb-6">
+							Loan Details
+						</Typography>
+						<div className="space-y-6">
+							<div className="space-y-4">
+								<div className="flex justify-between">
+									<Typography className="text-gray-600">
+										Product
+									</Typography>
+									<Typography className="text-gray-900 font-medium">
+										{productDetails.name}
+									</Typography>
+								</div>
+								<div className="flex justify-between">
+									<Typography className="text-gray-600">
+										Loan Amount
+									</Typography>
+									<Typography className="text-gray-900 font-medium">
+										{formatCurrency(
+											applicationData.loanAmount
+										)}
+									</Typography>
+								</div>
+								<div className="flex justify-between">
+									<Typography className="text-gray-600">
+										Loan Purpose
+									</Typography>
+									<Typography className="text-gray-900 font-medium">
+										{applicationData.loanPurpose}
+									</Typography>
+								</div>
+								<div className="flex justify-between">
+									<Typography className="text-gray-600">
+										Loan Term
+									</Typography>
+									<Typography className="text-gray-900 font-medium">
+										{applicationData.loanTerm} months
+									</Typography>
+								</div>
+								<div className="flex justify-between">
+									<Typography className="text-gray-600">
+										Interest Rate
+									</Typography>
+									<Typography className="text-gray-900 font-medium">
+										{productDetails.interestRate}% monthly
+									</Typography>
+								</div>
+							</div>
+
+							{fees && (
+								<>
+									<div className="pt-4 border-t border-gray-200">
+										<div className="space-y-4">
+											<div className="flex justify-between">
+												<div className="flex items-center gap-1">
+													<Typography className="text-gray-600">
+														Origination Fee (
+														{
+															productDetails.originationFee
+														}
+														%)
+													</Typography>
+													<Tooltip.Provider>
+														<Tooltip.Root
+															open={
+																openTooltip ===
+																"origination"
+															}
+															onOpenChange={() =>
+																handleTooltipClick(
+																	"origination"
+																)
+															}
+														>
+															<Tooltip.Trigger
+																asChild
+															>
+																<InfoIcon
+																	className="text-gray-400 cursor-pointer"
+																	fontSize="small"
+																	onClick={() =>
+																		handleTooltipClick(
+																			"origination"
+																		)
+																	}
+																/>
+															</Tooltip.Trigger>
+															<Tooltip.Portal>
+																<Tooltip.Content
+																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																	sideOffset={
+																		5
+																	}
+																>
+																	A one-time
+																	fee charged
+																	by the
+																	lender for
+																	processing
+																	your loan
+																	application.
+																	<Tooltip.Arrow className="fill-gray-800" />
+																</Tooltip.Content>
+															</Tooltip.Portal>
+														</Tooltip.Root>
+													</Tooltip.Provider>
+												</div>
+												<Typography className="text-red-600">
+													(
+													{formatCurrency(
+														fees.originationFee
+													)}
+													)
+												</Typography>
+											</div>
+											<div className="flex justify-between">
+												<div className="flex items-center gap-1">
+													<Typography className="text-gray-600">
+														Legal Fee (
+														{
+															productDetails.legalFee
+														}
+														%)
+													</Typography>
+													<Tooltip.Provider>
+														<Tooltip.Root
+															open={
+																openTooltip ===
+																"legal"
+															}
+															onOpenChange={() =>
+																handleTooltipClick(
+																	"legal"
+																)
+															}
+														>
+															<Tooltip.Trigger
+																asChild
+															>
+																<InfoIcon
+																	className="text-gray-400 cursor-pointer"
+																	fontSize="small"
+																	onClick={() =>
+																		handleTooltipClick(
+																			"legal"
+																		)
+																	}
+																/>
+															</Tooltip.Trigger>
+															<Tooltip.Portal>
+																<Tooltip.Content
+																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																	sideOffset={
+																		5
+																	}
+																>
+																	A fee
+																	charged to
+																	cover the
+																	legal costs
+																	associated
+																	with
+																	preparing
+																	and
+																	processing
+																	your loan
+																	documents.
+																	<Tooltip.Arrow className="fill-gray-800" />
+																</Tooltip.Content>
+															</Tooltip.Portal>
+														</Tooltip.Root>
+													</Tooltip.Provider>
+												</div>
+												<Typography className="text-red-600">
+													(
+													{formatCurrency(
+														fees.legalFee
+													)}
+													)
+												</Typography>
+											</div>
+											<div className="flex justify-between">
+												<div className="flex items-center gap-1">
+													<Typography className="text-gray-600">
+														Application Fee (paid
+														upfront)
+													</Typography>
+													<Tooltip.Provider>
+														<Tooltip.Root
+															open={
+																openTooltip ===
+																"application"
+															}
+															onOpenChange={() =>
+																handleTooltipClick(
+																	"application"
+																)
+															}
+														>
+															<Tooltip.Trigger
+																asChild
+															>
+																<InfoIcon
+																	className="text-gray-400 cursor-pointer"
+																	fontSize="small"
+																	onClick={() =>
+																		handleTooltipClick(
+																			"application"
+																		)
+																	}
+																/>
+															</Tooltip.Trigger>
+															<Tooltip.Portal>
+																<Tooltip.Content
+																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																	sideOffset={
+																		5
+																	}
+																>
+																	A
+																	non-refundable
+																	fee charged
+																	when you
+																	submit your
+																	loan
+																	application.
+																	This fee is
+																	paid
+																	separately
+																	before loan
+																	disbursement.
+																	<Tooltip.Arrow className="fill-gray-800" />
+																</Tooltip.Content>
+															</Tooltip.Portal>
+														</Tooltip.Root>
+													</Tooltip.Provider>
+												</div>
+												<Typography className="text-red-600">
+													(
+													{formatCurrency(
+														fees.applicationFee
+													)}
+													)
+												</Typography>
+											</div>
+										</div>
+									</div>
+
+									<div className="pt-4 border-t border-gray-200">
+										<div className="space-y-4">
+											{/* Net Loan Disbursement - Highlighted */}
+											<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+												<div className="flex justify-between items-center">
+													<div className="flex items-center gap-1">
+														<Typography className="text-blue-tertiary font-normal text-lg font-body">
+															Net Loan
+															Disbursement
+														</Typography>
+														<Tooltip.Provider>
+															<Tooltip.Root
+																open={
+																	openTooltip ===
+																	"disbursement"
+																}
+																onOpenChange={() =>
+																	handleTooltipClick(
+																		"disbursement"
+																	)
+																}
+															>
+																<Tooltip.Trigger
+																	asChild
+																>
+																	<InfoIcon
+																		className="text-gray-400 cursor-pointer"
+																		fontSize="small"
+																		onClick={() =>
+																			handleTooltipClick(
+																				"disbursement"
+																			)
+																		}
+																	/>
+																</Tooltip.Trigger>
+																<Tooltip.Portal>
+																	<Tooltip.Content
+																		className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																		sideOffset={
+																			5
+																		}
+																	>
+																		The
+																		actual
+																		amount
+																		you will
+																		receive
+																		after
+																		deducting
+																		the
+																		origination
+																		fee and
+																		legal
+																		fee from
+																		your
+																		loan
+																		amount.
+																		<Tooltip.Arrow className="fill-gray-800" />
+																	</Tooltip.Content>
+																</Tooltip.Portal>
+															</Tooltip.Root>
+														</Tooltip.Provider>
+													</div>
+													<Typography className="text-blue-tertiary font-normal text-xl font-heading">
+														{formatCurrency(
+															fees.netDisbursement
+														)}
+													</Typography>
+												</div>
+											</div>
+
+											{/* Monthly Repayment - Highlighted */}
+											<div className="bg-purple-primary/5 rounded-xl p-4 border border-purple-primary/20">
+												<div className="flex justify-between items-center">
+													<div className="flex items-center gap-1">
+														<Typography className="text-purple-primary font-normal text-lg font-body">
+															Monthly Repayment
+														</Typography>
+														<Tooltip.Provider>
+															<Tooltip.Root
+																open={
+																	openTooltip ===
+																	"repayment"
+																}
+																onOpenChange={() =>
+																	handleTooltipClick(
+																		"repayment"
+																	)
+																}
+															>
+																<Tooltip.Trigger
+																	asChild
+																>
+																	<InfoIcon
+																		className="text-gray-400 cursor-pointer"
+																		fontSize="small"
+																		onClick={() =>
+																			handleTooltipClick(
+																				"repayment"
+																			)
+																		}
+																	/>
+																</Tooltip.Trigger>
+																<Tooltip.Portal>
+																	<Tooltip.Content
+																		className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																		sideOffset={
+																			5
+																		}
+																	>
+																		The
+																		amount
+																		you need
+																		to pay
+																		each
+																		month,
+																		which
+																		includes
+																		both
+																		principal
+																		and
+																		interest.
+																		<Tooltip.Arrow className="fill-gray-800" />
+																	</Tooltip.Content>
+																</Tooltip.Portal>
+															</Tooltip.Root>
+														</Tooltip.Provider>
+													</div>
+													<Typography className="text-purple-primary font-normal text-xl font-heading">
+														{formatCurrency(
+															monthlyRepayment
+														)}
+													</Typography>
+												</div>
+											</div>
+										</div>
+									</div>
+								</>
+							)}
+						</div>
+					</Paper>
+
+					<Paper className="p-6">
+						<Typography variant="h6" className="text-blue-400 mb-6">
+							Personal Information
+						</Typography>
 						<div className="space-y-4">
 							<div className="flex justify-between">
 								<Typography className="text-gray-600">
-									Product
+									Full Name
 								</Typography>
 								<Typography className="text-gray-900 font-medium">
-									{productDetails.name}
+									{userData.fullName}
 								</Typography>
 							</div>
 							<div className="flex justify-between">
 								<Typography className="text-gray-600">
-									Loan Amount
+									Email
 								</Typography>
 								<Typography className="text-gray-900 font-medium">
-									{formatCurrency(applicationData.loanAmount)}
+									{userData.email}
 								</Typography>
 							</div>
 							<div className="flex justify-between">
 								<Typography className="text-gray-600">
-									Loan Purpose
+									Phone Number
 								</Typography>
 								<Typography className="text-gray-900 font-medium">
-									{applicationData.loanPurpose}
+									{userData.phoneNumber}
 								</Typography>
 							</div>
 							<div className="flex justify-between">
 								<Typography className="text-gray-600">
-									Loan Term
+									Employment Status
 								</Typography>
 								<Typography className="text-gray-900 font-medium">
-									{applicationData.loanTerm} months
+									{userData.employmentStatus}
 								</Typography>
 							</div>
-							<div className="flex justify-between">
-								<Typography className="text-gray-600">
-									Interest Rate
-								</Typography>
-								<Typography className="text-gray-900 font-medium">
-									{productDetails.interestRate}% monthly
-								</Typography>
-							</div>
-						</div>
-
-						{fees && (
-							<>
-								<div className="pt-4 border-t border-gray-200">
-									<div className="space-y-4">
-										<div className="flex justify-between">
-											<div className="flex items-center gap-1">
-												<Typography className="text-gray-600">
-													Origination Fee (
-													{
-														productDetails.originationFee
-													}
-													%)
-												</Typography>
-												<Tooltip.Provider>
-													<Tooltip.Root
-														open={
-															openTooltip ===
-															"origination"
-														}
-														onOpenChange={() =>
-															handleTooltipClick(
-																"origination"
-															)
-														}
-													>
-														<Tooltip.Trigger
-															asChild
-														>
-															<InfoIcon
-																className="text-gray-400 cursor-pointer"
-																fontSize="small"
-																onClick={() =>
-																	handleTooltipClick(
-																		"origination"
-																	)
-																}
-															/>
-														</Tooltip.Trigger>
-														<Tooltip.Portal>
-															<Tooltip.Content
-																className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																sideOffset={5}
-															>
-																A one-time fee
-																charged by the
-																lender for
-																processing your
-																loan
-																application.
-																<Tooltip.Arrow className="fill-gray-800" />
-															</Tooltip.Content>
-														</Tooltip.Portal>
-													</Tooltip.Root>
-												</Tooltip.Provider>
-											</div>
-											<Typography className="text-red-600">
-												(
-												{formatCurrency(
-													fees.originationFee
-												)}
-												)
-											</Typography>
-										</div>
-										<div className="flex justify-between">
-											<div className="flex items-center gap-1">
-												<Typography className="text-gray-600">
-													Legal Fee (
-													{productDetails.legalFee}%)
-												</Typography>
-												<Tooltip.Provider>
-													<Tooltip.Root
-														open={
-															openTooltip ===
-															"legal"
-														}
-														onOpenChange={() =>
-															handleTooltipClick(
-																"legal"
-															)
-														}
-													>
-														<Tooltip.Trigger
-															asChild
-														>
-															<InfoIcon
-																className="text-gray-400 cursor-pointer"
-																fontSize="small"
-																onClick={() =>
-																	handleTooltipClick(
-																		"legal"
-																	)
-																}
-															/>
-														</Tooltip.Trigger>
-														<Tooltip.Portal>
-															<Tooltip.Content
-																className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																sideOffset={5}
-															>
-																A fee charged to
-																cover the legal
-																costs associated
-																with preparing
-																and processing
-																your loan
-																documents.
-																<Tooltip.Arrow className="fill-gray-800" />
-															</Tooltip.Content>
-														</Tooltip.Portal>
-													</Tooltip.Root>
-												</Tooltip.Provider>
-											</div>
-											<Typography className="text-red-600">
-												({formatCurrency(fees.legalFee)}
-												)
-											</Typography>
-										</div>
-										<div className="flex justify-between">
-											<div className="flex items-center gap-1">
-												<Typography className="text-gray-600">
-													Application Fee (paid
-													upfront)
-												</Typography>
-												<Tooltip.Provider>
-													<Tooltip.Root
-														open={
-															openTooltip ===
-															"application"
-														}
-														onOpenChange={() =>
-															handleTooltipClick(
-																"application"
-															)
-														}
-													>
-														<Tooltip.Trigger
-															asChild
-														>
-															<InfoIcon
-																className="text-gray-400 cursor-pointer"
-																fontSize="small"
-																onClick={() =>
-																	handleTooltipClick(
-																		"application"
-																	)
-																}
-															/>
-														</Tooltip.Trigger>
-														<Tooltip.Portal>
-															<Tooltip.Content
-																className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																sideOffset={5}
-															>
-																A non-refundable
-																fee charged when
-																you submit your
-																loan
-																application.
-																This fee is paid
-																separately
-																before loan
-																disbursement.
-																<Tooltip.Arrow className="fill-gray-800" />
-															</Tooltip.Content>
-														</Tooltip.Portal>
-													</Tooltip.Root>
-												</Tooltip.Provider>
-											</div>
-											<Typography className="text-red-600">
-												(
-												{formatCurrency(
-													fees.applicationFee
-												)}
-												)
-											</Typography>
-										</div>
-									</div>
+							{userData.employerName && (
+								<div className="flex justify-between">
+									<Typography className="text-gray-600">
+										Employer
+									</Typography>
+									<Typography className="text-gray-900 font-medium">
+										{userData.employerName}
+									</Typography>
 								</div>
-
-								<div className="pt-4 border-t border-gray-200">
-									<div className="space-y-4">
-										{/* Net Loan Disbursement - Highlighted */}
-										<div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-lg p-4">
-											<div className="flex justify-between items-center">
-												<div className="flex items-center gap-1">
-													<Typography className="text-green-400 font-normal text-lg">
-														Net Loan Disbursement
-													</Typography>
-													<Tooltip.Provider>
-														<Tooltip.Root
-															open={
-																openTooltip ===
-																"disbursement"
-															}
-															onOpenChange={() =>
-																handleTooltipClick(
-																	"disbursement"
-																)
-															}
-														>
-															<Tooltip.Trigger
-																asChild
-															>
-																<InfoIcon
-																	className="text-gray-400 cursor-pointer"
-																	fontSize="small"
-																	onClick={() =>
-																		handleTooltipClick(
-																			"disbursement"
-																		)
-																	}
-																/>
-															</Tooltip.Trigger>
-															<Tooltip.Portal>
-																<Tooltip.Content
-																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																	sideOffset={
-																		5
-																	}
-																>
-																	The actual
-																	amount you
-																	will receive
-																	after
-																	deducting
-																	the
-																	origination
-																	fee and
-																	legal fee
-																	from your
-																	loan amount.
-																	<Tooltip.Arrow className="fill-gray-800" />
-																</Tooltip.Content>
-															</Tooltip.Portal>
-														</Tooltip.Root>
-													</Tooltip.Provider>
-												</div>
-												<Typography className="text-green-400 font-normal text-xl">
-													{formatCurrency(
-														fees.netDisbursement
-													)}
-												</Typography>
-											</div>
-										</div>
-
-										{/* Monthly Repayment - Highlighted */}
-										<div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-lg p-4">
-											<div className="flex justify-between items-center">
-												<div className="flex items-center gap-1">
-													<Typography className="text-purple-400 font-normal text-lg">
-														Monthly Repayment
-													</Typography>
-													<Tooltip.Provider>
-														<Tooltip.Root
-															open={
-																openTooltip ===
-																"repayment"
-															}
-															onOpenChange={() =>
-																handleTooltipClick(
-																	"repayment"
-																)
-															}
-														>
-															<Tooltip.Trigger
-																asChild
-															>
-																<InfoIcon
-																	className="text-gray-400 cursor-pointer"
-																	fontSize="small"
-																	onClick={() =>
-																		handleTooltipClick(
-																			"repayment"
-																		)
-																	}
-																/>
-															</Tooltip.Trigger>
-															<Tooltip.Portal>
-																<Tooltip.Content
-																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																	sideOffset={
-																		5
-																	}
-																>
-																	The amount
-																	you need to
-																	pay each
-																	month, which
-																	includes
-																	both
-																	principal
-																	and
-																	interest.
-																	<Tooltip.Arrow className="fill-gray-800" />
-																</Tooltip.Content>
-															</Tooltip.Portal>
-														</Tooltip.Root>
-													</Tooltip.Provider>
-												</div>
-												<Typography className="text-purple-400 font-normal text-xl">
-													{formatCurrency(
-														monthlyRepayment
-													)}
-												</Typography>
-											</div>
-										</div>
-									</div>
+							)}
+							{userData.monthlyIncome && (
+								<div className="flex justify-between">
+									<Typography className="text-gray-600">
+										Monthly Income
+									</Typography>
+									<Typography className="text-gray-900 font-medium">
+										{formatCurrency(userData.monthlyIncome)}
+									</Typography>
 								</div>
-							</>
-						)}
-					</div>
-				</Paper>
-
-				<Paper className="p-6">
-					<Typography variant="h6" className="text-blue-400 mb-6">
-						Personal Information
-					</Typography>
-					<div className="space-y-4">
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Full Name
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{userData.fullName}
-							</Typography>
-						</div>
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Email
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{userData.email}
-							</Typography>
-						</div>
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Phone Number
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{userData.phoneNumber}
-							</Typography>
-						</div>
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Employment Status
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{userData.employmentStatus}
-							</Typography>
-						</div>
-						{userData.employerName && (
-							<div className="flex justify-between">
-								<Typography className="text-gray-600">
-									Employer
+							)}
+							<div className="pt-4 border-t border-gray-200">
+								<Typography className="text-gray-900 font-medium mb-2">
+									Address
 								</Typography>
-								<Typography className="text-gray-900 font-medium">
-									{userData.employerName}
+								<Typography className="text-gray-600">
+									{userData.address1}
+									{userData.address2 && (
+										<>
+											<br />
+											{userData.address2}
+										</>
+									)}
+									<br />
+									{userData.city}, {userData.state}{" "}
+									{userData.postalCode}
 								</Typography>
 							</div>
-						)}
-						{userData.monthlyIncome && (
-							<div className="flex justify-between">
-								<Typography className="text-gray-600">
-									Monthly Income
-								</Typography>
-								<Typography className="text-gray-900 font-medium">
-									{formatCurrency(userData.monthlyIncome)}
-								</Typography>
-							</div>
-						)}
-						<div className="pt-4 border-t border-gray-200">
-							<Typography className="text-gray-900 font-medium mb-2">
-								Address
-							</Typography>
-							<Typography className="text-gray-600">
-								{userData.address1}
-								{userData.address2 && (
-									<>
-										<br />
-										{userData.address2}
-									</>
-								)}
-								<br />
-								{userData.city}, {userData.state}{" "}
-								{userData.postalCode}
-							</Typography>
 						</div>
-					</div>
-				</Paper>
+					</Paper>
 
-				<Paper className="p-6">
-					<Typography
-						variant="h6"
-						className="text-blue-400"
-						gutterBottom
-					>
-						Documents
-					</Typography>
-					<Typography
-						variant="body1"
-						className="text-gray-600 mb-2 leading-relaxed"
-					>
-						While documents can be submitted at a later stage,
-						providing them now will expedite your loan application
-						review process and help us serve you faster.
-					</Typography>
-					<div className="space-y-0">
-						{productDetails?.requiredDocuments?.map(
-							(docType: string, index: number) => {
-								const uploadedDocs =
-									applicationData.documents.filter(
-										(doc) => doc.type === docType
-									);
-								const hasUploads = uploadedDocs.length > 0;
-								return (
-									<div key={docType}>
-										<div className="py-4 space-y-2">
-											<div className="flex justify-between items-center">
-												<Typography
-													variant="body1"
-													className="text-gray-700 font-medium"
-												>
-													{docType}
-												</Typography>
-												<div
-													className={`px-3 py-1 rounded-full text-sm font-medium ${
-														hasUploads
-															? "bg-green-100 text-green-800"
-															: "bg-yellow-100 text-yellow-800"
-													}`}
-												>
-													{hasUploads
-														? `${uploadedDocs.length} file(s) uploaded`
-														: "Not Uploaded"}
+					<Paper className="p-6">
+						<Typography
+							variant="h6"
+							className="text-blue-400"
+							gutterBottom
+						>
+							Documents
+						</Typography>
+						<Typography
+							variant="body1"
+							className="text-gray-600 mb-2 leading-relaxed"
+						>
+							While documents can be submitted at a later stage,
+							providing them now will expedite your loan
+							application review process and help us serve you
+							faster.
+						</Typography>
+						<div className="space-y-0">
+							{productDetails?.requiredDocuments?.map(
+								(docType: string, index: number) => {
+									const uploadedDocs =
+										applicationData.documents.filter(
+											(doc) => doc.type === docType
+										);
+									const hasUploads = uploadedDocs.length > 0;
+									return (
+										<div key={docType}>
+											<div className="py-4 space-y-2">
+												<div className="flex justify-between items-center">
+													<Typography
+														variant="body1"
+														className="text-gray-700 font-medium"
+													>
+														{docType}
+													</Typography>
+													<div
+														className={`px-3 py-1 rounded-full text-sm font-medium ${
+															hasUploads
+																? "bg-green-100 text-green-800"
+																: "bg-yellow-100 text-yellow-800"
+														}`}
+													>
+														{hasUploads
+															? `${uploadedDocs.length} file(s) uploaded`
+															: "Not Uploaded"}
+													</div>
 												</div>
+												{hasUploads && (
+													<div className="pl-4 space-y-2">
+														{uploadedDocs.map(
+															(doc) => (
+																<div
+																	key={doc.id}
+																	className="flex justify-between items-center text-sm"
+																>
+																	<span className="text-gray-500">
+																		{doc.fileUrl
+																			.split(
+																				"/"
+																			)
+																			.pop()}
+																	</span>
+																	<Link
+																		href={`${
+																			process
+																				.env
+																				.NEXT_PUBLIC_API_URL
+																		}/api/loan-applications/${searchParams.get(
+																			"applicationId"
+																		)}/documents/${
+																			doc.id
+																		}`}
+																		target="_blank"
+																		rel="noopener noreferrer"
+																		className="text-indigo-600 hover:text-indigo-500"
+																	>
+																		View
+																	</Link>
+																</div>
+															)
+														)}
+													</div>
+												)}
 											</div>
-											{hasUploads && (
-												<div className="pl-4 space-y-2">
-													{uploadedDocs.map((doc) => (
-														<div
-															key={doc.id}
-															className="flex justify-between items-center text-sm"
-														>
-															<span className="text-gray-500">
-																{doc.fileUrl
-																	.split("/")
-																	.pop()}
-															</span>
-															<Link
-																href={`${
-																	process.env
-																		.NEXT_PUBLIC_API_URL
-																}/api/loan-applications/${searchParams.get(
-																	"applicationId"
-																)}/documents/${
-																	doc.id
-																}`}
-																target="_blank"
-																rel="noopener noreferrer"
-																className="text-indigo-600 hover:text-indigo-500"
-															>
-																View
-															</Link>
-														</div>
-													))}
-												</div>
+											{index <
+												(productDetails
+													?.requiredDocuments
+													?.length ?? 0) -
+													1 && (
+												<div className="border-b border-gray-200"></div>
 											)}
 										</div>
-										{index <
-											(productDetails?.requiredDocuments
-												?.length ?? 0) -
-												1 && (
-											<div className="border-b border-gray-200"></div>
-										)}
-									</div>
-								);
-							}
-						)}
-					</div>
-				</Paper>
-
-				<FormControlLabel
-					control={
-						<Checkbox
-							checked={termsAccepted}
-							onChange={(e) => {
-								setTermsAccepted(e.target.checked);
-								if (error) setError(null);
-							}}
-							className="text-indigo-600"
-						/>
-					}
-					label={
-						<Typography className="text-gray-600">
-							I have read and agree to the{" "}
-							<Link
-								href="/terms"
-								target="_blank"
-								className="text-indigo-600 hover:text-indigo-500"
-							>
-								Terms and Conditions
-							</Link>{" "}
-							and{" "}
-							<Link
-								href="/privacy"
-								target="_blank"
-								className="text-indigo-600 hover:text-indigo-500"
-							>
-								Privacy Policy
-							</Link>
-						</Typography>
-					}
-				/>
-			</div>
-
-			<Box className="flex justify-between pt-6">
-				<Button
-					type="button"
-					variant="outlined"
-					onClick={handleBack}
-					disabled={isLoading}
-					className="text-gray-700 border-gray-300 hover:bg-gray-50"
-				>
-					Back
-				</Button>
-				<Button
-					type="submit"
-					variant="contained"
-					disabled={isLoading || !termsAccepted}
-					className="bg-indigo-600 hover:bg-indigo-700 text-white"
-				>
-					{isLoading ? (
-						<div className="flex items-center">
-							<span className="mr-2">Submitting...</span>
-							<div
-								className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"
-								role="status"
-							>
-								<span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">
-									Loading...
-								</span>
-							</div>
+									);
+								}
+							)}
 						</div>
-					) : (
-						"Submit Application"
-					)}
-				</Button>
+					</Paper>
+
+					<FormControlLabel
+						control={
+							<Checkbox
+								checked={termsAccepted}
+								onChange={(e) => {
+									setTermsAccepted(e.target.checked);
+									if (error) setError(null);
+								}}
+								className="text-indigo-600"
+							/>
+						}
+						label={
+							<Typography className="text-gray-600">
+								I have read and agree to the{" "}
+								<Link
+									href="/terms"
+									target="_blank"
+									className="text-indigo-600 hover:text-indigo-500"
+								>
+									Terms and Conditions
+								</Link>{" "}
+								and{" "}
+								<Link
+									href="/privacy"
+									target="_blank"
+									className="text-indigo-600 hover:text-indigo-500"
+								>
+									Privacy Policy
+								</Link>
+							</Typography>
+						}
+					/>
+				</div>
+
+				<Box className="flex justify-between pt-6">
+					<Button
+						type="button"
+						variant="outlined"
+						onClick={handleBack}
+						disabled={isLoading}
+						className="text-gray-700 border-gray-300 hover:bg-gray-50"
+					>
+						Back
+					</Button>
+					<Button
+						type="submit"
+						variant="contained"
+						disabled={isLoading || !termsAccepted}
+						className="bg-indigo-600 hover:bg-indigo-700 text-white"
+					>
+						{isLoading ? (
+							<div className="flex items-center">
+								<span className="mr-2">Submitting...</span>
+								<div
+									className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"
+									role="status"
+								>
+									<span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">
+										Loading...
+									</span>
+								</div>
+							</div>
+						) : (
+							"Submit Application"
+						)}
+					</Button>
+				</Box>
 			</Box>
-		</Box>
+		</div>
 	);
 }
 
 export default function ReviewAndSubmitForm(props: ReviewAndSubmitFormProps) {
 	return (
-		<Suspense fallback={<div>Loading...</div>}>
+		<Suspense
+			fallback={
+				<div className="flex justify-center items-center min-h-[200px]">
+					<div className="flex flex-col items-center space-y-4">
+						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary"></div>
+						<p className="text-gray-700 font-body">Loading...</p>
+					</div>
+				</div>
+			}
+		>
 			<ReviewAndSubmitFormContent {...props} />
 		</Suspense>
 	);

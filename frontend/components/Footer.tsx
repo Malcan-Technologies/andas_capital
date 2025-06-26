@@ -1,23 +1,24 @@
 import Link from "next/link";
 import { MdArrowForward, MdShield } from "react-icons/md";
+import Logo from "./Logo";
 
 export default function Footer() {
 	return (
-		<footer className="bg-[#0A0612] text-white">
+		<footer className="bg-gradient-to-b from-gray-900 to-black text-white">
 			{/* CTA Section */}
-			<div className="border-b border-white/10">
+			{/* <div className="border-b border-brand-primary/20">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 					<div className="text-center">
-						<h2 className="text-3xl font-bold mb-4">
+						<h2 className="text-3xl font-bold mb-4 font-heading">
 							Ready to Get Started?
 						</h2>
-						<p className="text-gray-300 mb-8 max-w-2xl mx-auto">
+						<p className="text-gray-300 mb-8 max-w-2xl mx-auto font-body">
 							Join thousands of businesses and employees who trust
 							Kapital for their financial needs.
 						</p>
 						<Link
 							href="/apply"
-							className="inline-flex items-center bg-white text-purple-900 px-6 py-3 rounded-full hover:bg-purple-50 transition-all text-lg font-semibold"
+							className="brand-button-primary inline-flex items-center text-lg font-semibold"
 						>
 							Apply Now
 							<span className="ml-2">
@@ -26,19 +27,21 @@ export default function Footer() {
 						</Link>
 					</div>
 				</div>
-			</div>
+			</div> */}
 
 			{/* Links Section */}
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-12">
 				<div className="grid grid-cols-2 md:grid-cols-4 gap-8">
 					{/* Products */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4">Products</h3>
+						<h3 className="text-lg font-semibold mb-4 font-heading">
+							Products
+						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/pay-advance"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									PayAdvance™
 								</Link>
@@ -46,7 +49,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/equipment-financing"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Equipment Financing
 								</Link>
@@ -54,7 +57,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/sme-term-loan"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									SME Term Loan
 								</Link>
@@ -62,7 +65,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/products"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Borrow
 								</Link>
@@ -72,12 +75,14 @@ export default function Footer() {
 
 					{/* Company */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4">Company</h3>
+						<h3 className="text-lg font-semibold mb-4 font-heading">
+							Company
+						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/about"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									About Us
 								</Link>
@@ -86,7 +91,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/careers"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Careers
 								</Link>
@@ -94,7 +99,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/press"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Press
 								</Link>
@@ -104,14 +109,14 @@ export default function Footer() {
 
 					{/* Resources */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4">
+						<h3 className="text-lg font-semibold mb-4 font-heading">
 							Resources
 						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/blog"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Blog
 								</Link>
@@ -119,7 +124,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/help"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Help Center
 								</Link>
@@ -127,7 +132,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/guides"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Guides
 								</Link>
@@ -135,7 +140,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/calculator"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Loan Calculator
 								</Link>
@@ -145,12 +150,14 @@ export default function Footer() {
 
 					{/* Legal */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4">Legal</h3>
+						<h3 className="text-lg font-semibold mb-4 font-heading">
+							Legal
+						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/privacy"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Privacy Policy
 								</Link>
@@ -158,7 +165,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/terms"
-									className="text-gray-300 hover:text-white"
+									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
 								>
 									Terms of Service
 								</Link>
@@ -168,19 +175,21 @@ export default function Footer() {
 				</div>
 
 				{/* Copyright */}
-				<div className="mt-12 pt-8 border-t border-white/10">
+				<div className="mt-12 pt-8 border-t border-purple-primary/20">
 					<div className="flex flex-col space-y-6">
-						{/* SSL Badge - Shown at top on all screens */}
-						<div className="flex justify-start">
-							<div className="inline-flex items-center gap-2 bg-[#0F0A1F] backdrop-blur-lg rounded-xl p-4 border border-white/10 w-fit">
-								<span className="text-green-400 flex-shrink-0">
+						{/* Logo and SSL Badge */}
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+							<Logo size="lg" variant="white" linkTo="/" />
+
+							<div className="inline-flex items-center gap-2 bg-purple-primary/10 backdrop-blur-lg rounded-xl p-4 border border-purple-primary/30 w-fit">
+								<span className="text-purple-primary flex-shrink-0">
 									<MdShield size={20} />
 								</span>
 								<div className="text-sm">
-									<p className="text-green-400 font-medium">
+									<p className="text-purple-primary font-medium font-body">
 										SSL Secured
 									</p>
-									<p className="text-gray-400 text-xs">
+									<p className="text-gray-400 text-xs font-body">
 										256-bit encryption
 									</p>
 								</div>
@@ -188,7 +197,7 @@ export default function Footer() {
 						</div>
 
 						{/* Legal Text */}
-						<div className="text-gray-400 space-y-4">
+						<div className="text-gray-400 space-y-4 font-body">
 							<p>
 								© {new Date().getFullYear()} Kapital. All rights
 								reserved.

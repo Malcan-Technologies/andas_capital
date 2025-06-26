@@ -210,7 +210,7 @@ export function NotificationsDropdown() {
 				<Button
 					variant="ghost"
 					size="icon"
-					className="relative bg-gray-800 hover:bg-gray-700 text-gray-100 hover:text-white transition-colors"
+					className="relative bg-white hover:bg-purple-primary/5 text-gray-700 hover:text-purple-primary border border-gray-200 hover:border-purple-primary/20 transition-colors shadow-sm"
 				>
 					<Bell className="h-5 w-5" />
 					{unreadCount > 0 && (
@@ -220,10 +220,10 @@ export function NotificationsDropdown() {
 			</DropdownMenuTrigger>
 			<DropdownMenuContent
 				align="end"
-				className="w-80 bg-gray-800/95 backdrop-blur-lg border-gray-700"
+				className="w-80 bg-white/95 backdrop-blur-lg border-gray-200 shadow-lg"
 			>
-				<div className="flex items-center justify-between p-4 border-b border-gray-600">
-					<h2 className="font-semibold text-gray-100">
+				<div className="flex items-center justify-between p-4 border-b border-gray-200">
+					<h2 className="font-semibold text-gray-700 font-heading">
 						Notifications
 					</h2>
 					{unreadCount > 0 && (
@@ -237,7 +237,7 @@ export function NotificationsDropdown() {
 										.map((n) => n.id)
 								)
 							}
-							className="text-xs text-gray-300 hover:text-gray-100 hover:bg-gray-700"
+							className="text-xs text-gray-500 hover:text-purple-primary hover:bg-purple-primary/5 font-body"
 						>
 							Mark all as read
 						</Button>
@@ -248,36 +248,38 @@ export function NotificationsDropdown() {
 						Array.from({ length: 3 }).map((_, i) => (
 							<div
 								key={i}
-								className="p-4 border-b border-gray-600"
+								className="p-4 border-b border-gray-200"
 							>
-								<Skeleton className="h-4 w-3/4 mb-2 bg-gray-700" />
-								<Skeleton className="h-3 w-full bg-gray-700" />
+								<Skeleton className="h-4 w-3/4 mb-2 bg-gray-200" />
+								<Skeleton className="h-3 w-full bg-gray-200" />
 							</div>
 						))
 					) : error ? (
-						<div className="p-4 text-center text-gray-400">
+						<div className="p-4 text-center text-gray-500">
 							Unable to load notifications
 							<div className="mt-2">
 								<Button
 									variant="outline"
 									size="sm"
 									onClick={fetchNotifications}
-									className="text-xs bg-gray-700 hover:bg-gray-600 border-gray-600"
+									className="text-xs bg-white hover:bg-purple-primary/5 border-gray-200 hover:border-purple-primary/20 text-gray-700 hover:text-purple-primary font-body"
 								>
 									Retry
 								</Button>
 							</div>
 						</div>
 					) : notifications.length === 0 ? (
-						<div className="p-4 text-center text-gray-400">
+						<div className="p-4 text-center text-gray-500 font-body">
 							No notifications
 						</div>
 					) : (
 						notifications.map((notification) => (
 							<div
 								key={notification.id}
-								className={`group p-4 border-b border-gray-600 hover:bg-gray-700/50 transition-colors ${
-									!notification.isRead ? "bg-gray-700/30" : ""
+								className={`group p-4 border-b border-gray-200 hover:bg-purple-primary/5 transition-colors ${
+									!notification.isRead
+										? "bg-blue-tertiary/5 border-l-4 border-l-blue-tertiary"
+										: ""
 								} ${notification.link ? "cursor-pointer" : ""}`}
 								onClick={(e) => {
 									e.preventDefault();
@@ -291,17 +293,17 @@ export function NotificationsDropdown() {
 										)}`}
 									/>
 									<div className="flex-1 min-w-0">
-										<div className="font-medium text-gray-100 flex items-center gap-2">
+										<div className="font-medium text-gray-700 flex items-center gap-2 font-heading">
 											{notification.title}
 											{notification.link && (
-												<ExternalLink className="h-3 w-3 text-gray-400" />
+												<ExternalLink className="h-3 w-3 text-gray-500" />
 											)}
 										</div>
-										<p className="text-sm text-gray-300">
+										<p className="text-sm text-gray-600 font-body">
 											{notification.message}
 										</p>
 										<div className="flex items-center justify-between mt-2">
-											<span className="text-xs text-gray-400">
+											<span className="text-xs text-gray-500 font-body">
 												{format(
 													new Date(
 														notification.createdAt
@@ -314,7 +316,7 @@ export function NotificationsDropdown() {
 													<Button
 														variant="ghost"
 														size="icon"
-														className="h-6 w-6 text-gray-400 hover:text-blue-400"
+														className="h-6 w-6 text-gray-500 hover:text-blue-tertiary hover:bg-blue-tertiary/10"
 														onClick={(e) => {
 															e.stopPropagation();
 															markAsRead([
@@ -329,7 +331,7 @@ export function NotificationsDropdown() {
 												<Button
 													variant="ghost"
 													size="icon"
-													className="h-6 w-6 text-gray-400 hover:text-red-400"
+													className="h-6 w-6 text-gray-500 hover:text-red-500 hover:bg-red-50"
 													onClick={(e) => {
 														e.stopPropagation();
 														deleteNotification(

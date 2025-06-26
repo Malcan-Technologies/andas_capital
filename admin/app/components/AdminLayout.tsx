@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -21,12 +21,15 @@ import {
 	BellIcon,
 	CubeIcon,
 	CreditCardIcon,
+	ReceiptPercentIcon,
+	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import {
 	AdminTokenStorage,
 	fetchWithAdminTokenRefresh,
 	checkAdminAuth,
 } from "../../lib/authUtils";
+import Logo from "./Logo";
 
 interface AdminLayoutProps {
 	children: React.ReactNode;
@@ -46,7 +49,43 @@ export default function AdminLayout({
 	const [adminName, setAdminName] = useState(userName);
 	const [loanWorkflowOpen, setLoanWorkflowOpen] = useState(false);
 	const [managementOpen, setManagementOpen] = useState(false);
+	const [applicationsOpen, setApplicationsOpen] = useState(false);
+	const [loansOpen, setLoansOpen] = useState(false);
 	const router = useRouter();
+	const pathname = usePathname();
+
+	// Function to check if a navigation item is active
+	const isActive = (href: string) => {
+		if (href === "/dashboard") {
+			return pathname === "/dashboard";
+		}
+
+		// Handle query parameters for filtered pages
+		if (href.includes("?")) {
+			const [basePath, queryString] = href.split("?");
+			if (pathname === basePath) {
+				// Check if current URL contains the same query parameters
+				if (typeof window !== "undefined") {
+					const currentParams = new URLSearchParams(
+						window.location.search
+					);
+					const targetParams = new URLSearchParams(queryString);
+
+					// Check if all target parameters match current parameters
+					const targetEntries = Array.from(targetParams.entries());
+					for (const [key, value] of targetEntries) {
+						if (currentParams.get(key) !== value) {
+							return false;
+						}
+					}
+					return true;
+				}
+			}
+			return false;
+		}
+
+		return pathname.startsWith(href);
+	};
 
 	useEffect(() => {
 		// Check if user is authenticated
@@ -131,11 +170,20 @@ export default function AdminLayout({
 
 	const navigation = [
 		{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
-		{ name: "Active Loans", href: "/dashboard/loans", icon: BanknotesIcon },
 		{
 			name: "Disbursements",
 			href: "/dashboard/disbursements",
 			icon: CreditCardIcon,
+		},
+		{
+			name: "Payments",
+			href: "/dashboard/payments",
+			icon: ReceiptPercentIcon,
+		},
+		{
+			name: "Overdue Payments",
+			href: "/dashboard/late-fees",
+			icon: ExclamationTriangleIcon,
 		},
 		{ name: "Users", href: "/dashboard/users", icon: UserGroupIcon },
 		{ name: "Reports", href: "/dashboard/reports", icon: ChartBarIcon },
@@ -146,16 +194,30 @@ export default function AdminLayout({
 			name: "All Applications",
 			href: "/dashboard/applications",
 			icon: DocumentTextIcon,
+			subItems: [
+				{
+					name: "Pending Approval",
+					href: "/dashboard/applications?filter=pending-approval",
+					icon: ClockIcon,
+				},
+				{
+					name: "Pending Disbursement",
+					href: "/dashboard/applications?filter=pending-disbursement",
+					icon: CheckCircleIcon,
+				},
+			],
 		},
 		{
-			name: "Pending Approval",
-			href: "/dashboard/applications?filter=pending-approval",
-			icon: ClockIcon,
-		},
-		{
-			name: "Pending Disbursement",
-			href: "/dashboard/applications?filter=pending-disbursement",
-			icon: CheckCircleIcon,
+			name: "All Loans",
+			href: "/dashboard/loans",
+			icon: BanknotesIcon,
+			subItems: [
+				{
+					name: "Pending Discharge",
+					href: "/dashboard/loans?filter=pending_discharge",
+					icon: ClockIcon,
+				},
+			],
 		},
 		{
 			name: "Workflow Overview",
@@ -182,45 +244,122 @@ export default function AdminLayout({
 		},
 	];
 
+	// Function to check if any sub-item in a dropdown is active
+	const isDropdownActive = (items: any[]) => {
+		return items.some((item) => isActive(item.href));
+	};
+
+	// Auto-expand dropdowns based on current path
+	useEffect(() => {
+		const isLoanPath = loanWorkflowItems.some((item) => {
+			const isMainActive = isActive(item.href);
+			const isSubActive = item.subItems?.some((subItem) =>
+				isActive(subItem.href)
+			);
+			return isMainActive || isSubActive;
+		});
+		const isManagementPath = managementItems.some((item) =>
+			isActive(item.href)
+		);
+
+		// Check for specific applications and loans paths
+		const isApplicationsPath = pathname.startsWith(
+			"/dashboard/applications"
+		);
+		const isLoansPath = pathname.startsWith("/dashboard/loans");
+
+		setLoanWorkflowOpen(isLoanPath);
+		setManagementOpen(isManagementPath);
+		setApplicationsOpen(isApplicationsPath);
+		setLoansOpen(isLoansPath);
+	}, [pathname]);
+
 	// Function to render navigation items
 	const renderNavigation = (isMobile = false) => {
-		const baseClasses = isMobile
-			? "group flex items-center rounded-md px-2 py-2 text-base font-medium text-gray-300 hover:bg-gray-800/50 hover:text-white transition-colors duration-200"
-			: "group flex items-center rounded-md px-2 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800/50 hover:text-white transition-colors duration-200";
+		const getBaseClasses = (active: boolean) => {
+			const baseSize = isMobile
+				? "group flex items-center rounded-md px-2 py-2 text-base font-medium transition-colors duration-200"
+				: "group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors duration-200";
 
-		const iconClasses = isMobile
-			? "mr-4 h-6 w-6 flex-shrink-0 text-gray-400 group-hover:text-gray-300"
-			: "mr-3 h-6 w-6 flex-shrink-0 text-gray-400 group-hover:text-gray-300";
+			return active
+				? `${baseSize} bg-blue-600/20 text-blue-200 border border-blue-500/30`
+				: `${baseSize} text-gray-300 hover:bg-gray-800/50 hover:text-white`;
+		};
 
-		const subItemClasses = isMobile
-			? "group flex items-center rounded-md px-2 py-2 pl-11 text-sm font-medium text-gray-400 hover:bg-gray-800/30 hover:text-gray-200 transition-colors duration-200"
-			: "group flex items-center rounded-md px-2 py-2 pl-9 text-sm font-medium text-gray-400 hover:bg-gray-800/30 hover:text-gray-200 transition-colors duration-200";
+		const getIconClasses = (active: boolean) => {
+			const baseSize = isMobile
+				? "mr-4 h-6 w-6 flex-shrink-0"
+				: "mr-3 h-6 w-6 flex-shrink-0";
 
-		const subIconClasses = isMobile
-			? "mr-3 h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-400"
-			: "mr-3 h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-400";
+			return active
+				? `${baseSize} text-blue-300`
+				: `${baseSize} text-gray-400 group-hover:text-gray-300`;
+		};
+
+		const getSubItemClasses = (active: boolean) => {
+			const baseSize = isMobile
+				? "group flex items-center rounded-md px-2 py-2 pl-11 text-sm font-medium transition-colors duration-200"
+				: "group flex items-center rounded-md px-2 py-2 pl-9 text-sm font-medium transition-colors duration-200";
+
+			return active
+				? `${baseSize} bg-blue-600/20 text-blue-200 border border-blue-500/30`
+				: `${baseSize} text-gray-400 hover:bg-gray-800/30 hover:text-gray-200`;
+		};
+
+		const getSubIconClasses = (active: boolean) => {
+			const baseSize = isMobile
+				? "mr-3 h-5 w-5 flex-shrink-0"
+				: "mr-3 h-5 w-5 flex-shrink-0";
+
+			return active
+				? `${baseSize} text-blue-300`
+				: `${baseSize} text-gray-500 group-hover:text-gray-400`;
+		};
+
+		const getSubSubItemClasses = (active: boolean) => {
+			const baseSize = isMobile
+				? "group flex items-center rounded-md px-2 py-2 pl-16 text-sm transition-colors duration-200"
+				: "group flex items-center rounded-md px-2 py-2 pl-14 text-sm transition-colors duration-200";
+
+			return active
+				? `${baseSize} text-blue-200 font-semibold`
+				: `${baseSize} text-gray-400 hover:text-gray-200`;
+		};
+
+		const getSubSubIconClasses = (active: boolean) => {
+			const baseSize = isMobile
+				? "mr-3 h-4 w-4 flex-shrink-0"
+				: "mr-3 h-4 w-4 flex-shrink-0";
+
+			return active
+				? `${baseSize} text-blue-300`
+				: `${baseSize} text-gray-500 group-hover:text-gray-400`;
+		};
 
 		return (
 			<>
-				{navigation.map((item) => (
-					<Link
-						key={item.name}
-						href={item.href}
-						className={baseClasses}
-					>
-						<item.icon className={iconClasses} />
-						{item.name}
-					</Link>
-				))}
+				{navigation.map((item) => {
+					const active = isActive(item.href);
+					return (
+						<Link
+							key={item.name}
+							href={item.href}
+							className={getBaseClasses(active)}
+						>
+							<item.icon className={getIconClasses(active)} />
+							{item.name}
+						</Link>
+					);
+				})}
 
-				{/* Loan Workflow Dropdown */}
+				{/* Loans Dropdown */}
 				<div>
 					<button
 						onClick={() => setLoanWorkflowOpen(!loanWorkflowOpen)}
-						className={baseClasses}
+						className={getBaseClasses(false)}
 					>
-						<ArrowPathIcon className={iconClasses} />
-						Loan Applications
+						<DocumentTextIcon className={getIconClasses(false)} />
+						Loans
 						{loanWorkflowOpen ? (
 							<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
 						) : (
@@ -229,16 +368,110 @@ export default function AdminLayout({
 					</button>
 					{loanWorkflowOpen && (
 						<div className="mt-1 space-y-1">
-							{loanWorkflowItems.map((item) => (
-								<Link
-									key={item.name}
-									href={item.href}
-									className={subItemClasses}
-								>
-									<item.icon className={subIconClasses} />
-									{item.name}
-								</Link>
-							))}
+							{loanWorkflowItems.map((item) => {
+								const active = isActive(item.href);
+								const hasSubItems =
+									item.subItems && item.subItems.length > 0;
+								const isExpanded =
+									(item.name === "All Applications" &&
+										applicationsOpen) ||
+									(item.name === "All Loans" && loansOpen);
+
+								return (
+									<div key={item.name}>
+										{hasSubItems ? (
+											<div className="flex items-center">
+												<Link
+													href={item.href}
+													className={`${getSubItemClasses(
+														active
+													)} flex-1 mr-2`}
+												>
+													<item.icon
+														className={getSubIconClasses(
+															active
+														)}
+													/>
+													{item.name}
+												</Link>
+												<button
+													onClick={() => {
+														if (
+															item.name ===
+															"All Applications"
+														) {
+															setApplicationsOpen(
+																!applicationsOpen
+															);
+														} else if (
+															item.name ===
+															"All Loans"
+														) {
+															setLoansOpen(
+																!loansOpen
+															);
+														}
+													}}
+													className="p-1 rounded hover:bg-gray-800/30 transition-colors"
+												>
+													{isExpanded ? (
+														<ChevronDownIcon className="h-4 w-4 text-gray-400" />
+													) : (
+														<ChevronRightIcon className="h-4 w-4 text-gray-400" />
+													)}
+												</button>
+											</div>
+										) : (
+											<Link
+												href={item.href}
+												className={getSubItemClasses(
+													active
+												)}
+											>
+												<item.icon
+													className={getSubIconClasses(
+														active
+													)}
+												/>
+												{item.name}
+											</Link>
+										)}
+
+										{hasSubItems && isExpanded && (
+											<div className="mt-1 space-y-1">
+												{item.subItems.map(
+													(subItem) => {
+														const subActive =
+															isActive(
+																subItem.href
+															);
+														return (
+															<Link
+																key={
+																	subItem.name
+																}
+																href={
+																	subItem.href
+																}
+																className={getSubSubItemClasses(
+																	subActive
+																)}
+															>
+																<subItem.icon
+																	className={getSubSubIconClasses(
+																		subActive
+																	)}
+																/>
+																{subItem.name}
+															</Link>
+														);
+													}
+												)}
+											</div>
+										)}
+									</div>
+								);
+							})}
 						</div>
 					)}
 				</div>
@@ -247,9 +480,9 @@ export default function AdminLayout({
 				<div>
 					<button
 						onClick={() => setManagementOpen(!managementOpen)}
-						className={baseClasses}
+						className={getBaseClasses(false)}
 					>
-						<Cog6ToothIcon className={iconClasses} />
+						<Cog6ToothIcon className={getIconClasses(false)} />
 						Management
 						{managementOpen ? (
 							<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
@@ -259,16 +492,23 @@ export default function AdminLayout({
 					</button>
 					{managementOpen && (
 						<div className="mt-1 space-y-1">
-							{managementItems.map((item) => (
-								<Link
-									key={item.name}
-									href={item.href}
-									className={subItemClasses}
-								>
-									<item.icon className={subIconClasses} />
-									{item.name}
-								</Link>
-							))}
+							{managementItems.map((item) => {
+								const active = isActive(item.href);
+								return (
+									<Link
+										key={item.name}
+										href={item.href}
+										className={getSubItemClasses(active)}
+									>
+										<item.icon
+											className={getSubIconClasses(
+												active
+											)}
+										/>
+										{item.name}
+									</Link>
+								);
+							})}
 						</div>
 					)}
 				</div>
@@ -299,13 +539,10 @@ export default function AdminLayout({
 				<div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-gradient-to-b from-gray-800 to-gray-900 backdrop-blur-md border-r border-gray-700/30">
 					<div className="flex h-16 items-center justify-between px-4">
 						<div className="flex items-center">
-							<Image
-								src="/logo-black-large.svg"
-								alt="Logo"
-								width={120}
-								height={40}
-								className="h-8 w-auto invert"
-								priority
+							<Logo
+								size="md"
+								variant="black"
+								linkTo="/dashboard"
 							/>
 							<span className="ml-2 px-2 py-1 text-xs font-semibold text-white bg-amber-600 rounded-full">
 								Admin
@@ -352,14 +589,7 @@ export default function AdminLayout({
 			<div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
 				<div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-gray-800 to-gray-900 backdrop-blur-md border-r border-gray-700/30">
 					<div className="flex h-16 items-center px-4">
-						<Image
-							src="/logo-black-large.svg"
-							alt="Logo"
-							width={120}
-							height={40}
-							className="h-8 w-auto invert"
-							priority
-						/>
+						<Logo size="md" variant="black" linkTo="/dashboard" />
 						<span className="ml-2 px-2 py-1 text-xs font-semibold text-white bg-amber-600 rounded-full">
 							Admin
 						</span>

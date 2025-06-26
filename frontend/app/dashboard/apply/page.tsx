@@ -176,7 +176,11 @@ function ApplyPageContent() {
 	useEffect(() => {
 		const fetchProducts = async () => {
 			try {
-				const data = await fetchWithTokenRefresh<any>("/api/products");
+				// Add cache-busting parameter to ensure fresh data
+				const data = await fetchWithTokenRefresh<any>(
+					`/api/products?t=${Date.now()}`
+				);
+
 				setProducts(data);
 			} catch (error) {
 				console.error("Error fetching products:", error);
@@ -715,21 +719,21 @@ function ApplyPageContent() {
 	};
 
 	return (
-		<div className="min-h-screen bg-gray-900">
+		<div className="min-h-screen bg-offwhite">
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<div className="flex items-center justify-between mb-8">
 					<div>
-						<h1 className="text-2xl font-semibold text-white">
+						<h1 className="text-2xl font-semibold text-gray-700 font-heading">
 							Apply for a Loan
 						</h1>
-						<p className="mt-1 text-sm text-gray-400">
+						<p className="mt-1 text-sm text-gray-500 font-body">
 							Complete the steps below to submit your loan
 							application
 						</p>
 					</div>
 					<button
 						onClick={() => router.push("/dashboard")}
-						className="inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg text-gray-300 bg-gray-800/50 backdrop-blur-md hover:bg-gray-700/50 transition-colors"
+						className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors shadow-sm font-body"
 					>
 						<ArrowBack className="h-4 w-4 mr-2" />
 						Back to Dashboard
@@ -739,7 +743,7 @@ function ApplyPageContent() {
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 					<div className="lg:col-span-2">
 						{/* Custom Stepper */}
-						<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 mb-6">
+						<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
 							<div className="flex items-center justify-between">
 								{steps.map((label, index) => (
 									<div
@@ -748,12 +752,12 @@ function ApplyPageContent() {
 									>
 										<div className="flex flex-col items-center">
 											<div
-												className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
+												className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors font-body ${
 													index < activeStep
-														? "bg-blue-600 border-blue-600 text-white"
+														? "bg-purple-primary border-purple-primary text-white"
 														: index === activeStep
-														? "bg-blue-600/20 border-blue-400 text-blue-400"
-														: "bg-gray-700 border-gray-600 text-gray-400"
+														? "bg-purple-primary/10 border-purple-primary text-purple-primary"
+														: "bg-gray-100 border-gray-300 text-gray-500"
 												}`}
 											>
 												{index < activeStep ? (
@@ -763,9 +767,9 @@ function ApplyPageContent() {
 												)}
 											</div>
 											<span
-												className={`mt-2 text-xs font-medium text-center max-w-[80px] ${
+												className={`mt-2 text-xs font-medium text-center max-w-[80px] font-body ${
 													index <= activeStep
-														? "text-blue-400"
+														? "text-purple-primary"
 														: "text-gray-500"
 												}`}
 											>
@@ -776,8 +780,8 @@ function ApplyPageContent() {
 											<div
 												className={`w-16 h-0.5 mx-4 ${
 													index < activeStep
-														? "bg-blue-600"
-														: "bg-gray-600"
+														? "bg-purple-primary"
+														: "bg-gray-300"
 												}`}
 											/>
 										)}
@@ -787,28 +791,28 @@ function ApplyPageContent() {
 						</div>
 
 						{/* Main Content */}
-						<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6">
+						<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
 							{renderStepContent(activeStep)}
 						</div>
 					</div>
 
 					<div className="lg:col-span-1">
 						{activeStep === 0 && selectedProductDetails && (
-							<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 sticky top-8">
+							<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-8">
 								<div className="space-y-4">
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Product
 										</p>
-										<p className="text-white font-medium">
+										<p className="text-gray-700 font-medium font-heading">
 											{selectedProductDetails.name}
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Amount Range
 										</p>
-										<p className="text-white font-medium">
+										<p className="text-gray-700 font-medium font-body">
 											RM
 											{selectedProductDetails.minAmount.toLocaleString()}{" "}
 											- RM
@@ -816,15 +820,15 @@ function ApplyPageContent() {
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Description
 										</p>
-										<p className="text-gray-300">
+										<p className="text-gray-700 font-body">
 											{selectedProductDetails.description}
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Features
 										</p>
 										<ul className="mt-1 space-y-1">
@@ -834,8 +838,8 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<CheckCircle className="h-5 w-5 text-green-400 mr-2 mt-0.5" />
-														<p className="text-gray-300">
+														<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+														<p className="text-gray-700 font-body">
 															{feature}
 														</p>
 													</li>
@@ -844,7 +848,100 @@ function ApplyPageContent() {
 										</ul>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
+											Fees & Charges
+										</p>
+										<div className="mt-1 space-y-1">
+											{selectedProductDetails.originationFee >
+												0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														{
+															selectedProductDetails.originationFee
+														}
+														% origination fee
+													</p>
+												</div>
+											)}
+											{selectedProductDetails.legalFee >
+												0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														{
+															selectedProductDetails.legalFee
+														}
+														% legal fee
+													</p>
+												</div>
+											)}
+											{selectedProductDetails.applicationFee >
+												0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														RM{" "}
+														{
+															selectedProductDetails.applicationFee
+														}{" "}
+														application fee (paid
+														before approval)
+													</p>
+												</div>
+											)}
+											{selectedProductDetails.applicationFee >
+												0 && (
+												<div className="flex items-start">
+													<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														Includes 1 free CTOS
+														credit report
+													</p>
+												</div>
+											)}
+										</div>
+									</div>
+									<div>
+										<p className="text-sm text-gray-500 font-body">
+											Late Payment Fees
+										</p>
+										<div className="mt-1 space-y-1">
+											{selectedProductDetails.lateFeeRate &&
+												selectedProductDetails.lateFeeRate >
+													0 && (
+													<div className="flex items-start">
+														<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+														<p className="text-gray-700 font-body">
+															{Math.floor(
+																selectedProductDetails.lateFeeRate *
+																	365
+															)}
+															% per year interest
+															on overdue amounts
+														</p>
+													</div>
+												)}
+											{(selectedProductDetails.lateFeeFixedAmount ||
+												0) > 0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														RM{" "}
+														{
+															selectedProductDetails.lateFeeFixedAmount
+														}{" "}
+														fixed fee every{" "}
+														{selectedProductDetails.lateFeeFrequencyDays ||
+															7}{" "}
+														days
+													</p>
+												</div>
+											)}
+										</div>
+									</div>
+									<div>
+										<p className="text-sm text-gray-500 font-body">
 											Requirements
 										</p>
 										<ul className="mt-1 space-y-1">
@@ -854,8 +951,8 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
-														<p className="text-gray-300">
+														<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+														<p className="text-gray-700 font-body">
 															{req}
 														</p>
 													</li>
@@ -867,24 +964,24 @@ function ApplyPageContent() {
 							</div>
 						)}
 						{activeStep > 0 && selectedProductDetails && (
-							<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 sticky top-8">
-								<h3 className="text-lg font-semibold text-white mb-4">
+							<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-8">
+								<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
 									Product Details
 								</h3>
 								<div className="space-y-4">
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Product
 										</p>
-										<p className="text-white font-medium">
+										<p className="text-gray-700 font-medium font-heading">
 											{selectedProductDetails.name}
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Amount Range
 										</p>
-										<p className="text-white font-medium">
+										<p className="text-gray-700 font-medium font-body">
 											RM
 											{selectedProductDetails.minAmount.toLocaleString()}{" "}
 											- RM
@@ -892,15 +989,15 @@ function ApplyPageContent() {
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Description
 										</p>
-										<p className="text-gray-300">
+										<p className="text-gray-700 font-body">
 											{selectedProductDetails.description}
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
 											Features
 										</p>
 										<ul className="mt-1 space-y-1">
@@ -910,8 +1007,8 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<CheckCircle className="h-5 w-5 text-green-400 mr-2 mt-0.5" />
-														<p className="text-gray-300">
+														<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+														<p className="text-gray-700 font-body">
 															{feature}
 														</p>
 													</li>
@@ -920,7 +1017,100 @@ function ApplyPageContent() {
 										</ul>
 									</div>
 									<div>
-										<p className="text-sm text-gray-400">
+										<p className="text-sm text-gray-500 font-body">
+											Fees & Charges
+										</p>
+										<div className="mt-1 space-y-1">
+											{selectedProductDetails.originationFee >
+												0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														{
+															selectedProductDetails.originationFee
+														}
+														% origination fee
+													</p>
+												</div>
+											)}
+											{selectedProductDetails.legalFee >
+												0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														{
+															selectedProductDetails.legalFee
+														}
+														% legal fee
+													</p>
+												</div>
+											)}
+											{selectedProductDetails.applicationFee >
+												0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														RM{" "}
+														{
+															selectedProductDetails.applicationFee
+														}{" "}
+														application fee (paid
+														before approval)
+													</p>
+												</div>
+											)}
+											{selectedProductDetails.applicationFee >
+												0 && (
+												<div className="flex items-start">
+													<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														Includes 1 free CTOS
+														credit report
+													</p>
+												</div>
+											)}
+										</div>
+									</div>
+									<div>
+										<p className="text-sm text-gray-500 font-body">
+											Late Payment Fees
+										</p>
+										<div className="mt-1 space-y-1">
+											{selectedProductDetails.lateFeeRate &&
+												selectedProductDetails.lateFeeRate >
+													0 && (
+													<div className="flex items-start">
+														<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+														<p className="text-gray-700 font-body">
+															{Math.floor(
+																selectedProductDetails.lateFeeRate *
+																	365
+															)}
+															% per year interest
+															on overdue amounts
+														</p>
+													</div>
+												)}
+											{(selectedProductDetails.lateFeeFixedAmount ||
+												0) > 0 && (
+												<div className="flex items-start">
+													<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+													<p className="text-gray-700 font-body">
+														RM{" "}
+														{
+															selectedProductDetails.lateFeeFixedAmount
+														}{" "}
+														fixed fee every{" "}
+														{selectedProductDetails.lateFeeFrequencyDays ||
+															7}{" "}
+														days
+													</p>
+												</div>
+											)}
+										</div>
+									</div>
+									<div>
+										<p className="text-sm text-gray-500 font-body">
 											Requirements
 										</p>
 										<ul className="mt-1 space-y-1">
@@ -930,8 +1120,8 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
-														<p className="text-gray-300">
+														<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+														<p className="text-gray-700 font-body">
 															{req}
 														</p>
 													</li>
@@ -953,8 +1143,8 @@ export default function ApplyPage() {
 	return (
 		<Suspense
 			fallback={
-				<div className="min-h-screen bg-gray-900 flex items-center justify-center">
-					<div className="text-white">Loading...</div>
+				<div className="min-h-screen bg-offwhite flex items-center justify-center">
+					<div className="text-gray-700 font-body">Loading...</div>
 				</div>
 			}
 		>

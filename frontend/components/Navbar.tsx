@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
+import Logo from "./Logo";
 import {
 	MdMenu,
 	MdClose,
@@ -29,7 +30,7 @@ type NavbarProps = {
 type ActiveMenu = "none" | "borrow" | "resources";
 
 export default function Navbar({
-	bgStyle = "bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900",
+	bgStyle = "bg-gradient-to-r from-gray-900 via-slate-800 to-gray-900",
 }: NavbarProps) {
 	const [isScrolled, setIsScrolled] = useState(false);
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -101,30 +102,36 @@ export default function Navbar({
 		<>
 			<nav
 				ref={navRef}
-				className={`fixed w-full z-50 transition-colors duration-300 ${
+				className={`fixed z-50 transition-all duration-300 ${
 					isScrolled
-						? "bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900"
-						: bgStyle
-				} border-b border-white/10 backdrop-blur-md dark:from-purple-900 dark:via-indigo-900 dark:to-blue-900`}
+						? "top-4 left-4 right-4 bg-white/95 backdrop-blur-lg border border-gray-200 rounded-2xl shadow-lg"
+						: "top-0 left-0 right-0 border-b border-white/10 backdrop-blur-md"
+				} ${!isScrolled ? bgStyle : ""}`}
 			>
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+				<div
+					className={`w-full ${
+						isScrolled
+							? "px-6 sm:px-8 lg:px-12"
+							: "px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16"
+					}`}
+				>
 					<div className="flex justify-between h-16 items-center">
 						<div className="flex items-center">
-							<Link href="/" className="relative w-32 h-8">
-								<Image
-									src="/logo-white-large.svg"
-									alt="Kapital"
-									fill
-									className="object-contain"
-									priority
-								/>
-							</Link>
+							<Logo
+								size="lg"
+								variant={isScrolled ? "white" : "black"}
+								linkTo="/"
+							/>
 						</div>
 						<div className="hidden md:flex items-center justify-center flex-1 space-x-8 px-16">
 							<div className="relative">
 								<button
 									onClick={() => handleMenuClick("borrow")}
-									className="text-gray-200 hover:text-white dark:text-gray-200 dark:hover:text-white transition-colors flex items-center gap-1"
+									className={`${
+										isScrolled
+											? "text-gray-700 hover:text-purple-primary"
+											: "text-gray-200 hover:text-purple-primary"
+									} transition-colors flex items-center gap-1 font-body`}
 								>
 									Borrow
 									<div
@@ -141,7 +148,11 @@ export default function Navbar({
 							<div className="relative">
 								<button
 									onClick={() => handleMenuClick("resources")}
-									className="text-gray-200 hover:text-white dark:text-gray-200 dark:hover:text-white transition-colors flex items-center gap-1"
+									className={`${
+										isScrolled
+											? "text-gray-700 hover:text-purple-primary"
+											: "text-gray-200 hover:text-purple-primary"
+									} transition-colors flex items-center gap-1 font-body`}
 								>
 									Resources
 									<div
@@ -162,7 +173,11 @@ export default function Navbar({
 									href="https://wa.me/60164614919?text=I'm%20interested%20in%20Kapital%20lending%20products"
 									target="_blank"
 									rel="noopener noreferrer"
-									className="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 border-gray-200 hover:border-white text-gray-200 hover:text-white transition-colors"
+									className={`inline-flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
+										isScrolled
+											? "border-gray-400 hover:border-purple-primary text-gray-700 hover:text-purple-primary"
+											: "border-gray-400 hover:border-purple-primary text-gray-200 hover:text-purple-primary"
+									}`}
 								>
 									<MdPhone size={20} />
 								</a>
@@ -181,7 +196,7 @@ export default function Navbar({
 							{isLoggedIn ? (
 								<Link
 									href="/dashboard"
-									className="inline-flex items-center gap-2 font-semibold bg-white text-purple-900 px-4 py-2 rounded-full hover:bg-purple-50 transition-all"
+									className="bg-purple-primary text-white hover:bg-purple-700 px-6 py-2 rounded-full transition-colors inline-flex items-center gap-2 font-semibold"
 								>
 									<MdDashboard size={20} />
 									Go to Dashboard
@@ -190,13 +205,17 @@ export default function Navbar({
 								<>
 									<Link
 										href="/login"
-										className="text-gray-200 hover:text-white px-4 py-2 rounded-full transition-colors"
+										className={`${
+											isScrolled
+												? "text-gray-700 hover:text-purple-primary"
+												: "text-gray-200 hover:text-purple-primary"
+										} px-4 py-2 rounded-full transition-colors font-body`}
 									>
 										Sign in
 									</Link>
 									<Link
 										href="/signup"
-										className="font-semibold bg-white text-purple-900 px-4 py-2 rounded-full hover:bg-purple-50 transition-all"
+										className="bg-purple-primary text-white hover:bg-purple-700 px-6 py-2 rounded-full transition-colors font-semibold"
 									>
 										Get started
 									</Link>
@@ -218,42 +237,56 @@ export default function Navbar({
 
 					{/* Mega Menu Container */}
 					<div
-						className={`absolute left-0 right-0 mt-1 transition-all duration-200 ${
+						className={`absolute transition-all duration-200 ${
+							isScrolled
+								? "left-0 right-0 mt-1"
+								: "left-0 right-0 mt-1"
+						} ${
 							activeMenu === "none"
 								? "opacity-0 invisible"
 								: "opacity-100 visible"
 						}`}
 					>
-						<div className="max-w-7xl mx-auto">
-							<div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+						<div
+							className={`w-full ${
+								isScrolled
+									? "px-0"
+									: "px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16"
+							}`}
+						>
+							<div
+								className={`bg-white rounded-2xl shadow-xl p-6 lg:p-8 border border-gray-200 ${
+									isScrolled ? "mx-0" : "mx-2 sm:mx-4 lg:mx-0"
+								}`}
+							>
 								{activeMenu === "borrow" && (
 									<div className="grid grid-cols-3 gap-8">
 										{/* Business Solutions Column */}
 										<div>
-											<h3 className="text-lg font-semibold text-gray-900 mb-4">
+											<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
 												Business Solutions
 											</h3>
 											<div className="space-y-4">
 												<Link
 													href="/pay-advance"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
 														<MdGroups
 															size={24}
-															color="#9333EA"
+															color="#7C3AED"
 														/>
 													</div>
 													<div>
 														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
+															<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
 																PayAdvance™
 															</h4>
-															<span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-600 rounded-full">
+															<span className="text-xs px-2 py-0.5 bg-blue-tertiary/20 text-blue-tertiary rounded-full border border-blue-tertiary/30">
 																New
 															</span>
 														</div>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Instant salary
 															advances for your
 															employees
@@ -262,25 +295,25 @@ export default function Navbar({
 												</Link>
 												<Link
 													href="/equipment-financing"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-blue-tertiary/10 flex items-center justify-center flex-shrink-0 border border-blue-tertiary/20">
 														<MdBusinessCenter
 															size={24}
-															color="#059669"
+															color="#38BDF8"
 														/>
 													</div>
 													<div>
 														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+															<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-tertiary transition-colors font-heading">
 																Equipment
 																Financing
 															</h4>
-															<span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-full">
+															<span className="text-xs px-2 py-0.5 bg-blue-tertiary/20 text-blue-tertiary rounded-full border border-blue-tertiary/30">
 																New
 															</span>
 														</div>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Finance your
 															business equipment
 															with flexible terms
@@ -289,21 +322,21 @@ export default function Navbar({
 												</Link>
 												<Link
 													href="/sme-term-loan"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
 														<MdBusinessCenter
 															size={24}
-															color="#2563EB"
+															color="#7C3AED"
 														/>
 													</div>
 													<div>
 														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+															<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
 																SME Term Loan
 															</h4>
 														</div>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Term loans for
 															business expansion
 														</p>
@@ -311,20 +344,20 @@ export default function Navbar({
 												</Link>
 												<Link
 													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-200">
 														<MdDirectionsCar
 															size={24}
-															color="#2563EB"
+															color="#6B7280"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-gray-600 transition-colors font-heading">
 															Auto Dealer
 															Financing
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Specialized
 															financing for
 															dealerships
@@ -336,25 +369,25 @@ export default function Navbar({
 
 										{/* Personal Solutions Column */}
 										<div>
-											<h3 className="text-lg font-semibold text-gray-900 mb-4">
+											<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
 												Personal Solutions
 											</h3>
 											<div className="space-y-4">
 												<Link
 													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-blue-tertiary/10 flex items-center justify-center flex-shrink-0 border border-blue-tertiary/20">
 														<MdAccountBalance
 															size={24}
-															color="#059669"
+															color="#38BDF8"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-tertiary transition-colors font-heading">
 															Lifestyle Term Loan
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Quick and flexible
 															personal loans
 														</p>
@@ -362,20 +395,20 @@ export default function Navbar({
 												</Link>
 												<Link
 													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
 														<MdApartment
 															size={24}
-															color="#059669"
+															color="#7C3AED"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
 															Property-Backed
 															Financing
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Better rates with
 															property collateral
 														</p>
@@ -383,20 +416,20 @@ export default function Navbar({
 												</Link>
 												<Link
 													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-200">
 														<MdShowChart
 															size={24}
-															color="#059669"
+															color="#6B7280"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-gray-600 transition-colors font-heading">
 															Lease-to-Own
 															Financing
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Vehicle-backed
 															financing solutions
 														</p>
@@ -406,7 +439,7 @@ export default function Navbar({
 										</div>
 
 										{/* CTA Column - Borrow Menu */}
-										<div className="bg-gray-50 rounded-xl p-6">
+										<div className="bg-white rounded-xl p-6 border border-gray-100">
 											<div className="relative h-32 mb-4">
 												<Image
 													src="/decide.svg"
@@ -416,17 +449,17 @@ export default function Navbar({
 												/>
 											</div>
 											<div className="mb-4">
-												<h3 className="text-lg font-semibold text-gray-900 mb-2">
+												<h3 className="text-lg font-semibold text-gray-700 mb-2 font-heading">
 													Ready to get started?
 												</h3>
-												<p className="text-sm text-gray-600">
+												<p className="text-sm text-gray-500 font-body">
 													Apply now and get approved
 													within 24 hours
 												</p>
 											</div>
 											<Link
 												href="/products"
-												className="inline-block text-blue-600 hover:text-blue-700 font-medium"
+												className="inline-block text-blue-tertiary hover:text-purple-primary font-medium transition-colors font-body"
 											>
 												See all products →
 											</Link>
@@ -438,25 +471,25 @@ export default function Navbar({
 									<div className="grid grid-cols-3 gap-8">
 										{/* Company Column */}
 										<div>
-											<h3 className="text-lg font-semibold text-gray-900 mb-4">
+											<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
 												Company
 											</h3>
 											<div className="space-y-4">
 												<Link
 													href="/about"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
 														<MdInfo
 															size={24}
-															color="#4F46E5"
+															color="#7C3AED"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
 															About Us
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Learn more about our
 															mission and values
 														</p>
@@ -464,19 +497,19 @@ export default function Navbar({
 												</Link>
 												<Link
 													href="/careers"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-blue-tertiary/10 flex items-center justify-center flex-shrink-0 border border-blue-tertiary/20">
 														<MdWork
 															size={24}
-															color="#4F46E5"
+															color="#38BDF8"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-tertiary transition-colors font-heading">
 															Careers
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Join our team and
 															make an impact
 														</p>
@@ -487,25 +520,25 @@ export default function Navbar({
 
 										{/* Resources Column */}
 										<div>
-											<h3 className="text-lg font-semibold text-gray-900 mb-4">
+											<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
 												Resources
 											</h3>
 											<div className="space-y-4">
 												<Link
 													href="/blog"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-blue-tertiary/10 flex items-center justify-center flex-shrink-0 border border-blue-tertiary/20">
 														<MdArticle
 															size={24}
-															color="#4F46E5"
+															color="#38BDF8"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-tertiary transition-colors font-heading">
 															Blog
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Latest insights and
 															updates
 														</p>
@@ -513,19 +546,19 @@ export default function Navbar({
 												</Link>
 												<Link
 													href="/help"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
 												>
-													<div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
 														<MdHelp
 															size={24}
-															color="#4F46E5"
+															color="#7C3AED"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
 															Help Center
 														</h4>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-gray-500 font-body">
 															Get answers to your
 															questions
 														</p>
@@ -535,7 +568,7 @@ export default function Navbar({
 										</div>
 
 										{/* CTA Column - Resources Menu */}
-										<div className="bg-gray-50 rounded-xl p-6">
+										<div className="bg-white rounded-xl p-6 border border-gray-100">
 											<div className="relative h-32 mb-4">
 												<Image
 													src="/help.svg"
@@ -545,17 +578,17 @@ export default function Navbar({
 												/>
 											</div>
 											<div className="mb-4">
-												<h3 className="text-lg font-semibold text-gray-900 mb-2">
+												<h3 className="text-lg font-semibold text-gray-700 mb-2 font-heading">
 													Need help?
 												</h3>
-												<p className="text-sm text-gray-600">
+												<p className="text-sm text-gray-500 font-body">
 													Our support team is here for
 													you 24/7
 												</p>
 											</div>
 											<Link
 												href="https://wa.me/60164614919?text=I'm%20interested%20in%20Kapital%20lending%20products"
-												className="inline-block text-blue-600 hover:text-blue-700 font-medium"
+												className="inline-block text-blue-tertiary hover:text-purple-primary font-medium transition-colors font-body"
 											>
 												Contact our support team →
 											</Link>
@@ -593,7 +626,7 @@ export default function Navbar({
 							{isLoggedIn ? (
 								<Link
 									href="/dashboard"
-									className="flex-1 text-center flex items-center justify-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
+									className="flex-1 text-center flex items-center justify-center gap-2 bg-purple-primary text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
 									onClick={() => setMobileMenuOpen(false)}
 								>
 									<MdDashboard size={20} />
@@ -610,7 +643,7 @@ export default function Navbar({
 									</Link>
 									<Link
 										href="/signup"
-										className="flex-1 text-center bg-purple-600 text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
+										className="flex-1 text-center bg-purple-primary text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
 										onClick={() => setMobileMenuOpen(false)}
 									>
 										Get started
@@ -623,7 +656,8 @@ export default function Navbar({
 					{/* Scrollable Content Area */}
 					<div className="h-full overflow-y-auto pb-32">
 						<div className="p-6">
-							<div className="flex justify-end mb-8">
+							<div className="flex justify-between items-center mb-8">
+								<Logo size="md" variant="black" />
 								<button
 									onClick={() => setMobileMenuOpen(false)}
 									className="text-gray-500 hover:text-gray-700"

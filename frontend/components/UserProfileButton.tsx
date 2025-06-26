@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -9,7 +11,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User } from "lucide-react";
+import { Settings } from "lucide-react";
 
 export default function UserProfileButton() {
 	const router = useRouter();
@@ -41,26 +43,26 @@ export default function UserProfileButton() {
 				<Button
 					variant="ghost"
 					size="icon"
-					className="relative bg-gray-800 hover:bg-gray-700 text-gray-100 hover:text-white transition-colors"
+					className="relative bg-white hover:bg-purple-primary/5 text-gray-700 hover:text-purple-primary border border-gray-200 hover:border-purple-primary/20 transition-colors shadow-sm"
 				>
-					<User className="h-5 w-5" />
+					<Settings className="h-5 w-5" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent
 				align="end"
-				className="w-48 bg-gray-800/95 backdrop-blur-lg border-gray-700"
+				className="w-48 bg-white/95 backdrop-blur-lg border-gray-200 shadow-lg"
 			>
 				<DropdownMenuItem asChild>
 					<Link
 						href="/dashboard/profile"
-						className="w-full cursor-pointer text-gray-100 hover:text-white hover:bg-gray-700 focus:bg-gray-700 focus:text-white"
+						className="w-full cursor-pointer text-gray-700 hover:text-purple-primary hover:bg-purple-primary/5 focus:bg-purple-primary/5 focus:text-purple-primary font-body"
 					>
 						Profile
 					</Link>
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					onClick={handleLogout}
-					className="cursor-pointer text-gray-100 hover:text-white hover:bg-gray-700 focus:bg-gray-700 focus:text-white"
+					className="cursor-pointer text-gray-700 hover:text-purple-primary hover:bg-purple-primary/5 focus:bg-purple-primary/5 focus:text-purple-primary font-body"
 				>
 					Logout
 				</DropdownMenuItem>

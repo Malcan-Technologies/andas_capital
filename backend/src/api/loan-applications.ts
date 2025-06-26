@@ -864,6 +864,97 @@ router.delete(
 
 /**
  * @swagger
+ * /api/loan-applications/{id}:
+ *   delete:
+ *     summary: Delete a loan application (only incomplete applications)
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan application ID or URL link
+ *     responses:
+ *       200:
+ *         description: Loan application deleted successfully
+ *       400:
+ *         description: Cannot delete non-incomplete applications
+ *       404:
+ *         description: Loan application not found
+ *       500:
+ *         description: Server error
+ */
+// Delete a loan application (only incomplete applications)
+router.delete("/:id", authenticateToken, async (req: AuthRequest, res) => {
+	try {
+		const { id } = req.params;
+		const userId = req.user!.userId;
+
+		// Check if the application exists and belongs to the user
+		const existingApplication = await prisma.loanApplication.findFirst({
+			where: {
+				OR: [{ id }, { urlLink: id }],
+				userId,
+			},
+			include: {
+				documents: true,
+			},
+		});
+
+		if (!existingApplication) {
+			return res
+				.status(404)
+				.json({ message: "Loan application not found" });
+		}
+
+		// Only allow deletion of incomplete applications
+		if (existingApplication.status !== "INCOMPLETE") {
+			return res.status(400).json({
+				message: "Only incomplete applications can be deleted",
+			});
+		}
+
+		// Delete associated documents first
+		if (existingApplication.documents.length > 0) {
+			// Delete files from storage
+			for (const document of existingApplication.documents) {
+				const filePath = path.join(process.cwd(), document.fileUrl);
+				try {
+					if (fs.existsSync(filePath)) {
+						fs.unlinkSync(filePath);
+					}
+				} catch (err) {
+					console.error("Error deleting file from storage:", err);
+				}
+			}
+
+			// Delete documents from database
+			await prisma.userDocument.deleteMany({
+				where: {
+					applicationId: existingApplication.id,
+				},
+			});
+		}
+
+		// Delete the loan application
+		await prisma.loanApplication.delete({
+			where: { id: existingApplication.id },
+		});
+
+		return res.json({ message: "Loan application deleted successfully" });
+	} catch (error) {
+		console.error("Error deleting loan application:", error);
+		return res
+			.status(500)
+			.json({ message: "Failed to delete loan application" });
+	}
+});
+
+/**
+ * @swagger
  * components:
  *   schemas:
  *     LoanApplication:

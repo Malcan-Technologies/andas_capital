@@ -36,7 +36,7 @@ async function addWalletBalance() {
 		}
 
 		// Add balance
-		const addAmount = 10000; // Add RM 10,000
+		const addAmount = 100000; // Add RM 100,000
 		await prisma.wallet.update({
 			where: {
 				id: wallet.id,

@@ -2,13 +2,14 @@ FROM node:20-bullseye-slim
 
 WORKDIR /app
 
-# Install dependencies including OpenSSL
+# Install dependencies including OpenSSL and cron
 RUN apt-get update && apt-get install -y \
     openssl \
     python3 \
     make \
     g++ \
     curl \
+    cron \
     && rm -rf /var/lib/apt/lists/*
 
 # Create uploads directory
@@ -23,14 +24,15 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
-
-# Verify Prisma client generation
-RUN node scripts/verify-prisma-client.js
-
 # Expose the port the app runs on
 EXPOSE 4001
 
-# Use a simple bash command to run migrations and start the server
-CMD /bin/bash -c "sleep 5 && npx prisma migrate deploy && npm run dev" 
+# Make scripts executable
+RUN chmod +x scripts/*.sh scripts/*.js
+
+# Generate Prisma client after volume mount, then setup cron, run migrations and start the server
+CMD /bin/bash -c "sleep 5 && npx prisma generate && npx prisma migrate deploy && npm run build && ./scripts/setup-cron.sh && npm run dev" 
+# Add migration validation
+COPY scripts/validate-migration.sh /app/scripts/
+COPY scripts/safe-migrate.sh /app/scripts/
+RUN chmod +x /app/scripts/*.sh

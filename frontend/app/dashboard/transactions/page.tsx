@@ -106,13 +106,15 @@ export default function TransactionsPage() {
 		switch (type) {
 			case "DEPOSIT":
 			case "LOAN_DISBURSEMENT":
-				return <ArrowDownIcon className="h-5 w-5 text-green-400" />;
+				return (
+					<ArrowDownIcon className="h-5 w-5 text-purple-primary" />
+				);
 			case "WITHDRAWAL":
-				return <ArrowUpIcon className="h-5 w-5 text-red-400" />;
+				return <ArrowUpIcon className="h-5 w-5 text-blue-tertiary" />;
 			case "LOAN_REPAYMENT":
 				return (
 					<svg
-						className="h-5 w-5 text-purple-400"
+						className="h-5 w-5 text-green-600"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -126,7 +128,7 @@ export default function TransactionsPage() {
 					</svg>
 				);
 			default:
-				return <WalletIcon className="h-5 w-5 text-gray-400" />;
+				return <WalletIcon className="h-5 w-5 text-gray-500" />;
 		}
 	};
 
@@ -134,21 +136,21 @@ export default function TransactionsPage() {
 		switch (status) {
 			case "APPROVED":
 				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-400/30">
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200 font-body">
 						<CheckCircleIcon className="h-3 w-3 mr-1" />
 						Approved
 					</span>
 				);
 			case "PENDING":
 				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-300 border border-yellow-400/30">
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200 font-body">
 						<ClockIcon className="h-3 w-3 mr-1" />
 						Pending
 					</span>
 				);
 			case "REJECTED":
 				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200 font-body">
 						<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
 						Rejected
 					</span>
@@ -184,7 +186,7 @@ export default function TransactionsPage() {
 		return (
 			<DashboardLayout userName={userName} title="Transactions">
 				<div className="flex items-center justify-center h-64">
-					<div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+					<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin"></div>
 				</div>
 			</DashboardLayout>
 		);
@@ -193,20 +195,24 @@ export default function TransactionsPage() {
 	return (
 		<DashboardLayout userName={userName} title="Transactions">
 			<div className="max-w-7xl mx-auto">
-				<div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-2xl shadow-xl text-white overflow-hidden border border-gray-700">
-					<div className="px-6 py-4 border-b border-gray-700 bg-gray-700/30 backdrop-blur-md">
-						<div className="flex items-center justify-between">
-							<h3 className="text-lg font-semibold text-white">
+				<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+					{/* Card Header */}
+					<div className="p-6 pb-0">
+						<div className="flex items-center space-x-2 mb-6">
+							<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+								<WalletIcon className="h-5 w-5 text-purple-primary" />
+							</div>
+							<h3 className="text-lg font-heading text-purple-primary font-semibold">
 								All Transactions
 							</h3>
-							<span className="text-sm text-gray-300">
+							<span className="text-sm text-gray-500 font-body ml-auto">
 								{transactions.length} Total Transaction
 								{transactions.length !== 1 ? "s" : ""}
 							</span>
 						</div>
 					</div>
 
-					<div className="p-6">
+					<div className="p-6 pt-0">
 						{/* Transaction Type Filter */}
 						{transactions.length > 0 && (
 							<div className="mb-6">
@@ -223,10 +229,10 @@ export default function TransactionsPage() {
 											onClick={() =>
 												setTransactionFilter(type)
 											}
-											className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors backdrop-blur-md ${
+											className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors font-body ${
 												transactionFilter === type
-													? "bg-blue-500/20 text-blue-300 border border-blue-400/30"
-													: "bg-gray-600/50 text-gray-300 hover:bg-gray-500/50 border border-gray-500/50"
+													? "bg-purple-primary text-white"
+													: "bg-gray-100 text-gray-700 hover:bg-blue-tertiary hover:text-white"
 											}`}
 										>
 											{getTransactionTypeLabel(type)}
@@ -240,8 +246,8 @@ export default function TransactionsPage() {
 						<div className="space-y-4">
 							{loading ? (
 								<div className="text-center py-8">
-									<div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
-									<p className="mt-4 text-gray-300">
+									<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+									<p className="mt-4 text-gray-500 font-body">
 										Loading transactions...
 									</p>
 								</div>
@@ -251,27 +257,27 @@ export default function TransactionsPage() {
 										(transaction) => (
 											<div
 												key={transaction.id}
-												className="flex items-center justify-between p-4 border border-gray-600 rounded-xl hover:bg-gray-700/30 transition-colors bg-gray-800/50 backdrop-blur-md"
+												className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-offwhite hover:border-purple-primary/30 transition-all duration-200 bg-white"
 											>
 												<div className="flex items-center space-x-4 min-w-0 flex-1">
-													<div className="p-2 bg-gray-700/50 rounded-xl flex-shrink-0 border border-gray-600/50">
+													<div className="p-2 bg-gray-50 rounded-xl flex-shrink-0 border border-gray-200">
 														{getTransactionIcon(
 															transaction.type
 														)}
 													</div>
 													<div className="min-w-0 flex-1">
-														<p className="font-semibold text-white truncate">
+														<p className="font-semibold text-gray-700 truncate font-body">
 															{
 																transaction.description
 															}
 														</p>
-														<p className="text-sm text-gray-400 mt-1">
+														<p className="text-sm text-gray-500 mt-1 font-body">
 															{formatDateTime(
 																transaction.createdAt
 															)}
 														</p>
 														{transaction.reference && (
-															<p className="text-xs text-gray-500 truncate">
+															<p className="text-xs text-gray-500 truncate font-body">
 																Ref:{" "}
 																{
 																	transaction.reference
@@ -282,14 +288,14 @@ export default function TransactionsPage() {
 												</div>
 												<div className="text-right flex-shrink-0 ml-4">
 													<p
-														className={`font-bold text-lg ${
+														className={`font-bold text-lg font-body ${
 															transaction.type ===
 															"LOAN_REPAYMENT"
-																? "text-purple-400"
+																? "text-green-600"
 																: transaction.amount >
 																  0
-																? "text-green-400"
-																: "text-red-400"
+																? "text-purple-primary"
+																: "text-blue-tertiary"
 														}`}
 													>
 														{transaction.amount > 0
@@ -311,8 +317,8 @@ export default function TransactionsPage() {
 								</div>
 							) : transactions.length > 0 ? (
 								<div className="text-center py-12">
-									<WalletIcon className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-									<p className="text-gray-400 mb-2">
+									<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+									<p className="text-gray-500 mb-2 font-body">
 										No{" "}
 										{getTransactionTypeLabel(
 											transactionFilter
@@ -323,18 +329,18 @@ export default function TransactionsPage() {
 										onClick={() =>
 											setTransactionFilter("ALL")
 										}
-										className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+										className="text-sm text-purple-primary hover:text-blue-tertiary font-medium font-body transition-colors"
 									>
 										Show all transactions
 									</button>
 								</div>
 							) : (
 								<div className="text-center py-12">
-									<WalletIcon className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-									<h4 className="text-lg font-medium text-white mb-2">
+									<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+									<h4 className="text-lg font-medium text-gray-700 mb-2 font-heading">
 										No Transactions Yet
 									</h4>
-									<p className="text-gray-400 mb-4">
+									<p className="text-gray-500 mb-4 font-body">
 										Your transaction history will appear
 										here once you start using your wallet.
 									</p>

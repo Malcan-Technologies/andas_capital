@@ -16,13 +16,13 @@ const prisma = new PrismaClient();
  * @swagger
  * /api/loans:
  *   get:
- *     summary: Get user's active loans
+ *     summary: Get user's loans
  *     tags: [Loans]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of user's active loans
+ *         description: List of user's loans (active, pending discharge, and discharged)
  *         content:
  *           application/json:
  *             schema:
@@ -76,7 +76,12 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			where: {
 				userId,
 				status: {
-					in: ["ACTIVE", "OVERDUE"], // Only loans that can be repaid
+					in: [
+						"ACTIVE",
+						"OVERDUE",
+						"PENDING_DISCHARGE",
+						"DISCHARGED",
+					], // Include all loan statuses for dashboard
 				},
 			},
 			include: {
@@ -91,13 +96,10 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 					},
 				},
 				repayments: {
-					where: {
-						status: "COMPLETED",
-					},
 					orderBy: {
-						paidAt: "desc",
+						dueDate: "asc",
 					},
-					take: 5, // Last 5 repayments
+					// Include all repayments for chart calculation
 				},
 			},
 			orderBy: {
@@ -105,27 +107,216 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			},
 		});
 
-		// Calculate additional loan information
-		const loansWithDetails = loans.map((loan) => {
-			const totalRepaid = loan.repayments.reduce(
-				(sum, repayment) => sum + repayment.amount,
-				0
-			);
+		// Ensure outstanding balances are accurate by recalculating them
+		// This ensures single source of truth even if there were any inconsistencies
+		for (const loan of loans.filter(
+			(l) => l.status === "ACTIVE" || l.status === "OVERDUE"
+		)) {
+			await prisma.$transaction(async (tx) => {
+				// Import the calculation function from wallet API
+				const { calculateOutstandingBalance } = await import(
+					"./wallet"
+				);
+				await calculateOutstandingBalance(loan.id, tx);
+			});
+		}
 
-			const progressPercentage =
-				loan.principalAmount > 0
-					? ((loan.principalAmount - loan.outstandingBalance) /
-							loan.principalAmount) *
-					  100
-					: 0;
+		// Calculate additional loan information including late fees
+		const loansWithDetails = await Promise.all(
+			loans.map(async (loan) => {
+				const totalRepaid = loan.repayments.reduce(
+					(sum, repayment) => sum + repayment.amount,
+					0
+				);
 
-			return {
-				...loan,
-				totalRepaid,
-				progressPercentage: Math.round(progressPercentage * 100) / 100,
-				canRepay: loan.outstandingBalance > 0,
-			};
-		});
+				const progressPercentage =
+					loan.principalAmount > 0
+						? ((loan.principalAmount - loan.outstandingBalance) /
+								loan.principalAmount) *
+						  100
+						: 0;
+
+				// Calculate next payment amount considering advance payments and late fees
+				let nextPaymentInfo = {
+					amount: loan.monthlyPayment,
+					isOverdue: false,
+					includesLateFees: false,
+					description: "Monthly Payment",
+					dueDate: loan.nextPaymentDue,
+				};
+
+				// Get overdue repayments and late fee information
+				let overdueInfo = {
+					hasOverduePayments: false,
+					totalOverdueAmount: 0,
+					totalLateFees: 0,
+					overdueRepayments: [] as any[],
+				};
+
+				try {
+					// Get all pending/partial repayments that are overdue using raw query
+					const today = new Date();
+					today.setHours(0, 0, 0, 0);
+
+					const overdueRepaymentsQuery = `
+						SELECT 
+							lr.*,
+							COALESCE(SUM(lf."feeAmount"), 0) as total_late_fees
+						FROM loan_repayments lr
+						LEFT JOIN late_fees lf ON lr.id = lf."loanRepaymentId" AND lf.status = 'ACTIVE'
+						WHERE lr."loanId" = $1
+						  AND lr.status IN ('PENDING', 'PARTIAL')
+						  AND lr."dueDate" < $2
+						GROUP BY lr.id
+						ORDER BY lr."dueDate" ASC
+					`;
+
+					const overdueRepayments = (await prisma.$queryRawUnsafe(
+						overdueRepaymentsQuery,
+						loan.id,
+						today
+					)) as any[];
+
+					if (overdueRepayments.length > 0) {
+						console.log(
+							`🔍 DEBUG: Overdue repayments for loan ${loan.id}:`,
+							overdueRepayments.map((r) => ({
+								id: r.id,
+								amount: r.amount,
+								actualAmount: r.actualAmount,
+								status: r.status,
+								dueDate: r.dueDate,
+								total_late_fees: r.total_late_fees,
+							}))
+						);
+
+						overdueInfo.hasOverduePayments = true;
+
+						// Calculate total overdue amount and late fees
+						for (const repayment of overdueRepayments) {
+							const outstandingAmount = repayment.actualAmount
+								? Math.max(
+										0,
+										repayment.amount -
+											repayment.actualAmount
+								  )
+								: repayment.amount;
+
+							const totalLateFees =
+								Number(repayment.total_late_fees) || 0;
+
+							overdueInfo.totalOverdueAmount += outstandingAmount;
+							overdueInfo.totalLateFees += totalLateFees;
+
+							overdueInfo.overdueRepayments.push({
+								id: repayment.id,
+								amount: repayment.amount,
+								outstandingAmount,
+								totalLateFees,
+								totalAmountDue:
+									outstandingAmount + totalLateFees,
+								dueDate: repayment.dueDate,
+								daysOverdue: Math.floor(
+									(today.getTime() -
+										new Date(repayment.dueDate).getTime()) /
+										(1000 * 60 * 60 * 24)
+								),
+							});
+						}
+					}
+				} catch (error) {
+					console.error(
+						`Error calculating late fees for loan ${loan.id}:`,
+						error
+					);
+					// Continue without late fee info if there's an error
+				}
+
+				// Calculate next payment amount based on current situation
+				try {
+					if (overdueInfo.hasOverduePayments) {
+						// If loan has overdue payments, next payment is total overdue + late fees
+						nextPaymentInfo = {
+							amount:
+								overdueInfo.totalOverdueAmount +
+								overdueInfo.totalLateFees,
+							isOverdue: true,
+							includesLateFees: overdueInfo.totalLateFees > 0,
+							description:
+								overdueInfo.totalLateFees > 0
+									? "Overdue Amount + Late Fees"
+									: "Overdue Amount",
+							dueDate: loan.nextPaymentDue,
+						};
+					} else if (
+						loan.status === "ACTIVE" &&
+						loan.nextPaymentDue
+					) {
+						// Get next pending repayment to calculate balance payment
+						const nextRepayment =
+							await prisma.loanRepayment.findFirst({
+								where: {
+									loanId: loan.id,
+									status: { in: ["PENDING", "PARTIAL"] },
+									dueDate: { gte: new Date() },
+								},
+								orderBy: { dueDate: "asc" },
+							});
+
+						if (nextRepayment) {
+							// Calculate remaining balance for next payment
+							const remainingBalance = nextRepayment.actualAmount
+								? Math.max(
+										0,
+										nextRepayment.amount -
+											nextRepayment.actualAmount
+								  )
+								: nextRepayment.amount;
+
+							// Check for late fees on this specific repayment
+							const nextRepaymentLateFees =
+								await prisma.lateFee.aggregate({
+									where: {
+										loanRepaymentId: nextRepayment.id,
+										status: "ACTIVE",
+									},
+									_sum: { feeAmount: true },
+								});
+
+							const lateFeeAmount =
+								nextRepaymentLateFees._sum.feeAmount || 0;
+
+							nextPaymentInfo = {
+								amount: remainingBalance + lateFeeAmount,
+								isOverdue: false,
+								includesLateFees: lateFeeAmount > 0,
+								description:
+									lateFeeAmount > 0
+										? "Next Payment + Late Fees"
+										: "Next Payment",
+								dueDate: nextRepayment.dueDate,
+							};
+						}
+					}
+				} catch (error) {
+					console.error(
+						`Error calculating next payment info for loan ${loan.id}:`,
+						error
+					);
+					// Continue with default next payment info if there's an error
+				}
+
+				return {
+					...loan,
+					totalRepaid,
+					progressPercentage:
+						Math.round(progressPercentage * 100) / 100,
+					canRepay: loan.outstandingBalance > 0,
+					overdueInfo,
+					nextPaymentInfo,
+				};
+			})
+		);
 
 		res.json({ loans: loansWithDetails });
 		return;
@@ -312,6 +503,230 @@ router.get(
 			return;
 		} catch (error) {
 			console.error("Error fetching loan repayments:", error);
+			res.status(500).json({ error: "Internal server error" });
+			return;
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/loans/{id}/transactions:
+ *   get:
+ *     summary: Get loan payment transactions from wallet
+ *     tags: [Loans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan ID
+ *     responses:
+ *       200:
+ *         description: Loan payment transactions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 walletTransactions:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       amount:
+ *                         type: number
+ *                       type:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                       description:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/:id/transactions",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user!.userId;
+			const { id } = req.params;
+
+			// First verify the loan belongs to the user
+			const loan = await prisma.loan.findFirst({
+				where: {
+					id,
+					userId,
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({ error: "Loan not found" });
+			}
+
+			// Get wallet transactions related to this loan
+			const walletTransactions = await prisma.walletTransaction.findMany({
+				where: {
+					userId,
+					loanId: id,
+					type: "LOAN_REPAYMENT",
+				},
+				orderBy: {
+					createdAt: "desc",
+				},
+			});
+
+			res.json({ walletTransactions });
+			return;
+		} catch (error) {
+			console.error("Error fetching loan transactions:", error);
+			res.status(500).json({ error: "Internal server error" });
+			return;
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/loans/{id}/late-fees:
+ *   get:
+ *     summary: Get late fee information for a loan
+ *     tags: [Loans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan ID
+ *     responses:
+ *       200:
+ *         description: Late fee information for the loan
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/:id/late-fees",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user!.userId;
+			const { id } = req.params;
+
+			// First verify the loan belongs to the user
+			const loan = await prisma.loan.findFirst({
+				where: {
+					id,
+					userId,
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({ error: "Loan not found" });
+			}
+
+			// Get all overdue repayments with late fees
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+
+			const overdueRepaymentsQuery = `
+				SELECT 
+					lr.id,
+					lr.amount,
+					lr."actualAmount",
+					lr."dueDate",
+					lr.status,
+					lr."installmentNumber",
+					COALESCE(SUM(lf."feeAmount"), 0) as total_late_fees,
+					COUNT(lf.id) as late_fee_entries,
+					MAX(lf."calculationDate") as latest_calculation_date
+				FROM loan_repayments lr
+				LEFT JOIN late_fees lf ON lr.id = lf."loanRepaymentId" AND lf.status = 'ACTIVE'
+				WHERE lr."loanId" = $1
+				  AND lr.status IN ('PENDING', 'PARTIAL')
+				  AND lr."dueDate" < $2
+				GROUP BY lr.id, lr.amount, lr."actualAmount", lr."dueDate", lr.status, lr."installmentNumber"
+				ORDER BY lr."dueDate" ASC
+			`;
+
+			const overdueRepayments = (await prisma.$queryRawUnsafe(
+				overdueRepaymentsQuery,
+				id,
+				today
+			)) as any[];
+
+			// Calculate detailed information for each overdue repayment
+			const detailedOverdueInfo = overdueRepayments.map((repayment) => {
+				const outstandingAmount = repayment.actualAmount
+					? Math.max(0, repayment.amount - repayment.actualAmount)
+					: repayment.amount;
+
+				const totalLateFees = Number(repayment.total_late_fees) || 0;
+				const totalAmountDue = outstandingAmount + totalLateFees;
+
+				const daysOverdue = Math.floor(
+					(today.getTime() - new Date(repayment.dueDate).getTime()) /
+						(1000 * 60 * 60 * 24)
+				);
+
+				return {
+					repaymentId: repayment.id,
+					installmentNumber: repayment.installmentNumber,
+					originalAmount: repayment.amount,
+					outstandingAmount,
+					totalLateFees,
+					totalAmountDue,
+					dueDate: repayment.dueDate,
+					daysOverdue,
+					status: repayment.status,
+					lateFeeEntries: Number(repayment.late_fee_entries),
+					latestCalculationDate: repayment.latest_calculation_date,
+				};
+			});
+
+			// Calculate summary
+			const summary = {
+				totalOverdueAmount: detailedOverdueInfo.reduce(
+					(sum, item) => sum + item.outstandingAmount,
+					0
+				),
+				totalLateFees: detailedOverdueInfo.reduce(
+					(sum, item) => sum + item.totalLateFees,
+					0
+				),
+				totalAmountDue: detailedOverdueInfo.reduce(
+					(sum, item) => sum + item.totalAmountDue,
+					0
+				),
+				overdueRepaymentCount: detailedOverdueInfo.length,
+				hasOverduePayments: detailedOverdueInfo.length > 0,
+			};
+
+			res.json({
+				summary,
+				overdueRepayments: detailedOverdueInfo,
+			});
+			return;
+		} catch (error) {
+			console.error("Error fetching late fee information:", error);
 			res.status(500).json({ error: "Internal server error" });
 			return;
 		}

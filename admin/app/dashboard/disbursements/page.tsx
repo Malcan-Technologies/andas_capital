@@ -359,7 +359,7 @@ function DisbursementsContent() {
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
-							All Status
+							All
 						</button>
 						<button
 							onClick={() => setStatusFilter("COMPLETED")}
@@ -370,16 +370,6 @@ function DisbursementsContent() {
 							}`}
 						>
 							Completed
-						</button>
-						<button
-							onClick={() => setStatusFilter("PENDING")}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								statusFilter === "PENDING"
-									? "bg-yellow-500/30 text-yellow-100 border-yellow-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending
 						</button>
 						<button
 							onClick={() => setStatusFilter("FAILED")}

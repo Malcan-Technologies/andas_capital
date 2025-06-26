@@ -44,10 +44,17 @@ Key Conventions
   - Use only for Web API access in small components.
   - Avoid for data fetching or state management.
 
+Authentication Patterns
+- Always include Authorization headers for admin API calls: `Authorization: Bearer ${token}`
+- Use `fetchWithAdminTokenRefresh` utility from `authUtils.ts` for authenticated requests
+- Never rely solely on cookies for API authentication in admin routes
+- For manual fetch calls, always include: `headers: { "Authorization": \`Bearer \${localStorage.getItem("adminToken") || ""}\` }`
+- Admin route handlers should check both Authorization headers AND cookies as fallback
+- Environment variables must include fallback values: `process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"`
+
 Additional notes  
 - My backend is deployed using Docker. Always run commands in Docker
 - For example i use this to rebuild it docker compose -f docker-compose.dev.yml down && docker compose -f docker-compose.dev.yml up -d
 - My frontend is written in NextJS
 - Authentication is handled using refresh tokens in the backend
-
-Follow Next.js docs for Data Fetching, Rendering, and Routing.
+- Follow Next.js docs for Data Fetching, Rendering, and Routing.

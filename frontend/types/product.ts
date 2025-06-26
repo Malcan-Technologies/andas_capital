@@ -10,6 +10,9 @@ export interface ProductType {
 	legalFee: number;
 	originationFee: number;
 	lateFee: number;
+	lateFeeRate?: number;
+	lateFeeFixedAmount?: number;
+	lateFeeFrequencyDays?: number;
 	applicationFee: number;
 	eligibility: string[];
 	features: string[];

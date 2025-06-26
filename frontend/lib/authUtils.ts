@@ -12,17 +12,36 @@ export const TokenStorage = {
 
 	// Note: expiresInDays=0.01 is approximately 15 minutes, matching the JWT expiration in the backend
 	setAccessToken: (token: string, expiresInDays: number = 0.01): void => {
-		if (typeof window !== "undefined") {
-			localStorage.setItem("token", token);
+		try {
+			if (typeof window !== "undefined") {
+				localStorage.setItem("token", token);
+				console.log(
+					"[TokenStorage] Access token stored in localStorage"
+				);
+			}
+			Cookies.set("token", token, { expires: expiresInDays });
+			console.log("[TokenStorage] Access token stored in cookies");
+		} catch (error) {
+			console.error(
+				"[TokenStorage] Failed to store access token:",
+				error
+			);
 		}
-		Cookies.set("token", token, { expires: expiresInDays });
 	},
 
 	removeAccessToken: (): void => {
-		if (typeof window !== "undefined") {
-			localStorage.removeItem("token");
+		try {
+			if (typeof window !== "undefined") {
+				localStorage.removeItem("token");
+			}
+			Cookies.remove("token");
+			console.log("[TokenStorage] Access token removed");
+		} catch (error) {
+			console.error(
+				"[TokenStorage] Failed to remove access token:",
+				error
+			);
 		}
-		Cookies.remove("token");
 	},
 
 	// Refresh token functions
@@ -38,17 +57,36 @@ export const TokenStorage = {
 
 	// 90 days expiration, matching the backend JWT refresh token expiration
 	setRefreshToken: (token: string, expiresInDays: number = 90): void => {
-		if (typeof window !== "undefined") {
-			localStorage.setItem("refreshToken", token);
+		try {
+			if (typeof window !== "undefined") {
+				localStorage.setItem("refreshToken", token);
+				console.log(
+					"[TokenStorage] Refresh token stored in localStorage"
+				);
+			}
+			Cookies.set("refreshToken", token, { expires: expiresInDays });
+			console.log("[TokenStorage] Refresh token stored in cookies");
+		} catch (error) {
+			console.error(
+				"[TokenStorage] Failed to store refresh token:",
+				error
+			);
 		}
-		Cookies.set("refreshToken", token, { expires: expiresInDays });
 	},
 
 	removeRefreshToken: (): void => {
-		if (typeof window !== "undefined") {
-			localStorage.removeItem("refreshToken");
+		try {
+			if (typeof window !== "undefined") {
+				localStorage.removeItem("refreshToken");
+			}
+			Cookies.remove("refreshToken");
+			console.log("[TokenStorage] Refresh token removed");
+		} catch (error) {
+			console.error(
+				"[TokenStorage] Failed to remove refresh token:",
+				error
+			);
 		}
-		Cookies.remove("refreshToken");
 	},
 
 	// Clear all tokens

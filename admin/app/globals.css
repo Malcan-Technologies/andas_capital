@@ -1,14 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  /* Brand Colors */
+  --color-primary: #14B8A6;
+  --color-accent-from: #14B8A6;
+  --color-accent-to: #3B82F6;
+  --color-highlight: #22D3EE;
+  --color-bg: #0F172A;
+  --color-text-light: #F8FAFC;
+  
+  /* Legacy variables for compatibility */
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-end-rgb));
+@layer base {
+  body {
+    @apply bg-brand-background text-brand-text-light font-body;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Brand Typography Classes */
+  .brand-logo {
+    @apply font-logo font-logo text-brand-primary;
+  }
+  
+  .brand-heading {
+    @apply font-heading font-heading;
+  }
+  
+  .brand-gradient-text {
+    @apply bg-gradient-to-r from-brand-primary to-accent bg-clip-text text-transparent;
+  }
+  
+  /* Brand Component Classes */
+  .brand-button-primary {
+    @apply bg-brand-gradient hover:bg-brand-gradient-hover text-white font-medium px-6 py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl;
+  }
+  
+  .brand-button-secondary {
+    @apply bg-transparent border-2 border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white font-medium px-6 py-3 rounded-xl transition-all duration-200;
+  }
+  
+  .brand-card {
+    @apply bg-gradient-to-br from-gray-900/80 via-gray-800/80 to-gray-900/80 backdrop-blur-md border border-gray-700/30 rounded-2xl shadow-xl;
+  }
+  
+  .brand-input {
+    @apply bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary backdrop-blur-md;
+  }
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #14B8A6, #3B82F6);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #0d9488, #2563eb);
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(20, 184, 166, 0.3);
+  color: #F8FAFC;
 } 

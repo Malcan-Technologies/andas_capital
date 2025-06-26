@@ -23,6 +23,7 @@ import {
 	ChartBarIcon,
 	CalendarDaysIcon,
 	ArrowTrendingUpIcon as TrendingUpIcon,
+	ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../lib/authUtils";
 import Link from "next/link";
@@ -48,8 +49,14 @@ interface DashboardStats {
 	totalUsers: number;
 	pendingReviewApplications: number;
 	approvedLoans: number;
+	pendingDisbursementCount?: number;
 	disbursedLoans: number;
 	totalDisbursedAmount: number;
+	totalLoanValue?: number;
+	currentLoanValue?: number;
+	totalFeesCollected?: number;
+	totalLateFeesCollected?: number;
+	totalRepayments?: number;
 	recentApplications: {
 		id: string;
 		userId: string;
@@ -78,6 +85,12 @@ interface DashboardStats {
 		disbursement_count: number;
 		users: number;
 		kyc_users: number;
+		actual_repayments: number;
+		scheduled_repayments: number;
+		total_loan_value: number;
+		current_loan_value: number;
+		repayment_count: number;
+		scheduled_count: number;
 	}[];
 	statusBreakdown?: {
 		status: string;
@@ -91,8 +104,14 @@ export default function AdminDashboardPage() {
 		totalUsers: 0,
 		pendingReviewApplications: 0,
 		approvedLoans: 0,
+		pendingDisbursementCount: 0,
 		disbursedLoans: 0,
 		totalDisbursedAmount: 0,
+		totalLoanValue: 0,
+		currentLoanValue: 0,
+		totalFeesCollected: 0,
+		totalLateFeesCollected: 0,
+		totalRepayments: 0,
 		recentApplications: [],
 		totalApplications: 0,
 		rejectedApplications: 0,
@@ -109,6 +128,8 @@ export default function AdminDashboardPage() {
 	const [workflowCounts, setWorkflowCounts] = useState({
 		PENDING_DECISION: 0,
 		PENDING_DISBURSEMENT: 0,
+		PENDING_DISCHARGE: 0,
+		PENDING_PAYMENTS: 0,
 	});
 
 	useEffect(() => {
@@ -130,6 +151,28 @@ export default function AdminDashboardPage() {
 				const data = await fetchWithAdminTokenRefresh<DashboardStats>(
 					"/api/admin/dashboard"
 				);
+
+				// Fetch late fees data
+				let totalLateFeesCollected = 0;
+				try {
+					const lateFeesResponse = await fetchWithAdminTokenRefresh<{
+						success: boolean;
+						data: any[];
+					}>("/api/admin/late-fees");
+
+					if (lateFeesResponse.success && lateFeesResponse.data) {
+						// Calculate total late fees collected (PAID status)
+						totalLateFeesCollected = lateFeesResponse.data
+							.filter((fee: any) => fee.status === "PAID")
+							.reduce(
+								(sum: number, fee: any) => sum + fee.feeAmount,
+								0
+							);
+					}
+				} catch (error) {
+					console.error("Error fetching late fees data:", error);
+					// Don't fail the entire dashboard if late fees can't be fetched
+				}
 
 				// Fetch real monthly statistics
 				let monthlyStats = [];
@@ -162,6 +205,12 @@ export default function AdminDashboardPage() {
 							disbursement_count: 28,
 							users: 12,
 							kyc_users: 8,
+							actual_repayments: 14000,
+							scheduled_repayments: 15000,
+							total_loan_value: 320000,
+							current_loan_value: 306000,
+							repayment_count: 25,
+							scheduled_count: 30,
 						},
 						{
 							month: "Feb",
@@ -173,6 +222,12 @@ export default function AdminDashboardPage() {
 							disbursement_count: 35,
 							users: 15,
 							kyc_users: 11,
+							actual_repayments: 17500,
+							scheduled_repayments: 18500,
+							total_loan_value: 400000,
+							current_loan_value: 688500,
+							repayment_count: 32,
+							scheduled_count: 38,
 						},
 						{
 							month: "Mar",
@@ -184,6 +239,12 @@ export default function AdminDashboardPage() {
 							disbursement_count: 32,
 							users: 18,
 							kyc_users: 14,
+							actual_repayments: 16000,
+							scheduled_repayments: 17200,
+							total_loan_value: 365000,
+							current_loan_value: 1037500,
+							repayment_count: 28,
+							scheduled_count: 35,
 						},
 						{
 							month: "Apr",
@@ -195,6 +256,12 @@ export default function AdminDashboardPage() {
 							disbursement_count: 40,
 							users: 22,
 							kyc_users: 18,
+							actual_repayments: 20000,
+							scheduled_repayments: 21000,
+							total_loan_value: 456000,
+							current_loan_value: 1473500,
+							repayment_count: 38,
+							scheduled_count: 42,
 						},
 						{
 							month: "May",
@@ -206,6 +273,12 @@ export default function AdminDashboardPage() {
 							disbursement_count: 38,
 							users: 19,
 							kyc_users: 15,
+							actual_repayments: 19000,
+							scheduled_repayments: 20500,
+							total_loan_value: 432000,
+							current_loan_value: 1886500,
+							repayment_count: 35,
+							scheduled_count: 40,
 						},
 						{
 							month: "Jun",
@@ -217,15 +290,18 @@ export default function AdminDashboardPage() {
 							disbursement_count: 45,
 							users: 25,
 							kyc_users: 20,
+							actual_repayments: 22500,
+							scheduled_repayments: 24000,
+							total_loan_value: 513000,
+							current_loan_value: 2377000,
+							repayment_count: 42,
+							scheduled_count: 48,
 						},
 					];
 				}
 
-				// Enhance data with calculated metrics
-				const totalApplications =
-					(data.approvedLoans || 0) +
-					(data.rejectedApplications || 0) +
-					(data.pendingReviewApplications || 0);
+				// Use totalApplications from API instead of calculating
+				const totalApplications = data.totalApplications || 0;
 
 				// Calculate monthly growth from real data
 				const currentMonth = monthlyStats[monthlyStats.length - 1];
@@ -238,13 +314,26 @@ export default function AdminDashboardPage() {
 						  100
 						: 0;
 
+				// Enhance monthlyStats with missing fields if they don't exist
+				const enhancedMonthlyStats = monthlyStats.map((stat: any) => ({
+					...stat,
+					actual_repayments: stat.actual_repayments || 0,
+					scheduled_repayments: stat.scheduled_repayments || 0,
+					total_loan_value: stat.total_loan_value || 0,
+					current_loan_value: stat.current_loan_value || 0,
+					repayment_count: stat.repayment_count || 0,
+					scheduled_count: stat.scheduled_count || 0,
+				}));
+
 				const enhancedData = {
 					...data,
 					totalApplications,
+					totalLateFeesCollected,
 					averageLoanAmount:
 						data.disbursedLoans > 0
-							? (data.totalDisbursedAmount || 0) /
-							  data.disbursedLoans
+							? (data.totalLoanValue ||
+									data.totalDisbursedAmount ||
+									0) / data.disbursedLoans
 							: 0,
 					conversionRate:
 						totalApplications > 0
@@ -254,26 +343,26 @@ export default function AdminDashboardPage() {
 					monthlyGrowth,
 					activeUsers: Math.floor((data.totalUsers || 0) * 0.7), // Mock data
 					totalRevenue: (data.totalDisbursedAmount || 0) * 0.05, // Assuming 5% fee
-					monthlyStats,
+					monthlyStats: enhancedMonthlyStats,
 					statusBreakdown: [
 						{
-							status: "Approved",
-							count: data.approvedLoans || 0,
+							status: "Disbursed",
+							count: data.disbursedLoans || 0,
 							percentage: 0,
 						},
 						{
-							status: "Pending",
+							status: "Pending Disbursement",
+							count: data.pendingDisbursementCount || 0,
+							percentage: 0,
+						},
+						{
+							status: "Pending Review",
 							count: data.pendingReviewApplications || 0,
 							percentage: 0,
 						},
 						{
 							status: "Rejected",
 							count: data.rejectedApplications || 0,
-							percentage: 0,
-						},
-						{
-							status: "Disbursed",
-							count: data.disbursedLoans || 0,
 							percentage: 0,
 						},
 					],
@@ -296,6 +385,45 @@ export default function AdminDashboardPage() {
 						"/api/admin/applications/counts"
 					);
 
+					// Fetch pending discharge loans count
+					let pendingDischargeCount = 0;
+					try {
+						const loansResponse = await fetchWithAdminTokenRefresh<{
+							success: boolean;
+							data: any[];
+						}>("/api/admin/loans");
+
+						if (loansResponse.success && loansResponse.data) {
+							pendingDischargeCount = loansResponse.data.filter(
+								(loan: any) =>
+									loan.status === "PENDING_DISCHARGE"
+							).length;
+						}
+					} catch (loansError) {
+						console.error(
+							"Error fetching loans for discharge count:",
+							loansError
+						);
+					}
+
+					// Fetch pending payments count
+					let pendingPaymentsCount = 0;
+					try {
+						const paymentsResponse =
+							await fetchWithAdminTokenRefresh<{
+								data: any[];
+							}>("/api/admin/payments/pending");
+
+						if (paymentsResponse.data) {
+							pendingPaymentsCount = paymentsResponse.data.length;
+						}
+					} catch (paymentsError) {
+						console.error(
+							"Error fetching pending payments count:",
+							paymentsError
+						);
+					}
+
 					setWorkflowCounts({
 						PENDING_DECISION:
 							countsData.PENDING_DECISION ||
@@ -303,8 +431,10 @@ export default function AdminDashboardPage() {
 							0,
 						PENDING_DISBURSEMENT:
 							countsData.PENDING_DISBURSEMENT ||
-							data.approvedLoans ||
+							data.pendingDisbursementCount ||
 							0,
+						PENDING_DISCHARGE: pendingDischargeCount,
+						PENDING_PAYMENTS: pendingPaymentsCount,
 					});
 				} catch (countsError) {
 					console.error(
@@ -314,7 +444,10 @@ export default function AdminDashboardPage() {
 
 					setWorkflowCounts({
 						PENDING_DECISION: data.pendingReviewApplications || 0,
-						PENDING_DISBURSEMENT: data.approvedLoans || 0,
+						PENDING_DISBURSEMENT:
+							data.pendingDisbursementCount || 0,
+						PENDING_DISCHARGE: 0,
+						PENDING_PAYMENTS: 0,
 					});
 				}
 			} catch (error) {
@@ -346,12 +479,16 @@ export default function AdminDashboardPage() {
 		switch (status) {
 			case "PENDING":
 			case "PENDING_APPROVAL":
+			case "Pending Review":
 				return "bg-yellow-500/20 text-yellow-200 border border-yellow-400/20";
 			case "APPROVED":
+			case "Disbursed":
 				return "bg-green-500/20 text-green-200 border border-green-400/20";
 			case "REJECTED":
+			case "Rejected":
 				return "bg-red-500/20 text-red-200 border border-red-400/20";
 			case "DISBURSED":
+			case "Pending Disbursement":
 				return "bg-blue-500/20 text-blue-200 border border-blue-400/20";
 			case "WITHDRAWN":
 				return "bg-gray-500/20 text-gray-200 border border-gray-400/20";
@@ -361,6 +498,9 @@ export default function AdminDashboardPage() {
 	};
 
 	const formatNumber = (num: number) => {
+		if (num >= 1000000000) {
+			return (num / 1000000000).toFixed(1) + "B";
+		}
 		if (num >= 1000000) {
 			return (num / 1000000).toFixed(1) + "M";
 		}
@@ -368,6 +508,19 @@ export default function AdminDashboardPage() {
 			return (num / 1000).toFixed(1) + "K";
 		}
 		return num.toString();
+	};
+
+	const formatCurrencyCompact = (amount: number) => {
+		if (amount >= 1000000000) {
+			return `RM${(amount / 1000000000).toFixed(1)}B`;
+		}
+		if (amount >= 1000000) {
+			return `RM${(amount / 1000000).toFixed(1)}M`;
+		}
+		if (amount >= 1000) {
+			return `RM${(amount / 1000).toFixed(1)}K`;
+		}
+		return formatCurrency(amount);
 	};
 
 	// Helper function to calculate totals and growth
@@ -401,114 +554,385 @@ export default function AdminDashboardPage() {
 			title="Dashboard"
 			description="Overview of your platform's performance"
 		>
-			{/* Key Metrics Grid */}
-			<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-				{/* Total Users */}
-				<div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-md border border-blue-500/30 overflow-hidden shadow-lg rounded-xl">
-					<div className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm font-medium text-blue-200">
-									Total Users
-								</p>
-								<p className="text-3xl font-bold text-white">
-									{formatNumber(stats.totalUsers)}
-								</p>
-								<div className="flex items-center mt-2">
-									<TrendingUpIcon className="h-4 w-4 text-green-400 mr-1" />
-									<span className="text-sm text-green-400">
-										+{stats.monthlyGrowth?.toFixed(1)}%
-									</span>
-									<span className="text-xs text-gray-400 ml-1">
-										this month
-									</span>
-								</div>
+			{/* Quick Actions */}
+			<div className="mb-8">
+				<h2 className="text-lg font-medium text-white mb-5 flex items-center">
+					<ClockIcon className="h-6 w-6 mr-2 text-amber-400" />
+					Quick Actions
+				</h2>
+				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					{/* Pending Decisions */}
+					<Link
+						href="/dashboard/applications/pending-decision"
+						className="group bg-gradient-to-br from-amber-600/20 to-amber-800/20 backdrop-blur-md border border-amber-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-amber-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-amber-500/30 rounded-lg">
+								<ExclamationTriangleIcon className="h-6 w-6 text-amber-300" />
 							</div>
-							<div className="p-3 bg-blue-500/30 rounded-xl">
-								<UserGroupIcon className="h-8 w-8 text-blue-300" />
+							{workflowCounts.PENDING_DECISION > 0 && (
+								<span className="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.PENDING_DECISION
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Review Applications
+						</h3>
+						<p className="text-sm text-amber-200 mb-3">
+							{workflowCounts.PENDING_DECISION > 0
+								? `${formatNumber(
+										workflowCounts.PENDING_DECISION
+								  )} applications need review`
+								: "No pending applications"}
+						</p>
+						<div className="flex items-center text-amber-300 text-sm font-medium group-hover:text-amber-200">
+							Review now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+
+					{/* Pending Disbursements */}
+					<Link
+						href="/dashboard/applications/pending-disbursement"
+						className="group bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-md border border-green-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-green-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-green-500/30 rounded-lg">
+								<CheckCircleIcon className="h-6 w-6 text-green-300" />
+							</div>
+							{workflowCounts.PENDING_DISBURSEMENT > 0 && (
+								<span className="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.PENDING_DISBURSEMENT
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Process Disbursements
+						</h3>
+						<p className="text-sm text-green-200 mb-3">
+							{workflowCounts.PENDING_DISBURSEMENT > 0
+								? `${formatNumber(
+										workflowCounts.PENDING_DISBURSEMENT
+								  )} loans ready to disburse`
+								: "No pending disbursements"}
+						</p>
+						<div className="flex items-center text-green-300 text-sm font-medium group-hover:text-green-200">
+							Process now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+
+					{/* Pending Discharge */}
+					<Link
+						href="/dashboard/loans?filter=pending_discharge"
+						className="group bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-md border border-orange-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-orange-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-orange-500/30 rounded-lg">
+								<ClockIcon className="h-6 w-6 text-orange-300" />
+							</div>
+							{workflowCounts.PENDING_DISCHARGE > 0 && (
+								<span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.PENDING_DISCHARGE
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Pending Discharge
+						</h3>
+						<p className="text-sm text-orange-200 mb-3">
+							{workflowCounts.PENDING_DISCHARGE > 0
+								? `${formatNumber(
+										workflowCounts.PENDING_DISCHARGE
+								  )} loans ready for discharge`
+								: "No loans pending discharge"}
+						</p>
+						<div className="flex items-center text-orange-300 text-sm font-medium group-hover:text-orange-200">
+							Review now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+
+					{/* Review Payments */}
+					<Link
+						href="/dashboard/payments"
+						className="group bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-md border border-purple-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-purple-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-purple-500/30 rounded-lg">
+								<ReceiptPercentIcon className="h-6 w-6 text-purple-300" />
+							</div>
+							{workflowCounts.PENDING_PAYMENTS > 0 && (
+								<span className="bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.PENDING_PAYMENTS
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Review Payments
+						</h3>
+						<p className="text-sm text-purple-200 mb-3">
+							{workflowCounts.PENDING_PAYMENTS > 0
+								? `${formatNumber(
+										workflowCounts.PENDING_PAYMENTS
+								  )} payments need review`
+								: "No pending payments"}
+						</p>
+						<div className="flex items-center text-purple-300 text-sm font-medium group-hover:text-purple-200">
+							Review now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+				</div>
+			</div>
+
+			{/* Key Metrics */}
+			<div className="mb-8">
+				<h2 className="text-lg font-medium text-white mb-5 flex items-center">
+					<ChartBarIcon className="h-6 w-6 mr-2 text-blue-400" />
+					Key Metrics
+				</h2>
+				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{/* Total Users */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+						<div className="p-6">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm font-medium text-gray-300">
+										Total Users
+									</p>
+									<p className="text-3xl font-bold text-blue-400">
+										{formatNumber(stats.totalUsers)}
+									</p>
+									<div className="flex items-center mt-2">
+										<TrendingUpIcon className="h-4 w-4 text-green-400 mr-1" />
+										<span className="text-sm text-green-400">
+											+{stats.monthlyGrowth?.toFixed(1)}%
+										</span>
+										<span className="text-xs text-gray-400 ml-1">
+											this month
+										</span>
+									</div>
+								</div>
+								<div className="p-3 bg-gray-700/50 rounded-xl">
+									<UserGroupIcon className="h-8 w-8 text-gray-400" />
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
 
-				{/* Total Applications */}
-				<div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-md border border-purple-500/30 overflow-hidden shadow-lg rounded-xl">
-					<div className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm font-medium text-purple-200">
-									Total Applications
-								</p>
-								<p className="text-3xl font-bold text-white">
-									{formatNumber(stats.totalApplications || 0)}
-								</p>
-								<div className="flex items-center mt-2">
-									<span className="text-sm text-purple-300">
-										{stats.conversionRate?.toFixed(1)}%
-									</span>
-									<span className="text-xs text-gray-400 ml-1">
-										approval rate
-									</span>
-								</div>
-							</div>
-							<div className="p-3 bg-purple-500/30 rounded-xl">
-								<DocumentTextIcon className="h-8 w-8 text-purple-300" />
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{/* Total Disbursed */}
-				<div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-md border border-green-500/30 overflow-hidden shadow-lg rounded-xl">
-					<div className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm font-medium text-green-200">
-									Total Disbursed
-								</p>
-								<p className="text-3xl font-bold text-white">
-									{formatCurrency(stats.totalDisbursedAmount)}
-								</p>
-								<div className="flex items-center mt-2">
-									<span className="text-sm text-green-300">
-										{stats.disbursedLoans}
-									</span>
-									<span className="text-xs text-gray-400 ml-1">
-										active loans
-									</span>
-								</div>
-							</div>
-							<div className="p-3 bg-green-500/30 rounded-xl">
-								<BanknotesIcon className="h-8 w-8 text-green-300" />
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{/* Revenue */}
-				<div className="bg-gradient-to-br from-amber-600/20 to-amber-800/20 backdrop-blur-md border border-amber-500/30 overflow-hidden shadow-lg rounded-xl">
-					<div className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm font-medium text-amber-200">
-									Total Revenue
-								</p>
-								<p className="text-3xl font-bold text-white">
-									{formatCurrency(stats.totalRevenue || 0)}
-								</p>
-								<div className="flex items-center mt-2">
-									<span className="text-sm text-amber-300">
-										{formatCurrency(
-											stats.averageLoanAmount || 0
+					{/* Total Applications */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+						<div className="p-6">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm font-medium text-gray-300">
+										Total Applications
+									</p>
+									<p className="text-3xl font-bold text-purple-400">
+										{formatNumber(
+											stats.totalApplications || 0
 										)}
-									</span>
-									<span className="text-xs text-gray-400 ml-1">
-										avg loan
-									</span>
+									</p>
+									<div className="flex items-center mt-2">
+										<span className="text-sm text-purple-400">
+											{stats.conversionRate?.toFixed(1)}%
+										</span>
+										<span className="text-xs text-gray-400 ml-1">
+											approval rate
+										</span>
+									</div>
+								</div>
+								<div className="p-3 bg-gray-700/50 rounded-xl">
+									<DocumentTextIcon className="h-8 w-8 text-gray-400" />
 								</div>
 							</div>
-							<div className="p-3 bg-amber-500/30 rounded-xl">
-								<CurrencyDollarIcon className="h-8 w-8 text-amber-300" />
+						</div>
+					</div>
+
+					{/* Current Loan Value */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+						<div className="p-6">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm font-medium text-gray-300">
+										Current Loan Value
+									</p>
+									<p className="text-3xl font-bold text-green-400">
+										{formatCurrencyCompact(
+											stats.currentLoanValue || 0
+										)}
+									</p>
+									<div className="flex items-center mt-2">
+										<span className="text-sm text-green-400">
+											{formatNumber(stats.disbursedLoans)}
+										</span>
+										<span className="text-xs text-gray-400 ml-1">
+											active loans
+										</span>
+									</div>
+								</div>
+								<div className="p-3 bg-gray-700/50 rounded-xl">
+									<BanknotesIcon className="h-8 w-8 text-gray-400" />
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Total Disbursed */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+						<div className="p-6">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm font-medium text-gray-300">
+										Total Disbursed
+									</p>
+									<p className="text-3xl font-bold text-indigo-400">
+										{formatCurrencyCompact(
+											stats.totalDisbursedAmount
+										)}
+									</p>
+									<div className="flex items-center mt-2">
+										<span className="text-sm text-indigo-400">
+											{formatCurrencyCompact(
+												stats.totalDisbursedAmount /
+													(stats.disbursedLoans || 1)
+											)}
+										</span>
+										<span className="text-xs text-gray-400 ml-1">
+											avg disbursed
+										</span>
+									</div>
+								</div>
+								<div className="p-3 bg-gray-700/50 rounded-xl">
+									<CreditCardIcon className="h-8 w-8 text-gray-400" />
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Total Repayments */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+						<div className="p-6">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm font-medium text-gray-300">
+										Total Repayments
+									</p>
+									<p className="text-3xl font-bold text-amber-400">
+										{formatCurrencyCompact(
+											stats.totalRepayments || 0
+										)}
+									</p>
+									<div className="flex items-center mt-2">
+										<span className="text-sm text-amber-400">
+											{stats.monthlyStats &&
+											stats.monthlyStats.length > 0
+												? formatCurrencyCompact(
+														stats.monthlyStats.reduce(
+															(sum, month) =>
+																sum +
+																month.actual_repayments,
+															0
+														) /
+															stats.monthlyStats.reduce(
+																(sum, month) =>
+																	sum +
+																	month.repayment_count,
+																0
+															) || 0
+												  )
+												: "RM0"}
+										</span>
+										<span className="text-xs text-gray-400 ml-1">
+											avg repayment amount
+										</span>
+									</div>
+								</div>
+								<div className="p-3 bg-gray-700/50 rounded-xl">
+									<CurrencyDollarIcon className="h-8 w-8 text-gray-400" />
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Total Fees Collected */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+						<div className="p-6">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm font-medium text-gray-300">
+										Total Fees Deducted
+									</p>
+									<p className="text-3xl font-bold text-emerald-400">
+										{formatCurrencyCompact(
+											stats.totalFeesCollected || 0
+										)}
+									</p>
+									<div className="flex items-center mt-2">
+										<span className="text-sm text-emerald-400">
+											{stats.disbursedLoans > 0
+												? formatCurrencyCompact(
+														(stats.totalFeesCollected ||
+															0) /
+															stats.disbursedLoans
+												  )
+												: "RM0"}
+										</span>
+										<span className="text-xs text-gray-400 ml-1">
+											avg fee per loan
+										</span>
+									</div>
+								</div>
+								<div className="p-3 bg-gray-700/50 rounded-xl">
+									<BanknotesIcon className="h-8 w-8 text-gray-400" />
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Total Late Fees Collected */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+						<div className="p-6">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm font-medium text-gray-300">
+										Total Late Fees Collected
+									</p>
+									<p className="text-3xl font-bold text-red-400">
+										{formatCurrencyCompact(
+											stats.totalLateFeesCollected || 0
+										)}
+									</p>
+									<div className="flex items-center mt-2">
+										<span className="text-sm text-red-400">
+											{stats.totalLateFeesCollected &&
+											stats.totalLateFeesCollected > 0
+												? `${(
+														(stats.totalLateFeesCollected /
+															(stats.totalRepayments ||
+																1)) *
+														100
+												  ).toFixed(1)}%`
+												: "0%"}
+										</span>
+										<span className="text-xs text-gray-400 ml-1">
+											of total repayments
+										</span>
+									</div>
+								</div>
+								<div className="p-3 bg-gray-700/50 rounded-xl">
+									<ExclamationTriangleIcon className="h-8 w-8 text-gray-400" />
+								</div>
 							</div>
 						</div>
 					</div>
@@ -698,10 +1122,10 @@ export default function AdminDashboardPage() {
 					<div className="grid grid-cols-3 gap-4 mb-6">
 						<div className="text-center">
 							<p className="text-2xl font-bold text-green-400">
-								{formatNumber(stats.approvedLoans || 0)}
+								{formatNumber(stats.disbursedLoans || 0)}
 							</p>
 							<p className="text-xs text-gray-400">
-								Total Approvals
+								Total Disbursed
 							</p>
 						</div>
 						<div className="text-center">
@@ -806,36 +1230,36 @@ export default function AdminDashboardPage() {
 
 			{/* Additional Charts Row */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-				{/* Revenue Trends */}
+				{/* Monthly Repayments vs Scheduled */}
 				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h3 className="text-lg font-medium text-white">
-							Monthly Revenue & Disbursements
+							Monthly Collections vs Scheduled
 						</h3>
 						<CurrencyDollarIcon className="h-6 w-6 text-green-400" />
 					</div>
 
-					{/* Revenue Headlines */}
+					{/* Repayments Headlines */}
 					<div className="grid grid-cols-3 gap-4 mb-6">
 						<div className="text-center">
 							<p className="text-2xl font-bold text-green-400">
-								{formatCurrency(
+								{formatCurrencyCompact(
 									calculateMetrics(
 										stats.monthlyStats || [],
-										"revenue"
+										"actual_repayments"
 									).total
 								)}
 							</p>
 							<p className="text-xs text-gray-400">
-								Total Revenue
+								Total Collections
 							</p>
 						</div>
 						<div className="text-center">
 							<p className="text-2xl font-bold text-white">
-								{formatCurrency(
+								{formatCurrencyCompact(
 									calculateMetrics(
 										stats.monthlyStats || [],
-										"revenue"
+										"actual_repayments"
 									).currentMonth
 								)}
 							</p>
@@ -846,7 +1270,7 @@ export default function AdminDashboardPage() {
 								className={`text-2xl font-bold ${
 									calculateMetrics(
 										stats.monthlyStats || [],
-										"revenue"
+										"actual_repayments"
 									).growth >= 0
 										? "text-green-400"
 										: "text-red-400"
@@ -854,13 +1278,13 @@ export default function AdminDashboardPage() {
 							>
 								{calculateMetrics(
 									stats.monthlyStats || [],
-									"revenue"
+									"actual_repayments"
 								).growth >= 0
 									? "+"
 									: ""}
 								{calculateMetrics(
 									stats.monthlyStats || [],
-									"revenue"
+									"actual_repayments"
 								).growth.toFixed(1)}
 								%
 							</p>
@@ -898,33 +1322,159 @@ export default function AdminDashboardPage() {
 										value: number,
 										name: string
 									) => [
-										`RM${value.toLocaleString()}`,
-										name === "revenue"
-											? "Revenue"
-											: "Total Disbursements",
+										formatCurrencyCompact(value),
+										name === "actual_repayments"
+											? "Collections (Actual)"
+											: "Scheduled Repayments",
 									]}
 								/>
 								<Legend
 									wrapperStyle={{ color: "#9CA3AF" }}
 									formatter={(value: string) =>
-										value === "revenue"
-											? "Revenue"
-											: "Total Disbursements"
+										value === "actual_repayments"
+											? "Collections (Actual)"
+											: "Scheduled Repayments"
 									}
 								/>
 								<Bar
-									dataKey="revenue"
+									dataKey="actual_repayments"
 									fill="#10B981"
 									radius={[4, 4, 0, 0]}
-									name="revenue"
+									name="actual_repayments"
 								/>
 								<Bar
-									dataKey="disbursement_amount"
-									fill="#3B82F6"
+									dataKey="scheduled_repayments"
+									fill="#F59E0B"
 									radius={[4, 4, 0, 0]}
-									name="disbursement_amount"
+									name="scheduled_repayments"
 								/>
 							</BarChart>
+						</ResponsiveContainer>
+					</div>
+				</div>
+
+				{/* Total Loan Value (TLV) Trends */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
+					<div className="flex items-center justify-between mb-4">
+						<h3 className="text-lg font-medium text-white">
+							Monthly Current Loan Value
+						</h3>
+						<BanknotesIcon className="h-6 w-6 text-blue-400" />
+					</div>
+
+					{/* TLV Headlines */}
+					<div className="grid grid-cols-3 gap-4 mb-6">
+						<div className="text-center">
+							<p className="text-2xl font-bold text-blue-400">
+								{formatCurrencyCompact(
+									calculateMetrics(
+										stats.monthlyStats || [],
+										"current_loan_value"
+									).total
+								)}
+							</p>
+							<p className="text-xs text-gray-400">
+								Current Loan Value
+							</p>
+						</div>
+						<div className="text-center">
+							<p className="text-2xl font-bold text-white">
+								{formatCurrencyCompact(
+									calculateMetrics(
+										stats.monthlyStats || [],
+										"current_loan_value"
+									).currentMonth
+								)}
+							</p>
+							<p className="text-xs text-gray-400">This Month</p>
+						</div>
+						<div className="text-center">
+							<p
+								className={`text-2xl font-bold ${
+									calculateMetrics(
+										stats.monthlyStats || [],
+										"current_loan_value"
+									).growth >= 0
+										? "text-green-400"
+										: "text-red-400"
+								}`}
+							>
+								{calculateMetrics(
+									stats.monthlyStats || [],
+									"current_loan_value"
+								).growth >= 0
+									? "+"
+									: ""}
+								{calculateMetrics(
+									stats.monthlyStats || [],
+									"current_loan_value"
+								).growth.toFixed(1)}
+								%
+							</p>
+							<p className="text-xs text-gray-400">MoM Growth</p>
+						</div>
+					</div>
+
+					<div className="h-80">
+						<ResponsiveContainer width="100%" height="100%">
+							<AreaChart data={stats.monthlyStats}>
+								<defs>
+									<linearGradient
+										id="colorTLV"
+										x1="0"
+										y1="0"
+										x2="0"
+										y2="1"
+									>
+										<stop
+											offset="5%"
+											stopColor="#3B82F6"
+											stopOpacity={0.8}
+										/>
+										<stop
+											offset="95%"
+											stopColor="#3B82F6"
+											stopOpacity={0.1}
+										/>
+									</linearGradient>
+								</defs>
+								<CartesianGrid
+									strokeDasharray="3 3"
+									stroke="#374151"
+								/>
+								<XAxis
+									dataKey="month"
+									stroke="#9CA3AF"
+									fontSize={12}
+								/>
+								<YAxis
+									stroke="#9CA3AF"
+									fontSize={12}
+									tickFormatter={(value) =>
+										`RM${(value / 1000).toFixed(0)}K`
+									}
+								/>
+								<Tooltip
+									contentStyle={{
+										backgroundColor: "#1F2937",
+										border: "1px solid #374151",
+										borderRadius: "8px",
+										color: "#F9FAFB",
+									}}
+									formatter={(value: number) => [
+										formatCurrencyCompact(value),
+										"Current Loan Value",
+									]}
+								/>
+								<Area
+									type="monotone"
+									dataKey="current_loan_value"
+									stroke="#3B82F6"
+									fillOpacity={1}
+									fill="url(#colorTLV)"
+									name="Current Loan Value"
+								/>
+							</AreaChart>
 						</ResponsiveContainer>
 					</div>
 				</div>
@@ -1048,281 +1598,6 @@ export default function AdminDashboardPage() {
 							</LineChart>
 						</ResponsiveContainer>
 					</div>
-				</div>
-			</div>
-
-			{/* Quick Actions */}
-			<div className="mb-8">
-				<h2 className="text-lg font-medium text-white mb-5 flex items-center">
-					<ClockIcon className="h-6 w-6 mr-2 text-amber-400" />
-					Quick Actions
-				</h2>
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-					{/* Pending Decisions */}
-					<Link
-						href="/dashboard/applications/pending-decision"
-						className="group bg-gradient-to-br from-amber-600/20 to-amber-800/20 backdrop-blur-md border border-amber-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-amber-400/50"
-					>
-						<div className="flex items-center justify-between mb-3">
-							<div className="p-2 bg-amber-500/30 rounded-lg">
-								<ExclamationTriangleIcon className="h-6 w-6 text-amber-300" />
-							</div>
-							{workflowCounts.PENDING_DECISION > 0 && (
-								<span className="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-									{workflowCounts.PENDING_DECISION}
-								</span>
-							)}
-						</div>
-						<h3 className="text-white font-medium mb-1">
-							Review Applications
-						</h3>
-						<p className="text-sm text-amber-200 mb-3">
-							{workflowCounts.PENDING_DECISION > 0
-								? `${workflowCounts.PENDING_DECISION} applications need review`
-								: "No pending applications"}
-						</p>
-						<div className="flex items-center text-amber-300 text-sm font-medium group-hover:text-amber-200">
-							Review now
-							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-						</div>
-					</Link>
-
-					{/* Pending Disbursements */}
-					<Link
-						href="/dashboard/applications/pending-disbursement"
-						className="group bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-md border border-green-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-green-400/50"
-					>
-						<div className="flex items-center justify-between mb-3">
-							<div className="p-2 bg-green-500/30 rounded-lg">
-								<CheckCircleIcon className="h-6 w-6 text-green-300" />
-							</div>
-							{workflowCounts.PENDING_DISBURSEMENT > 0 && (
-								<span className="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-									{workflowCounts.PENDING_DISBURSEMENT}
-								</span>
-							)}
-						</div>
-						<h3 className="text-white font-medium mb-1">
-							Process Disbursements
-						</h3>
-						<p className="text-sm text-green-200 mb-3">
-							{workflowCounts.PENDING_DISBURSEMENT > 0
-								? `${workflowCounts.PENDING_DISBURSEMENT} loans ready to disburse`
-								: "No pending disbursements"}
-						</p>
-						<div className="flex items-center text-green-300 text-sm font-medium group-hover:text-green-200">
-							Process now
-							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-						</div>
-					</Link>
-
-					{/* Manage Users */}
-					<Link
-						href="/dashboard/users"
-						className="group bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-md border border-blue-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-blue-400/50"
-					>
-						<div className="flex items-center justify-between mb-3">
-							<div className="p-2 bg-blue-500/30 rounded-lg">
-								<UserGroupIcon className="h-6 w-6 text-blue-300" />
-							</div>
-							<span className="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-								{stats.totalUsers}
-							</span>
-						</div>
-						<h3 className="text-white font-medium mb-1">
-							Manage Users
-						</h3>
-						<p className="text-sm text-blue-200 mb-3">
-							View and manage all platform users
-						</p>
-						<div className="flex items-center text-blue-300 text-sm font-medium group-hover:text-blue-200">
-							View users
-							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-						</div>
-					</Link>
-
-					{/* Send Notifications */}
-					<Link
-						href="/dashboard/notifications"
-						className="group bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-md border border-purple-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-purple-400/50"
-					>
-						<div className="flex items-center justify-between mb-3">
-							<div className="p-2 bg-purple-500/30 rounded-lg">
-								<BellIcon className="h-6 w-6 text-purple-300" />
-							</div>
-						</div>
-						<h3 className="text-white font-medium mb-1">
-							Send Notifications
-						</h3>
-						<p className="text-sm text-purple-200 mb-3">
-							Broadcast messages to users
-						</p>
-						<div className="flex items-center text-purple-300 text-sm font-medium group-hover:text-purple-200">
-							Create notification
-							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-						</div>
-					</Link>
-				</div>
-			</div>
-
-			{/* Recent Applications */}
-			<div className="mb-8">
-				<div className="flex items-center justify-between mb-5">
-					<h2 className="text-lg font-medium text-white flex items-center">
-						<DocumentTextIcon className="h-6 w-6 mr-2 text-blue-400" />
-						Recent Applications
-					</h2>
-					<Link href="/dashboard/applications">
-						<span className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors border border-blue-400/20">
-							View all applications
-							<ChevronRightIcon className="ml-2 h-4 w-4" />
-						</span>
-					</Link>
-				</div>
-				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-					<div className="overflow-x-auto">
-						<table className="min-w-full divide-y divide-gray-700/30">
-							<thead className="bg-gray-800/50">
-								<tr>
-									<th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-										Customer
-									</th>
-									<th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-										Status
-									</th>
-									<th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-										Date
-									</th>
-									<th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-										Action
-									</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-gray-700/30">
-								{stats.recentApplications.length > 0 ? (
-									stats.recentApplications.map(
-										(application) => (
-											<tr
-												key={application.id}
-												className="hover:bg-gray-800/30 transition-colors"
-											>
-												<td className="px-6 py-4 whitespace-nowrap">
-													<div className="flex items-center">
-														<div className="flex-shrink-0 h-10 w-10">
-															<div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center">
-																<UserGroupIcon className="h-6 w-6 text-gray-400" />
-															</div>
-														</div>
-														<div className="ml-4">
-															<div className="text-sm font-medium text-white">
-																{application
-																	.user
-																	?.fullName ||
-																	"Unknown"}
-															</div>
-															<div className="text-sm text-gray-400">
-																{application
-																	.user
-																	?.email ||
-																	"N/A"}
-															</div>
-														</div>
-													</div>
-												</td>
-												<td className="px-6 py-4 whitespace-nowrap">
-													<span
-														className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(
-															application.status
-														)}`}
-													>
-														{application.status?.replace(
-															/_/g,
-															" "
-														)}
-													</span>
-												</td>
-												<td className="px-6 py-4 whitespace-nowrap">
-													<div className="flex items-center text-sm text-gray-400">
-														<CalendarDaysIcon className="h-4 w-4 mr-2" />
-														{formatDate(
-															application.createdAt
-														)}
-													</div>
-												</td>
-												<td className="px-6 py-4 whitespace-nowrap text-sm">
-													<Link
-														href={`/dashboard/applications?id=${application.id}`}
-														className="inline-flex items-center text-blue-400 hover:text-blue-300 transition-colors"
-													>
-														<EyeIcon className="h-4 w-4 mr-1" />
-														View details
-													</Link>
-												</td>
-											</tr>
-										)
-									)
-								) : (
-									<tr>
-										<td
-											colSpan={4}
-											className="px-6 py-12 text-center"
-										>
-											<DocumentTextIcon className="mx-auto h-12 w-12 text-gray-500 mb-2" />
-											<h3 className="text-sm font-medium text-gray-300">
-												No recent applications
-											</h3>
-											<p className="text-sm text-gray-500">
-												Applications will appear here as
-												they are submitted
-											</p>
-										</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
-					</div>
-				</div>
-			</div>
-
-			{/* System Tools */}
-			<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
-				<div className="flex items-center justify-between mb-6">
-					<h2 className="text-lg font-medium text-white flex items-center">
-						<Cog6ToothIcon className="h-6 w-6 mr-2 text-gray-400" />
-						System Maintenance
-					</h2>
-				</div>
-				<div className="flex flex-wrap gap-4">
-					<button
-						className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-						onClick={async () => {
-							try {
-								const response =
-									await fetchWithAdminTokenRefresh(
-										"/api/admin/ensure-wallets",
-										{ method: "POST" }
-									);
-								alert("Wallets verified successfully!");
-								console.log(response);
-							} catch (error) {
-								console.error("Error ensuring wallets:", error);
-								alert(
-									"Error ensuring wallets. Check console for details."
-								);
-							}
-						}}
-					>
-						<CreditCardIcon className="h-4 w-4 mr-2" />
-						Ensure All Users Have Wallets
-					</button>
-
-					<Link
-						href="/dashboard/products"
-						className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
-					>
-						<PlusIcon className="h-4 w-4 mr-2" />
-						Manage Products
-					</Link>
 				</div>
 			</div>
 		</AdminLayout>

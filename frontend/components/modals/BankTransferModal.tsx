@@ -19,13 +19,15 @@ export default function BankTransferModal({
 
 	return (
 		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-			<div className="bg-gradient-to-br from-gray-900/90 to-gray-800/90 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto text-white border border-white/10">
+			<div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
 				<div className="p-6">
 					<div className="flex items-center justify-between mb-6">
-						<h2 className="text-xl font-bold">Bank Transfer</h2>
+						<h2 className="text-xl font-bold text-gray-700 font-heading">
+							Bank Transfer
+						</h2>
 						<button
 							onClick={onClose}
-							className="text-gray-400 hover:text-gray-200"
+							className="text-gray-500 hover:text-gray-700 transition-colors"
 						>
 							<svg
 								className="w-6 h-6"
@@ -45,52 +47,52 @@ export default function BankTransferModal({
 
 					{/* Amount Display */}
 					<div className="mb-6">
-						<label className="block text-sm font-medium text-gray-300 mb-2">
+						<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
 							Transfer Amount (MYR)
 						</label>
-						<div className="w-full px-4 py-3 border border-gray-600 rounded-xl bg-gray-700/50 text-lg font-semibold text-white backdrop-blur-md">
+						<div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-blue-tertiary/5 text-lg font-semibold text-purple-primary font-heading">
 							{amount}
 						</div>
 					</div>
 
 					{/* Bank Details */}
-					<div className="bg-white/5 rounded-xl p-4 mb-6 space-y-4 border border-white/10">
+					<div className="bg-blue-tertiary/5 rounded-xl p-4 mb-6 space-y-4 border border-blue-tertiary/20">
 						<div>
-							<p className="text-sm text-gray-400 mb-1">
+							<p className="text-sm text-gray-500 mb-1 font-body">
 								Beneficiary Account Number
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-mono text-lg font-semibold text-white">
+								<p className="font-mono text-lg font-semibold text-gray-700">
 									001866001878013
 								</p>
 								<button
 									onClick={() =>
 										copyToClipboard("001866001878013")
 									}
-									className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
+									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
 							</div>
-							<p className="text-xs text-gray-500 mt-1">
+							<p className="text-xs text-gray-400 mt-1 font-body">
 								The account number is exclusive to{" "}
 								{userName.toUpperCase()}
 							</p>
 						</div>
 
 						<div>
-							<p className="text-sm text-gray-400 mb-1">
+							<p className="text-sm text-gray-500 mb-1 font-body">
 								Beneficiary Name
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-mono text-lg font-semibold text-white">
+								<p className="font-mono text-lg font-semibold text-gray-700">
 									GROWKAPITAL187813
 								</p>
 								<button
 									onClick={() =>
 										copyToClipboard("GROWKAPITAL187813")
 									}
-									className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
+									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
@@ -98,11 +100,11 @@ export default function BankTransferModal({
 						</div>
 
 						<div>
-							<p className="text-sm text-gray-400 mb-1">
+							<p className="text-sm text-gray-500 mb-1 font-body">
 								Beneficiary Bank
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-semibold text-white">
+								<p className="font-semibold text-gray-700 font-heading">
 									HSBC Bank Malaysia Berhad
 								</p>
 								<button
@@ -111,7 +113,7 @@ export default function BankTransferModal({
 											"HSBC Bank Malaysia Berhad"
 										)
 									}
-									className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
+									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
@@ -119,21 +121,21 @@ export default function BankTransferModal({
 						</div>
 
 						<div>
-							<p className="text-sm text-gray-400 mb-1">
+							<p className="text-sm text-gray-500 mb-1 font-body">
 								Reference (Required)
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-mono text-lg font-semibold text-orange-400">
+								<p className="font-mono text-lg font-semibold text-blue-tertiary">
 									{reference}
 								</p>
 								<button
 									onClick={() => copyToClipboard(reference)}
-									className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
+									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
 							</div>
-							<p className="text-xs text-gray-500 mt-1">
+							<p className="text-xs text-gray-400 mt-1 font-body">
 								Please enter your reference ID accurately in the
 								"Reference field". Otherwise, your deposit will
 								be delayed.
@@ -142,16 +144,16 @@ export default function BankTransferModal({
 					</div>
 
 					{/* Instructions */}
-					<div className="mb-6 space-y-3 text-sm text-gray-400">
+					<div className="mb-6 space-y-3 text-sm text-gray-500 font-body">
 						<div className="flex items-start space-x-2">
-							<div className="w-2 h-2 bg-gray-500 rounded-full mt-2 flex-shrink-0"></div>
+							<div className="w-2 h-2 bg-purple-primary rounded-full mt-2 flex-shrink-0"></div>
 							<p>
 								Please transfer the exact amount to complete
 								your transaction.
 							</p>
 						</div>
 						<div className="flex items-start space-x-2">
-							<div className="w-2 h-2 bg-gray-500 rounded-full mt-2 flex-shrink-0"></div>
+							<div className="w-2 h-2 bg-purple-primary rounded-full mt-2 flex-shrink-0"></div>
 							<p>
 								Include the reference number to ensure proper
 								processing.
@@ -162,7 +164,7 @@ export default function BankTransferModal({
 					{/* Submit Button */}
 					<button
 						onClick={onConfirm}
-						className="w-full bg-emerald-600 text-white py-3 px-4 rounded-xl font-semibold hover:bg-emerald-700 transition-colors"
+						className="w-full bg-purple-primary text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-purple-600 transition-colors shadow-sm"
 					>
 						I've Completed the Transfer
 					</button>

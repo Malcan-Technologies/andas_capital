@@ -48,7 +48,9 @@ async function main() {
 						"Employed for at least 3 months",
 						"No active bankruptcy status",
 					],
-					lateFee: 8, // 1% late payment fee
+					lateFeeRate: 0.022, // 0.022% per day interest
+					lateFeeFixedAmount: 0, // No fixed fee
+					lateFeeFrequencyDays: 7, // every 7 days
 					originationFee: 3, // 2% origination fee
 					legalFee: 2, // No legal fee
 					applicationFee: 50, // No application fee
@@ -83,7 +85,9 @@ async function main() {
 						"Minimum monthly revenue of RM10,000",
 						"No active bankruptcy status",
 					],
-					lateFee: 8, // 2% late payment fee
+					lateFeeRate: 0.022, // 0.022% per day interest
+					lateFeeFixedAmount: 0, // No fixed fee
+					lateFeeFrequencyDays: 7, // every 7 days
 					originationFee: 3, // 3% origination fee
 					legalFee: 2, // RM500 legal fee
 					applicationFee: 50, // RM100 application fee
@@ -126,7 +130,9 @@ async function main() {
 						"Minimum annual revenue of RM300,000",
 						"No active bankruptcy status",
 					],
-					lateFee: 8, // 2% late payment fee
+					lateFeeRate: 0.022, // 0.022% per day interest
+					lateFeeFixedAmount: 0, // No fixed fee
+					lateFeeFrequencyDays: 7, // every 7 days
 					originationFee: 2, // 2.5% origination fee
 					legalFee: 3, // RM1000 legal fee
 					applicationFee: 50, // RM200 application fee

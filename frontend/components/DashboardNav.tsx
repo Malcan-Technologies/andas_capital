@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Logo from "./Logo";
@@ -49,21 +51,9 @@ export default function DashboardNav() {
 	const pathname = usePathname();
 
 	return (
-		<div className="flex flex-col h-full bg-gray-800 border-r border-gray-700">
-			<div className="p-4">
-				<Logo />
-			</div>
-
-			<div className="p-4">
-				<Link
-					href="/dashboard/apply"
-					className="flex items-center justify-center w-full px-4 py-3.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-600/90 to-blue-600/90 hover:from-indigo-600 hover:to-blue-600 rounded-lg transition-all duration-200 backdrop-blur-sm border border-indigo-400/30 hover:border-indigo-400/50 shadow-lg hover:shadow-indigo-500/20 group transform hover:-translate-y-0.5"
-				>
-					<PlusIcon className="w-5 h-5 mr-2 text-white/90 group-hover:text-white transition-colors" />
-					<span className="text-white/90 group-hover:text-white transition-colors">
-						Apply for a Loan
-					</span>
-				</Link>
+		<div className="flex flex-col h-full bg-white border-r border-purple-primary/20">
+			<div className="p-4 flex justify-center">
+				<Logo size="lg" variant="white" linkTo="/dashboard" />
 			</div>
 
 			<nav className="flex-1 p-4 space-y-1">
@@ -73,15 +63,17 @@ export default function DashboardNav() {
 						<Link
 							key={item.name}
 							href={item.href}
-							className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+							className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 font-body ${
 								isActive
-									? "bg-blue-600/20 text-blue-400 border border-blue-500/30"
-									: "text-gray-300 hover:bg-gray-700/50 hover:text-white"
+									? "bg-purple-primary/20 text-purple-primary border border-purple-primary/30 shadow-lg shadow-purple-primary/10"
+									: "text-gray-700 hover:bg-purple-primary/5 hover:text-purple-primary hover:border-purple-primary/20 border border-transparent"
 							}`}
 						>
 							<span
-								className={`mr-3 ${
-									isActive ? "text-blue-400" : "text-gray-400"
+								className={`mr-3 transition-colors duration-200 ${
+									isActive
+										? "text-purple-primary"
+										: "text-gray-500 group-hover:text-purple-primary"
 								}`}
 							>
 								{item.icon}
@@ -92,12 +84,23 @@ export default function DashboardNav() {
 				})}
 			</nav>
 
-			<div className="p-4 border-t border-gray-700">
+			{/* Featured Apply Button - Moved to bottom for better visual hierarchy */}
+			<div className="px-4 pb-4">
+				<Link
+					href="/dashboard/apply"
+					className="group relative flex items-center w-full px-4 py-3 text-sm font-medium text-purple-primary bg-purple-primary/5 hover:bg-purple-primary/10 rounded-xl transition-all duration-200 border border-purple-primary/20 hover:border-purple-primary/30 font-body"
+				>
+					<PlusIcon className="w-5 h-5 mr-3 text-purple-primary group-hover:rotate-90 transition-transform duration-200" />
+					<span className="font-semibold">Apply for a Loan</span>
+				</Link>
+			</div>
+
+			<div className="p-4 border-t border-purple-primary/20">
 				<Link
 					href="/dashboard/profile"
-					className="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-lg hover:bg-gray-700/50 hover:text-white transition-colors"
+					className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 rounded-xl hover:bg-purple-primary/5 hover:text-purple-primary transition-all duration-200 border border-transparent hover:border-purple-primary/20 font-body group"
 				>
-					<UserIcon className="w-6 h-6 mr-3 text-gray-400" />
+					<UserIcon className="w-5 h-5 mr-3 text-gray-500 group-hover:text-purple-primary transition-colors duration-200" />
 					Profile
 				</Link>
 			</div>

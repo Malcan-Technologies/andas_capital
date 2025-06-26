@@ -30,7 +30,7 @@ function LoginMessage() {
 	if (!message) return null;
 
 	return (
-		<div className="text-sm text-center text-green-600 bg-green-50 border border-green-200 rounded-md p-3">
+		<div className="text-sm text-center text-green-300 bg-green-900/20 border border-green-700/30 rounded-md p-3">
 			{message}
 		</div>
 	);
@@ -41,6 +41,7 @@ export default function AdminLoginPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [phoneNumber, setPhoneNumber] = useState("");
+	const [showPassword, setShowPassword] = useState(false);
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
@@ -121,155 +122,322 @@ export default function AdminLoginPage() {
 	};
 
 	return (
-		<div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-			<div className="max-w-md w-full">
-				<button
-					onClick={() => router.back()}
-					className="mb-4 flex items-center text-sm text-gray-600 hover:text-gray-900"
-				>
-					<svg
-						className="w-4 h-4 mr-2"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
+		<>
+			<style jsx global>{`
+				/* Remove all shadows and focus styles from phone input */
+				.react-tel-input *,
+				.react-tel-input *:before,
+				.react-tel-input *:after,
+				.react-tel-input .flag-dropdown,
+				.react-tel-input .form-control,
+				.react-tel-input .selected-flag {
+					outline: none !important;
+					box-shadow: none !important;
+					-webkit-box-shadow: none !important;
+					-moz-box-shadow: none !important;
+				}
+				.react-tel-input .flag-dropdown:focus,
+				.react-tel-input .form-control:focus,
+				.react-tel-input .selected-flag:focus,
+				.react-tel-input .flag-dropdown:hover,
+				.react-tel-input .form-control:hover,
+				.react-tel-input .selected-flag:hover,
+				.react-tel-input .flag-dropdown:active,
+				.react-tel-input .form-control:active,
+				.react-tel-input .selected-flag:active {
+					outline: none !important;
+					box-shadow: none !important;
+					-webkit-box-shadow: none !important;
+					-moz-box-shadow: none !important;
+				}
+
+				/* Style the container wrapper */
+				.phone-input-wrapper {
+					border-radius: 0;
+					transition: all 0.2s;
+					position: relative;
+				}
+				.phone-input-wrapper:focus-within {
+					box-shadow: 0 0 0 2px rgb(59 130 246 / 0.5);
+				}
+				.phone-input-wrapper:focus-within
+					.react-tel-input
+					.flag-dropdown,
+				.phone-input-wrapper:focus-within
+					.react-tel-input
+					.form-control {
+					border-color: rgb(59 130 246) !important;
+				}
+
+				/* Remove all border radius from phone input */
+				.react-tel-input,
+				.react-tel-input > div,
+				.react-tel-input .flag-dropdown,
+				.react-tel-input .form-control {
+					border-radius: 0.375rem !important;
+				}
+
+				.react-tel-input .flag-dropdown {
+					background-color: rgb(55 65 81) !important;
+					border-color: rgb(75 85 99) !important;
+					color: rgb(229 231 235) !important;
+				}
+				.react-tel-input .flag-dropdown:hover {
+					background-color: rgb(75 85 99) !important;
+				}
+				.react-tel-input .selected-flag {
+					background-color: transparent !important;
+					width: 100% !important;
+					height: 100% !important;
+					display: flex !important;
+					align-items: center !important;
+					justify-content: center !important;
+					padding: 0 !important;
+					border: none !important;
+				}
+				.react-tel-input .selected-flag:hover {
+					background-color: transparent !important;
+				}
+				.react-tel-input .country-list {
+					background-color: rgb(55 65 81) !important;
+					border-color: rgb(75 85 99) !important;
+				}
+				.react-tel-input .country-list .country {
+					background-color: rgb(55 65 81) !important;
+					color: rgb(229 231 235) !important;
+				}
+				.react-tel-input .country-list .country:hover {
+					background-color: rgb(59 130 246 / 0.1) !important;
+					color: rgb(147 197 253) !important;
+				}
+				.react-tel-input .country-list .country.highlight {
+					background-color: rgb(59 130 246 / 0.2) !important;
+					color: rgb(147 197 253) !important;
+				}
+				.react-tel-input .search-box {
+					background-color: rgb(55 65 81) !important;
+					border-color: rgb(75 85 99) !important;
+					color: rgb(229 231 235) !important;
+				}
+				.react-tel-input .search-box::placeholder {
+					color: rgb(156 163 175) !important;
+				}
+			`}</style>
+			<div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+				{/* Background decorative elements */}
+				<div className="absolute inset-0 overflow-hidden">
+					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-blue-600/10 to-purple-600/10 blur-3xl"></div>
+					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-purple-600/10 to-blue-600/10 blur-3xl"></div>
+				</div>
+
+				<div className="max-w-md w-full relative z-10">
+					<button
+						onClick={() => router.back()}
+						className="mb-4 flex items-center text-sm text-gray-400 hover:text-gray-200 transition-colors font-body"
 					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-							d="M10 19l-7-7m0 0l7-7m-7 7h18"
-						/>
-					</svg>
-					Back
-				</button>
+						<svg
+							className="w-4 h-4 mr-2"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M10 19l-7-7m0 0l7-7m-7 7h18"
+							/>
+						</svg>
+						Back
+					</button>
 
-				<div className="bg-white rounded-xl shadow-lg p-8 space-y-8">
-					<div className="flex flex-col items-center">
-						<div className="w-32 mb-6">
-							<Logo />
-						</div>
-						<h2 className="text-center text-3xl font-extrabold text-gray-900">
-							Admin Login
-						</h2>
-						<p className="mt-2 text-center text-sm text-gray-600">
-							Access the admin dashboard
-						</p>
-					</div>
-
-					{/* Wrap the component using searchParams in Suspense boundary */}
-					<Suspense fallback={<div className="h-10"></div>}>
-						<LoginMessage />
-					</Suspense>
-
-					<form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-						<div className="space-y-4">
-							<div>
-								<label
-									htmlFor="phoneNumber"
-									className="block text-sm font-medium text-gray-700 mb-1"
-								>
-									Phone Number
-								</label>
-								<PhoneInput
-									country="my"
-									value={phoneNumber}
-									onChange={(
-										value: string,
-										data: CountryData
-									) => {
-										setPhoneNumber(value);
-										setPlaceholder(
-											placeholders[data.countryCode] ||
-												"1234 5678"
-										);
-									}}
-									inputProps={{
-										id: "phoneNumber",
-										name: "phoneNumber",
-										required: true,
-										placeholder: placeholder,
-									}}
-									containerClass="!w-full"
-									inputClass="!w-full !h-10 !py-2 !text-base !border-gray-300 focus:!ring-purple-500 focus:!border-purple-500"
-									buttonClass="!border-gray-300 !bg-white hover:!bg-gray-50"
-									dropdownClass="!bg-white"
-									searchClass="!bg-white"
-									enableSearch
-									disableSearchIcon
-									searchPlaceholder="Search country..."
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-xl p-8 space-y-8">
+						<div className="flex flex-col items-center">
+							<div className="mb-6">
+								<Logo
+									size="lg"
+									variant="black"
+									linkTo={undefined}
 								/>
 							</div>
+							<h2 className="text-center text-3xl font-extrabold text-white font-heading">
+								Admin Login
+							</h2>
+							<p className="mt-2 text-center text-sm text-gray-400 font-body">
+								Access the admin dashboard
+							</p>
+						</div>
 
-							<div>
-								<div className="flex items-center justify-between">
+						{/* Wrap the component using searchParams in Suspense boundary */}
+						<Suspense fallback={<div className="h-10"></div>}>
+							<LoginMessage />
+						</Suspense>
+
+						<form
+							className="mt-8 space-y-6"
+							onSubmit={handleSubmit}
+						>
+							<div className="space-y-4">
+								<div>
 									<label
-										htmlFor="password"
-										className="block text-sm font-medium text-gray-700"
+										htmlFor="phoneNumber"
+										className="block text-sm font-medium text-gray-300 mb-1 font-body"
 									>
-										Password
+										Phone Number
 									</label>
-									<Link
-										href="/forgot-password"
-										className="text-sm font-medium text-purple-600 hover:text-purple-500"
-									>
-										Forgot password?
-									</Link>
+									<div className="phone-input-wrapper">
+										<PhoneInput
+											country="my"
+											value={phoneNumber}
+											onChange={(
+												value: string,
+												data: CountryData
+											) => {
+												setPhoneNumber(value);
+												setPlaceholder(
+													placeholders[
+														data.countryCode
+													] || "1234 5678"
+												);
+											}}
+											inputProps={{
+												id: "phoneNumber",
+												name: "phoneNumber",
+												required: true,
+												placeholder: placeholder,
+											}}
+											containerClass="!w-full"
+											inputClass="!w-full !h-12 !pl-20 !pr-4 !py-3 !text-base !font-body !bg-gray-700 !border !border-gray-600 !text-gray-100 !placeholder-gray-400 hover:!border-gray-500 focus:!border-blue-500 !transition-colors"
+											buttonClass="!h-12 !w-16 !border !border-gray-600 !bg-gray-700 hover:!bg-gray-600 !text-gray-300 !transition-colors !border-r-0"
+											dropdownClass="!bg-gray-700 !border-gray-600 !text-gray-100 !shadow-xl !rounded-lg !mt-1 !max-h-60 !overflow-y-auto !min-w-72"
+											searchClass="!bg-gray-700 !border-gray-600 !text-gray-100 !placeholder-gray-400"
+											enableSearch
+											disableSearchIcon
+											searchPlaceholder="Search country..."
+										/>
+									</div>
 								</div>
-								<input
-									id="password"
-									name="password"
-									type="password"
-									required
-									className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
-									placeholder="Enter your password"
-								/>
-							</div>
-						</div>
 
-						{error && (
-							<div className="text-sm text-center text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
-								{error}
-							</div>
-						)}
-
-						<div>
-							<button
-								type="submit"
-								disabled={loading}
-								className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-							>
-								{loading ? (
-									<>
-										<svg
-											className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
+								<div>
+									<div className="flex items-center justify-between">
+										<label
+											htmlFor="password"
+											className="block text-sm font-medium text-gray-300 font-body"
 										>
-											<circle
-												className="opacity-25"
-												cx="12"
-												cy="12"
-												r="10"
-												stroke="currentColor"
-												strokeWidth="4"
-											></circle>
-											<path
-												className="opacity-75"
-												fill="currentColor"
-												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-											></path>
-										</svg>
-										Signing in...
-									</>
-								) : (
-									"Sign in"
-								)}
-							</button>
-						</div>
-					</form>
+											Password
+										</label>
+										<Link
+											href="/forgot-password"
+											className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
+										>
+											Forgot password?
+										</Link>
+									</div>
+									<div className="relative">
+										<input
+											id="password"
+											name="password"
+											type={
+												showPassword
+													? "text"
+													: "password"
+											}
+											required
+											className="mt-1 block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-gray-700 border border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-500 transition-colors rounded-md [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+											placeholder="Enter your password"
+											autoComplete="current-password"
+										/>
+										<button
+											type="button"
+											onClick={() =>
+												setShowPassword(!showPassword)
+											}
+											className="absolute inset-y-0 right-0 top-1 flex items-center pr-3 text-gray-400 hover:text-gray-200 transition-colors"
+										>
+											{showPassword ? (
+												<svg
+													className="h-5 w-5"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+													strokeWidth={2}
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 1-4.243-4.243m4.242 4.242L9.88 9.88"
+													/>
+												</svg>
+											) : (
+												<svg
+													className="h-5 w-5"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+													strokeWidth={2}
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
+													/>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+													/>
+												</svg>
+											)}
+										</button>
+									</div>
+								</div>
+							</div>
+
+							{error && (
+								<div className="text-sm text-center text-red-300 bg-red-900/20 border border-red-700/30 rounded-md p-3">
+									{error}
+								</div>
+							)}
+
+							<div>
+								<button
+									type="submit"
+									disabled={loading}
+									className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+								>
+									{loading ? (
+										<>
+											<svg
+												className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+											>
+												<circle
+													className="opacity-25"
+													cx="12"
+													cy="12"
+													r="10"
+													stroke="currentColor"
+													strokeWidth="4"
+												></circle>
+												<path
+													className="opacity-75"
+													fill="currentColor"
+													d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+												></path>
+											</svg>
+											Signing in...
+										</>
+									) : (
+										"Sign in"
+									)}
+								</button>
+							</div>
+						</form>
+					</div>
 				</div>
 			</div>
-		</div>
+		</>
 	);
 }

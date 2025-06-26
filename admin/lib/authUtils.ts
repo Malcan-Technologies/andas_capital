@@ -178,7 +178,8 @@ export const fetchWithAdminTokenRefresh = async <T>(
 		!url.startsWith("/api/users/") &&
 		!url.startsWith("/api/admin/refresh") &&
 		!url.startsWith("/api/admin/login") &&
-		!url.startsWith("/api/admin/logout")
+		!url.startsWith("/api/admin/logout") &&
+		!url.startsWith("/api/admin/payments/") // Keep payments routes in frontend
 	) {
 		// For API calls to admin endpoints, route them to the backend
 		const isAdminEndpoint = url.includes("/api/admin/");

@@ -17,13 +17,15 @@ export default function PaymentMethodModal({
 }: PaymentMethodModalProps) {
 	return (
 		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-			<div className="bg-gradient-to-br from-gray-900/90 to-gray-800/90 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto text-white border border-white/10">
+			<div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
 				<div className="p-6">
 					<div className="flex items-center justify-between mb-6">
-						<h2 className="text-xl font-bold">{title}</h2>
+						<h2 className="text-xl font-bold text-gray-700 font-heading">
+							{title}
+						</h2>
 						<button
 							onClick={onClose}
-							className="text-gray-400 hover:text-gray-200"
+							className="text-gray-500 hover:text-gray-700 transition-colors"
 						>
 							<svg
 								className="w-6 h-6"
@@ -42,11 +44,11 @@ export default function PaymentMethodModal({
 					</div>
 
 					{amount && (
-						<div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
-							<p className="text-sm text-gray-400">
+						<div className="mb-6 p-4 bg-blue-tertiary/5 rounded-xl border border-blue-tertiary/20">
+							<p className="text-sm text-gray-500 font-body">
 								Amount to Pay
 							</p>
-							<p className="text-xl font-semibold">
+							<p className="text-xl font-semibold text-purple-primary font-heading">
 								MYR {amount}
 							</p>
 						</div>
@@ -57,20 +59,20 @@ export default function PaymentMethodModal({
 						{onFPXSelect && (
 							<button
 								onClick={onFPXSelect}
-								className="w-full border border-white/10 rounded-xl p-4 hover:border-emerald-500/50 transition-colors bg-white/5 text-left"
+								className="w-full border border-gray-200 rounded-xl p-4 hover:border-purple-primary/50 hover:bg-purple-primary/5 transition-colors bg-white text-left shadow-sm"
 							>
 								<div className="flex items-center justify-between mb-3">
 									<div className="flex items-center space-x-3">
-										<div className="w-10 h-10 bg-emerald-900/50 rounded-lg flex items-center justify-center border border-emerald-500/30">
-											<span className="text-emerald-400 font-bold text-sm">
+										<div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center border border-green-200">
+											<span className="text-green-700 font-bold text-sm">
 												FPX
 											</span>
 										</div>
 										<div>
-											<h3 className="font-semibold text-white">
+											<h3 className="font-semibold text-gray-700 font-heading">
 												FPX Express Deposit
 											</h3>
-											<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-900/50 text-orange-300 border border-orange-500/30">
+											<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 font-body">
 												Popular
 											</span>
 										</div>
@@ -89,22 +91,30 @@ export default function PaymentMethodModal({
 										/>
 									</svg>
 								</div>
-								<div className="space-y-2 text-sm text-gray-400">
+								<div className="space-y-2 text-sm text-gray-500 font-body">
 									<div className="flex justify-between">
 										<span>Estimated Arrival</span>
-										<span>Usually 5 Min</span>
+										<span className="text-gray-700">
+											Usually 5 Min
+										</span>
 									</div>
 									<div className="flex justify-between">
 										<span>Fees</span>
-										<span>Free</span>
+										<span className="text-gray-700">
+											Free
+										</span>
 									</div>
 									<div className="flex justify-between">
 										<span>Currency</span>
-										<span>MYR</span>
+										<span className="text-gray-700">
+											MYR
+										</span>
 									</div>
 									<div className="flex justify-between">
 										<span>Supported Banks</span>
-										<span>Most Malaysian Banks</span>
+										<span className="text-gray-700">
+											Most Malaysian Banks
+										</span>
 									</div>
 								</div>
 							</button>
@@ -113,10 +123,10 @@ export default function PaymentMethodModal({
 						{/* Bank Transfer */}
 						<button
 							onClick={onBankTransferSelect}
-							className="w-full border border-white/10 rounded-xl p-4 hover:border-emerald-500/50 hover:bg-emerald-900/20 transition-colors text-left bg-white/5"
+							className="w-full border border-gray-200 rounded-xl p-4 hover:border-purple-primary/50 hover:bg-purple-primary/5 transition-colors text-left bg-white shadow-sm"
 						>
 							<div className="flex items-center justify-between mb-3">
-								<h3 className="font-semibold text-white">
+								<h3 className="font-semibold text-gray-700 font-heading">
 									Bank Transfer
 								</h3>
 								<svg
@@ -133,22 +143,26 @@ export default function PaymentMethodModal({
 									/>
 								</svg>
 							</div>
-							<div className="space-y-2 text-sm text-gray-400">
+							<div className="space-y-2 text-sm text-gray-500 font-body">
 								<div className="flex justify-between">
 									<span>Estimated Arrival</span>
-									<span>Usually 1 Business Day</span>
+									<span className="text-gray-700">
+										Usually 1 Business Day
+									</span>
 								</div>
 								<div className="flex justify-between">
 									<span>Fees</span>
-									<span>Free</span>
+									<span className="text-gray-700">Free</span>
 								</div>
 								<div className="flex justify-between">
 									<span>Currency</span>
-									<span>MYR</span>
+									<span className="text-gray-700">MYR</span>
 								</div>
 								<div className="flex justify-between">
 									<span>Supported Banks</span>
-									<span>Most Malaysian Banks</span>
+									<span className="text-gray-700">
+										Most Malaysian Banks
+									</span>
 								</div>
 							</div>
 						</button>

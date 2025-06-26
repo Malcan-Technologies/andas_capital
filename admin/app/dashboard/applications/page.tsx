@@ -1074,26 +1074,7 @@ function AdminApplicationsPageContent() {
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
 							<div className="p-6">
 								<div className="flex justify-between items-center mb-6">
-									<div className="flex items-center">
-										<button
-											onClick={handleViewClose}
-											className="mr-3 p-1 rounded-full bg-gray-700/50 hover:bg-gray-700/70 text-gray-300"
-										>
-											<svg
-												className="w-5 h-5"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-												xmlns="http://www.w3.org/2000/svg"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-													d="M15 19l-7-7 7-7"
-												/>
-											</svg>
-										</button>
+									<div>
 										<h3 className="text-xl font-semibold text-white">
 											Application Details
 										</h3>

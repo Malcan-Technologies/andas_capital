@@ -140,21 +140,21 @@ export default function ApplicationDetails({
 	const getStatusColor = (status: string) => {
 		switch (status) {
 			case "INCOMPLETE":
-				return "bg-yellow-500/20 text-yellow-400";
+				return "bg-yellow-100 text-yellow-800 border border-yellow-200";
 			case "PENDING_APP_FEE":
 			case "PENDING_KYC":
 			case "PENDING_APPROVAL":
-				return "bg-blue-500/20 text-blue-400";
+				return "bg-blue-100 text-blue-800 border border-blue-200";
 			case "APPROVED":
-				return "bg-green-500/20 text-green-400";
+				return "bg-green-100 text-green-800 border border-green-200";
 			case "REJECTED":
-				return "bg-red-500/20 text-red-400";
+				return "bg-red-100 text-red-800 border border-red-200";
 			case "DISBURSED":
-				return "bg-purple-500/20 text-purple-400";
+				return "bg-purple-100 text-purple-800 border border-purple-200";
 			case "WITHDRAWN":
-				return "bg-gray-500/20 text-gray-400";
+				return "bg-gray-100 text-gray-800 border border-gray-200";
 			default:
-				return "bg-gray-500/20 text-gray-400";
+				return "bg-gray-100 text-gray-800 border border-gray-200";
 		}
 	};
 
@@ -226,32 +226,30 @@ export default function ApplicationDetails({
 
 	return (
 		<DashboardLayout userName={userName}>
-			<div className="min-h-screen bg-gray-900">
+			<div className="min-h-screen bg-offwhite">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 					{loading ? (
 						<div className="flex justify-center items-center p-8">
-							<div
-								className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-blue-400 border-r-transparent align-[-0.125em]"
-								role="status"
-							>
-								<span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">
-									Loading...
-								</span>
+							<div className="flex flex-col items-center space-y-4">
+								<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary"></div>
+								<p className="text-gray-700 font-body">
+									Loading application details...
+								</p>
 							</div>
 						</div>
 					) : application ? (
 						<div className="space-y-6">
-							<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6">
-								<div className="flex items-center justify-between border-b border-gray-700/50 pb-4 mb-4">
+							<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+								<div className="flex items-center justify-between border-b border-gray-200 pb-4 mb-4">
 									<div>
 										<button
 											onClick={() => router.back()}
-											className="mb-4 inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg text-gray-300 bg-gray-800/50 backdrop-blur-md hover:bg-gray-700/50 transition-colors"
+											className="mb-4 inline-flex items-center px-4 py-2 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-body"
 										>
 											<ArrowBackIcon className="h-4 w-4 mr-2" />
 											Back to Applications
 										</button>
-										<h1 className="text-2xl font-semibold text-white">
+										<h1 className="text-2xl font-heading font-bold text-purple-primary">
 											Loan Application Details
 										</h1>
 									</div>
@@ -265,51 +263,51 @@ export default function ApplicationDetails({
 								</div>
 
 								{/* Loan Details Section */}
-								<div className="bg-gray-800/30 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 mb-6">
-									<h2 className="text-lg font-medium text-white mb-6">
+								<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+									<h2 className="text-lg font-heading font-semibold text-blue-tertiary mb-6">
 										Loan Details
 									</h2>
 									<div className="space-y-6">
 										<div className="space-y-4">
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Product
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{application.product.name}
 												</span>
 											</div>
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Loan Amount
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{formatCurrency(
 														application.amount
 													)}
 												</span>
 											</div>
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Loan Purpose
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{application.purpose}
 												</span>
 											</div>
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Loan Term
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{application.term} months
 												</span>
 											</div>
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Interest Rate
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{
 														application.product
 															.interestRate
@@ -322,10 +320,10 @@ export default function ApplicationDetails({
 										{/* Fees Section */}
 										{application && (
 											<>
-												<div className="pt-4 border-t border-gray-700/50">
+												<div className="pt-4 border-t border-gray-200">
 													<div className="space-y-4">
 														<div className="flex justify-between">
-															<span className="text-gray-400">
+															<span className="text-gray-500 font-body">
 																Origination Fee
 																(
 																{
@@ -335,7 +333,7 @@ export default function ApplicationDetails({
 																}
 																%)
 															</span>
-															<span className="text-red-400">
+															<span className="text-red-600 font-body">
 																(
 																{formatCurrency(
 																	calculateFees(
@@ -347,7 +345,7 @@ export default function ApplicationDetails({
 															</span>
 														</div>
 														<div className="flex justify-between">
-															<span className="text-gray-400">
+															<span className="text-gray-500 font-body">
 																Legal Fee (
 																{
 																	application
@@ -356,7 +354,7 @@ export default function ApplicationDetails({
 																}
 																%)
 															</span>
-															<span className="text-red-400">
+															<span className="text-red-600 font-body">
 																(
 																{formatCurrency(
 																	calculateFees(
@@ -367,11 +365,11 @@ export default function ApplicationDetails({
 															</span>
 														</div>
 														<div className="flex justify-between">
-															<span className="text-gray-400">
+															<span className="text-gray-500 font-body">
 																Application Fee
 																(paid upfront)
 															</span>
-															<span className="text-red-400">
+															<span className="text-red-600 font-body">
 																(
 																{formatCurrency(
 																	calculateFees(
@@ -385,34 +383,39 @@ export default function ApplicationDetails({
 													</div>
 												</div>
 
-												<div className="pt-4 border-t border-gray-700/50">
+												<div className="pt-4 border-t border-gray-200">
 													<div className="space-y-4">
-														<div className="flex justify-between">
-															<span className="text-white font-bold">
-																Net Loan
-																Disbursement
-															</span>
-															<span className="text-green-400 font-bold">
-																{formatCurrency(
-																	calculateFees(
-																		application
-																	)
-																		.netDisbursement
-																)}
-															</span>
+														{/* Net Loan Disbursement - Highlighted */}
+														<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+															<div className="flex justify-between items-center">
+																<span className="text-blue-tertiary font-normal text-lg font-body">
+																	Net Loan
+																	Disbursement
+																</span>
+																<span className="text-blue-tertiary font-normal text-xl font-heading">
+																	{formatCurrency(
+																		calculateFees(
+																			application
+																		)
+																			.netDisbursement
+																	)}
+																</span>
+															</div>
 														</div>
-														<div className="flex justify-between">
-															<span className="text-white font-bold">
-																Monthly
-																Repayment
-															</span>
-															<span className="text-red-400 font-bold">
-																(
-																{formatCurrency(
-																	application.monthlyRepayment
-																)}
-																)
-															</span>
+
+														{/* Monthly Repayment - Highlighted */}
+														<div className="bg-purple-primary/5 rounded-xl p-4 border border-purple-primary/20">
+															<div className="flex justify-between items-center">
+																<span className="text-purple-primary font-normal text-lg font-body">
+																	Monthly
+																	Repayment
+																</span>
+																<span className="text-purple-primary font-normal text-xl font-heading">
+																	{formatCurrency(
+																		application.monthlyRepayment
+																	)}
+																</span>
+															</div>
 														</div>
 													</div>
 												</div>
@@ -423,32 +426,32 @@ export default function ApplicationDetails({
 
 								{/* Personal Information Section */}
 								{application.user && (
-									<div className="bg-gray-800/30 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 mb-6">
-										<h2 className="text-lg font-medium text-white mb-6">
+									<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+										<h2 className="text-lg font-heading font-semibold text-blue-tertiary mb-6">
 											Personal Information
 										</h2>
 										<div className="space-y-4">
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Full Name
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{application.user.fullName}
 												</span>
 											</div>
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Email
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{application.user.email}
 												</span>
 											</div>
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Phone Number
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{
 														application.user
 															.phoneNumber
@@ -456,10 +459,10 @@ export default function ApplicationDetails({
 												</span>
 											</div>
 											<div className="flex justify-between">
-												<span className="text-gray-400">
+												<span className="text-gray-500 font-body">
 													Employment Status
 												</span>
-												<span className="text-white font-medium">
+												<span className="text-gray-700 font-medium font-body">
 													{
 														application.user
 															.employmentStatus
@@ -468,10 +471,10 @@ export default function ApplicationDetails({
 											</div>
 											{application.user.employerName && (
 												<div className="flex justify-between">
-													<span className="text-gray-400">
+													<span className="text-gray-500 font-body">
 														Employer
 													</span>
-													<span className="text-white font-medium">
+													<span className="text-gray-700 font-medium font-body">
 														{
 															application.user
 																.employerName
@@ -481,10 +484,10 @@ export default function ApplicationDetails({
 											)}
 											{application.user.monthlyIncome && (
 												<div className="flex justify-between">
-													<span className="text-gray-400">
+													<span className="text-gray-500 font-body">
 														Monthly Income
 													</span>
-													<span className="text-white font-medium">
+													<span className="text-gray-700 font-medium font-body">
 														{formatCurrency(
 															Number(
 																application.user
@@ -494,11 +497,11 @@ export default function ApplicationDetails({
 													</span>
 												</div>
 											)}
-											<div className="pt-4 border-t border-gray-700/50">
-												<span className="text-white font-medium block mb-2">
+											<div className="pt-4 border-t border-gray-200">
+												<span className="text-gray-700 font-medium font-body block mb-2">
 													Address
 												</span>
-												<span className="text-gray-400 block">
+												<span className="text-gray-500 font-body block">
 													{application.user.address1}
 													{application.user
 														.address2 && (
@@ -525,16 +528,16 @@ export default function ApplicationDetails({
 								)}
 
 								{/* Documents Section */}
-								<div className="bg-gray-800/30 backdrop-blur-md border border-gray-700/50 rounded-xl p-6 mb-6">
+								<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
 									<div className="flex justify-between items-center mb-4">
-										<h2 className="text-lg font-medium text-white">
+										<h2 className="text-lg font-heading font-semibold text-blue-tertiary">
 											Required Documents
 										</h2>
 										<button
 											onClick={() =>
 												setIsDocumentDialogOpen(true)
 											}
-											className="inline-flex items-center px-4 py-2 border border-blue-600/60 rounded-lg text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
+											className="inline-flex items-center px-4 py-2 border border-blue-tertiary/30 rounded-xl text-blue-tertiary bg-blue-tertiary/5 hover:bg-blue-tertiary/10 transition-colors font-body"
 											disabled={
 												application.status ===
 												"WITHDRAWN"
@@ -544,7 +547,7 @@ export default function ApplicationDetails({
 											Edit Documents
 										</button>
 									</div>
-									<div className="divide-y divide-gray-700/50">
+									<div className="divide-y divide-gray-200">
 										{application.product
 											.requiredDocuments &&
 										application.product.requiredDocuments
@@ -563,15 +566,15 @@ export default function ApplicationDetails({
 															className="flex flex-col py-3"
 														>
 															<div className="flex justify-between items-center mb-2">
-																<span className="text-sm text-gray-300">
+																<span className="text-sm text-gray-700 font-body">
 																	{docType}
 																</span>
 																<span
 																	className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
 																		uploadedDocs.length >
 																		0
-																			? "bg-green-500/20 text-green-400"
-																			: "bg-yellow-500/20 text-yellow-400"
+																			? "bg-green-100 text-green-800 border border-green-200"
+																			: "bg-yellow-100 text-yellow-800 border border-yellow-200"
 																	}`}
 																>
 																	{uploadedDocs.length >
@@ -593,7 +596,7 @@ export default function ApplicationDetails({
 																				}
 																				className="flex justify-between items-center"
 																			>
-																				<span className="text-sm text-gray-400">
+																				<span className="text-sm text-gray-500 font-body">
 																					{doc.fileUrl
 																						?.split(
 																							"/"
@@ -606,7 +609,7 @@ export default function ApplicationDetails({
 																					href={`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${application.id}/documents/${doc.id}`}
 																					target="_blank"
 																					rel="noopener noreferrer"
-																					className="text-blue-400 hover:text-blue-300 text-sm"
+																					className="text-blue-tertiary hover:text-blue-600 text-sm font-body"
 																				>
 																					View
 																				</a>
@@ -621,14 +624,14 @@ export default function ApplicationDetails({
 											)
 										) : (
 											<div className="py-3">
-												<p className="text-sm text-gray-400">
+												<p className="text-sm text-gray-500 font-body">
 													No required documents found
 												</p>
 											</div>
 										)}
 									</div>
 									{application.status === "WITHDRAWN" && (
-										<Typography className="text-sm text-gray-400 mt-4">
+										<Typography className="text-sm text-gray-500 font-body mt-4">
 											Document uploads are disabled for
 											withdrawn applications.
 										</Typography>
@@ -636,18 +639,18 @@ export default function ApplicationDetails({
 								</div>
 
 								{/* Application Timeline */}
-								<div className="bg-gray-800/30 backdrop-blur-md border border-gray-700/50 rounded-xl p-6">
-									<h2 className="text-lg font-medium text-white mb-4">
+								<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+									<h2 className="text-lg font-heading font-semibold text-blue-tertiary mb-4">
 										Application Timeline
 									</h2>
 									<div className="space-y-4">
 										<div className="flex items-center gap-3">
-											<div className="flex-shrink-0 w-2 h-2 rounded-full bg-green-400" />
+											<div className="flex-shrink-0 w-2 h-2 rounded-full bg-green-500" />
 											<div className="flex-1">
-												<p className="text-sm font-medium text-white">
+												<p className="text-sm font-medium text-gray-700 font-body">
 													Application Started
 												</p>
-												<p className="text-sm text-gray-400">
+												<p className="text-sm text-gray-500 font-body">
 													{formatDate(
 														application.createdAt
 													)}
@@ -657,12 +660,12 @@ export default function ApplicationDetails({
 										{application.status !==
 											"INCOMPLETE" && (
 											<div className="flex items-center gap-3">
-												<div className="flex-shrink-0 w-2 h-2 rounded-full bg-green-400" />
+												<div className="flex-shrink-0 w-2 h-2 rounded-full bg-green-500" />
 												<div className="flex-1">
-													<p className="text-sm font-medium text-white">
+													<p className="text-sm font-medium text-gray-700 font-body">
 														Application Submitted
 													</p>
-													<p className="text-sm text-gray-400">
+													<p className="text-sm text-gray-500 font-body">
 														{formatDate(
 															application.updatedAt
 														)}
@@ -672,12 +675,12 @@ export default function ApplicationDetails({
 										)}
 										{application.status === "WITHDRAWN" && (
 											<div className="flex items-center gap-3">
-												<div className="flex-shrink-0 w-2 h-2 rounded-full bg-red-400" />
+												<div className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500" />
 												<div className="flex-1">
-													<p className="text-sm font-medium text-white">
+													<p className="text-sm font-medium text-gray-700 font-body">
 														Application Withdrawn
 													</p>
-													<p className="text-sm text-gray-400">
+													<p className="text-sm text-gray-500 font-body">
 														{formatDate(
 															application.updatedAt
 														)}
@@ -690,8 +693,8 @@ export default function ApplicationDetails({
 							</div>
 						</div>
 					) : (
-						<div className="bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl p-6">
-							<p className="text-gray-400">
+						<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+							<p className="text-gray-500 font-body">
 								Application not found
 							</p>
 						</div>
@@ -707,21 +710,24 @@ export default function ApplicationDetails({
 				fullWidth
 				PaperProps={{
 					style: {
-						backgroundColor: "#1F2937",
+						backgroundColor: "white",
 						borderRadius: "12px",
-						border: "1px solid rgba(75, 85, 99, 0.5)",
+						border: "1px solid #E5E7EB",
 					},
 				}}
 			>
-				<div className="p-6 bg-gray-800">
+				<div className="p-6 bg-white">
 					<div className="flex justify-between items-center mb-6">
-						<Typography variant="h6" className="text-white">
+						<Typography
+							variant="h6"
+							className="text-purple-primary font-heading font-semibold"
+						>
 							Edit Documents
 						</Typography>
 						<IconButton
 							onClick={() => setIsDocumentDialogOpen(false)}
 							size="small"
-							className="text-gray-400 hover:text-gray-300"
+							className="text-gray-500 hover:text-gray-700"
 						>
 							<CloseIcon />
 						</IconButton>

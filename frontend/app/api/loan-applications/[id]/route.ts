@@ -41,6 +41,42 @@ export async function GET(
 	}
 }
 
+export async function DELETE(
+	req: NextRequest,
+	{ params }: { params: { id: string } }
+) {
+	try {
+		const cookieStore = cookies();
+		const token = cookieStore.get("token")?.value;
+
+		if (!token) {
+			return NextResponse.json(
+				{ message: "Unauthorized" },
+				{ status: 401 }
+			);
+		}
+
+		const response = await fetch(
+			`${API_URL}/api/loan-applications/${params.id}`,
+			{
+				method: "DELETE",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			}
+		);
+
+		const data = await response.json();
+		return NextResponse.json(data, { status: response.status });
+	} catch (error) {
+		console.error("Error deleting loan application:", error);
+		return NextResponse.json(
+			{ message: "Failed to delete loan application" },
+			{ status: 500 }
+		);
+	}
+}
+
 export async function PATCH(
 	req: NextRequest,
 	{ params }: { params: { id: string } }

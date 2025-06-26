@@ -123,43 +123,45 @@ export default function ProductSelectionForm({
 				{activeProducts.map((product) => (
 					<div
 						key={product.id}
-						className={`bg-gray-800/50 backdrop-blur-md border rounded-xl p-6 cursor-pointer transition-all hover:border-blue-400 ${
+						className={`bg-white border rounded-xl p-6 cursor-pointer transition-all hover:border-purple-primary hover:shadow-md ${
 							selected === product.id
-								? "border-blue-400 bg-blue-900/20"
-								: "border-gray-700/50"
+								? "border-purple-primary bg-purple-primary/5 shadow-md"
+								: "border-gray-200"
 						}`}
 						onClick={() => handleSelect(product.id)}
 					>
 						<div className="flex justify-between items-center mb-4">
-							<h3 className="text-lg font-semibold text-white">
+							<h3 className="text-lg font-semibold text-gray-700 font-heading">
 								{product.name}
 							</h3>
 							{selected === product.id && (
-								<CheckCircleIcon className="text-blue-400" />
+								<CheckCircleIcon className="text-purple-primary" />
 							)}
 						</div>
-						<p className="text-gray-300 text-sm mb-4">
+						<p className="text-gray-600 text-sm mb-4 font-body">
 							{product.description}
 						</p>
 						<div className="space-y-2">
-							<p className="text-sm text-gray-400">
+							<p className="text-sm text-gray-500 font-body">
 								Loan Amount: RM
 								{product.minAmount.toLocaleString()} - RM
 								{product.maxAmount.toLocaleString()}
 							</p>
-							<p className="text-sm text-gray-400">
+							<p className="text-sm text-gray-500 font-body">
 								Interest Rate: {product.interestRate}% per month
 							</p>
 						</div>
 					</div>
 				))}
 			</div>
-			{error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+			{error && (
+				<p className="text-red-600 text-sm mb-4 font-body">{error}</p>
+			)}
 			<div className="flex justify-end">
 				<button
 					type="submit"
 					disabled={!selected || loading}
-					className="px-6 py-3 bg-blue-600/80 backdrop-blur-md border border-blue-500/50 text-white rounded-lg hover:bg-blue-600/90 hover:border-blue-400/60 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+					className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium font-body"
 				>
 					{loading ? "Processing..." : "Continue"}
 				</button>

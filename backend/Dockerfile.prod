@@ -56,9 +56,9 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy compiled JavaScript
 COPY --from=builder /app/dist ./dist
 
-# Copy scripts directory
+# Copy scripts directory and add migration validation
 COPY scripts ./scripts/
-RUN chmod +x ./scripts/migrate-db.sh
+RUN chmod +x ./scripts/*.sh ./scripts/*.js
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chmod 777 uploads

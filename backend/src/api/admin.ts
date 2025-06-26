@@ -9,6 +9,8 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
+import lateFeeRoutes from "./admin/late-fees";
+import { LateFeeProcessor } from "../lib/lateFeeProcessor";
 /**
  * @swagger
  * tags:
@@ -18,6 +20,9 @@ import { AuthRequest } from "../middleware/auth";
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Register sub-routes
+router.use("/late-fees", lateFeeRoutes);
 
 // Helper function to create a loan disbursement record
 async function createLoanDisbursementRecord(
@@ -283,14 +288,21 @@ router.get(
 					},
 				});
 
-			// Get approved loans count (status = APPROVED or DISBURSED)
+			// Get approved loans count (status = APPROVED only, not including ACTIVE)
 			const approvedLoans = await prisma.loanApplication.count({
 				where: {
-					status: {
-						in: ["APPROVED", "ACTIVE"],
-					},
+					status: "APPROVED",
 				},
 			});
+
+			// Get pending disbursement count (applications that are approved but not yet disbursed)
+			const pendingDisbursementCount = await prisma.loanApplication.count(
+				{
+					where: {
+						status: "PENDING_DISBURSEMENT",
+					},
+				}
+			);
 
 			// Get disbursed loans count (status = DISBURSED only)
 			const disbursedLoans = await prisma.loanApplication.count({
@@ -299,23 +311,98 @@ router.get(
 				},
 			});
 
-			// Get total disbursed amount (sum loan amounts where status = DISBURSED)
-			const disbursedLoanDetails = await prisma.loanApplication.findMany({
+			// Get total applications count (excluding INCOMPLETE applications)
+			const totalApplications = await prisma.loanApplication.count({
+				where: {
+					status: {
+						not: "INCOMPLETE",
+					},
+				},
+			});
+
+			// Get total loan value (TLV) - sum of totalAmount from active loans
+			const activeLoanDetails = await prisma.loan.findMany({
 				where: {
 					status: "ACTIVE",
 				},
 				select: {
-					amount: true,
+					totalAmount: true,
+					principalAmount: true,
 				},
 			});
 
-			// Calculate total disbursed amount
-			const totalDisbursedAmount = disbursedLoanDetails.reduce(
-				(sum, loan) => {
-					return sum + (loan.amount || 0);
+			// Calculate total loan value (amount borrowers need to pay back including interest)
+			const totalLoanValue = activeLoanDetails.reduce((sum, loan) => {
+				return sum + (loan.totalAmount || 0);
+			}, 0);
+
+			// Get total repayments made from wallet transactions to calculate current loan value
+			const totalRepaymentsMade =
+				await prisma.walletTransaction.aggregate({
+					_sum: {
+						amount: true,
+					},
+					where: {
+						type: "LOAN_REPAYMENT",
+						status: "APPROVED",
+					},
+				});
+
+			// Calculate current loan value (Total Loan Value - Repayments Made)
+			const currentLoanValue =
+				Math.round(
+					(totalLoanValue -
+						Math.abs(totalRepaymentsMade._sum.amount || 0)) *
+						100
+				) / 100;
+
+			// Get total disbursed amount from loan_disbursement table
+			const totalDisbursedAmount =
+				await prisma.loanDisbursement.aggregate({
+					_sum: {
+						amount: true,
+					},
+					where: {
+						status: "COMPLETED",
+					},
+				});
+
+			// Get total principal amount from loans to calculate fees collected
+			const totalPrincipalAmount = await prisma.loan.aggregate({
+				_sum: {
+					principalAmount: true,
 				},
-				0
-			);
+				where: {
+					status: {
+						in: ["ACTIVE", "PENDING_DISCHARGE", "DISCHARGED"],
+					},
+				},
+			});
+
+			// Calculate total fees collected (Principal - Disbursed)
+			const totalFeesCollected =
+				Math.round(
+					((totalPrincipalAmount._sum.principalAmount || 0) -
+						(totalDisbursedAmount._sum.amount || 0)) *
+						100
+				) / 100;
+
+			// Get total repayments from wallet_transactions (actual cash collected)
+			const totalRepaymentsResult =
+				await prisma.walletTransaction.aggregate({
+					_sum: {
+						amount: true,
+					},
+					where: {
+						type: "LOAN_REPAYMENT",
+						status: "APPROVED",
+					},
+				});
+
+			const totalRepayments =
+				Math.round(
+					Math.abs(totalRepaymentsResult._sum.amount || 0) * 100
+				) / 100;
 
 			// Get recent applications
 			const recentApplications = await prisma.loanApplication.findMany({
@@ -335,10 +422,16 @@ router.get(
 
 			res.json({
 				totalUsers,
+				totalApplications,
 				pendingReviewApplications,
 				approvedLoans,
+				pendingDisbursementCount,
 				disbursedLoans,
-				totalDisbursedAmount,
+				totalDisbursedAmount: totalDisbursedAmount._sum.amount || 0,
+				totalLoanValue,
+				currentLoanValue,
+				totalFeesCollected,
+				totalRepayments,
 				recentApplications,
 			});
 		} catch (error) {
@@ -386,6 +479,18 @@ router.get(
  *                       users:
  *                         type: number
  *                       kyc_users:
+ *                         type: number
+ *                       actual_repayments:
+ *                         type: number
+ *                       scheduled_repayments:
+ *                         type: number
+ *                       total_loan_value:
+ *                         type: number
+ *                       current_loan_value:
+ *                         type: number
+ *                       repayment_count:
+ *                         type: number
+ *                       scheduled_count:
  *                         type: number
  *       401:
  *         description: Unauthorized
@@ -441,22 +546,109 @@ router.get(
 				kyc_users: bigint;
 			}>;
 
-			// Get monthly disbursement amounts and counts for revenue calculation
+			// Get monthly disbursement amounts and counts using loan_disbursement table
 			const monthlyDisbursements = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', la."createdAt") as month,
-					SUM(COALESCE(la.amount, 0)) as total_amount,
+					DATE_TRUNC('month', ld."disbursedAt") as month,
+					ROUND(SUM(COALESCE(ld.amount, 0))::numeric, 2) as total_amount,
 					COUNT(*) as disbursement_count
-				FROM "loan_applications" la
-				WHERE la.status = 'ACTIVE' 
-				AND la."createdAt" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', la."createdAt")
+				FROM "loan_disbursements" ld
+				WHERE ld.status = 'COMPLETED' 
+				AND ld."disbursedAt" >= ${sixMonthsAgo}
+				GROUP BY DATE_TRUNC('month', ld."disbursedAt")
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
 				total_amount: number;
 				disbursement_count: bigint;
 			}>;
+
+			// Get monthly actual repayments from wallet_transactions (actual cash collected)
+			const monthlyRepayments = (await prisma.$queryRaw`
+				SELECT 
+					DATE_TRUNC('month', wt."processedAt") as month,
+					ROUND(SUM(ABS(COALESCE(wt.amount, 0)))::numeric, 2) as actual_repayments,
+					COUNT(*) as repayment_count
+				FROM "wallet_transactions" wt
+				WHERE wt.type = 'LOAN_REPAYMENT' 
+				AND wt.status = 'APPROVED'
+				AND wt."processedAt" IS NOT NULL
+				AND wt."processedAt" >= ${sixMonthsAgo}
+				GROUP BY DATE_TRUNC('month', wt."processedAt")
+				ORDER BY month ASC
+			`) as Array<{
+				month: Date;
+				actual_repayments: number;
+				repayment_count: bigint;
+			}>;
+
+			// Get monthly scheduled repayments using scheduledAmount from loan_repayments
+			const monthlyScheduledRepayments = (await prisma.$queryRaw`
+				SELECT 
+					DATE_TRUNC('month', lr."dueDate") as month,
+					ROUND(SUM(COALESCE(lr."scheduledAmount", lr.amount))::numeric, 2) as scheduled_repayments,
+					COUNT(*) as scheduled_count
+				FROM "loan_repayments" lr
+				WHERE lr."dueDate" >= ${sixMonthsAgo}
+				GROUP BY DATE_TRUNC('month', lr."dueDate")
+				ORDER BY month ASC
+			`) as Array<{
+				month: Date;
+				scheduled_repayments: number;
+				scheduled_count: bigint;
+			}>;
+
+			// Get monthly TLV using totalAmount from loans table
+			const monthlyTLV = (await prisma.$queryRaw`
+				SELECT 
+					DATE_TRUNC('month', l."createdAt") as month,
+					ROUND(SUM(COALESCE(l."totalAmount", l."principalAmount"))::numeric, 2) as total_loan_value
+				FROM "loans" l
+				WHERE l.status IN ('ACTIVE', 'PENDING_DISCHARGE', 'DISCHARGED')
+				AND l."createdAt" >= ${sixMonthsAgo}
+				GROUP BY DATE_TRUNC('month', l."createdAt")
+				ORDER BY month ASC
+			`) as Array<{
+				month: Date;
+				total_loan_value: number;
+			}>;
+
+			// Calculate current loan value by deducting repayments from total loan value
+			// We need to calculate cumulative values for each month
+			let cumulativeTLV = 0;
+			let cumulativeRepayments = 0;
+
+			const monthlyCurrentLoanValue = monthlyApplications.map((stat) => {
+				const monthKey = stat.month.toISOString();
+
+				// Add new loans for this month
+				const tlvData = monthlyTLV.find(
+					(t) => t.month.toISOString() === monthKey
+				);
+				if (tlvData) {
+					cumulativeTLV += tlvData.total_loan_value;
+				}
+
+				// Add repayments made in this month
+				const repaymentsData = monthlyRepayments.find(
+					(r) => r.month.toISOString() === monthKey
+				);
+				if (repaymentsData) {
+					cumulativeRepayments += repaymentsData.actual_repayments;
+				}
+
+				// Current loan value = Total loans issued - Total repayments made
+				const currentLoanValue = Math.max(
+					0,
+					cumulativeTLV - cumulativeRepayments
+				);
+
+				return {
+					month: stat.month,
+					current_loan_value:
+						Math.round(currentLoanValue * 100) / 100,
+				};
+			});
 
 			// Create a map for easy lookup
 			const userMap = new Map(
@@ -474,6 +666,41 @@ router.get(
 					},
 				])
 			);
+			const repaymentsMap = new Map(
+				monthlyRepayments.map((r) => [
+					r.month.toISOString(),
+					{
+						actual_repayments: Number(r.actual_repayments) || 0,
+						repayment_count: Number(r.repayment_count),
+					},
+				])
+			);
+			const scheduledRepaymentsMap = new Map(
+				monthlyScheduledRepayments.map((s) => [
+					s.month.toISOString(),
+					{
+						scheduled_repayments:
+							Number(s.scheduled_repayments) || 0,
+						scheduled_count: Number(s.scheduled_count),
+					},
+				])
+			);
+			const tlvMap = new Map(
+				monthlyTLV.map((t) => [
+					t.month.toISOString(),
+					{
+						total_loan_value: Number(t.total_loan_value) || 0,
+					},
+				])
+			);
+			const currentLoanValueMap = new Map(
+				monthlyCurrentLoanValue.map((c) => [
+					c.month.toISOString(),
+					{
+						current_loan_value: Number(c.current_loan_value) || 0,
+					},
+				])
+			);
 
 			// Format the data for the frontend
 			const monthlyStats = monthlyApplications.map((stat) => {
@@ -486,6 +713,24 @@ router.get(
 					users: 0,
 					kyc_users: 0,
 				};
+				const repaymentsData = repaymentsMap.get(monthKey) || {
+					actual_repayments: 0,
+					repayment_count: 0,
+				};
+				const scheduledRepaymentsData = scheduledRepaymentsMap.get(
+					monthKey
+				) || {
+					scheduled_repayments: 0,
+					scheduled_count: 0,
+				};
+				const tlvData = tlvMap.get(monthKey) || {
+					total_loan_value: 0,
+				};
+				const currentLoanValueData = currentLoanValueMap.get(
+					monthKey
+				) || {
+					current_loan_value: 0,
+				};
 
 				return {
 					month: stat.month.toLocaleDateString("en-US", {
@@ -494,11 +739,28 @@ router.get(
 					applications: Number(stat.applications),
 					approvals: Number(stat.approvals),
 					disbursements: Number(stat.disbursements),
-					revenue: disbursementData.total_amount * 0.05, // Assuming 5% fee
+					revenue:
+						Math.round(repaymentsData.actual_repayments * 100) /
+						100, // Use actual repayments from wallet transactions
 					disbursement_amount: disbursementData.total_amount,
 					disbursement_count: disbursementData.disbursement_count,
 					users: userData.users,
 					kyc_users: userData.kyc_users,
+					actual_repayments:
+						Math.round(repaymentsData.actual_repayments * 100) /
+						100,
+					scheduled_repayments:
+						Math.round(
+							scheduledRepaymentsData.scheduled_repayments * 100
+						) / 100,
+					total_loan_value:
+						Math.round(tlvData.total_loan_value * 100) / 100,
+					current_loan_value:
+						Math.round(
+							currentLoanValueData.current_loan_value * 100
+						) / 100,
+					repayment_count: repaymentsData.repayment_count,
+					scheduled_count: scheduledRepaymentsData.scheduled_count,
 				};
 			});
 
@@ -531,6 +793,12 @@ router.get(
 						disbursement_count: 0,
 						users: 0,
 						kyc_users: 0,
+						actual_repayments: 0,
+						scheduled_repayments: 0,
+						total_loan_value: 0,
+						current_loan_value: 0,
+						repayment_count: 0,
+						scheduled_count: 0,
 					});
 				}
 			}
@@ -1593,6 +1861,22 @@ router.patch(
 										);
 									}
 
+									// Calculate total amount directly from principal and interest
+									const principal = application.amount;
+									const interestRate =
+										application.interestRate || 0;
+									const term = application.term || 12;
+									const totalInterest =
+										Math.round(
+											principal *
+												(interestRate / 100) *
+												term *
+												100
+										) / 100;
+									const totalAmount =
+										Math.round(
+											(principal + totalInterest) * 100
+										) / 100;
 									updatedLoan =
 										await prismaTransaction.loan.create({
 											data: {
@@ -1600,8 +1884,8 @@ router.patch(
 												applicationId: application.id,
 												principalAmount:
 													application.amount,
-												outstandingBalance:
-													application.amount,
+												totalAmount: totalAmount,
+												outstandingBalance: totalAmount,
 												interestRate:
 													application.interestRate ||
 													0,
@@ -2108,7 +2392,9 @@ router.get(
 
 			const loans = await prisma.loan.findMany({
 				where: {
-					status: "ACTIVE",
+					status: {
+						in: ["ACTIVE", "PENDING_DISCHARGE", "DISCHARGED"],
+					},
 				},
 				include: {
 					user: {
@@ -2157,7 +2443,7 @@ router.get(
 						orderBy: {
 							dueDate: "desc",
 						},
-						take: 10,
+						take: 5, // Just for summary - full data loaded on repayments tab
 					},
 				},
 				orderBy: {
@@ -2346,14 +2632,31 @@ router.post(
 									);
 								}
 
+								// Calculate total amount directly from principal and interest
+								const principal = application.amount;
+								const interestRate =
+									application.interestRate || 0;
+								const term = application.term || 12;
+								const totalInterest =
+									Math.round(
+										principal *
+											(interestRate / 100) *
+											term *
+											100
+									) / 100;
+								const totalAmount =
+									Math.round(
+										(principal + totalInterest) * 100
+									) / 100;
+
 								updatedLoan =
 									await prismaTransaction.loan.create({
 										data: {
 											userId: application.userId,
 											applicationId: application.id,
 											principalAmount: application.amount,
-											outstandingBalance:
-												application.amount,
+											totalAmount: totalAmount,
+											outstandingBalance: totalAmount,
 											interestRate:
 												application.interestRate || 0,
 											term: application.term || 12,
@@ -2390,6 +2693,15 @@ router.post(
 							application.user.bankName,
 							application.user.accountNumber,
 							notes
+						);
+
+						// Auto-generate payment schedule when loan is disbursed
+						console.log(
+							`Auto-generating payment schedule for loan ${updatedLoan.id}`
+						);
+						await generatePaymentScheduleInTransaction(
+							updatedLoan.id,
+							prismaTransaction
 						);
 
 						// Create a wallet transaction record if possible
@@ -3736,6 +4048,2338 @@ router.get(
 				success: false,
 				message: "Failed to fetch disbursements",
 				error: error.message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans/{id}/repayments:
+ *   get:
+ *     summary: Get loan repayment schedule and history (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan ID
+ *     responses:
+ *       200:
+ *         description: Loan repayment data
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/loans/:id/repayments",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+
+			// Get loan with repayments
+			const loan = await prisma.loan.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+					repayments: {
+						orderBy: {
+							dueDate: "asc",
+						},
+					},
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found",
+				});
+			}
+
+			// Generate payment schedule if no repayments exist
+			if (loan.repayments.length === 0 && loan.status === "ACTIVE") {
+				await generatePaymentSchedule(loan.id);
+
+				// Refetch loan with generated repayments
+				const updatedLoan = await prisma.loan.findUnique({
+					where: { id },
+					include: {
+						user: {
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+								phoneNumber: true,
+							},
+						},
+						application: {
+							include: {
+								product: {
+									select: {
+										name: true,
+										code: true,
+									},
+								},
+							},
+						},
+						repayments: {
+							orderBy: {
+								dueDate: "asc",
+							},
+						},
+					},
+				});
+
+				return res.json({
+					success: true,
+					data: updatedLoan,
+				});
+			}
+
+			// Apply prepayment adjustments to the schedule
+			const adjustedLoan = await applyPrepaymentAdjustments(loan);
+
+			// Debug logging
+			console.log(`Admin API - Loan ${loan.id} repayments response:`);
+			console.log(`  • Original repayments: ${loan.repayments.length}`);
+			console.log(
+				`  • Adjusted repayments: ${adjustedLoan.repayments.length}`
+			);
+			console.log(`  • Total paid: ${adjustedLoan.totalPaid || 0}`);
+
+			if (adjustedLoan.repayments.length > 0) {
+				console.log(
+					`  • First payment: ${adjustedLoan.repayments[0].dueDate}`
+				);
+				console.log(
+					`  • Last payment: ${
+						adjustedLoan.repayments[
+							adjustedLoan.repayments.length - 1
+						].dueDate
+					}`
+				);
+			}
+
+			return res.json({
+				success: true,
+				data: adjustedLoan,
+			});
+		} catch (error) {
+			console.error("Error fetching loan repayments:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch loan repayments",
+				error: error.message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/repayments/pending:
+ *   get:
+ *     summary: Get pending repayment requests (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of pending repayment requests
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/repayments/pending",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			// Get pending wallet transactions for loan repayments
+			const pendingRepayments = await prisma.walletTransaction.findMany({
+				where: {
+					type: "LOAN_REPAYMENT",
+					status: "PENDING",
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					loan: {
+						include: {
+							application: {
+								include: {
+									product: {
+										select: {
+											name: true,
+											code: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				orderBy: {
+					createdAt: "desc",
+				},
+			});
+
+			return res.json({
+				success: true,
+				data: pendingRepayments,
+			});
+		} catch (error) {
+			console.error("Error fetching pending repayments:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch pending repayments",
+				error: error.message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/repayments/{id}/approve:
+ *   post:
+ *     summary: Approve a pending repayment (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Wallet transaction ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *                 description: Admin notes for the approval
+ *     responses:
+ *       200:
+ *         description: Repayment approved successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Transaction not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/repayments/:id/approve",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { notes } = req.body;
+			const adminUserId = req.user?.userId;
+
+			// Get the pending transaction
+			const transaction = await prisma.walletTransaction.findUnique({
+				where: { id },
+				include: {
+					loan: true,
+					user: true,
+				},
+			});
+
+			if (!transaction) {
+				return res.status(404).json({
+					success: false,
+					message: "Transaction not found",
+				});
+			}
+
+			if (transaction.status !== "PENDING") {
+				return res.status(400).json({
+					success: false,
+					message: "Transaction is not pending approval",
+				});
+			}
+
+			if (transaction.type !== "LOAN_REPAYMENT") {
+				return res.status(400).json({
+					success: false,
+					message: "Transaction is not a loan repayment",
+				});
+			}
+
+			// Process the repayment in a transaction
+			const result = await prisma.$transaction(async (tx) => {
+				// Get the actual payment amount (stored as positive in metadata) and round to 2 decimal places
+				const paymentAmount =
+					Math.round(
+						((transaction.metadata as any)?.originalAmount ||
+							Math.abs(transaction.amount)) * 100
+					) / 100;
+
+				// Update transaction status
+				const updatedTransaction = await tx.walletTransaction.update({
+					where: { id },
+					data: {
+						status: "APPROVED",
+						processedAt: new Date(),
+						metadata: {
+							...((transaction.metadata as object) || {}),
+							approvedBy: adminUserId,
+							approvedAt: new Date().toISOString(),
+							adminNotes: notes || "",
+						},
+					},
+				});
+
+				// Update loan balance and payment schedule
+				const loan = transaction.loan;
+				if (loan) {
+					// Update the payment schedule to mark repayments as completed
+					// This function already updates the loan record with correct values
+					const scheduleUpdate =
+						await updatePaymentScheduleAfterPayment(
+							loan.id,
+							paymentAmount,
+							tx
+						);
+
+					console.log(`Payment approved for loan ${loan.id}:`);
+					console.log(`  • Payment amount: ${paymentAmount}`);
+					console.log(
+						`  • Principal paid: ${
+							scheduleUpdate?.totalPrincipalPaid || 0
+						}`
+					);
+					console.log(
+						`  • New outstanding: ${
+							scheduleUpdate?.newOutstandingBalance || 0
+						}`
+					);
+					console.log(
+						`  • Next payment due: ${
+							scheduleUpdate?.nextPaymentDue || "None"
+						}`
+					);
+
+					// Create notification for user
+					await tx.notification.create({
+						data: {
+							userId: transaction.userId,
+							title: "Payment Approved",
+							message: `Your loan repayment of KES ${paymentAmount.toFixed(
+								0
+							)} has been approved and processed successfully.`,
+							type: "SYSTEM",
+							priority: "MEDIUM",
+							metadata: {
+								transactionId: id,
+								loanId: loan.id,
+								amount: paymentAmount,
+								newOutstandingBalance:
+									scheduleUpdate?.newOutstandingBalance || 0,
+								processedBy: adminUserId,
+								adminNotes: notes || "",
+							},
+						},
+					});
+
+					return { updatedTransaction, scheduleUpdate };
+				}
+
+				return { updatedTransaction, scheduleUpdate: null };
+			});
+
+			return res.json({
+				success: true,
+				message: "Repayment approved successfully",
+				data: result,
+			});
+		} catch (error) {
+			console.error("Error approving repayment:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to approve repayment",
+				error: error.message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/repayments/{id}/reject:
+ *   post:
+ *     summary: Reject a pending repayment (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Wallet transaction ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Reason for rejection
+ *               notes:
+ *                 type: string
+ *                 description: Additional admin notes
+ *     responses:
+ *       200:
+ *         description: Repayment rejected successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Transaction not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/repayments/:id/reject",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { reason, notes } = req.body;
+			const adminUserId = req.user?.userId;
+
+			if (!reason) {
+				return res.status(400).json({
+					success: false,
+					message: "Rejection reason is required",
+				});
+			}
+
+			// Get the pending transaction
+			const transaction = await prisma.walletTransaction.findUnique({
+				where: { id },
+				include: {
+					user: true,
+				},
+			});
+
+			if (!transaction) {
+				return res.status(404).json({
+					success: false,
+					message: "Transaction not found",
+				});
+			}
+
+			if (transaction.status !== "PENDING") {
+				return res.status(400).json({
+					success: false,
+					message: "Transaction is not pending approval",
+				});
+			}
+
+			// Reject the transaction
+			const result = await prisma.$transaction(async (tx) => {
+				// Get the actual payment amount (stored as positive in metadata) and round to 2 decimal places
+				const paymentAmount =
+					Math.round(
+						((transaction.metadata as any)?.originalAmount ||
+							Math.abs(transaction.amount)) * 100
+					) / 100;
+
+				// Update transaction status
+				const updatedTransaction = await tx.walletTransaction.update({
+					where: { id },
+					data: {
+						status: "REJECTED",
+						processedAt: new Date(),
+						metadata: {
+							...((transaction.metadata as object) || {}),
+							rejectedBy: adminUserId,
+							rejectedAt: new Date().toISOString(),
+							rejectionReason: reason,
+							adminNotes: notes || "",
+						},
+					},
+				});
+
+				// Create notification for user
+				await tx.notification.create({
+					data: {
+						userId: transaction.userId,
+						title: "Payment Rejected",
+						message: `Your loan repayment of KES ${paymentAmount.toFixed(
+							0
+						)} has been rejected. Reason: ${reason}`,
+						type: "SYSTEM",
+						priority: "HIGH",
+						metadata: {
+							transactionId: id,
+							rejectionReason: reason,
+							adminNotes: notes || "",
+							rejectedBy: adminUserId,
+							amount: paymentAmount,
+						},
+					},
+				});
+
+				return { updatedTransaction };
+			});
+
+			return res.json({
+				success: true,
+				message: "Repayment rejected successfully",
+				data: result,
+			});
+		} catch (error) {
+			console.error("Error rejecting repayment:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to reject repayment",
+				error: error.message,
+			});
+		}
+	}
+);
+
+// Enhanced helper functions for robust payment schedule tracking
+
+// Transaction-aware version for use during loan disbursement
+async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
+	const loan = await tx.loan.findUnique({
+		where: { id: loanId },
+	});
+
+	if (!loan || !loan.disbursedAt) {
+		throw new Error("Loan not found or not disbursed");
+	}
+
+	// Clear any existing schedule first
+	await tx.loanRepayment.deleteMany({
+		where: { loanId: loan.id },
+	});
+
+	const repayments = [];
+
+	// Flat rate calculation: (Principal + Total Interest) / Term
+	const monthlyInterestRate = loan.interestRate / 100;
+	const totalInterest =
+		Math.round(
+			loan.principalAmount * monthlyInterestRate * loan.term * 100
+		) / 100;
+	const monthlyPayment =
+		Math.round(((loan.principalAmount + totalInterest) / loan.term) * 100) /
+		100;
+
+	// Calculate interest and principal portions for flat rate
+	const monthlyInterestAmount =
+		Math.round((totalInterest / loan.term) * 100) / 100;
+	const monthlyPrincipalAmount =
+		Math.round((loan.principalAmount / loan.term) * 100) / 100;
+
+	console.log(`Generating payment schedule for loan ${loanId}:`);
+	console.log(
+		`Principal: ${loan.principalAmount}, Interest Rate: ${loan.interestRate}%, Term: ${loan.term} months`
+	);
+	console.log(
+		`Total Interest: ${totalInterest}, Monthly Payment: ${monthlyPayment}`
+	);
+
+	for (let month = 1; month <= loan.term; month++) {
+		// Set due date to end of day exactly 1 month from disbursement
+		// Use UTC date manipulation to avoid timezone issues
+		const disbursementDate = new Date(loan.disbursedAt);
+
+		// Create due date by adding months using UTC methods
+		// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
+		const dueDate = new Date(
+			Date.UTC(
+				disbursementDate.getUTCFullYear(),
+				disbursementDate.getUTCMonth() + month,
+				disbursementDate.getUTCDate(),
+				15,
+				59,
+				59,
+				999
+			)
+		);
+
+		repayments.push({
+			loanId: loan.id,
+			amount: monthlyPayment,
+			principalAmount: monthlyPrincipalAmount,
+			interestAmount: monthlyInterestAmount,
+			status: "PENDING",
+			dueDate: dueDate,
+			installmentNumber: month,
+			scheduledAmount: monthlyPayment,
+		});
+	}
+
+	// Create all repayment records
+	await tx.loanRepayment.createMany({
+		data: repayments,
+	});
+
+	// Update loan with next payment due date and correct monthly payment
+	if (repayments.length > 0) {
+		await tx.loan.update({
+			where: { id: loanId },
+			data: {
+				monthlyPayment: monthlyPayment,
+				nextPaymentDue: repayments[0].dueDate,
+			},
+		});
+	}
+
+	console.log(`Created ${repayments.length} payment records`);
+	return repayments;
+}
+
+async function generatePaymentSchedule(loanId: string) {
+	const loan = await prisma.loan.findUnique({
+		where: { id: loanId },
+	});
+
+	if (!loan || !loan.disbursedAt) {
+		throw new Error("Loan not found or not disbursed");
+	}
+
+	// Clear any existing schedule first
+	await prisma.loanRepayment.deleteMany({
+		where: { loanId: loan.id },
+	});
+
+	const repayments = [];
+
+	// Flat rate calculation: (Principal + Total Interest) / Term
+	// Total Interest = Principal * Monthly Interest Rate * Term
+	const monthlyInterestRate = loan.interestRate / 100; // Monthly interest rate (e.g., 1.5% = 0.015)
+	const totalInterest =
+		Math.round(
+			loan.principalAmount * monthlyInterestRate * loan.term * 100
+		) / 100;
+	const monthlyPayment =
+		Math.round(((loan.principalAmount + totalInterest) / loan.term) * 100) /
+		100;
+
+	// Calculate interest and principal portions for flat rate
+	const monthlyInterestAmount =
+		Math.round((totalInterest / loan.term) * 100) / 100;
+	const monthlyPrincipalAmount =
+		Math.round((loan.principalAmount / loan.term) * 100) / 100;
+
+	console.log(`Generating payment schedule for loan ${loanId}:`);
+	console.log(
+		`Principal: ${loan.principalAmount}, Interest Rate: ${loan.interestRate}%, Term: ${loan.term} months`
+	);
+	console.log(
+		`Total Interest: ${totalInterest}, Monthly Payment: ${monthlyPayment}`
+	);
+
+	for (let month = 1; month <= loan.term; month++) {
+		// Set due date to end of day exactly 1 month from disbursement
+		// Use UTC date manipulation to avoid timezone issues
+		const disbursementDate = new Date(loan.disbursedAt);
+
+		// Create due date by adding months using UTC methods
+		// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
+		const dueDate = new Date(
+			Date.UTC(
+				disbursementDate.getUTCFullYear(),
+				disbursementDate.getUTCMonth() + month,
+				disbursementDate.getUTCDate(),
+				15,
+				59,
+				59,
+				999
+			)
+		);
+
+		repayments.push({
+			loanId: loan.id,
+			amount: monthlyPayment,
+			principalAmount: monthlyPrincipalAmount,
+			interestAmount: monthlyInterestAmount,
+			status: "PENDING",
+			dueDate: dueDate,
+			installmentNumber: month,
+			scheduledAmount: monthlyPayment,
+		});
+	}
+
+	// Create all repayment records
+	await prisma.loanRepayment.createMany({
+		data: repayments,
+	});
+
+	// Update loan with next payment due date and correct monthly payment
+	if (repayments.length > 0) {
+		await prisma.loan.update({
+			where: { id: loanId },
+			data: {
+				monthlyPayment: monthlyPayment, // Update with correct flat rate calculation
+				nextPaymentDue: repayments[0].dueDate,
+			},
+		});
+	}
+
+	console.log(`Created ${repayments.length} payment records`);
+	return repayments;
+}
+
+// Helper function to update repayment status based on all payments (Hybrid Approach)
+async function updateRepaymentStatusFromTransactions(loanId: string, tx: any) {
+	console.log(
+		`Updating repayment status for loan ${loanId} based on transactions`
+	);
+
+	// Get all repayments for this loan, ordered by due date
+	const repayments = await tx.loanRepayment.findMany({
+		where: { loanId: loanId },
+		orderBy: { dueDate: "asc" },
+	});
+
+	// Get all approved payment transactions
+	const actualPayments = await tx.walletTransaction.findMany({
+		where: {
+			loanId: loanId,
+			type: "LOAN_REPAYMENT",
+			status: "APPROVED",
+		},
+		orderBy: { processedAt: "asc" },
+	});
+
+	// Calculate total payments made
+	const totalPaymentsMade = actualPayments.reduce(
+		(total: number, payment: any) => {
+			return total + Math.abs(payment.amount);
+		},
+		0
+	);
+
+	console.log(`Total payments made: ${totalPaymentsMade}`);
+
+	// Apply payments to repayments chronologically to determine status
+	let remainingPayments = totalPaymentsMade;
+	const mostRecentPayment = actualPayments[actualPayments.length - 1];
+	const mostRecentPaymentDate =
+		mostRecentPayment?.processedAt || mostRecentPayment?.createdAt;
+
+	for (const repayment of repayments) {
+		if (remainingPayments <= 0) {
+			// No payments left - mark as PENDING
+			await tx.loanRepayment.update({
+				where: { id: repayment.id },
+				data: {
+					status: "PENDING",
+					actualAmount: null,
+					paidAt: null,
+					paymentType: null,
+					daysEarly: null,
+					daysLate: null,
+				},
+			});
+		} else if (remainingPayments >= repayment.amount) {
+			// Fully covered by payments
+			const dueDate = new Date(repayment.dueDate);
+			const paidDate = new Date(mostRecentPaymentDate || new Date());
+			const daysDiff = Math.ceil(
+				(paidDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+			);
+
+			const daysEarly = daysDiff < 0 ? Math.abs(daysDiff) : 0;
+			const daysLate = daysDiff > 0 ? daysDiff : 0;
+
+			// Check if repayment status is changing from non-COMPLETED to COMPLETED
+			const wasCompleted = repayment.status === "COMPLETED";
+
+			// Handle late fees first to determine total amount paid
+			let totalAmountPaidForThisRepayment = repayment.amount;
+			let lateFeesPaid = 0;
+
+			if (!wasCompleted) {
+				// New completion - handle late fees and calculate total amount
+				try {
+					const lateFeeResult =
+						await LateFeeProcessor.handleRepaymentCleared(
+							repayment.id,
+							remainingPayments, // Amount available for this repayment
+							paidDate,
+							tx
+						);
+
+					lateFeesPaid = lateFeeResult.lateFeesPaid;
+					totalAmountPaidForThisRepayment =
+						repayment.amount + lateFeesPaid;
+
+					console.log(
+						`💰 Late fee handling for repayment ${repayment.id}:`,
+						{
+							lateFeesPaid: lateFeeResult.lateFeesPaid,
+							lateFeesWaived: lateFeeResult.lateFeesWaived,
+							totalLateFees: lateFeeResult.totalLateFees,
+							totalAmountPaidForThisRepayment,
+						}
+					);
+				} catch (error) {
+					console.error(
+						`Error handling late fees for repayment ${repayment.id}:`,
+						error
+					);
+					// Don't fail the payment processing due to late fee errors
+				}
+
+				await tx.loanRepayment.update({
+					where: { id: repayment.id },
+					data: {
+						status: "COMPLETED",
+						actualAmount: totalAmountPaidForThisRepayment, // Total amount including late fees
+						paidAt: mostRecentPaymentDate,
+						paymentType:
+							daysEarly > 0
+								? "EARLY"
+								: daysLate > 0
+								? "LATE"
+								: "ON_TIME",
+						daysEarly: daysEarly,
+						daysLate: daysLate,
+					},
+				});
+
+				console.log(`✅ Marked repayment ${repayment.id} as COMPLETED`);
+			} else {
+				// Already completed - preserve existing actualAmount (which includes late fees)
+				totalAmountPaidForThisRepayment =
+					repayment.actualAmount || repayment.amount;
+				console.log(
+					`✅ Repayment ${repayment.id} already COMPLETED with actualAmount: ${totalAmountPaidForThisRepayment}`
+				);
+			}
+
+			remainingPayments -= totalAmountPaidForThisRepayment;
+		} else {
+			// Partially covered
+			const dueDate = new Date(repayment.dueDate);
+			const paidDate = new Date(mostRecentPaymentDate || new Date());
+			const daysDiff = Math.ceil(
+				(paidDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+			);
+
+			const daysEarly = daysDiff < 0 ? Math.abs(daysDiff) : 0;
+			const daysLate = daysDiff > 0 ? daysDiff : 0;
+
+			await tx.loanRepayment.update({
+				where: { id: repayment.id },
+				data: {
+					status: "PENDING", // Still pending since not fully paid
+					actualAmount: remainingPayments, // Amount actually paid towards this repayment
+					paidAt: mostRecentPaymentDate,
+					paymentType: "PARTIAL",
+					daysEarly: daysEarly,
+					daysLate: daysLate,
+				},
+			});
+
+			console.log(
+				`💰 Marked repayment ${repayment.id} as PARTIAL: ${remainingPayments} of ${repayment.amount}`
+			);
+			remainingPayments = 0; // All remaining payments applied to this repayment
+		}
+	}
+}
+
+async function updatePaymentScheduleAfterPayment(
+	loanId: string,
+	paymentAmount: number,
+	tx: any
+) {
+	console.log(
+		`Updating payment schedule for loan ${loanId}, payment amount: ${paymentAmount}`
+	);
+
+	// Update repayment status based on all transactions (preserves individual payment history)
+	await updateRepaymentStatusFromTransactions(loanId, tx);
+
+	// Calculate outstanding balance based on actual transaction data
+	const newOutstandingBalance = await calculateOutstandingBalance(loanId, tx);
+
+	// Update next payment due date
+	const nextPaymentDue = await calculateNextPaymentDue(loanId, tx);
+
+	// Update next payment due (status is already handled in calculateOutstandingBalance)
+	await tx.loan.update({
+		where: { id: loanId },
+		data: {
+			nextPaymentDue: nextPaymentDue,
+		},
+	});
+
+	console.log(
+		`Updated loan ${loanId}: outstanding ${newOutstandingBalance}, nextPaymentDue ${nextPaymentDue}`
+	);
+
+	return {
+		totalPrincipalPaid: paymentAmount, // Just this payment amount
+		newOutstandingBalance,
+		nextPaymentDue: nextPaymentDue,
+	};
+}
+
+async function calculateNextPaymentDue(loanId: string, tx: any) {
+	// Get all repayments for this loan, ordered by due date
+	const repayments = await tx.loanRepayment.findMany({
+		where: { loanId: loanId },
+		orderBy: { dueDate: "asc" },
+	});
+
+	// Get total payments made
+	const actualPayments = await tx.walletTransaction.findMany({
+		where: {
+			loanId: loanId,
+			type: "LOAN_REPAYMENT",
+			status: "APPROVED",
+		},
+	});
+
+	const totalPaymentsMade = actualPayments.reduce(
+		(total: number, payment: any) => {
+			return total + Math.abs(payment.amount);
+		},
+		0
+	);
+
+	// Apply payments to repayments in chronological order to find next due
+	let remainingPayments = totalPaymentsMade;
+
+	for (const repayment of repayments) {
+		// Get late fees for this repayment
+		const lateFees = await tx.$queryRawUnsafe(
+			`
+			SELECT COALESCE(SUM("feeAmount"), 0) as total_late_fees
+			FROM late_fees 
+			WHERE "loanRepaymentId" = $1 AND status = 'ACTIVE'
+		`,
+			repayment.id
+		);
+		const totalLateFees = Number(lateFees[0]?.total_late_fees || 0);
+		const totalAmountDue = repayment.amount + totalLateFees;
+
+		if (remainingPayments <= 0) {
+			// This repayment hasn't been paid yet
+			return repayment.dueDate;
+		}
+
+		if (remainingPayments >= totalAmountDue) {
+			// This repayment is fully covered (including late fees)
+			remainingPayments -= totalAmountDue;
+		} else {
+			// This repayment is partially covered, so it's the next due
+			return repayment.dueDate;
+		}
+	}
+
+	// All repayments are covered
+	return null;
+}
+
+async function calculateOutstandingBalance(loanId: string, tx: any) {
+	// Get the loan to get the total amount and current status
+	const loan = await tx.loan.findUnique({
+		where: { id: loanId },
+	});
+
+	if (!loan) {
+		throw new Error(`Loan ${loanId} not found`);
+	}
+
+	// Get all APPROVED wallet transactions for this loan (actual payments made)
+	const actualPayments = await tx.walletTransaction.findMany({
+		where: {
+			loanId: loanId,
+			type: "LOAN_REPAYMENT",
+			status: "APPROVED",
+		},
+	});
+
+	// Get total unpaid late fees for this loan
+	const unpaidLateFees = await tx.$queryRawUnsafe(
+		`
+		SELECT COALESCE(SUM(lf."feeAmount"), 0) as total_unpaid_late_fees
+		FROM late_fees lf
+		JOIN loan_repayments lr ON lf."loanRepaymentId" = lr.id
+		WHERE lr."loanId" = $1 AND lf.status = 'ACTIVE'
+	`,
+		loanId
+	);
+	const totalUnpaidLateFees = Number(
+		unpaidLateFees[0]?.total_unpaid_late_fees || 0
+	);
+
+	console.log(`Calculating outstanding balance for loan ${loanId}:`);
+	console.log(`Original loan amount: ${loan.totalAmount}`);
+	console.log(`Unpaid late fees: ${totalUnpaidLateFees}`);
+
+	// Calculate total actual payments made (sum of all approved payment transactions)
+	const totalPaymentsMade = actualPayments.reduce(
+		(total: number, payment: any) => {
+			// Payment amounts are stored as negative, so we take absolute value
+			const paymentAmount = Math.abs(payment.amount);
+			console.log(`Payment transaction ${payment.id}: ${paymentAmount}`);
+			return total + paymentAmount;
+		},
+		0
+	);
+
+	console.log(`Total payments made: ${totalPaymentsMade}`);
+
+	// Outstanding balance = Original loan amount + Unpaid late fees - Total actual payments made
+	const totalAmountOwed = loan.totalAmount + totalUnpaidLateFees;
+	const outstandingBalance =
+		Math.round((totalAmountOwed - totalPaymentsMade) * 100) / 100;
+	const finalOutstandingBalance = Math.max(0, outstandingBalance);
+
+	console.log(`Outstanding balance: ${finalOutstandingBalance}`);
+
+	// Check if loan should be marked as PENDING_DISCHARGE
+	if (loan.status === "ACTIVE" && finalOutstandingBalance === 0) {
+		console.log(
+			`🎯 Loan ${loanId} fully paid - updating status to PENDING_DISCHARGE`
+		);
+		await tx.loan.update({
+			where: { id: loanId },
+			data: {
+				status: "PENDING_DISCHARGE",
+				outstandingBalance: finalOutstandingBalance,
+			},
+		});
+	} else {
+		// Just update the outstanding balance
+		await tx.loan.update({
+			where: { id: loanId },
+			data: { outstandingBalance: finalOutstandingBalance },
+		});
+	}
+
+	return finalOutstandingBalance;
+}
+
+async function syncLoanBalances() {
+	// Function to recalculate and sync all loan outstanding balances
+	const loans = await prisma.loan.findMany({
+		where: {
+			status: {
+				in: ["ACTIVE", "OVERDUE"],
+			},
+		},
+	});
+
+	console.log(`Syncing balances for ${loans.length} loans...`);
+
+	for (const loan of loans) {
+		await prisma.$transaction(async (tx) => {
+			// Sync repayment schedule with actual payments first
+			await syncRepaymentScheduleWithActualPayments(loan.id, tx);
+
+			// calculateOutstandingBalance now handles status changes automatically
+			const correctOutstandingBalance = await calculateOutstandingBalance(
+				loan.id,
+				tx
+			);
+			const correctNextPaymentDue = await calculateNextPaymentDue(
+				loan.id,
+				tx
+			);
+
+			// Update next payment due (status is already handled in calculateOutstandingBalance)
+			await tx.loan.update({
+				where: { id: loan.id },
+				data: {
+					nextPaymentDue: correctNextPaymentDue,
+				},
+			});
+
+			console.log(
+				`Updated loan ${loan.id}: outstanding ${correctOutstandingBalance}, nextPaymentDue ${correctNextPaymentDue}`
+			);
+		});
+	}
+
+	console.log("Loan balance sync completed");
+}
+
+/**
+ * @swagger
+ * /api/admin/loans/sync-balances:
+ *   post:
+ *     summary: Sync all loan balances with actual payment transactions (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Loan balances synced successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/loans/sync-balances",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			await syncLoanBalances();
+
+			return res.json({
+				success: true,
+				message: "Loan balances synced successfully",
+			});
+		} catch (error) {
+			console.error("Error syncing loan balances:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to sync loan balances",
+				error: error.message,
+			});
+		}
+	}
+);
+
+// Function to apply prepayment adjustments to the payment schedule
+async function applyPrepaymentAdjustments(loan: any) {
+	// Get all payments made for this loan from wallet_transactions
+	const payments = await prisma.walletTransaction.findMany({
+		where: {
+			loanId: loan.id,
+			type: "LOAN_REPAYMENT",
+			status: "APPROVED",
+		},
+		orderBy: {
+			createdAt: "asc",
+		},
+	});
+
+	// Calculate total amount paid (use absolute value since wallet transactions are negative for debits)
+	const totalPaid = payments.reduce(
+		(sum, payment) => sum + Math.abs(payment.amount),
+		0
+	);
+
+	console.log(`Applying prepayment adjustments for loan ${loan.id}:`);
+	console.log(`Total paid: ${totalPaid}`);
+	console.log(`Original repayments count: ${loan.repayments.length}`);
+	console.log(`Wallet payments found: ${payments.length}`);
+
+	// Debug: Log payment details
+	payments.forEach((payment, idx) => {
+		console.log(
+			`Payment ${idx + 1}: ${Math.abs(payment.amount)} on ${
+				payment.createdAt
+			} (${payment.reference})`
+		);
+	});
+
+	// Debug: Log repayment details
+	loan.repayments.forEach((repayment: any, idx: number) => {
+		console.log(
+			`Repayment ${idx + 1}: ${repayment.amount} due ${
+				repayment.dueDate
+			} status ${repayment.status}`
+		);
+	});
+
+	// Enhanced repayments with payment dates from wallet transactions
+	// Sort payments chronologically to process them in order
+	const sortedPayments = payments.sort(
+		(a, b) =>
+			new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+	);
+
+	// Sort repayments by due date to match payments chronologically
+	const sortedRepayments = [...loan.repayments].sort(
+		(a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+	);
+
+	console.log(
+		`Processing ${sortedPayments.length} payments for ${sortedRepayments.length} repayments`
+	);
+
+	// NEW ALGORITHM: Allocate payments chronologically across repayments
+	// This properly handles cases where one payment covers multiple repayments
+	let remainingPaymentAmount = totalPaid;
+	let currentPaymentIndex = 0;
+
+	const enhancedRepayments = sortedRepayments.map((repayment: any) => {
+		console.log(
+			`Processing repayment ${repayment.id} (${repayment.amount}, status: ${repayment.status})`
+		);
+
+		// Only assign payment information to COMPLETED repayments
+		if (repayment.status !== "COMPLETED") {
+			console.log(
+				`Skipping payment allocation for ${repayment.status} repayment`
+			);
+			return {
+				...repayment,
+				actualPaymentDate: repayment.paidAt,
+				contributingPayments: [],
+				totalContributingAmount: 0,
+			};
+		}
+
+		const contributingPayments = [];
+		let repaymentAmountNeeded = repayment.amount;
+		let totalContributingAmount = 0;
+
+		console.log(`Remaining payment amount: ${remainingPaymentAmount}`);
+
+		// If there's no remaining payment amount, this repayment hasn't been paid
+		if (remainingPaymentAmount <= 0) {
+			return {
+				...repayment,
+				actualPaymentDate: repayment.paidAt,
+				contributingPayments: [],
+				totalContributingAmount: 0,
+			};
+		}
+
+		// Allocate payments to this COMPLETED repayment until it's fully covered or we run out of payments
+		while (
+			repaymentAmountNeeded > 0 &&
+			remainingPaymentAmount > 0 &&
+			currentPaymentIndex < sortedPayments.length
+		) {
+			const currentPayment = sortedPayments[currentPaymentIndex];
+			const paymentAmount = Math.abs(currentPayment.amount);
+
+			console.log(`Using payment ${currentPayment.id}: ${paymentAmount}`);
+
+			// Determine how much of this payment applies to this repayment
+			const amountToApply = Math.min(
+				paymentAmount,
+				repaymentAmountNeeded,
+				remainingPaymentAmount
+			);
+
+			// Add this payment as contributing (even if partial)
+			contributingPayments.push({
+				...currentPayment,
+				appliedAmount: amountToApply, // Track how much of this payment was applied
+			});
+
+			totalContributingAmount += amountToApply;
+			repaymentAmountNeeded -= amountToApply;
+			remainingPaymentAmount -= amountToApply;
+
+			console.log(
+				`Applied ${amountToApply} to repayment ${repayment.id}`
+			);
+			console.log(
+				`Remaining needed for repayment: ${repaymentAmountNeeded}`
+			);
+			console.log(
+				`Remaining total payment amount: ${remainingPaymentAmount}`
+			);
+
+			// If we've used up this entire payment, move to the next one
+			if (amountToApply >= paymentAmount) {
+				currentPaymentIndex++;
+			} else {
+				// If we only used part of this payment, we'll continue with it for the next repayment
+				// But we need to track that we've used part of it
+				break;
+			}
+		}
+
+		// If we found contributing payments, use them
+		if (contributingPayments.length > 0) {
+			console.log(
+				`Matched repayment ${repayment.id} (${repayment.amount}) with ${contributingPayments.length} payments totaling ${totalContributingAmount}`
+			);
+
+			return {
+				...repayment,
+				actualPaymentDate: contributingPayments[0].createdAt,
+				contributingPayments: contributingPayments.map((p) => ({
+					id: p.id,
+					amount: Math.abs(p.appliedAmount || p.amount), // Always use positive values
+					createdAt: p.createdAt,
+					reference: p.reference,
+					description: p.description,
+				})),
+				totalContributingAmount: Math.abs(totalContributingAmount), // Ensure positive
+			};
+		}
+
+		return {
+			...repayment,
+			actualPaymentDate: repayment.paidAt,
+			contributingPayments: [],
+			totalContributingAmount: 0,
+		};
+	});
+
+	if (totalPaid === 0) {
+		// No payments made, return original schedule with enhanced payment dates
+		return {
+			...loan,
+			repayments: enhancedRepayments,
+		};
+	}
+
+	// Get pending repayments only for prepayment calculation
+	const pendingRepayments = enhancedRepayments
+		.filter((r: any) => r.status === "PENDING")
+		.sort(
+			(a: any, b: any) =>
+				new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+		);
+
+	// Get completed/prepaid repayments
+	const nonPendingRepayments = enhancedRepayments.filter(
+		(r: any) => r.status !== "PENDING"
+	);
+
+	// Calculate how much should be deducted from future payments
+	let remainingPrepayment = totalPaid;
+	const adjustedRepayments = [];
+
+	// Process each pending payment in chronological order
+	for (const repayment of pendingRepayments) {
+		if (remainingPrepayment <= 0) {
+			// No more prepayment to apply, keep original amount
+			adjustedRepayments.push({
+				...repayment,
+				adjustedAmount: repayment.amount,
+				prepaymentApplied: 0,
+			});
+		} else if (remainingPrepayment >= repayment.amount) {
+			// Prepayment covers this entire payment - show as fully covered
+			adjustedRepayments.push({
+				...repayment,
+				adjustedAmount: 0,
+				prepaymentApplied: repayment.amount,
+				// Don't change status here - database should have correct status
+			});
+
+			remainingPrepayment -= repayment.amount;
+		} else {
+			// Prepayment partially covers this payment
+			adjustedRepayments.push({
+				...repayment,
+				adjustedAmount: repayment.amount - remainingPrepayment,
+				prepaymentApplied: remainingPrepayment,
+			});
+			remainingPrepayment = 0;
+		}
+	}
+
+	// Combine all repayments and sort by installment number
+	const allRepayments = [...nonPendingRepayments, ...adjustedRepayments].sort(
+		(a: any, b: any) =>
+			(a.installmentNumber || 0) - (b.installmentNumber || 0)
+	);
+
+	console.log(`Final repayments count: ${allRepayments.length}`);
+
+	// Return loan with adjusted repayments
+	return {
+		...loan,
+		repayments: allRepayments,
+		totalPaid,
+		remainingPrepayment,
+	};
+}
+
+/**
+ * @swagger
+ * /api/admin/loans/{id}/transactions:
+ *   get:
+ *     summary: Get wallet transactions for a specific loan (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan ID
+ *     responses:
+ *       200:
+ *         description: Wallet transactions for the loan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+// Get wallet transactions for a specific loan (admin only)
+// @ts-ignore
+router.get(
+	"/loans/:id/transactions",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			console.log(`Fetching wallet transactions for loan ID: ${id}`);
+
+			// First verify the loan exists
+			const loan = await prisma.loan.findUnique({
+				where: { id },
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found",
+				});
+			}
+
+			// Get all wallet transactions related to this loan
+			const transactions = await prisma.walletTransaction.findMany({
+				where: {
+					loanId: id,
+				},
+				orderBy: {
+					createdAt: "desc",
+				},
+			});
+
+			console.log(
+				`Found ${transactions.length} transactions for loan ${id}`
+			);
+
+			return res.json({
+				success: true,
+				data: transactions,
+			});
+		} catch (error) {
+			console.error("Error fetching wallet transactions:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Internal server error",
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans/sync-balances:
+ *   post:
+ *     summary: Sync all loan outstanding balances (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Loan balances synced successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/loans/sync-balances",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			await syncLoanBalances();
+
+			res.json({
+				success: true,
+				message: "Loan balances synced successfully",
+			});
+		} catch (error) {
+			console.error("Error syncing loan balances:", error);
+			res.status(500).json({
+				success: false,
+				message: "Failed to sync loan balances",
+				error: error.message,
+			});
+		}
+	}
+);
+
+async function syncRepaymentScheduleWithActualPayments(
+	loanId: string,
+	tx: any
+) {
+	// Get all approved payment transactions for this loan
+	const actualPayments = await tx.walletTransaction.findMany({
+		where: {
+			loanId: loanId,
+			type: "LOAN_REPAYMENT",
+			status: "APPROVED",
+		},
+		orderBy: {
+			processedAt: "asc", // Process payments in chronological order
+		},
+	});
+
+	// Get all repayments for this loan, ordered by due date
+	const repayments = await tx.loanRepayment.findMany({
+		where: {
+			loanId: loanId,
+		},
+		orderBy: {
+			dueDate: "asc",
+		},
+	});
+
+	console.log(`Syncing repayment schedule for loan ${loanId}:`);
+	console.log(`Found ${actualPayments.length} actual payments`);
+	console.log(`Found ${repayments.length} scheduled repayments`);
+
+	// Calculate total payments made
+	const totalPaymentsMade = actualPayments.reduce(
+		(total: number, payment: any) => {
+			return total + Math.abs(payment.amount);
+		},
+		0
+	);
+
+	console.log(`Total payments made: ${totalPaymentsMade}`);
+
+	// Apply payments to repayments in chronological order
+	let remainingPayments = totalPaymentsMade;
+
+	// Get the most recent payment date for timing calculations
+	const mostRecentPayment = actualPayments[actualPayments.length - 1];
+	const mostRecentPaymentDate =
+		mostRecentPayment?.processedAt ||
+		mostRecentPayment?.createdAt ||
+		new Date();
+
+	for (const repayment of repayments) {
+		if (remainingPayments <= 0) {
+			// No more payments to apply - ensure this repayment is marked as PENDING
+			await tx.loanRepayment.update({
+				where: { id: repayment.id },
+				data: {
+					status: "PENDING",
+					actualAmount: null,
+					paidAt: null,
+					paymentType: null,
+					daysEarly: null,
+					daysLate: null,
+				},
+			});
+			continue;
+		}
+
+		const amountToApply = Math.min(remainingPayments, repayment.amount);
+
+		// Calculate if payment was early or late based on most recent payment
+		const dueDate = new Date(repayment.dueDate);
+		const paidDate = new Date(mostRecentPaymentDate);
+		const daysDiff = Math.ceil(
+			(paidDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+		);
+
+		const daysEarly = daysDiff < 0 ? Math.abs(daysDiff) : 0;
+		const daysLate = daysDiff > 0 ? daysDiff : 0;
+
+		if (amountToApply >= repayment.amount) {
+			// Full payment
+			await tx.loanRepayment.update({
+				where: { id: repayment.id },
+				data: {
+					status: "COMPLETED",
+					actualAmount: repayment.amount,
+					paidAt: mostRecentPaymentDate,
+					paymentType:
+						daysEarly > 0
+							? "EARLY"
+							: daysLate > 0
+							? "LATE"
+							: "ON_TIME",
+					daysEarly: daysEarly,
+					daysLate: daysLate,
+				},
+			});
+
+			console.log(
+				`✅ Fully paid repayment ${repayment.id}: ${repayment.amount}`
+			);
+			remainingPayments -= repayment.amount;
+		} else {
+			// Partial payment
+			await tx.loanRepayment.update({
+				where: { id: repayment.id },
+				data: {
+					status: "PENDING", // Still pending since not fully paid
+					actualAmount: amountToApply,
+					paidAt: mostRecentPaymentDate,
+					paymentType: "PARTIAL",
+					daysEarly: daysEarly,
+					daysLate: daysLate,
+				},
+			});
+
+			console.log(
+				`💰 Partial payment on repayment ${repayment.id}: ${amountToApply} of ${repayment.amount}`
+			);
+			remainingPayments -= amountToApply;
+		}
+	}
+
+	console.log(
+		`Sync completed. Total payments processed: ${totalPaymentsMade}`
+	);
+	return totalPaymentsMade;
+}
+
+/**
+ * @swagger
+ * /api/admin/loans/{id}/request-discharge:
+ *   post:
+ *     summary: Request loan discharge (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Reason for requesting discharge
+ *     responses:
+ *       200:
+ *         description: Discharge request submitted successfully
+ *       400:
+ *         description: Invalid request or loan cannot be discharged
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/loans/:id/request-discharge",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { reason } = req.body;
+
+			if (!reason || reason.trim().length === 0) {
+				return res.status(400).json({
+					success: false,
+					message: "Reason for discharge is required",
+				});
+			}
+
+			// Check if loan exists and is eligible for discharge
+			const loan = await prisma.loan.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found",
+				});
+			}
+
+			// Check if loan is eligible for discharge
+			if (loan.status === "DISCHARGED") {
+				return res.status(400).json({
+					success: false,
+					message: "Loan is already discharged",
+				});
+			}
+
+			if (loan.status === "PENDING_DISCHARGE") {
+				return res.status(400).json({
+					success: false,
+					message: "Loan discharge is already pending approval",
+				});
+			}
+
+			if (loan.status !== "ACTIVE") {
+				return res.status(400).json({
+					success: false,
+					message: "Only active loans can be discharged",
+				});
+			}
+
+			// Check if loan has outstanding balance
+			if (loan.outstandingBalance > 0) {
+				return res.status(400).json({
+					success: false,
+					message: `Loan still has outstanding balance of ${loan.outstandingBalance}. Cannot discharge until fully paid.`,
+				});
+			}
+
+			// Update loan status to PENDING_DISCHARGE
+			const updatedLoan = await prisma.loan.update({
+				where: { id },
+				data: {
+					status: "PENDING_DISCHARGE",
+					updatedAt: new Date(),
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+			});
+
+			// Log the discharge request
+			console.log(
+				`Loan discharge requested for loan ${id} by admin ${req.user?.userId}`
+			);
+			console.log(`Reason: ${reason}`);
+
+			return res.json({
+				success: true,
+				message: "Loan discharge request submitted successfully",
+				data: updatedLoan,
+			});
+		} catch (error) {
+			console.error("Error requesting loan discharge:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to request loan discharge",
+				error: (error as Error).message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans/{id}/approve-discharge:
+ *   post:
+ *     summary: Approve loan discharge (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan ID
+ *     requestBody:
+ *       required: false
+ *     responses:
+ *       200:
+ *         description: Loan discharged successfully
+ *       400:
+ *         description: Invalid request or loan cannot be discharged
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/loans/:id/approve-discharge",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+
+			// Check if loan exists and is pending discharge
+			const loan = await prisma.loan.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found",
+				});
+			}
+
+			if (loan.status !== "PENDING_DISCHARGE") {
+				return res.status(400).json({
+					success: false,
+					message: "Loan is not pending discharge approval",
+				});
+			}
+
+			// Final check for outstanding balance
+			if (loan.outstandingBalance > 0) {
+				return res.status(400).json({
+					success: false,
+					message: `Cannot discharge loan with outstanding balance of ${loan.outstandingBalance}`,
+				});
+			}
+
+			// Approve discharge
+			const updatedLoan = await prisma.loan.update({
+				where: { id },
+				data: {
+					status: "DISCHARGED",
+					dischargedAt: new Date(),
+					updatedAt: new Date(),
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+			});
+
+			// Log the discharge approval
+			console.log(`Loan ${id} discharged by admin ${req.user?.userId}`);
+
+			return res.json({
+				success: true,
+				message: "Loan discharged successfully",
+				data: updatedLoan,
+			});
+		} catch (error) {
+			console.error("Error approving loan discharge:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to approve loan discharge",
+				error: (error as Error).message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans/{id}/reject-discharge:
+ *   post:
+ *     summary: Reject loan discharge request (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Reason for rejecting the discharge
+ *     responses:
+ *       200:
+ *         description: Discharge request rejected successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/loans/:id/reject-discharge",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { reason } = req.body;
+
+			if (!reason || reason.trim().length === 0) {
+				return res.status(400).json({
+					success: false,
+					message: "Reason for rejection is required",
+				});
+			}
+
+			// Check if loan exists and is pending discharge
+			const loan = await prisma.loan.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found",
+				});
+			}
+
+			if (loan.status !== "PENDING_DISCHARGE") {
+				return res.status(400).json({
+					success: false,
+					message: "Loan is not pending discharge approval",
+				});
+			}
+
+			// Reject discharge - return to ACTIVE status
+			const updatedLoan = await prisma.loan.update({
+				where: { id },
+				data: {
+					status: "ACTIVE",
+					updatedAt: new Date(),
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+			});
+
+			// Log the discharge rejection
+			console.log(
+				`Loan discharge rejected for loan ${id} by admin ${req.user?.userId}`
+			);
+			console.log(`Reason: ${reason}`);
+
+			return res.json({
+				success: true,
+				message: "Discharge request rejected successfully",
+				data: updatedLoan,
+			});
+		} catch (error) {
+			console.error("Error rejecting loan discharge:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to reject loan discharge",
+				error: (error as Error).message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans/{id}:
+ *   get:
+ *     summary: Get individual loan details (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan ID
+ *     responses:
+ *       200:
+ *         description: Loan details retrieved successfully
+ *       404:
+ *         description: Loan not found
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/loans/:id",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+
+			const loan = await prisma.loan.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					application: {
+						select: {
+							amount: true,
+							term: true,
+						},
+					},
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found",
+				});
+			}
+
+			return res.json({
+				success: true,
+				loan,
+			});
+		} catch (error) {
+			console.error("Error fetching loan details:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch loan details",
+				error: (error as Error).message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans/{id}/repayments:
+ *   get:
+ *     summary: Get loan repayments (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan ID
+ *     responses:
+ *       200:
+ *         description: Loan repayments retrieved successfully
+ *       404:
+ *         description: Loan not found
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/loans/:id/repayments",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+
+			// First check if loan exists
+			const loan = await prisma.loan.findUnique({
+				where: { id },
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found",
+				});
+			}
+
+			const repayments = await prisma.loanRepayment.findMany({
+				where: { loanId: id },
+				orderBy: { dueDate: "asc" },
+			});
+
+			return res.json({
+				success: true,
+				repayments,
+			});
+		} catch (error) {
+			console.error("Error fetching loan repayments:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch loan repayments",
+				error: (error as Error).message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/loans/pending-discharge:
+ *   get:
+ *     summary: Get loans pending discharge approval (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of loans pending discharge
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/loans/pending-discharge",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			const pendingDischargeLoans = await prisma.loan.findMany({
+				where: {
+					status: "PENDING_DISCHARGE",
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+					repayments: {
+						select: {
+							id: true,
+							amount: true,
+							status: true,
+							dueDate: true,
+							paidAt: true,
+						},
+						orderBy: {
+							dueDate: "asc",
+						},
+					},
+				},
+				orderBy: {
+					updatedAt: "desc",
+				},
+			});
+
+			return res.json({
+				success: true,
+				data: pendingDischargeLoans,
+			});
+		} catch (error) {
+			console.error("Error fetching pending discharge loans:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch pending discharge loans",
+				error: (error as Error).message,
 			});
 		}
 	}

@@ -8,26 +8,28 @@ datasource db {
 }
 
 model Product {
-  id                String            @id @default(cuid())
-  code              String            @unique
-  name              String
-  description       String
-  minAmount         Float
-  maxAmount         Float
-  repaymentTerms    Json
-  interestRate      Float
-  eligibility       Json[]
-  lateFee           Float
-  originationFee    Float
-  legalFee          Float
-  applicationFee    Float
-  requiredDocuments Json[]
-  features          Json[]
-  isActive          Boolean           @default(true)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  loanTypes         Json[]
-  applications      LoanApplication[]
+  id                   String            @id @default(cuid())
+  code                 String            @unique
+  name                 String
+  description          String
+  minAmount            Float
+  maxAmount            Float
+  repaymentTerms       Json
+  interestRate         Float
+  eligibility          Json[]
+  lateFeeRate          Float             @default(8.0) // Daily late fee rate as percentage (e.g., 8 = 8% per day)
+  lateFeeFixedAmount   Float             @default(0) // Fixed fee amount charged periodically
+  lateFeeFrequencyDays Int               @default(7) // How often the fixed fee is charged (in days)
+  originationFee       Float
+  legalFee             Float
+  applicationFee       Float
+  requiredDocuments    Json[]
+  features             Json[]
+  isActive             Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  loanTypes            Json[]
+  applications         LoanApplication[]
 
   @@map("products")
 }
@@ -113,13 +115,15 @@ model Loan {
   userId             String
   applicationId      String              @unique
   principalAmount    Float
-  outstandingBalance Float
+  totalAmount        Float // Total amount to be repaid (principal + interest)
+  outstandingBalance Float // Outstanding principal balance
   interestRate       Float
   term               Int
   monthlyPayment     Float
   nextPaymentDue     DateTime?
   status             String              @default("ACTIVE")
   disbursedAt        DateTime?
+  dischargedAt       DateTime? // When the loan was discharged
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   repayments         LoanRepayment[]
@@ -131,18 +135,31 @@ model Loan {
 }
 
 model LoanRepayment {
-  id              String    @id @default(cuid())
-  loanId          String
-  amount          Float
-  principalAmount Float
-  interestAmount  Float
-  status          String    @default("PENDING")
-  dueDate         DateTime
-  paidAt          DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  loan            Loan      @relation(fields: [loanId], references: [id])
+  id                String          @id @default(cuid())
+  loanId            String
+  amount            Float
+  principalAmount   Float
+  interestAmount    Float
+  status            String          @default("PENDING")
+  dueDate           DateTime
+  paidAt            DateTime?
+  installmentNumber Int?
+  scheduledAmount   Float?
+  actualAmount      Float?
+  paymentType       String? // EARLY, ON_TIME, LATE, PARTIAL
+  daysEarly         Int?            @default(0)
+  daysLate          Int?            @default(0)
+  parentRepaymentId String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  loan              Loan            @relation(fields: [loanId], references: [id])
+  parentRepayment   LoanRepayment?  @relation("PartialPayments", fields: [parentRepaymentId], references: [id])
+  partialPayments   LoanRepayment[] @relation("PartialPayments")
+  lateFees          LateFee[]
 
+  @@index([installmentNumber])
+  @@index([paymentType])
+  @@index([status, dueDate])
   @@map("loan_repayments")
 }
 
@@ -268,6 +285,47 @@ model LoanApplicationHistory {
   application LoanApplication @relation(fields: [applicationId], references: [id])
 
   @@map("loan_application_history")
+}
+
+model LateFee {
+  id                   String   @id @default(cuid())
+  loanRepaymentId      String
+  calculationDate      DateTime @default(now())
+  daysOverdue          Int
+  outstandingPrincipal Float
+  dailyRate            Float // Product-specific daily rate (e.g., 8.0 = 8% per day)
+  feeAmount            Float // Fee amount for this calculation
+  cumulativeFees       Float // Total accumulated fees up to this date
+  feeType              String   @default("INTEREST") // INTEREST, FIXED
+  fixedFeeAmount       Float? // Fixed fee amount (for FIXED type)
+  frequencyDays        Int? // Frequency in days (for FIXED type)
+  status               String   @default("ACTIVE") // ACTIVE, PAID, WAIVED
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  loanRepayment LoanRepayment @relation(fields: [loanRepaymentId], references: [id])
+
+  @@unique([loanRepaymentId, calculationDate, feeType])
+  @@index([calculationDate])
+  @@index([status])
+  @@index([feeType])
+  @@map("late_fees")
+}
+
+model LateFeeProcessingLog {
+  id                 String   @id @default(cuid())
+  processedAt        DateTime @default(now())
+  feesCalculated     Int      @default(0)
+  totalFeeAmount     Float    @default(0)
+  overdue_repayments Int      @default(0)
+  status             String // SUCCESS, FAILED, PARTIAL
+  errorMessage       String?
+  processingTimeMs   Int?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  @@index([processedAt])
+  @@map("late_fee_processing_logs")
 }
 
 enum WalletTransactionStatus {

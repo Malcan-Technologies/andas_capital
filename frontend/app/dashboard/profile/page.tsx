@@ -163,9 +163,10 @@ export default function ProfilePage() {
 		return (
 			<DashboardLayout
 				userName={profile?.fullName?.split(" ")[0] || "User"}
+				title="Profile"
 			>
 				<div className="flex items-center justify-center h-full">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary"></div>
 				</div>
 			</DashboardLayout>
 		);
@@ -173,9 +174,9 @@ export default function ProfilePage() {
 
 	if (!profile) {
 		return (
-			<DashboardLayout userName="User">
-				<div className="bg-gradient-to-br from-red-700/70 via-red-700/70 to-rose-800/70 rounded-2xl p-6 backdrop-blur-md">
-					<p className="text-white">
+			<DashboardLayout userName="User" title="Profile">
+				<div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+					<p className="text-gray-700 font-body">
 						Failed to load profile information.
 					</p>
 				</div>
@@ -215,15 +216,15 @@ export default function ProfilePage() {
 
 	const renderBadge = (status: boolean, label: string) => (
 		<span
-			className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
+			className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium font-body ${
 				status
-					? "bg-green-500/20 text-green-200 border border-green-400/20"
-					: "bg-yellow-500/20 text-yellow-200 border border-yellow-400/20"
+					? "bg-green-100 text-green-700 border border-green-200"
+					: "bg-amber-100 text-amber-700 border border-amber-200"
 			}`}
 		>
 			<span
 				className={`h-2 w-2 mr-1.5 rounded-full ${
-					status ? "bg-green-400" : "bg-yellow-400"
+					status ? "bg-green-500" : "bg-amber-500"
 				}`}
 			></span>
 			{label}
@@ -233,7 +234,7 @@ export default function ProfilePage() {
 	const renderEditButton = (section: EditingSections) => (
 		<button
 			onClick={() => handleEdit(section)}
-			className="text-blue-200 hover:text-blue-100 flex items-center text-sm font-medium bg-white/5 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-md border border-white/10"
+			className="text-purple-primary hover:text-blue-tertiary flex items-center text-sm font-medium bg-purple-primary/5 px-3 py-1.5 rounded-lg hover:bg-purple-primary/10 transition-all duration-300 border border-purple-primary/20 font-body"
 		>
 			<PencilIcon className="h-4 w-4 mr-1" />
 			Edit
@@ -244,14 +245,14 @@ export default function ProfilePage() {
 		<div className="flex justify-end space-x-3 mt-6">
 			<button
 				onClick={handleCancel}
-				className="px-6 py-3 text-sm font-medium text-white/80 hover:text-white bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-md"
+				className="px-6 py-3 text-sm font-medium text-gray-700 hover:text-gray-900 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors font-body"
 				disabled={saving}
 			>
 				Cancel
 			</button>
 			<button
 				onClick={handleSave}
-				className="px-6 py-3 text-sm font-medium text-white bg-blue-500/80 hover:bg-blue-500/90 rounded-lg transition-colors backdrop-blur-md border border-blue-400/50"
+				className="px-6 py-3 text-sm font-medium text-white bg-purple-primary hover:bg-purple-600 rounded-lg transition-colors shadow-sm font-body"
 				disabled={saving}
 			>
 				{saving ? "Saving..." : "Save Changes"}
@@ -266,7 +267,7 @@ export default function ProfilePage() {
 		options?: readonly string[]
 	) => (
 		<div>
-			<label className="block text-sm font-medium text-blue-100 mb-2">
+			<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
 				{label}
 			</label>
 			{options ? (
@@ -274,7 +275,7 @@ export default function ProfilePage() {
 					name={name}
 					value={String(formData[name] || "")}
 					onChange={handleInputChange}
-					className="block w-full rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/50 focus:border-blue-500/50 focus:ring-blue-500/50 text-base py-3 px-4 backdrop-blur-md transition-colors"
+					className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
 				>
 					<option value="">Select {label}</option>
 					{options.map((option) => (
@@ -289,7 +290,7 @@ export default function ProfilePage() {
 					name={name}
 					value={String(formData[name] || "")}
 					onChange={handleInputChange}
-					className="block w-full rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/50 focus:border-blue-500/50 focus:ring-blue-500/50 text-base py-3 px-4 backdrop-blur-md transition-colors"
+					className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
 				/>
 			)}
 		</div>
@@ -300,18 +301,20 @@ export default function ProfilePage() {
 		icon: React.ReactNode,
 		section: EditingSections,
 		content: React.ReactNode,
-		titleColor: string
+		iconColor: string
 	) => (
-		<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 rounded-2xl shadow-2xl text-white overflow-hidden">
+		<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 			<div className="p-6">
 				<div className="flex justify-between items-center mb-6">
 					<div className="flex items-center space-x-3">
 						<div
-							className={`p-3 ${titleColor} rounded-xl backdrop-blur-md border border-white/20`}
+							className={`p-2 ${iconColor} rounded-lg border ${iconColor
+								.replace("bg-", "border-")
+								.replace("/10", "/20")}`}
 						>
 							{icon}
 						</div>
-						<h2 className={`text-xl font-bold ${titleColor}`}>
+						<h2 className="text-xl font-bold font-heading text-purple-primary">
 							{title}
 						</h2>
 					</div>
@@ -327,13 +330,15 @@ export default function ProfilePage() {
 		value: string | null,
 		icon?: React.ReactNode
 	) => (
-		<div className="flex items-center space-x-3 bg-white/5 p-4 rounded-lg border border-white/10">
-			{icon && <div className="flex-shrink-0 text-blue-200">{icon}</div>}
+		<div className="flex items-center space-x-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+			{icon && (
+				<div className="flex-shrink-0 text-purple-primary">{icon}</div>
+			)}
 			<div>
-				<label className="block text-sm font-medium text-blue-100">
+				<label className="block text-sm font-medium text-gray-500 font-body">
 					{label}
 				</label>
-				<p className="mt-2 text-base text-white">
+				<p className="mt-2 text-base text-gray-700 font-body">
 					{value || "Not provided"}
 				</p>
 			</div>
@@ -341,12 +346,15 @@ export default function ProfilePage() {
 	);
 
 	return (
-		<DashboardLayout userName={profile.fullName?.split(" ")[0] || "User"}>
+		<DashboardLayout
+			userName={profile.fullName?.split(" ")[0] || "User"}
+			title="Profile"
+		>
 			<div className="max-w-7xl mx-auto space-y-6">
 				{/* Personal Information */}
 				{renderInfoCard(
 					"Personal Information",
-					<UserCircleIcon className="h-8 w-8 text-white" />,
+					<UserCircleIcon className="h-6 w-6 text-purple-primary" />,
 					"personal",
 					editingSection === "personal" ? (
 						<div className="space-y-6">
@@ -367,7 +375,7 @@ export default function ProfilePage() {
 							{renderSaveButtons()}
 						</div>
 					) : (
-						<div className="space-y-4">
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 							{renderField(
 								"Full Name",
 								profile.fullName,
@@ -392,13 +400,13 @@ export default function ProfilePage() {
 							)}
 						</div>
 					),
-					"text-violet-300"
+					"bg-purple-primary/10"
 				)}
 
 				{/* Address */}
 				{renderInfoCard(
 					"Address",
-					<HomeIcon className="h-8 w-8 text-white" />,
+					<HomeIcon className="h-6 w-6 text-purple-primary" />,
 					"address",
 					editingSection === "address" ? (
 						<div className="space-y-6">
@@ -430,13 +438,13 @@ export default function ProfilePage() {
 							</div>
 						</div>
 					),
-					"text-blue-300"
+					"bg-purple-primary/10"
 				)}
 
 				{/* Employment */}
 				{renderInfoCard(
 					"Employment Information",
-					<BriefcaseIcon className="h-8 w-8 text-white" />,
+					<BriefcaseIcon className="h-6 w-6 text-purple-primary" />,
 					"employment",
 					editingSection === "employment" ? (
 						<div className="space-y-6">
@@ -486,13 +494,13 @@ export default function ProfilePage() {
 							)}
 						</div>
 					),
-					"text-emerald-300"
+					"bg-purple-primary/10"
 				)}
 
 				{/* Banking Information */}
 				{renderInfoCard(
 					"Banking Information",
-					<BanknotesIcon className="h-8 w-8 text-white" />,
+					<BanknotesIcon className="h-6 w-6 text-purple-primary" />,
 					"banking",
 					editingSection === "banking" ? (
 						<div className="space-y-6">
@@ -518,13 +526,13 @@ export default function ProfilePage() {
 							)}
 						</div>
 					),
-					"text-amber-300"
+					"bg-purple-primary/10"
 				)}
 
 				{/* Account Information */}
 				{renderInfoCard(
 					"Account Information",
-					<ClockIcon className="h-8 w-8 text-white" />,
+					<ClockIcon className="h-6 w-6 text-purple-primary" />,
 					null,
 					<div className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -547,8 +555,8 @@ export default function ProfilePage() {
 							)}
 						</div>
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							<div className="bg-white/5 p-4 rounded-lg border border-white/10">
-								<label className="block text-sm font-medium text-blue-100 mb-2">
+							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+								<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
 									Onboarding Status
 								</label>
 								<div className="mt-2">
@@ -560,8 +568,8 @@ export default function ProfilePage() {
 									)}
 								</div>
 							</div>
-							<div className="bg-white/5 p-4 rounded-lg border border-white/10">
-								<label className="block text-sm font-medium text-blue-100 mb-2">
+							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+								<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
 									KYC Status
 								</label>
 								<div className="mt-2">
@@ -575,7 +583,7 @@ export default function ProfilePage() {
 							</div>
 						</div>
 					</div>,
-					"text-gray-300"
+					"bg-purple-primary/10"
 				)}
 			</div>
 		</DashboardLayout>
