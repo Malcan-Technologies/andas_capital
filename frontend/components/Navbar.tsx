@@ -94,6 +94,22 @@ export default function Navbar({
 			if (section === "company" || section === "resources-sub") {
 				return [...new Set([...prev, "resources", section])];
 			}
+			// If it's a first-level menu, expand all its submenus by default
+			if (section === "borrow") {
+				return [
+					...new Set([...prev, "borrow", "business", "personal"]),
+				];
+			}
+			if (section === "resources") {
+				return [
+					...new Set([
+						...prev,
+						"resources",
+						"company",
+						"resources-sub",
+					]),
+				];
+			}
 			return [...prev, section];
 		});
 	};
@@ -227,7 +243,11 @@ export default function Navbar({
 						<div className="flex md:hidden">
 							<button
 								onClick={() => setMobileMenuOpen(true)}
-								className="text-white hover:text-gray-200"
+								className={`${
+									isScrolled
+										? "text-gray-700 hover:text-purple-primary"
+										: "text-white hover:text-gray-200"
+								} transition-colors`}
 							>
 								<span className="sr-only">Open menu</span>
 								<MdMenu size={24} />
@@ -657,7 +677,7 @@ export default function Navbar({
 					<div className="h-full overflow-y-auto pb-32">
 						<div className="p-6">
 							<div className="flex justify-between items-center mb-8">
-								<Logo size="md" variant="black" />
+								<Logo size="md" variant="white" />
 								<button
 									onClick={() => setMobileMenuOpen(false)}
 									className="text-gray-500 hover:text-gray-700"

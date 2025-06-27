@@ -504,7 +504,7 @@ export default function DashboardPage() {
 												  )}`
 												: ""
 										}`,
-										buttonText: "Resume Application",
+										buttonText: "Resume",
 										buttonHref: `/dashboard/apply?applicationId=${
 											currentApp.id
 										}&step=${
@@ -530,7 +530,7 @@ export default function DashboardPage() {
 												  )}`
 												: ""
 										}`,
-										buttonText: "Pay Application Fee",
+										buttonText: "Pay",
 										buttonHref: `/dashboard/applications/${currentApp.id}`,
 										icon: (
 											<CreditCardIcon className="h-6 w-6 text-amber-600" />

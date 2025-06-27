@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardNav from "./DashboardNav";
-import UserProfileButton from "./UserProfileButton";
 import NotificationsButton from "./NotificationsButton";
 import Link from "next/link";
 import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
@@ -67,20 +66,18 @@ export default function DashboardLayout({
 
 	return (
 		<div className="flex h-screen bg-offwhite">
-			{/* Mobile menu button */}
-			<div className="lg:hidden fixed top-4 right-4 z-50">
-				<UserProfileButton />
-			</div>
+			{/* Navigation - includes both desktop sidebar and mobile menu */}
+			<DashboardNav />
 
-			{/* Sidebar */}
-			<div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
-				<DashboardNav />
+			{/* Desktop Sidebar Space */}
+			<div className="hidden lg:block lg:w-64 lg:flex-shrink-0">
+				{/* This div creates space for the fixed sidebar on desktop */}
 			</div>
 
 			{/* Main content */}
-			<div className="lg:pl-64 flex flex-col flex-1">
-				{/* Top bar */}
-				<div className="sticky top-0 z-10 flex-shrink-0 flex h-24 bg-white/95 backdrop-blur-md border-b border-gray-200">
+			<div className="flex flex-col flex-1">
+				{/* Top bar - Desktop only */}
+				<div className="hidden lg:flex sticky top-0 z-10 flex-shrink-0 h-24 bg-white/95 backdrop-blur-md border-b border-gray-200">
 					<div className="flex-1 px-4 flex items-center">
 						<div>
 							<h1 className="text-2xl font-heading text-purple-primary">
@@ -100,7 +97,24 @@ export default function DashboardLayout({
 					</div>
 					<div className="flex items-center space-x-4 pr-4">
 						<NotificationsButton />
-						<UserProfileButton />
+					</div>
+				</div>
+
+				{/* Mobile Top bar - simplified, no user controls to avoid conflict with hamburger menu */}
+				<div className="lg:hidden sticky top-0 z-10 flex-shrink-0 bg-white/95 backdrop-blur-md border-b border-gray-200 px-4 py-3 pr-24">
+					<div>
+						<h1 className="text-xl font-heading text-purple-primary">
+							{title}
+						</h1>
+						<p className="text-sm text-gray-500 font-body">
+							Welcome back{" "}
+							<Link
+								href="/dashboard/profile"
+								className="text-purple-primary font-medium hover:text-blue-tertiary transition-colors"
+							>
+								{userName}
+							</Link>
+						</p>
 					</div>
 				</div>
 
