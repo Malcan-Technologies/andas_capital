@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const backendUrl =
-	process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(
 	request: NextRequest,

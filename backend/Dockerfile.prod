@@ -69,5 +69,5 @@ RUN node scripts/verify-prisma-client.js
 # Expose the port the app runs on
 EXPOSE 4001
 
-# Start the application (migrations will be run separately)
-CMD ["node", "dist/src/index.js"] 
+# Start the application with proper migration handling
+CMD ["sh", "-c", "npx prisma generate && node dist/src/index.js"] 

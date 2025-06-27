@@ -17,7 +17,6 @@ fi
 # Step 1: Clear any Prisma cache
 echo "🧹 Clearing Prisma cache..."
 $DOCKER_CMD rm -rf node_modules/.prisma || true
-$DOCKER_CMD npx prisma generate
 
 # Step 2: Check current migration status
 echo "🔍 Checking migration status..."
@@ -50,7 +49,7 @@ fi
 
 # Step 3: Force regenerate Prisma client
 echo "🔄 Regenerating Prisma client..."
-$DOCKER_CMD npx prisma generate --force
+$DOCKER_CMD npx prisma generate
 
 # Step 4: Apply any pending migrations
 echo "🚀 Applying migrations..."

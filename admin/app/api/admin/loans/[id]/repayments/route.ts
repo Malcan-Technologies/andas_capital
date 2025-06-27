@@ -11,7 +11,7 @@ export async function GET(
 
 		const response = await fetch(
 			`${
-				process.env.BACKEND_URL || "http://localhost:4001"
+				process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"
 			}/api/admin/loans/${loanId}/repayments`,
 			{
 				method: "GET",

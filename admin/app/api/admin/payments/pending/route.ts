@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
 			headers: {
 				Authorization: `Bearer ${token}`,
 				"Content-Type": "application/json",
+				"Cache-Control": "no-cache, no-store, must-revalidate",
+				Pragma: "no-cache",
 			},
 		});
 
@@ -50,7 +52,14 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
-		return NextResponse.json(data);
+		const jsonResponse = NextResponse.json(data);
+		jsonResponse.headers.set(
+			"Cache-Control",
+			"no-cache, no-store, must-revalidate"
+		);
+		jsonResponse.headers.set("Pragma", "no-cache");
+		jsonResponse.headers.set("Expires", "0");
+		return jsonResponse;
 	} catch (error) {
 		console.error("Error fetching pending payments:", error);
 		return NextResponse.json(

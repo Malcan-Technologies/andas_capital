@@ -16,6 +16,7 @@ import {
 	UserCircleIcon,
 	DocumentTextIcon,
 } from "@heroicons/react/24/outline";
+import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
 interface PendingPayment {
 	id: string;
@@ -86,6 +87,8 @@ function getDisplayAmount(payment: PendingPayment): number {
 	return payment.metadata?.originalAmount || Math.abs(payment.amount);
 }
 
+// Note: Using fetchWithAdminTokenRefresh utility for consistent API handling
+
 function PaymentsContent() {
 	const searchParams = useSearchParams();
 	const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>(
@@ -99,6 +102,9 @@ function PaymentsContent() {
 		useState<PendingPayment | null>(null);
 	const [searchTerm, setSearchTerm] = useState("");
 	const [refreshing, setRefreshing] = useState(false);
+	const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+	const [refreshInterval, setRefreshInterval] =
+		useState<NodeJS.Timeout | null>(null);
 
 	// Modal states
 	const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -116,22 +122,29 @@ function PaymentsContent() {
 		}
 	}, [searchParams]);
 
-	// Fetch pending payments
-	const fetchPendingPayments = async () => {
+	// Fetch pending payments with automatic token refresh and cache busting
+	const fetchPendingPayments = async (
+		showLoader = true,
+		bustCache = false
+	) => {
+		if (showLoader) {
+			setRefreshing(true);
+		}
+
 		try {
-			const response = await fetch("/api/admin/payments/pending", {
-				headers: {
-					Authorization: `Bearer ${
-						localStorage.getItem("adminToken") || ""
-					}`,
-					"Content-Type": "application/json",
-				},
-			});
-			if (!response.ok) {
+			// Add cache-busting parameter to ensure fresh data
+			const cacheBuster = bustCache ? `?_t=${Date.now()}` : "";
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data: PendingPayment[];
+			}>(`/api/admin/repayments/pending${cacheBuster}`);
+
+			if (data.success && data.data) {
+				setPendingPayments(data.data);
+				setLastRefresh(new Date());
+			} else {
 				throw new Error("Failed to fetch pending payments");
 			}
-			const data = await response.json();
-			setPendingPayments(data.data || []);
 		} catch (error) {
 			console.error("Error fetching pending payments:", error);
 			setPendingPayments([]);
@@ -141,9 +154,42 @@ function PaymentsContent() {
 		}
 	};
 
+	// Setup auto-refresh with cleanup
+	const setupAutoRefresh = useCallback(() => {
+		// Clear any existing interval
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+		}
+
+		// Set up new interval
+		const interval = setInterval(() => {
+			fetchPendingPayments(false); // Silent refresh
+		}, 30000); // 30 seconds
+
+		setRefreshInterval(interval);
+		return interval;
+	}, [refreshInterval]);
+
+	// Auto-refresh every 30 seconds to keep data fresh
 	useEffect(() => {
 		fetchPendingPayments();
+		const interval = setupAutoRefresh();
+
+		return () => {
+			if (interval) {
+				clearInterval(interval);
+			}
+		};
 	}, []);
+
+	// Clean up interval on unmount
+	useEffect(() => {
+		return () => {
+			if (refreshInterval) {
+				clearInterval(refreshInterval);
+			}
+		};
+	}, [refreshInterval]);
 
 	// Filter payments based on search term with exact loan ID matching
 	const filterPayments = useCallback(() => {
@@ -206,7 +252,7 @@ function PaymentsContent() {
 
 	const handleRefresh = () => {
 		setRefreshing(true);
-		fetchPendingPayments();
+		fetchPendingPayments(true, true); // Force cache bust
 	};
 
 	const handleApprovePayment = async () => {
@@ -214,38 +260,62 @@ function PaymentsContent() {
 
 		setProcessing(true);
 		try {
-			const response = await fetch(
-				`/api/admin/payments/${selectedPayment.id}/approve`,
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${
-							localStorage.getItem("adminToken") || ""
-						}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						notes: approvalNotes,
-					}),
-				}
-			);
+			// Clear auto-refresh to prevent race conditions
+			if (refreshInterval) {
+				clearInterval(refreshInterval);
+				setRefreshInterval(null);
+			}
 
-			const data = await response.json();
-			if (response.ok && data.success) {
-				// Remove from pending list
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				message?: string;
+			}>(`/api/admin/repayments/${selectedPayment.id}/approve`, {
+				method: "POST",
+				body: JSON.stringify({
+					notes: approvalNotes,
+				}),
+			});
+
+			if (data.success) {
+				// Remove from pending list immediately
 				setPendingPayments((prev) =>
 					prev.filter((r) => r.id !== selectedPayment.id)
 				);
 				setSelectedPayment(null);
 				setShowApprovalModal(false);
 				setApprovalNotes("");
+
+				// Show success message
 				alert("Payment approved successfully!");
+
+				// Force refresh with cache busting
+				await fetchPendingPayments(false, true);
+
+				// Restart auto-refresh
+				setupAutoRefresh();
 			} else {
 				throw new Error(data.message || "Failed to approve payment");
 			}
 		} catch (error) {
 			console.error("Error approving payment:", error);
-			alert("Failed to approve payment. Please try again.");
+
+			// Check if payment is no longer pending
+			if (
+				error instanceof Error &&
+				error.message.includes("not pending")
+			) {
+				alert(
+					"This payment has already been processed. Refreshing the list..."
+				);
+				await fetchPendingPayments(false, true);
+				setShowApprovalModal(false);
+				setApprovalNotes("");
+			} else {
+				alert("Failed to approve payment. Please try again.");
+			}
+
+			// Restart auto-refresh even on error
+			setupAutoRefresh();
 		} finally {
 			setProcessing(false);
 		}
@@ -256,26 +326,25 @@ function PaymentsContent() {
 
 		setProcessing(true);
 		try {
-			const response = await fetch(
-				`/api/admin/payments/${selectedPayment.id}/reject`,
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${
-							localStorage.getItem("adminToken") || ""
-						}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						reason: rejectionReason,
-						notes: rejectionNotes,
-					}),
-				}
-			);
+			// Clear auto-refresh to prevent race conditions
+			if (refreshInterval) {
+				clearInterval(refreshInterval);
+				setRefreshInterval(null);
+			}
 
-			const data = await response.json();
-			if (response.ok && data.success) {
-				// Remove from pending list
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				message?: string;
+			}>(`/api/admin/repayments/${selectedPayment.id}/reject`, {
+				method: "POST",
+				body: JSON.stringify({
+					reason: rejectionReason,
+					notes: rejectionNotes,
+				}),
+			});
+
+			if (data.success) {
+				// Remove from pending list immediately
 				setPendingPayments((prev) =>
 					prev.filter((r) => r.id !== selectedPayment.id)
 				);
@@ -283,13 +352,39 @@ function PaymentsContent() {
 				setShowRejectionModal(false);
 				setRejectionReason("");
 				setRejectionNotes("");
+
+				// Show success message
 				alert("Payment rejected successfully!");
+
+				// Force refresh with cache busting
+				await fetchPendingPayments(false, true);
+
+				// Restart auto-refresh
+				setupAutoRefresh();
 			} else {
 				throw new Error(data.message || "Failed to reject payment");
 			}
 		} catch (error) {
 			console.error("Error rejecting payment:", error);
-			alert("Failed to reject payment. Please try again.");
+
+			// Check if payment is no longer pending
+			if (
+				error instanceof Error &&
+				error.message.includes("not pending")
+			) {
+				alert(
+					"This payment has already been processed. Refreshing the list..."
+				);
+				await fetchPendingPayments(false, true);
+				setShowRejectionModal(false);
+				setRejectionReason("");
+				setRejectionNotes("");
+			} else {
+				alert("Failed to reject payment. Please try again.");
+			}
+
+			// Restart auto-refresh even on error
+			setupAutoRefresh();
 		} finally {
 			setProcessing(false);
 		}
@@ -316,6 +411,10 @@ function PaymentsContent() {
 						</h1>
 						<p className="text-gray-400">
 							Review and approve pending loan payments
+						</p>
+						<p className="text-xs text-gray-500 mt-1">
+							Last updated: {lastRefresh.toLocaleTimeString()} •
+							Auto-refreshes every 30s
 						</p>
 					</div>
 					<button
@@ -624,7 +723,8 @@ function PaymentsContent() {
 											onClick={() =>
 												setShowApprovalModal(true)
 											}
-											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
+											disabled={processing}
+											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
 										>
 											<CheckCircleIcon className="h-5 w-5 mr-2" />
 											Approve Payment
@@ -633,7 +733,8 @@ function PaymentsContent() {
 											onClick={() =>
 												setShowRejectionModal(true)
 											}
-											className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center"
+											disabled={processing}
+											className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center disabled:opacity-50"
 										>
 											<XCircleIcon className="h-5 w-5 mr-2" />
 											Reject Payment

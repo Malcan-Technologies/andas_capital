@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const backendUrl =
-	process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function GET(request: NextRequest) {
 	try {
@@ -39,6 +38,8 @@ export async function GET(request: NextRequest) {
 				headers: {
 					Authorization: `Bearer ${token}`,
 					"Content-Type": "application/json",
+					"Cache-Control": "no-cache, no-store, must-revalidate",
+					Pragma: "no-cache",
 				},
 			}
 		);
@@ -73,7 +74,14 @@ export async function GET(request: NextRequest) {
 			"items"
 		);
 
-		return NextResponse.json(data);
+		const jsonResponse = NextResponse.json(data);
+		jsonResponse.headers.set(
+			"Cache-Control",
+			"no-cache, no-store, must-revalidate"
+		);
+		jsonResponse.headers.set("Pragma", "no-cache");
+		jsonResponse.headers.set("Expires", "0");
+		return jsonResponse;
 	} catch (error) {
 		console.error("Error fetching pending repayments:", error);
 		return NextResponse.json(

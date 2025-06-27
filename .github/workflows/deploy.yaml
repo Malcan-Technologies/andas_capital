@@ -316,6 +316,9 @@ jobs:
               -e "ssh -i ~/.ssh/deploy_key" \
               admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
             
+            # Make deployment script executable
+            ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'chmod +x /var/www/growkapital/admin/deploy-admin.sh'
+            
             # Build and start admin
             ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
               cd /var/www/growkapital/admin
@@ -389,15 +392,14 @@ jobs:
               # Start or restart the admin service
               if pm2 list | grep -q "growkapital-admin"; then
                 echo "🔄 Restarting admin service..."
-                pm2 restart growkapital-admin
-              else
-                echo "▶️ Starting admin service..."
-                pm2 start npm --name "growkapital-admin" -- start -- --port 3003 --hostname 0.0.0.0
-                pm2 save
+                pm2 stop growkapital-admin
+                pm2 delete growkapital-admin
               fi
               
-              # Mark nginx for reload
-              touch /tmp/nginx-reload-needed
+              echo "▶️ Starting admin service with standalone server..."
+              # Use standalone server for admin (required for Next.js output: "standalone")
+              PORT=3003 pm2 start .next/standalone/server.js --name "growkapital-admin"
+              pm2 save
             '
             echo "✅ Admin deployment completed"
           else
