@@ -30,8 +30,10 @@ export default function Logo({
 				src={logoSrc}
 				alt="Kapital"
 				fill
-				className="object-contain"
+				className="object-contain antialiased"
 				priority
+				quality={100}
+				sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
 			/>
 		</div>
 	);

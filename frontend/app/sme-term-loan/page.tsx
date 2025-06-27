@@ -291,7 +291,7 @@ export default function SMETermLoan() {
 				</div>
 			</section>
 
-			{/* Benefits Section - Masonry Style */}
+			{/* Benefits Section */}
 			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gray-50/20 w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					<div className="text-center mb-8 lg:mb-12">
@@ -304,157 +304,107 @@ export default function SMETermLoan() {
 						</p>
 					</div>
 
-					{/* Masonry-style Benefits Cards */}
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
-						{/* Large Card - Working Capital */}
-						<div className="md:col-span-2 lg:col-span-2 lg:row-span-2 bg-gradient-to-br from-purple-primary to-purple-700 rounded-xl lg:rounded-2xl p-6 lg:p-8 text-white relative overflow-hidden">
-							<div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-							<div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
-							<div className="relative">
-								<div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6">
-									<MdAccountBalance
-										size={32}
-										className="text-white"
-									/>
-								</div>
-								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4">
-									Working Capital
-								</h3>
-								<p className="text-lg lg:text-xl text-white/90 mb-6 font-body leading-relaxed">
-									Access funds for inventory, operations, and
-									business expansion with flexible repayment
-									terms.
-								</p>
-								<div className="space-y-3">
-									<div className="flex items-center space-x-3">
-										<MdCheck
-											size={20}
-											className="text-white"
-										/>
-										<span className="text-white/90">
-											Inventory financing
-										</span>
-									</div>
-									<div className="flex items-center space-x-3">
-										<MdCheck
-											size={20}
-											className="text-white"
-										/>
-										<span className="text-white/90">
-											Operations funding
-										</span>
-									</div>
-									<div className="flex items-center space-x-3">
-										<MdCheck
-											size={20}
-											className="text-white"
-										/>
-										<span className="text-white/90">
-											Business expansion
-										</span>
-									</div>
-								</div>
+					{/* Benefits Grid */}
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
+						{/* Working Capital */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdAccountBalance
+									size={28}
+									className="text-purple-primary"
+								/>
 							</div>
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Working Capital
+							</h3>
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Access funds for inventory, operations, and
+								business expansion with flexible repayment terms
+							</p>
 						</div>
 
-						{/* Medium Card - Fast Processing */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-blue-tertiary/10">
+						{/* Fast Processing */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
 							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdSpeed
 									size={28}
 									className="text-blue-tertiary"
 								/>
 							</div>
-							<h3 className="text-xl font-heading font-bold mb-3 text-gray-700">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
 								Fast Processing
 							</h3>
-							<p className="text-gray-500 font-body mb-4">
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
 								Quick approval and disbursement process to meet
-								urgent needs
+								urgent business funding needs
 							</p>
-							<div className="bg-blue-tertiary/5 rounded-lg p-3">
-								<span className="text-2xl font-bold text-blue-tertiary">
-									3 Days
-								</span>
-								<p className="text-xs text-gray-500">
-									Average approval time
-								</p>
-							</div>
 						</div>
 
-						{/* Small Card - Minimal Security */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border border-green-100">
-							<div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
+						{/* Minimal Security */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdSecurity
-									size={24}
-									className="text-green-600"
+									size={28}
+									className="text-purple-primary"
 								/>
 							</div>
-							<h3 className="text-lg font-heading font-bold mb-2 text-gray-700">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
 								Minimal Security
 							</h3>
-							<p className="text-sm text-gray-500 font-body">
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
 								No collateral required for established
-								businesses
+								businesses with strong financial track records
 							</p>
 						</div>
 
-						{/* Medium Card - Flexible Terms */}
-						<div className="lg:col-span-2 bg-gradient-to-r from-blue-tertiary to-blue-600 rounded-xl lg:rounded-2xl p-6 lg:p-8 text-white">
-							<div className="flex items-start justify-between mb-4">
-								<div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-									<MdTrendingUp
-										size={28}
-										className="text-white"
-									/>
-								</div>
-								<div className="text-right">
-									<span className="text-2xl font-bold">
-										6-24
-									</span>
-									<p className="text-xs text-white/80">
-										Months
-									</p>
-								</div>
+						{/* Flexible Terms */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdTrendingUp
+									size={28}
+									className="text-blue-tertiary"
+								/>
 							</div>
-							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
 								Flexible Terms
 							</h3>
-							<p className="text-white/90 font-body">
-								Choose repayment terms that suit your business
-								cash flow and growth plans
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Choose repayment terms from 6 to 24 months that
+								suit your business cash flow
 							</p>
 						</div>
 
-						{/* Small Card - High Limits */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border border-purple-100">
-							<div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
+						{/* High Limits */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdVerifiedUser
-									size={24}
-									className="text-purple-600"
+									size={28}
+									className="text-purple-primary"
 								/>
 							</div>
-							<h3 className="text-lg font-heading font-bold mb-2 text-gray-700">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
 								High Limits
 							</h3>
-							<p className="text-sm text-gray-500 font-body">
-								Up to RM 1M financing available
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Up to RM 1,000,000 financing available for
+								qualified businesses and growth projects
 							</p>
 						</div>
 
-						{/* Small Card - Competitive Rates */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border border-amber-100">
-							<div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
+						{/* Competitive Rates */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdPeople
-									size={24}
-									className="text-amber-600"
+									size={28}
+									className="text-blue-tertiary"
 								/>
 							</div>
-							<h3 className="text-lg font-heading font-bold mb-2 text-gray-700">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
 								Competitive Rates
 							</h3>
-							<p className="text-sm text-gray-500 font-body">
-								As low as 1.0% monthly interest
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Starting from 1.0% monthly interest with
+								transparent pricing and no hidden fees
 							</p>
 						</div>
 					</div>

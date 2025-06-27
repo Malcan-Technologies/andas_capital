@@ -118,7 +118,7 @@ export default function Home() {
 					</div>
 
 					{/* Stats Card */}
-					<div className="bg-white rounded-xl lg:rounded-2xl p-4 sm:p-6 lg:p-8 shadow-xl border border-gray-100 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0">
+					<div className="bg-white rounded-xl lg:rounded-2xl p-4 sm:p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0">
 						{/* Background Pattern */}
 						<div className="absolute inset-0 opacity-5">
 							<div className="absolute w-40 h-40 bg-purple-primary rounded-full blur-3xl -top-10 -right-10"></div>
@@ -359,7 +359,7 @@ export default function Home() {
 			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					{/* Financial Solutions Card */}
-					<div className="bg-white rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 xl:p-16 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0 border border-gray-200 shadow-lg">
+					<div className="bg-white rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 xl:p-16 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0 border border-gray-200 shadow-sm hover:shadow-lg transition-all">
 						{/* Subtle background elements */}
 						<div className="absolute inset-0 overflow-hidden">
 							<div className="absolute w-[500px] h-[500px] bg-purple-primary/3 rounded-full blur-3xl -top-32 -left-32"></div>
@@ -527,7 +527,7 @@ export default function Home() {
 				</div>
 			</section>
 
-			{/* Why Trust Us Section - Masonry Layout */}
+			{/* Why Trust Us Section */}
 			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gray-50/20 w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					<div className="text-center mb-8 lg:mb-12">
@@ -549,191 +549,108 @@ export default function Home() {
 						</p>
 					</div>
 
-					{/* Masonry-style Trust Cards */}
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
-						{/* Large Card - Transparent Lending */}
-						<div className="md:col-span-2 lg:col-span-2 lg:row-span-2 bg-gradient-to-br from-purple-primary to-purple-700 rounded-xl lg:rounded-2xl p-6 lg:p-8 text-white relative overflow-hidden">
-							<div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-							<div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
-							<div className="relative">
-								<div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6">
-									<MdVerifiedUser
-										size={32}
-										className="text-white"
-									/>
-								</div>
-								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4">
-									100% Transparent Lending
-								</h3>
-								<p className="text-lg lg:text-xl text-white/90 mb-6 font-body leading-relaxed">
-									No hidden fees, no surprises. Every rate,
-									term, and condition is clearly explained
-									upfront.
-								</p>
-								<div className="space-y-3">
-									<div className="flex items-center space-x-3">
-										<MdCheck
-											size={20}
-											className="text-white"
-										/>
-										<span className="text-white/90">
-											Clear interest rates
-										</span>
-									</div>
-									<div className="flex items-center space-x-3">
-										<MdCheck
-											size={20}
-											className="text-white"
-										/>
-										<span className="text-white/90">
-											No processing fees
-										</span>
-									</div>
-									<div className="flex items-center space-x-3">
-										<MdCheck
-											size={20}
-											className="text-white"
-										/>
-										<span className="text-white/90">
-											Upfront terms
-										</span>
-									</div>
-								</div>
+					{/* Features Grid */}
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
+						{/* Transparent Lending */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdVerifiedUser
+									size={28}
+									className="text-purple-primary"
+								/>
 							</div>
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								100% Transparent
+							</h3>
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								No hidden fees, no surprises. Every rate, term,
+								and condition is clearly explained upfront
+							</p>
 						</div>
 
-						{/* Medium Card - Fast Approval */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-blue-tertiary/10">
+						{/* Lightning Fast */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
 							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdSpeed
 									size={28}
 									className="text-blue-tertiary"
 								/>
 							</div>
-							<h3 className="text-xl font-heading font-bold mb-3 text-gray-700">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
 								Lightning Fast
 							</h3>
-							<p className="text-gray-500 font-body mb-4">
-								Get approved in hours, not days
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								24-48 hour approval process with instant credit
+								decisions and same-day disbursement
 							</p>
-							<div className="bg-blue-tertiary/5 rounded-lg p-3">
-								<span className="text-2xl font-bold text-blue-tertiary">
-									24-48h
-								</span>
-								<p className="text-xs text-gray-500">
-									Average approval time
-								</p>
-							</div>
 						</div>
 
-						{/* Small Card - Licensed */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border border-green-100">
-							<div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
+						{/* Licensed & Regulated */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdSecurity
-									size={24}
-									className="text-green-600"
+									size={28}
+									className="text-purple-primary"
 								/>
 							</div>
-							<h3 className="text-lg font-heading font-bold mb-2 text-gray-700">
-								Licensed
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Licensed & Regulated
 							</h3>
-							<p className="text-sm text-gray-500 font-body">
-								Fully regulated fintech provider
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Fully licensed fintech provider operating under
+								Malaysian financial regulations
 							</p>
 						</div>
 
-						{/* Medium Card - AI Credit Decisions */}
-						<div className="lg:col-span-2 bg-gradient-to-r from-blue-tertiary to-blue-600 rounded-xl lg:rounded-2xl p-6 lg:p-8 text-white">
-							<div className="flex items-start justify-between mb-4">
-								<div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-									<MdAccountBalance
-										size={28}
-										className="text-white"
-									/>
-								</div>
-								<div className="text-right">
-									<span className="text-2xl font-bold">
-										A.I.
-									</span>
-									<p className="text-xs text-white/80">
-										Powered
-									</p>
-								</div>
+						{/* AI-Powered Credit */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdAccountBalance
+									size={28}
+									className="text-blue-tertiary"
+								/>
 							</div>
-							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3">
-								Smart Credit Decisions
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								AI-Powered Credit
 							</h3>
-							<p className="text-white/90 font-body">
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
 								Advanced algorithms ensure fair, fast, and
-								accurate loan assessments
+								accurate loan assessments for better outcomes
 							</p>
 						</div>
 
-						{/* Small Card - Investment Platform */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border border-purple-100">
-							<div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
-								<MdTrendingUp
-									size={24}
-									className="text-purple-600"
+						{/* Complete Solutions */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
+								<MdBusinessCenter
+									size={28}
+									className="text-purple-primary"
 								/>
 							</div>
-							<h3 className="text-lg font-heading font-bold mb-2 text-gray-700">
-								Trusted Investments
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Complete Solutions
 							</h3>
-							<p className="text-sm text-gray-500 font-body">
-								Secure investment opportunities
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Loans, investments, and analytics - everything
+								you need for financial success
 							</p>
 						</div>
 
-						{/* Small Card - Local Support */}
-						<div className="lg:col-span-1 bg-white rounded-xl lg:rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border border-amber-100">
-							<div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
+						{/* Local Expertise */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdPeople
-									size={24}
-									className="text-amber-600"
+									size={28}
+									className="text-blue-tertiary"
 								/>
 							</div>
-							<h3 className="text-lg font-heading font-bold mb-2 text-gray-700">
-								Local Team
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+								Local Expertise
 							</h3>
-							<p className="text-sm text-gray-500 font-body">
-								Malaysian support that understands you
+							<p className="text-lg lg:text-xl text-gray-500 font-body">
+								Malaysian team with deep understanding of local
+								business needs and market conditions
 							</p>
-						</div>
-
-						{/* Medium Card - Customer Reviews */}
-						<div className="lg:col-span-2 bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm">
-							<div className="flex items-center gap-2 mb-4">
-								{[...Array(5)].map((_, i) => (
-									<MdStar
-										key={i}
-										size={16}
-										className="text-yellow-400"
-									/>
-								))}
-								<span className="text-sm text-gray-500 ml-2">
-									4.8/5 from 1,200+ reviews
-								</span>
-							</div>
-							<p className="text-lg text-gray-700 mb-4 font-body">
-								"Best lending experience I've had. Fast,
-								transparent, and professional."
-							</p>
-							<div className="flex items-center gap-3">
-								<div className="w-10 h-10 rounded-full bg-purple-primary/20 flex items-center justify-center">
-									<span className="text-purple-primary font-bold">
-										R
-									</span>
-								</div>
-								<div>
-									<p className="font-semibold text-gray-700">
-										Rahman K.
-									</p>
-									<p className="text-sm text-gray-500">
-										Verified Customer
-									</p>
-								</div>
-							</div>
 						</div>
 					</div>
 				</div>
@@ -742,7 +659,7 @@ export default function Home() {
 			{/* Call to Action Section */}
 			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					<div className="bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 text-center relative overflow-hidden shadow-xl mx-2 sm:mx-4 lg:mx-0">
+					<div className="bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 text-center relative overflow-hidden shadow-sm hover:shadow-lg transition-all mx-2 sm:mx-4 lg:mx-0">
 						<div className="absolute inset-0 bg-black/10"></div>
 						<div className="relative">
 							<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-white px-4">
