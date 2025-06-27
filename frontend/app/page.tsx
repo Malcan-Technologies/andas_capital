@@ -358,168 +358,175 @@ export default function Home() {
 			{/* Products Section */}
 			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					{/* Financial Solutions Card */}
-					<div className="bg-white rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 xl:p-16 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0 border border-gray-200 shadow-sm hover:shadow-lg transition-all">
-						{/* Subtle background elements */}
-						<div className="absolute inset-0 overflow-hidden">
-							<div className="absolute w-[500px] h-[500px] bg-purple-primary/3 rounded-full blur-3xl -top-32 -left-32"></div>
-							<div className="absolute w-[700px] h-[700px] bg-blue-tertiary/3 rounded-full blur-3xl top-1/2 left-1/2"></div>
-							<div className="absolute w-[400px] h-[400px] bg-purple-primary/3 rounded-full blur-3xl -bottom-32 -right-32"></div>
+					{/* Section Header */}
+					<div className="text-center mb-8 lg:mb-12">
+						<div className="inline-flex items-center px-4 py-2 bg-purple-primary/10 rounded-full mb-4 sm:mb-6 border border-purple-primary/20">
+							<span className="text-xs sm:text-sm font-semibold text-purple-primary">
+								Our Solutions
+							</span>
 						</div>
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
+							Our Solutions
+						</h2>
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-5xl">
+							Three core solutions for your financial needs
+						</p>
+					</div>
 
-						<div className="relative">
-							<div className="text-center mb-8 lg:mb-12">
-								<div className="inline-flex items-center px-4 py-2 bg-purple-primary/10 rounded-full mb-4 sm:mb-6 border border-purple-primary/20">
-									<span className="text-xs sm:text-sm font-semibold text-purple-primary">
-										Our Solutions
-									</span>
-								</div>
-								<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
-									Our Solutions
-								</h2>
-								<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-5xl">
-									Three core solutions for your financial
-									needs
-								</p>
+					{/* Three Main Product Cards */}
+					<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
+						{/* Loans Card - Blue Theme */}
+						<div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl lg:rounded-2xl p-8 lg:p-10 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group">
+							{/* Subtle background elements */}
+							<div className="absolute inset-0 overflow-hidden">
+								<div className="absolute w-32 h-32 bg-white/10 rounded-full blur-2xl -top-8 -right-8 group-hover:scale-110 transition-transform duration-500"></div>
+								<div className="absolute w-24 h-24 bg-white/5 rounded-full blur-xl -bottom-4 -left-4 group-hover:scale-110 transition-transform duration-700"></div>
 							</div>
 
-							{/* Three Main Cards - Interesting Layout */}
-							<div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-2 gap-6 lg:gap-8">
-								{/* Loans Card - Tall Featured (Left Column, Full Height) */}
-								<div className="lg:row-span-2">
-									<div className="bg-blue-50 rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-blue-200 h-full">
-										<div className="flex flex-col h-full">
-											<div className="relative h-16 w-16 lg:h-20 lg:w-20 mb-4 lg:mb-6 mx-auto lg:mx-0">
-												<Image
-													src="/business-loan.svg"
-													alt="Loans"
-													fill
-													className="object-contain"
-												/>
-											</div>
-											<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 lg:mb-4 text-center lg:text-left text-gray-700">
-												Loans
-											</h3>
-											<p className="text-lg lg:text-xl text-gray-500 mb-4 lg:mb-6 text-center lg:text-left font-body">
-												Fast, transparent borrowing
-												solutions for businesses and
-												individuals
-											</p>
-											<div className="flex flex-wrap gap-2 lg:gap-3 mb-6 lg:mb-8 justify-center lg:justify-start">
-												<span className="bg-blue-200 text-blue-800 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													Up to RM 500K
-												</span>
-												<span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													24-48 hours
-												</span>
-												<span className="bg-blue-200 text-blue-800 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													No collateral
-												</span>
-											</div>
-											<div className="mt-auto">
-												<Link
-													href="/sme-term-loan"
-													className="text-blue-700 hover:text-blue-800 font-semibold inline-flex items-center justify-center lg:justify-start text-sm lg:text-base"
-												>
-													Apply for Loan
-													<MdArrowForward
-														size={16}
-														className="ml-1"
-													/>
-												</Link>
-											</div>
-										</div>
+							<div className="relative flex flex-col h-full">
+								<div className="w-14 h-14 lg:w-16 lg:h-16 mb-6 bg-white/20 rounded-xl lg:rounded-2xl flex items-center justify-center">
+									<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+										<Image
+											src="/business-loan.svg"
+											alt="Loans"
+											fill
+											className="object-contain brightness-0 invert"
+										/>
 									</div>
 								</div>
+								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4 text-white">
+									Borrow
+								</h3>
+								<p className="text-lg lg:text-xl text-blue-100 mb-6 font-body leading-relaxed">
+									Fast, transparent borrowing solutions for
+									businesses and individuals
+								</p>
+								<div className="flex flex-wrap gap-2 lg:gap-3 mb-8">
+									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										Up to RM 500K
+									</span>
+									<span className="bg-white/15 text-blue-100 px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										24-48 hours
+									</span>
+									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										No collateral
+									</span>
+								</div>
+								<div className="mt-auto">
+									<Link
+										href="/sme-term-loan"
+										className="inline-flex items-center px-6 py-3 bg-white text-blue-700 rounded-xl font-semibold hover:bg-blue-50 transition-all group-hover:scale-105 text-sm lg:text-base"
+									>
+										Apply for Loan
+										<MdArrowForward
+											size={16}
+											className="ml-2"
+										/>
+									</Link>
+								</div>
+							</div>
+						</div>
 
-								{/* Investments Card - Top Right */}
-								<div className="lg:col-span-2">
-									<div className="bg-green-50 rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-green-200 h-full">
-										<div className="flex flex-col h-full">
-											<div className="relative h-14 w-14 lg:h-16 lg:w-16 mb-4 lg:mb-6">
-												<Image
-													src="/investing.svg"
-													alt="Investments"
-													fill
-													className="object-contain"
-												/>
-											</div>
-											<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 lg:mb-4 text-gray-700">
-												Investments
-											</h3>
-											<p className="text-lg lg:text-xl text-gray-500 mb-4 lg:mb-6 font-body">
-												Private credit opportunities
-												with competitive returns for
-												investors
-											</p>
-											<div className="flex flex-wrap gap-2 lg:gap-3 mb-4 lg:mb-6">
-												<span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													8-12% Returns
-												</span>
-												<span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													Secured
-												</span>
-											</div>
-											<div className="mt-auto">
-												<Link
-													href="/products"
-													className="text-green-700 hover:text-green-800 font-semibold inline-flex items-center text-sm lg:text-base"
-												>
-													Start Investing
-													<MdArrowForward
-														size={16}
-														className="ml-1"
-													/>
-												</Link>
-											</div>
-										</div>
+						{/* Investments Card - Black Theme */}
+						<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl lg:rounded-2xl p-8 lg:p-10 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group">
+							{/* Subtle background elements */}
+							<div className="absolute inset-0 overflow-hidden">
+								<div className="absolute w-32 h-32 bg-white/10 rounded-full blur-2xl -top-8 -right-8 group-hover:scale-110 transition-transform duration-500"></div>
+								<div className="absolute w-24 h-24 bg-white/5 rounded-full blur-xl -bottom-4 -left-4 group-hover:scale-110 transition-transform duration-700"></div>
+							</div>
+
+							<div className="relative flex flex-col h-full">
+								<div className="w-14 h-14 lg:w-16 lg:h-16 mb-6 bg-white/20 rounded-xl lg:rounded-2xl flex items-center justify-center">
+									<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+										<Image
+											src="/investing.svg"
+											alt="Investments"
+											fill
+											className="object-contain brightness-0 invert"
+										/>
 									</div>
 								</div>
+								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4 text-white">
+									Invest
+								</h3>
+								<p className="text-lg lg:text-xl text-gray-200 mb-6 font-body leading-relaxed">
+									Private credit opportunities with
+									competitive returns for investors
+								</p>
+								<div className="flex flex-wrap gap-2 lg:gap-3 mb-8">
+									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										8-12% Returns
+									</span>
+									<span className="bg-white/15 text-gray-200 px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										Secured
+									</span>
+									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										Monthly Income
+									</span>
+								</div>
+								<div className="mt-auto">
+									<Link
+										href="/products"
+										className="inline-flex items-center px-6 py-3 bg-white text-gray-800 rounded-xl font-semibold hover:bg-gray-50 transition-all group-hover:scale-105 text-sm lg:text-base"
+									>
+										Start Investing
+										<MdArrowForward
+											size={16}
+											className="ml-2"
+										/>
+									</Link>
+								</div>
+							</div>
+						</div>
 
-								{/* Analytics Card - Bottom Right */}
-								<div className="lg:col-span-2">
-									<div className="bg-purple-50 rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-purple-200 h-full">
-										<div className="flex flex-col h-full">
-											<div className="relative h-14 w-14 lg:h-16 lg:w-16 mb-4 lg:mb-6">
-												<Image
-													src="/reports.svg"
-													alt="Analytics"
-													fill
-													className="object-contain"
-												/>
-											</div>
-											<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 lg:mb-4 text-gray-700">
-												Analytics
-											</h3>
-											<p className="text-lg lg:text-xl text-gray-500 mb-4 lg:mb-6 font-body">
-												Comprehensive credit reports and
-												business verification services
-											</p>
-											<div className="flex flex-wrap gap-2 lg:gap-3 mb-4 lg:mb-6">
-												<span className="bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													Credit Reports
-												</span>
-												<span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													SSM Reports
-												</span>
-												<span className="bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-xs lg:text-sm font-medium">
-													CTOS Data
-												</span>
-											</div>
-											<div className="mt-auto">
-												<Link
-													href="/credit-score+"
-													className="text-purple-700 hover:text-purple-800 font-semibold inline-flex items-center text-sm lg:text-base"
-												>
-													Get Report
-													<MdArrowForward
-														size={16}
-														className="ml-1"
-													/>
-												</Link>
-											</div>
-										</div>
+						{/* Analytics Card - Purple Theme */}
+						<div className="bg-gradient-to-br from-purple-primary to-purple-700 rounded-xl lg:rounded-2xl p-8 lg:p-10 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group">
+							{/* Subtle background elements */}
+							<div className="absolute inset-0 overflow-hidden">
+								<div className="absolute w-32 h-32 bg-white/10 rounded-full blur-2xl -top-8 -right-8 group-hover:scale-110 transition-transform duration-500"></div>
+								<div className="absolute w-24 h-24 bg-white/5 rounded-full blur-xl -bottom-4 -left-4 group-hover:scale-110 transition-transform duration-700"></div>
+							</div>
+
+							<div className="relative flex flex-col h-full">
+								<div className="w-14 h-14 lg:w-16 lg:h-16 mb-6 bg-white/20 rounded-xl lg:rounded-2xl flex items-center justify-center">
+									<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+										<Image
+											src="/reports.svg"
+											alt="Analytics"
+											fill
+											className="object-contain brightness-0 invert"
+										/>
 									</div>
+								</div>
+								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4 text-white">
+									Analytics
+								</h3>
+								<p className="text-lg lg:text-xl text-purple-100 mb-6 font-body leading-relaxed">
+									Comprehensive credit reports and business
+									verification services
+								</p>
+								<div className="flex flex-wrap gap-2 lg:gap-3 mb-8">
+									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										Credit Reports
+									</span>
+									<span className="bg-white/15 text-purple-100 px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										SSM Reports
+									</span>
+									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
+										CTOS Data
+									</span>
+								</div>
+								<div className="mt-auto">
+									<Link
+										href="/credit-score+"
+										className="inline-flex items-center px-6 py-3 bg-white text-purple-primary rounded-xl font-semibold hover:bg-purple-50 transition-all group-hover:scale-105 text-sm lg:text-base"
+									>
+										Get Report
+										<MdArrowForward
+											size={16}
+											className="ml-2"
+										/>
+									</Link>
 								</div>
 							</div>
 						</div>
