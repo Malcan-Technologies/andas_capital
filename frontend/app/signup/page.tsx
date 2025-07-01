@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import Logo from "../../components/Logo";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import Cookies from "js-cookie";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
@@ -17,6 +18,8 @@ interface CountryData {
 }
 
 export default function SignupPage() {
+	useDocumentTitle("Sign Up");
+
 	const router = useRouter();
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);

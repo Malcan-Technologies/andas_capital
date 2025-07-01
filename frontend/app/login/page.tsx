@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Logo from "../../components/Logo";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import Cookies from "js-cookie";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
@@ -18,6 +19,8 @@ interface CountryData {
 
 // Create a client component for handling searchParams
 function LoginPageContent() {
+	useDocumentTitle("Sign In");
+
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [error, setError] = useState<string | null>(null);

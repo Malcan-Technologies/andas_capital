@@ -5,8 +5,8 @@ import Providers from "@/components/Providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-	title: "Kapital Admin",
-	description: "Admin dashboard for Kapital",
+	title: "Kredit.my | Admin",
+	description: "Admin dashboard for Kredit.my",
 	icons: {
 		icon: [
 			{ url: "/favicon.svg" },

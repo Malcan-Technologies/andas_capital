@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import {
 	LineChart,
@@ -32,6 +33,8 @@ import {
 } from "react-icons/md";
 
 export default function PersonalLoan() {
+	useDocumentTitle("Personal Loan");
+
 	const [loanAmount, setLoanAmount] = useState(50000);
 	const [loanTerm, setLoanTerm] = useState(12);
 	const [isCollateralized, setIsCollateralized] = useState(false);

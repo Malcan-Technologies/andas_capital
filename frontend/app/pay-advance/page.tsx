@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import {
 	LineChart,
@@ -18,6 +19,8 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export default function EmployeeMicroLoan() {
+	useDocumentTitle("PayAdvance™");
+
 	const [loanAmount, setLoanAmount] = useState(1000);
 	const [loanTerm, setLoanTerm] = useState(6);
 	const [monthlySalary, setMonthlySalary] = useState(1700);

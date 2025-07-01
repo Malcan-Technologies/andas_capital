@@ -5,8 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export default function CreditScorePlus() {
+	useDocumentTitle("Credit Score+");
+
 	const [selectedPlan, setSelectedPlan] = useState<
 		"spark" | "stride" | "soar"
 	>("stride");

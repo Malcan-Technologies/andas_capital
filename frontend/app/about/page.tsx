@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Image from "next/image";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import {
 	MdArrowForward,
 	MdCheck,
@@ -21,6 +22,8 @@ import {
 } from "react-icons/md";
 
 export default function About() {
+	useDocumentTitle("About Us");
+
 	return (
 		<div className="min-h-screen bg-offwhite text-gray-700 font-body w-full">
 			<Navbar bgStyle="bg-transparent" />

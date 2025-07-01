@@ -53,6 +53,13 @@ export default function DashboardLayout({
 		return () => clearInterval(refreshInterval);
 	}, [router]);
 
+	// Update document title when title prop changes
+	useEffect(() => {
+		if (typeof document !== "undefined") {
+			document.title = `${title} | Kredit.my`;
+		}
+	}, [title]);
+
 	if (isLoading) {
 		return (
 			<div className="flex h-screen items-center justify-center bg-offwhite">

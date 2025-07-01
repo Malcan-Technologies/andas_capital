@@ -367,11 +367,21 @@ export default function Home() {
 								Built for Malaysia
 							</span>
 						</h2>
-						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-4xl">
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-4xl mb-4 lg:mb-6">
 							Comprehensive financial services designed to help
 							businesses and individuals thrive in Malaysia's
 							dynamic economy
 						</p>
+						<Link
+							href="/solutions"
+							className="text-sm sm:text-base text-gray-500 hover:text-purple-primary font-medium transition-colors duration-200 inline-flex items-center gap-2 group"
+						>
+							View All Solutions
+							<MdArrowForward
+								size={16}
+								className="group-hover:translate-x-0.5 transition-transform duration-200"
+							/>
+						</Link>
 					</div>
 
 					{/* Product Cards - Full Width Horizontal */}

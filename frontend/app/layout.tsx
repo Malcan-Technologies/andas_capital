@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
 	title: {
-		template: "%s | Kapital",
-		default: "Kapital - Smart Financing Solutions for Every Need",
+		template: "%s | Kredit.my",
+		default: "Kredit.my - Modern credit for Malaysia",
 	},
 	description:
 		"Get the funding you need with industry-leading rates and lightning-fast approval times. Business loans, personal loans, and salary advance solutions in Malaysia.",
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 	],
 	metadataBase: new URL("https://kapital.my"),
 	openGraph: {
-		title: "Kapital - Smart Financing Solutions for Every Need",
+		title: "Kredit.my - Modern credit for Malaysia",
 		description:
 			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
 		url: "https://kapital.my",
