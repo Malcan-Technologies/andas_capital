@@ -15,7 +15,7 @@ async function main() {
 				phoneNumber: "60123456789", // Example admin phone
 				password: hashedPassword,
 				fullName: "System Administrator",
-				email: "admin@growkapital.com",
+				email: "admin@kredit.my",
 				role: "ADMIN",
 				isOnboardingComplete: true,
 				kycStatus: true,

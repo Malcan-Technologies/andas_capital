@@ -33,7 +33,7 @@ const corsOrigins = process.env.CORS_ORIGIN
 			"http://localhost:3001",
 			"http://localhost:3002",
 	  ]
-	: ["https://growkapital.com", "https://admin.growkapital.com"];
+	: ["https://kredit.my", "https://admin.kredit.my", "https://api.kredit.my"];
 
 // Middleware
 app.use(

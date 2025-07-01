@@ -1,19 +1,20 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
-import Navbar from "@/components/Navbar";
 import { MdWhatsapp, MdPhone } from "react-icons/md";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export default function NotFound() {
+	useDocumentTitle("Page Not Found");
 	return (
-		<div className="min-h-screen bg-brand-background">
-			<Navbar bgStyle="bg-brand-background" />
-
-			<main className="relative min-h-[calc(100vh-4rem)] bg-brand-background overflow-hidden">
+		<div className="min-h-screen bg-offwhite">
+			<main className="relative min-h-screen bg-offwhite overflow-hidden">
 				{/* Decorative background elements */}
 				<div className="absolute inset-0">
-					<div className="absolute w-[500px] h-[500px] bg-gradient-to-br from-brand-primary/20 to-brand-highlight/20 rounded-full blur-3xl -top-32 -left-32 animate-pulse"></div>
-					<div className="absolute w-[500px] h-[500px] bg-gradient-to-br from-brand-highlight/20 to-brand-accent/20 rounded-full blur-3xl top-1/2 left-1/2 animate-pulse delay-700"></div>
-					<div className="absolute w-[500px] h-[500px] bg-gradient-to-br from-brand-accent/20 to-brand-primary/20 rounded-full blur-3xl -bottom-32 -right-32 animate-pulse delay-1000"></div>
+					<div className="absolute w-[500px] h-[500px] bg-gradient-to-br from-purple-primary/20 to-blue-tertiary/20 rounded-full blur-3xl -top-32 -left-32 animate-pulse"></div>
+					<div className="absolute w-[500px] h-[500px] bg-gradient-to-br from-blue-tertiary/20 to-purple-primary/20 rounded-full blur-3xl top-1/2 left-1/2 animate-pulse delay-700"></div>
+					<div className="absolute w-[500px] h-[500px] bg-gradient-to-br from-purple-primary/20 to-blue-tertiary/20 rounded-full blur-3xl -bottom-32 -right-32 animate-pulse delay-1000"></div>
 				</div>
 
 				{/* Content */}
@@ -31,27 +32,27 @@ export default function NotFound() {
 						</div>
 
 						{/* Error Message */}
-						<h1 className="text-6xl md:text-8xl font-bold text-white mb-6 font-heading">
+						<h1 className="text-6xl md:text-8xl font-bold text-gray-700 mb-6 font-heading">
 							Woof!{" "}
-							<span className="brand-gradient-text">404</span>
+							<span className="text-purple-primary">404</span>
 						</h1>
 
-						<p className="text-2xl md:text-3xl text-gray-300 mb-8 max-w-2xl font-body">
+						<p className="text-2xl md:text-3xl text-gray-500 mb-8 max-w-2xl font-body leading-relaxed">
 							Looks like our furry friend got a little too hungry
 							and ate this page! 🐕
 							<br />
-							<span className="text-lg text-gray-400 mt-2 block">
+							<span className="text-lg text-gray-500 mt-2 block">
 								Don&apos;t worry, we&apos;ll help you find what
 								you&apos;re looking for.
 							</span>
 						</p>
 
 						{/* Contact Information */}
-						<div className="brand-card p-8 mb-8 max-w-md">
-							<h2 className="text-xl font-semibold text-white mb-4 font-heading">
+						{/* <div className="bg-white rounded-xl p-8 mb-8 max-w-md border border-gray-200 shadow-sm">
+							<h2 className="text-xl font-semibold text-gray-700 mb-4 font-heading">
 								Need immediate assistance?
 							</h2>
-							<p className="text-gray-300 mb-6 font-body">
+							<p className="text-gray-500 mb-6 font-body">
 								Our team is here to help! Reach out to us on
 								WhatsApp or give us a call.
 							</p>
@@ -60,34 +61,34 @@ export default function NotFound() {
 									href="https://wa.me/60164614919?text=I'm%20interested%20in%20Kapital%20lending%20products"
 									target="_blank"
 									rel="noopener noreferrer"
-									className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full font-semibold transition-all group font-body"
+									className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-semibold transition-all group font-body"
 								>
 									<MdWhatsapp size={24} />
 									Chat on WhatsApp
 								</a>
 								<a
 									href="tel:+60164614919"
-									className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full font-semibold transition-all font-body"
+									className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-all font-body"
 								>
 									<MdPhone size={24} />
 									+60 16-461 4919
 								</a>
 							</div>
-						</div>
+						</div> */}
 
 						{/* Navigation Links */}
 						<div className="flex flex-wrap justify-center gap-4">
+							<button
+								onClick={() => window.history.back()}
+								className="bg-purple-primary text-white px-8 py-4 rounded-xl hover:bg-purple-700 transition-colors font-body font-semibold"
+							>
+								Go Back
+							</button>
 							<Link
 								href="/"
-								className="brand-button-primary px-8 py-4 font-body"
+								className="bg-blue-tertiary text-white px-8 py-4 rounded-xl hover:bg-blue-600 transition-colors font-body font-semibold"
 							>
 								Back to Home
-							</Link>
-							<Link
-								href="/products"
-								className="border-2 border-brand-primary text-brand-primary px-8 py-4 rounded-full font-semibold hover:bg-brand-primary/10 transition-colors font-body"
-							>
-								View Our Products
 							</Link>
 						</div>
 					</div>

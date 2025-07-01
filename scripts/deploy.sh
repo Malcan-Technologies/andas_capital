@@ -44,6 +44,6 @@ sudo nginx -t
 sudo systemctl restart nginx
 
 # Setup SSL certificate
-sudo certbot --nginx -d growkapital.com -d www.growkapital.com
+sudo certbot --nginx -d kredit.my -d www.kredit.my -d admin.kredit.my -d api.kredit.my
 
-echo "Deployment completed! Your website should now be accessible at https://growkapital.com" 
+echo "Deployment completed! Your website should now be accessible at https://kredit.my" 

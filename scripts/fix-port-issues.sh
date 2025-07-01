@@ -189,7 +189,7 @@ else
 fi
 
 # Test admin site API
-if curl -s -f -H "Host: admin.growkapital.com" http://localhost/api/health > /dev/null; then
+if curl -s -f -H "Host: admin.kredit.my" http://localhost/api/health > /dev/null; then
     print_success "✅ Admin site API proxy is working"
 else
     print_error "❌ Admin site API proxy is not working"
@@ -209,8 +209,8 @@ if [ "$backend_ok" = true ] && [ "$frontend_ok" = true ] && [ "$admin_ok" = true
     echo "  ✅ Admin: http://localhost:3003 (PM2)"
     echo ""
     echo "External Access:"
-    echo "  🌐 Main Site: https://growkapital.com"
-    echo "  🌐 Admin Site: https://admin.growkapital.com"
+    echo "  🌐 Main Site: https://kredit.my"
+    echo "  🌐 Admin Site: https://admin.kredit.my"
     echo ""
     print_success "The 502 gateway errors should now be resolved!"
 else

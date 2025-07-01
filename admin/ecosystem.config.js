@@ -7,8 +7,8 @@ module.exports = {
 			env: {
 				NODE_ENV: "production",
 				PORT: 3003,
-				NEXT_PUBLIC_API_URL: "https://growkapital.com",
-				NEXT_PUBLIC_SITE_URL: "https://admin.growkapital.com",
+				NEXT_PUBLIC_API_URL: "https://kredit.my",
+				NEXT_PUBLIC_SITE_URL: "https://admin.kredit.my",
 			},
 			instances: 1,
 			exec_mode: "fork",

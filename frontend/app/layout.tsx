@@ -20,12 +20,12 @@ export const metadata: Metadata = {
 		"malaysia",
 		"fintech",
 	],
-	metadataBase: new URL("https://kapital.my"),
+	metadataBase: new URL("https://kredit.my"),
 	openGraph: {
 		title: "Kredit.my - Modern credit for Malaysia",
 		description:
 			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
-		url: "https://kapital.my",
+		url: "https://kredit.my",
 		siteName: "Kapital",
 		images: [
 			{
