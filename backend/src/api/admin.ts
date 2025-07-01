@@ -847,6 +847,7 @@ router.get("/users", authenticateToken, async (req: Request, res: Response) => {
 				phoneNumber: true,
 				role: true,
 				createdAt: true,
+				lastLoginAt: true,
 			},
 		});
 

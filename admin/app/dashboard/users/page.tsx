@@ -14,11 +14,13 @@ import {
 	XMarkIcon,
 	UserGroupIcon,
 	CalendarIcon,
+	ClockIcon,
 	PhoneIcon,
 	EnvelopeIcon,
 	IdentificationIcon,
 	CreditCardIcon,
 	ArrowPathIcon,
+	BanknotesIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 
@@ -29,6 +31,7 @@ interface User {
 	phoneNumber: string;
 	role: string;
 	createdAt: string;
+	lastLoginAt?: string;
 }
 
 interface LoanApplication {
@@ -40,6 +43,28 @@ interface LoanApplication {
 	updatedAt: string;
 	product?: {
 		name?: string;
+	};
+}
+
+interface ActiveLoan {
+	id: string;
+	userId: string;
+	principalAmount: number;
+	totalAmount: number;
+	outstandingBalance: number;
+	interestRate: number;
+	term: number;
+	monthlyPayment: number;
+	nextPaymentDue?: string;
+	status: string;
+	disbursedAt: string;
+	createdAt: string;
+	application?: {
+		id: string;
+		purpose?: string;
+		product?: {
+			name?: string;
+		};
 	};
 }
 
@@ -58,6 +83,7 @@ export default function AdminUsersPage() {
 	const [selectedUser, setSelectedUser] = useState<User | null>(null);
 	const [viewDialogOpen, setViewDialogOpen] = useState(false);
 	const [userLoans, setUserLoans] = useState<LoanApplication[]>([]);
+	const [userActiveLoans, setUserActiveLoans] = useState<ActiveLoan[]>([]);
 	const [loadingLoans, setLoadingLoans] = useState(false);
 
 	// Form states
@@ -105,6 +131,14 @@ export default function AdminUsersPage() {
 			day: "numeric",
 			month: "short",
 			year: "numeric",
+		});
+	};
+
+	const formatTime = (dateString: string) => {
+		return new Date(dateString).toLocaleTimeString("en-MY", {
+			hour: "2-digit",
+			minute: "2-digit",
+			hour12: true,
 		});
 	};
 
@@ -303,9 +337,30 @@ export default function AdminUsersPage() {
 				(app) => app.userId === user.id
 			);
 			setUserLoans(userLoans);
+
+			// Fetch active loans for this user
+			try {
+				const loansResponse = await fetchWithAdminTokenRefresh<{
+					success?: boolean;
+					data?: ActiveLoan[];
+				}>("/api/admin/loans");
+
+				if (loansResponse.success && loansResponse.data) {
+					const userActiveLoans = loansResponse.data.filter(
+						(loan) => loan.userId === user.id
+					);
+					setUserActiveLoans(userActiveLoans);
+				} else {
+					setUserActiveLoans([]);
+				}
+			} catch (error) {
+				console.error("Error fetching active loans:", error);
+				setUserActiveLoans([]);
+			}
 		} catch (error) {
 			console.error("Error fetching user loans:", error);
 			setUserLoans([]);
+			setUserActiveLoans([]);
 		} finally {
 			setLoadingLoans(false);
 		}
@@ -315,6 +370,7 @@ export default function AdminUsersPage() {
 		setViewDialogOpen(false);
 		setSelectedUser(null);
 		setUserLoans([]);
+		setUserActiveLoans([]);
 	};
 
 	const handleViewLoanDetails = (loanId: string, status: string) => {
@@ -453,6 +509,9 @@ export default function AdminUsersPage() {
 									Role
 								</th>
 								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+									Last Login
+								</th>
+								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 									Joined
 								</th>
 								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -513,6 +572,32 @@ export default function AdminUsersPage() {
 											</span>
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap">
+											<div className="text-sm text-gray-300">
+												{user.lastLoginAt ? (
+													<div>
+														<div className="flex items-center">
+															<CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
+															{formatDate(
+																user.lastLoginAt
+															)}
+														</div>
+														<div className="flex items-center mt-1">
+															<ClockIcon className="h-4 w-4 text-gray-400 mr-2" />
+															<span className="text-xs text-gray-400">
+																{formatTime(
+																	user.lastLoginAt
+																)}
+															</span>
+														</div>
+													</div>
+												) : (
+													<span className="text-gray-500 italic">
+														Never logged in
+													</span>
+												)}
+											</div>
+										</td>
+										<td className="px-6 py-4 whitespace-nowrap">
 											<div className="flex items-center text-sm text-gray-300">
 												<CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
 												{formatDate(user.createdAt)}
@@ -554,7 +639,7 @@ export default function AdminUsersPage() {
 							) : (
 								<tr>
 									<td
-										colSpan={5}
+										colSpan={6}
 										className="px-6 py-12 text-center"
 									>
 										<UserGroupIcon className="mx-auto h-12 w-12 text-gray-500" />
@@ -583,7 +668,7 @@ export default function AdminUsersPage() {
 							onClick={handleEditCancel}
 						></div>
 
-						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-700/30">
+						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-7xl sm:w-full max-h-[90vh] border border-gray-700/30">
 							<div className="px-6 py-4 border-b border-gray-700/30">
 								<h3 className="text-lg font-medium text-white">
 									Edit User
@@ -850,13 +935,13 @@ export default function AdminUsersPage() {
 			{/* View User Modal */}
 			{viewDialogOpen && selectedUser && (
 				<div className="fixed inset-0 z-50 overflow-y-auto">
-					<div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+					<div className="flex items-center justify-center min-h-screen p-4">
 						<div
 							className="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity"
 							onClick={handleViewClose}
 						></div>
 
-						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full border border-gray-700/30">
+						<div className="relative bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all w-full max-w-7xl max-h-[90vh] border border-gray-700/30">
 							<div className="px-6 py-4 border-b border-gray-700/30 flex justify-between items-center">
 								<h3 className="text-lg font-medium text-white">
 									User Details
@@ -869,7 +954,7 @@ export default function AdminUsersPage() {
 								</button>
 							</div>
 
-							<div className="px-6 py-4 max-h-96 overflow-y-auto">
+							<div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-120px)]">
 								<div className="space-y-6">
 									{/* User Information */}
 									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
@@ -931,6 +1016,11 @@ export default function AdminUsersPage() {
 										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
 											<CreditCardIcon className="h-6 w-6 text-green-400 mr-2" />
 											Loan Applications
+											{userLoans.length > 0 && (
+												<span className="ml-2 bg-green-500/20 text-green-200 text-xs font-medium px-2 py-1 rounded-full border border-green-400/20">
+													{userLoans.length}
+												</span>
+											)}
 										</h4>
 
 										{loadingLoans ? (
@@ -943,7 +1033,7 @@ export default function AdminUsersPage() {
 													<thead className="bg-gray-800/50">
 														<tr>
 															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Loan ID
+																Application ID
 															</th>
 															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
 																Product
@@ -955,7 +1045,7 @@ export default function AdminUsersPage() {
 																Status
 															</th>
 															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Date
+																Applied Date
 															</th>
 															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
 																Action
@@ -1038,6 +1128,157 @@ export default function AdminUsersPage() {
 												<p>
 													No loan applications found
 													for this user.
+												</p>
+											</div>
+										)}
+									</div>
+
+									{/* Active Loans */}
+									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+											<BanknotesIcon className="h-6 w-6 text-blue-400 mr-2" />
+											Active Loans
+											{userActiveLoans.length > 0 && (
+												<span className="ml-2 bg-blue-500/20 text-blue-200 text-xs font-medium px-2 py-1 rounded-full border border-blue-400/20">
+													{userActiveLoans.length}
+												</span>
+											)}
+										</h4>
+
+										{loadingLoans ? (
+											<div className="flex justify-center py-6">
+												<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
+											</div>
+										) : userActiveLoans.length > 0 ? (
+											<div className="overflow-x-auto">
+												<table className="min-w-full divide-y divide-gray-700/30">
+													<thead className="bg-gray-800/50">
+														<tr>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Loan ID
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Product
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Principal
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Outstanding
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Monthly Payment
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Next Payment
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Status
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Action
+															</th>
+														</tr>
+													</thead>
+													<tbody className="divide-y divide-gray-700/30">
+														{userActiveLoans.map(
+															(loan) => (
+																<tr
+																	key={
+																		loan.id
+																	}
+																	className="hover:bg-gray-800/30"
+																>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm font-medium text-white">
+																			{loan.id.substring(
+																				0,
+																				8
+																			)}
+																			...
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm text-gray-300">
+																			{loan
+																				.application
+																				?.product
+																				?.name ||
+																				"N/A"}
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm text-gray-300">
+																			{formatCurrency(
+																				loan.principalAmount
+																			)}
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm text-gray-300">
+																			{formatCurrency(
+																				loan.outstandingBalance
+																			)}
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm text-gray-300">
+																			{formatCurrency(
+																				loan.monthlyPayment
+																			)}
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm text-gray-300">
+																			{loan.nextPaymentDue
+																				? formatDate(
+																						loan.nextPaymentDue
+																				  )
+																				: "N/A"}
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<span
+																			className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
+																				loan.status ===
+																				"ACTIVE"
+																					? "bg-green-500/20 text-green-200 border-green-400/20"
+																					: getStatusColor(
+																							loan.status
+																					  )
+																			}`}
+																		>
+																			{
+																				loan.status
+																			}
+																		</span>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<button
+																			onClick={() =>
+																				handleViewLoanDetails(
+																					loan.id,
+																					loan.status
+																				)
+																			}
+																			className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+																		>
+																			View
+																			Details
+																		</button>
+																	</td>
+																</tr>
+															)
+														)}
+													</tbody>
+												</table>
+											</div>
+										) : (
+											<div className="text-center py-6 text-gray-400">
+												<BanknotesIcon className="mx-auto h-12 w-12 text-gray-500 mb-2" />
+												<p>
+													No active loans found for
+													this user.
 												</p>
 											</div>
 										)}
