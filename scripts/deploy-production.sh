@@ -158,6 +158,11 @@ build_backend() {
     
     cd /var/www/growkapital/backend
     
+    # Ensure uploads directory exists with proper permissions
+    print_status "Setting up uploads directory..."
+    mkdir -p uploads
+    chmod 755 uploads
+    
     # Build and start the backend
     docker compose -f docker-compose.prod.yml up -d --build
     
