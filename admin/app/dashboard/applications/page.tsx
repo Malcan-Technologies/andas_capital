@@ -601,7 +601,7 @@ function AdminApplicationsPageContent() {
 	};
 
 	// Format document URL by prepending backend URL if it's a relative path
-	const formatDocumentUrl = (fileUrl: string): string => {
+	const formatDocumentUrl = (fileUrl: string, documentId: string): string => {
 		if (!fileUrl) return "";
 
 		// If the URL already includes http(s), it's already an absolute URL
@@ -610,8 +610,8 @@ function AdminApplicationsPageContent() {
 		}
 
 		// For relative URLs, use the loan-applications API endpoint instead of direct file access
-		if (selectedApplication) {
-			return `${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${selectedApplication.id}/documents/${selectedDocument?.id}`;
+		if (selectedApplication && documentId) {
+			return `${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${selectedApplication.id}/documents/${documentId}`;
 		}
 
 		// Fallback to old method if no application is selected (this shouldn't happen in normal usage)
@@ -1116,7 +1116,20 @@ function AdminApplicationsPageContent() {
 											setSelectedTab("documents")
 										}
 									>
-										Documents
+										<div className="flex items-center space-x-2">
+											<span>Documents</span>
+											{selectedApplication?.documents &&
+												selectedApplication.documents
+													.length > 0 && (
+													<span className="bg-blue-500/20 text-blue-200 text-xs font-medium px-2 py-1 rounded-full border border-blue-400/20">
+														{
+															selectedApplication
+																.documents
+																.length
+														}
+													</span>
+												)}
+										</div>
 									</div>
 									<div
 										className={`px-4 py-2 cursor-pointer transition-colors ${
@@ -1386,7 +1399,8 @@ function AdminApplicationsPageContent() {
 																	<div className="flex space-x-2 mt-2">
 																		<a
 																			href={formatDocumentUrl(
-																				doc.fileUrl
+																				doc.fileUrl,
+																				doc.id
 																			)}
 																			target="_blank"
 																			rel="noopener noreferrer"
