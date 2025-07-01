@@ -7,6 +7,12 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata = {
 	title: "Kapital Admin",
 	description: "Admin dashboard for Kapital",
+	icons: {
+		icon: [
+			{ url: "/favicon.svg" },
+			{ url: "/favicon.svg", type: "image/svg+xml" },
+		],
+	},
 };
 
 export default function RootLayout({
