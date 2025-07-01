@@ -26,12 +26,21 @@ export default function About() {
 			<Navbar bgStyle="bg-transparent" />
 
 			{/* Hero Section */}
-			<section className="min-h-screen relative flex items-center bg-[#0A0612] w-full">
+			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-[#0A0612] via-[#1A0B2E] to-[#0A0612] w-full">
 				{/* Gradient background elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute w-[500px] h-[500px] bg-purple-primary/10 rounded-full blur-3xl -top-32 -left-32"></div>
-					<div className="absolute w-[700px] h-[700px] bg-purple-primary/5 rounded-full blur-3xl top-1/2 left-1/2"></div>
-					<div className="absolute w-[400px] h-[400px] bg-purple-primary/8 rounded-full blur-3xl -bottom-32 -right-32"></div>
+					{/* Primary purple orbs */}
+					<div className="absolute w-[500px] h-[500px] bg-[#7C3AED]/15 rounded-full blur-3xl -top-32 -left-32 animate-pulse"></div>
+					<div className="absolute w-[700px] h-[700px] bg-[#7C3AED]/8 rounded-full blur-3xl top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+					<div className="absolute w-[400px] h-[400px] bg-[#7C3AED]/12 rounded-full blur-3xl -bottom-32 -right-32"></div>
+
+					{/* Additional subtle purple accents */}
+					<div className="absolute w-[300px] h-[300px] bg-[#7C3AED]/6 rounded-full blur-2xl top-20 right-1/4"></div>
+					<div className="absolute w-[200px] h-[200px] bg-[#7C3AED]/10 rounded-full blur-xl bottom-1/4 left-1/4"></div>
+
+					{/* Gradient overlay for depth */}
+					<div className="absolute inset-0 bg-gradient-to-t from-[#7C3AED]/5 via-transparent to-transparent"></div>
+					<div className="absolute inset-0 bg-gradient-to-r from-[#7C3AED]/3 via-transparent to-[#7C3AED]/3"></div>
 				</div>
 
 				{/* Content */}

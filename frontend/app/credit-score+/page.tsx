@@ -16,18 +16,27 @@ export default function CreditScorePlus() {
 			<Navbar bgStyle="bg-[#0A0612] dark:bg-[#0A0612]" />
 
 			{/* Hero Section */}
-			<section className="relative min-h-screen bg-[#0A0612] dark:bg-[#0A0612] pt-16">
-				{/* Decorative Elements */}
+			<section className="relative min-h-screen bg-gradient-to-br from-[#0A0612] via-[#1A1A0A] to-[#0A0612] dark:bg-gradient-to-br dark:from-[#0A0612] dark:via-[#1A1A0A] dark:to-[#0A0612] pt-16">
+				{/* Gradient background elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute -top-40 -right-40 w-80 h-80 bg-[#F7E16F] rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-					<div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[#F5D742] rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-					<div className="absolute top-40 left-40 w-80 h-80 bg-[#F7E16F] rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+					{/* Primary yellow orbs */}
+					<div className="absolute w-[500px] h-[500px] bg-[#EAB308]/15 rounded-full blur-3xl -top-32 -left-32 animate-pulse"></div>
+					<div className="absolute w-[700px] h-[700px] bg-[#EAB308]/8 rounded-full blur-3xl top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+					<div className="absolute w-[400px] h-[400px] bg-[#EAB308]/12 rounded-full blur-3xl -bottom-32 -right-32"></div>
+
+					{/* Additional subtle yellow accents */}
+					<div className="absolute w-[300px] h-[300px] bg-[#EAB308]/6 rounded-full blur-2xl top-20 right-1/4"></div>
+					<div className="absolute w-[200px] h-[200px] bg-[#EAB308]/10 rounded-full blur-xl bottom-1/4 left-1/4"></div>
+
+					{/* Gradient overlay for depth */}
+					<div className="absolute inset-0 bg-gradient-to-t from-[#EAB308]/5 via-transparent to-transparent"></div>
+					<div className="absolute inset-0 bg-gradient-to-r from-[#EAB308]/3 via-transparent to-[#EAB308]/3"></div>
 				</div>
 
 				{/* Content */}
 				<div className="relative min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-					<div className="h-full flex flex-col">
-						<div className="flex-1 flex flex-col lg:flex-row items-center gap-12">
+					<div className="h-full flex flex-col justify-center">
+						<div className="flex flex-col lg:flex-row items-center gap-12">
 							{/* Left Column */}
 							<div className="flex-1 text-center lg:text-left">
 								<h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-white dark:text-white">
