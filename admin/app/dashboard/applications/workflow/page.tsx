@@ -27,6 +27,7 @@ interface ApplicationCounts {
 	PENDING_KYC: number;
 	PENDING_APPROVAL: number;
 	APPROVED: number;
+	PENDING_ATTESTATION: number;
 	PENDING_SIGNATURE: number;
 	PENDING_DISBURSEMENT: number;
 	ACTIVE: number;
@@ -60,6 +61,7 @@ export default function ApplicationWorkflowPage() {
 		PENDING_KYC: 0,
 		PENDING_APPROVAL: 0,
 		APPROVED: 0,
+		PENDING_ATTESTATION: 0,
 		PENDING_SIGNATURE: 0,
 		PENDING_DISBURSEMENT: 0,
 		ACTIVE: 0,
@@ -122,11 +124,15 @@ export default function ApplicationWorkflowPage() {
 					// Approved but not disbursed - some portion of approved loans
 					APPROVED: Math.max(
 						1,
-						Math.floor((dashboardData.approvedLoans || 0) * 0.3)
+						Math.floor((dashboardData.approvedLoans || 0) * 0.2)
+					),
+					PENDING_ATTESTATION: Math.max(
+						1,
+						Math.floor((dashboardData.approvedLoans || 0) * 0.2)
 					),
 					PENDING_SIGNATURE: Math.max(
 						1,
-						Math.floor((dashboardData.approvedLoans || 0) * 0.2)
+						Math.floor((dashboardData.approvedLoans || 0) * 0.1)
 					),
 
 					// Pending disbursement - remaining approved loans
@@ -177,12 +183,13 @@ export default function ApplicationWorkflowPage() {
 					PENDING_KYC: 2,
 					PENDING_APPROVAL: 5,
 					APPROVED: 3,
+					PENDING_ATTESTATION: 2,
 					PENDING_SIGNATURE: 2,
 					PENDING_DISBURSEMENT: 4,
 					ACTIVE: 8,
 					WITHDRAWN: 1,
 					REJECTED: 2,
-					total: 32,
+					total: 34,
 				});
 			}
 		} finally {
@@ -307,8 +314,26 @@ export default function ApplicationWorkflowPage() {
 			actionLabel: "Make Decision",
 		},
 		{
-			id: "approval",
-			title: "Post-Approval",
+			id: "attestation",
+			title: "Terms Attestation",
+			description:
+				"Customer acknowledges loan terms through video or meeting",
+			type: "user",
+			statuses: [
+				{
+					name: "PENDING_ATTESTATION",
+					label: "Pending Attestation",
+					count: counts.PENDING_ATTESTATION,
+					color: "cyan",
+					icon: ClipboardDocumentCheckIcon,
+				},
+			],
+			linkPath: "/dashboard/applications",
+			actionLabel: "Complete Attestation",
+		},
+		{
+			id: "signature",
+			title: "Loan Agreement",
 			description:
 				"Customer signs loan agreement and completes documentation",
 			type: "user",
@@ -412,6 +437,12 @@ export default function ApplicationWorkflowPage() {
 					bg: "bg-amber-500/20",
 					text: "text-amber-200",
 					border: "border-amber-400/20",
+				};
+			case "cyan":
+				return {
+					bg: "bg-cyan-500/20",
+					text: "text-cyan-200",
+					border: "border-cyan-400/20",
 				};
 			case "gray":
 				return {

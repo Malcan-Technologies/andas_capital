@@ -345,7 +345,7 @@ export default function PersonalLoan() {
 										src="/apply-screenshot.png"
 										alt="Personal Loan Application Process"
 										fill
-										className="object-cover rounded-b-xl"
+										className="object-cover object-top rounded-b-xl"
 										sizes="(max-width: 768px) 100vw, 50vw"
 									/>
 								</div>

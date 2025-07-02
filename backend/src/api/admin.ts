@@ -64,7 +64,7 @@ async function createLoanDisbursementRecord(
 }
 
 // Helper function to track application status changes
-async function trackApplicationStatusChange(
+export async function trackApplicationStatusChange(
 	prismaTransaction: any,
 	applicationId: string,
 	previousStatus: string | null,
@@ -1387,6 +1387,7 @@ router.get(
 				"PENDING_KYC",
 				"PENDING_APPROVAL",
 				"APPROVED",
+				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
 				"ACTIVE",
@@ -1514,6 +1515,234 @@ router.get(
 			return res.json(applications);
 		} catch (error) {
 			console.error("Error fetching applications:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/live-attestations:
+ *   get:
+ *     summary: Get all live video call attestation requests
+ *     tags: [Admin - Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of live attestation requests
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/LoanApplication'
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+// Get all live video call attestation requests (admin endpoint)
+router.get(
+	"/applications/live-attestations",
+	authenticateToken,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			console.log("Admin fetching live attestation requests");
+
+			const applications = await prisma.loanApplication.findMany({
+				where: {
+					status: "PENDING_ATTESTATION",
+					attestationType: "MEETING",
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+				orderBy: [
+					{
+						attestationCompleted: "asc", // Pending first
+					},
+					{
+						updatedAt: "desc", // Most recent requests first within each group
+					},
+				],
+			});
+
+			console.log(
+				`Found ${applications.length} live attestation requests`
+			);
+			return res.json(applications);
+		} catch (error) {
+			console.error("Error fetching live attestation requests:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/complete-live-attestation:
+ *   post:
+ *     summary: Complete live video call attestation for an application
+ *     tags: [Admin - Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *                 description: Admin notes about the live call
+ *               meetingCompletedAt:
+ *                 type: string
+ *                 format: date-time
+ *                 description: When the meeting was completed
+ *     responses:
+ *       200:
+ *         description: Live attestation completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       400:
+ *         description: Invalid request or application not in correct status
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Complete live video call attestation (admin endpoint)
+router.post(
+	"/applications/:id/complete-live-attestation",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { notes, meetingCompletedAt } = req.body;
+			const adminUserId = req.user?.userId;
+
+			console.log(
+				`Admin ${adminUserId} completing live attestation for application ${id}`
+			);
+
+			// Get the application to check current status
+			const application = await prisma.loanApplication.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					product: true,
+				},
+			});
+
+			if (!application) {
+				return res
+					.status(404)
+					.json({ message: "Application not found" });
+			}
+
+			// Validate current status and attestation type
+			if (application.status !== "PENDING_ATTESTATION") {
+				return res.status(400).json({
+					message: `Application must be in PENDING_ATTESTATION status. Current status: ${application.status}`,
+				});
+			}
+
+			if (application.attestationType !== "MEETING") {
+				return res.status(400).json({
+					message: `Application must have MEETING attestation type. Current type: ${application.attestationType}`,
+				});
+			}
+
+			// Update the application to complete the live attestation
+			const updatedApplication = await prisma.loanApplication.update({
+				where: { id },
+				data: {
+					attestationCompleted: true,
+					attestationDate: new Date(),
+					attestationNotes:
+						notes || "Live video call completed by admin",
+					meetingCompletedAt: meetingCompletedAt
+						? new Date(meetingCompletedAt)
+						: new Date(),
+					status: "PENDING_SIGNATURE", // Move to next step
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+			});
+
+			// Track the status change in history
+			await trackApplicationStatusChange(
+				prisma,
+				id,
+				"PENDING_ATTESTATION",
+				"PENDING_SIGNATURE",
+				adminUserId,
+				"Live video call attestation completed by admin",
+				notes || "Live video call attestation completed by admin",
+				{
+					attestationType: "MEETING",
+					completedBy: adminUserId,
+					completedAt: new Date().toISOString(),
+					meetingCompletedAt:
+						meetingCompletedAt || new Date().toISOString(),
+				}
+			);
+
+			console.log(
+				`Live attestation completed successfully for application ${id} by admin ${adminUserId}`
+			);
+			return res.json(updatedApplication);
+		} catch (error) {
+			console.error("Error completing live attestation:", error);
 			return res.status(500).json({ message: "Internal server error" });
 		}
 	}
@@ -1739,6 +1968,7 @@ router.patch(
 				"PENDING_KYC",
 				"PENDING_APPROVAL",
 				"APPROVED",
+				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
 				"ACTIVE",
@@ -1752,12 +1982,12 @@ router.patch(
 					.json({ message: "Invalid status value" });
 			}
 
-			// Auto-convert APPROVED to PENDING_SIGNATURE for better workflow
+			// Auto-convert APPROVED to PENDING_ATTESTATION for better workflow
 			let finalStatus = status;
 			if (status === "APPROVED") {
-				finalStatus = "PENDING_SIGNATURE";
+				finalStatus = "PENDING_ATTESTATION";
 				console.log(
-					"Auto-converting APPROVED status to PENDING_SIGNATURE"
+					"Auto-converting APPROVED status to PENDING_ATTESTATION"
 				);
 			}
 
@@ -2208,11 +2438,11 @@ router.patch(
 					finalStatus,
 					adminUserId,
 					status === "APPROVED"
-						? "Auto-converted from APPROVED to PENDING_SIGNATURE"
+						? "Auto-converted from APPROVED to PENDING_ATTESTATION"
 						: "Admin status update",
 					notes ||
 						(status === "APPROVED"
-							? "Automatically moved to signature stage after approval"
+							? "Automatically moved to attestation stage after approval"
 							: ""),
 					{
 						updatedBy: adminUserId,
@@ -6382,6 +6612,211 @@ router.get(
 				message: "Failed to fetch pending discharge loans",
 				error: (error as Error).message,
 			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/complete-attestation:
+ *   post:
+ *     summary: Mark attestation as completed and move to next stage (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               attestationType:
+ *                 type: string
+ *                 enum: [IMMEDIATE, MEETING]
+ *               attestationNotes:
+ *                 type: string
+ *               attestationVideoWatched:
+ *                 type: boolean
+ *               attestationTermsAccepted:
+ *                 type: boolean
+ *               meetingCompletedAt:
+ *                 type: string
+ *                 format: date-time
+ *     responses:
+ *       200:
+ *         description: Attestation completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       400:
+ *         description: Invalid request or application not in correct status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Complete attestation and move to next stage (admin only)
+router.post(
+	"/applications/:id/complete-attestation",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const {
+				attestationType,
+				attestationNotes,
+				attestationVideoWatched,
+				attestationTermsAccepted,
+				meetingCompletedAt,
+			} = req.body;
+			const adminUserId = req.user?.userId;
+
+			console.log(
+				`Processing attestation completion for application ${id}`
+			);
+
+			// Get the application to check current status
+			const application = await prisma.loanApplication.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					product: true,
+				},
+			});
+
+			if (!application) {
+				return res
+					.status(404)
+					.json({ message: "Application not found" });
+			}
+
+			// Validate current status
+			if (application.status !== "PENDING_ATTESTATION") {
+				return res.status(400).json({
+					message: `Application must be in PENDING_ATTESTATION status. Current status: ${application.status}`,
+				});
+			}
+
+			// Validate attestation data based on type
+			if (attestationType === "IMMEDIATE") {
+				if (!attestationVideoWatched || !attestationTermsAccepted) {
+					return res.status(400).json({
+						message:
+							"For immediate attestation, video must be watched and terms must be accepted",
+					});
+				}
+			} else if (attestationType === "MEETING") {
+				if (!meetingCompletedAt) {
+					return res.status(400).json({
+						message:
+							"For meeting attestation, meeting completion date is required",
+					});
+				}
+			} else {
+				return res.status(400).json({
+					message:
+						"Invalid attestation type. Must be IMMEDIATE or MEETING",
+				});
+			}
+
+			// Update the application with attestation completion
+			const updatedApplication = await prisma.loanApplication.update({
+				where: { id },
+				data: {
+					status: "PENDING_SIGNATURE",
+					attestationType,
+					attestationCompleted: true,
+					attestationDate: new Date(),
+					attestationNotes: attestationNotes || null,
+					attestationVideoWatched:
+						attestationType === "IMMEDIATE"
+							? attestationVideoWatched
+							: false,
+					attestationTermsAccepted:
+						attestationType === "IMMEDIATE"
+							? attestationTermsAccepted
+							: true,
+					meetingCompletedAt:
+						attestationType === "MEETING"
+							? new Date(meetingCompletedAt)
+							: null,
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+			});
+
+			// Track the status change in history
+			await trackApplicationStatusChange(
+				prisma,
+				id,
+				"PENDING_ATTESTATION",
+				"PENDING_SIGNATURE",
+				adminUserId,
+				"Attestation completed",
+				attestationNotes ||
+					`${attestationType} attestation completed successfully`,
+				{
+					attestationType,
+					attestationVideoWatched:
+						attestationType === "IMMEDIATE"
+							? attestationVideoWatched
+							: false,
+					attestationTermsAccepted:
+						attestationType === "IMMEDIATE"
+							? attestationTermsAccepted
+							: true,
+					meetingCompletedAt:
+						attestationType === "MEETING"
+							? meetingCompletedAt
+							: null,
+					completedBy: adminUserId,
+					completedAt: new Date().toISOString(),
+				}
+			);
+
+			console.log(
+				`Attestation completed successfully for application ${id}`
+			);
+			return res.json(updatedApplication);
+		} catch (error) {
+			console.error("Error completing attestation:", error);
+			return res.status(500).json({ message: "Internal server error" });
 		}
 	}
 );

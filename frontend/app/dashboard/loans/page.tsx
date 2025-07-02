@@ -20,10 +20,13 @@ import {
 	PlusIcon,
 	DocumentTextIcon,
 	XMarkIcon,
+	VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
 import PaymentMethodModal from "@/components/modals/PaymentMethodModal";
 import BankTransferModal from "@/components/modals/BankTransferModal";
+import AttestationMethodModal from "@/components/modals/AttestationMethodModal";
+import LiveCallConfirmationModal from "@/components/modals/LiveCallConfirmationModal";
 
 interface LoanSummary {
 	totalOutstanding: number;
@@ -124,6 +127,11 @@ interface LoanApplication {
 	purpose: string;
 	createdAt: string;
 	updatedAt: string;
+	attestationType?: string;
+	attestationCompleted?: boolean;
+	attestationDate?: string;
+	attestationNotes?: string;
+	meetingCompletedAt?: string;
 	product: {
 		name: string;
 		code: string;
@@ -135,6 +143,18 @@ interface LoanApplication {
 		type: string;
 		status: string;
 	}>;
+	history?: LoanApplicationHistory[];
+}
+
+interface LoanApplicationHistory {
+	id: string;
+	loanApplicationId: string;
+	previousStatus: string | null;
+	newStatus: string;
+	changedBy: string;
+	changedById: string;
+	createdAt: string;
+	notes?: string;
 }
 
 function LoansPageContent() {
@@ -162,6 +182,15 @@ function LoansPageContent() {
 	}>({});
 	const [loading, setLoading] = useState<boolean>(true);
 	const [showLoanDetails, setShowLoanDetails] = useState<{
+		[key: string]: boolean;
+	}>({});
+	const [showApplicationDetails, setShowApplicationDetails] = useState<{
+		[key: string]: boolean;
+	}>({});
+	const [applicationHistory, setApplicationHistory] = useState<{
+		[key: string]: LoanApplicationHistory[];
+	}>({});
+	const [loadingApplicationHistory, setLoadingApplicationHistory] = useState<{
 		[key: string]: boolean;
 	}>({});
 
@@ -219,6 +248,14 @@ function LoansPageContent() {
 	const [selectedDeleteApplication, setSelectedDeleteApplication] =
 		useState<LoanApplication | null>(null);
 	const [deleting, setDeleting] = useState<boolean>(false);
+
+	// Attestation method modal states
+	const [showAttestationMethodModal, setShowAttestationMethodModal] =
+		useState<boolean>(false);
+	const [selectedAttestationApplication, setSelectedAttestationApplication] =
+		useState<LoanApplication | null>(null);
+	const [showLiveCallConfirmationModal, setShowLiveCallConfirmationModal] =
+		useState<boolean>(false);
 
 	// Chart filter state
 	const [chartTimeFilter, setChartTimeFilter] = useState<"all" | "year">(
@@ -442,6 +479,63 @@ function LoansPageContent() {
 			setLoadingLateFeeInfo((prev) => ({
 				...prev,
 				[loanId]: false,
+			}));
+		}
+	};
+
+	const loadApplicationHistory = async (applicationId: string) => {
+		// Only skip if currently loading to prevent duplicate requests
+		if (loadingApplicationHistory[applicationId]) {
+			return;
+		}
+
+		setLoadingApplicationHistory((prev) => ({
+			...prev,
+			[applicationId]: true,
+		}));
+
+		try {
+			const historyData = await fetchWithTokenRefresh<
+				| {
+						applicationId: string;
+						currentStatus: string;
+						timeline: LoanApplicationHistory[];
+				  }
+				| LoanApplicationHistory[]
+			>(`/api/loan-applications/${applicationId}/history`);
+
+			// Handle both old array format and new object format
+			let history: LoanApplicationHistory[] = [];
+			if (Array.isArray(historyData)) {
+				// Old format - direct array
+				history = historyData;
+			} else if (
+				historyData &&
+				typeof historyData === "object" &&
+				"timeline" in historyData
+			) {
+				// New format - object with timeline property
+				history = historyData.timeline || [];
+			}
+
+			setApplicationHistory((prev) => ({
+				...prev,
+				[applicationId]: history,
+			}));
+		} catch (error) {
+			console.error(
+				`Error loading history for application ${applicationId}:`,
+				error
+			);
+			// Set empty array on error
+			setApplicationHistory((prev) => ({
+				...prev,
+				[applicationId]: [],
+			}));
+		} finally {
+			setLoadingApplicationHistory((prev) => ({
+				...prev,
+				[applicationId]: false,
 			}));
 		}
 	};
@@ -749,7 +843,10 @@ function LoansPageContent() {
 	};
 
 	// Application utility functions
-	const getApplicationStatusColor = (status: string) => {
+	const getApplicationStatusColor = (
+		status: string,
+		attestationType?: string
+	) => {
 		switch (status) {
 			case "INCOMPLETE":
 				return "bg-yellow-100 text-yellow-800";
@@ -757,6 +854,16 @@ function LoansPageContent() {
 			case "PENDING_KYC":
 			case "PENDING_APPROVAL":
 				return "bg-blue-100 text-blue-800";
+			case "PENDING_ATTESTATION":
+				// Special color for live call requests
+				if (attestationType === "MEETING") {
+					return "bg-purple-100 text-purple-800";
+				}
+				return "bg-cyan-100 text-cyan-800";
+			case "PENDING_SIGNATURE":
+				return "bg-indigo-100 text-indigo-800";
+			case "PENDING_DISBURSEMENT":
+				return "bg-orange-100 text-orange-800";
 			case "APPROVED":
 				return "bg-green-100 text-green-800";
 			case "REJECTED":
@@ -770,7 +877,10 @@ function LoansPageContent() {
 		}
 	};
 
-	const getApplicationStatusLabel = (status: string) => {
+	const getApplicationStatusLabel = (
+		status: string,
+		attestationType?: string
+	) => {
 		switch (status) {
 			case "INCOMPLETE":
 				return "Incomplete";
@@ -780,6 +890,16 @@ function LoansPageContent() {
 				return "Pending KYC";
 			case "PENDING_APPROVAL":
 				return "Under Review";
+			case "PENDING_ATTESTATION":
+				// Show special status for live call requests
+				if (attestationType === "MEETING") {
+					return "Awaiting Live Call";
+				}
+				return "Pending Attestation";
+			case "PENDING_SIGNATURE":
+				return "Pending Signature";
+			case "PENDING_DISBURSEMENT":
+				return "Pending Disbursement";
 			case "APPROVED":
 				return "Approved";
 			case "REJECTED":
@@ -790,6 +910,32 @@ function LoansPageContent() {
 				return "Withdrawn";
 			default:
 				return status;
+		}
+	};
+
+	const getHistoryActionDescription = (
+		previousStatus: string | null,
+		newStatus: string
+	): string => {
+		if (!previousStatus) {
+			return `Application created with status: ${getApplicationStatusLabel(
+				newStatus
+			)}`;
+		}
+
+		return `Status changed from ${getApplicationStatusLabel(
+			previousStatus
+		)} to ${getApplicationStatusLabel(newStatus)}`;
+	};
+
+	const toggleApplicationDetails = (applicationId: string) => {
+		setShowApplicationDetails((prev) => ({
+			...prev,
+			[applicationId]: !prev[applicationId],
+		}));
+
+		if (!showApplicationDetails[applicationId]) {
+			loadApplicationHistory(applicationId);
 		}
 	};
 
@@ -896,8 +1042,71 @@ function LoansPageContent() {
 		}
 	};
 
-	const handleViewApplicationDetails = (appId: string) => {
-		router.push(`/dashboard/applications/${appId}`);
+	const handleAttestationMethodSelect = (app: LoanApplication) => {
+		setSelectedAttestationApplication(app);
+		setShowAttestationMethodModal(true);
+	};
+
+	const handleInstantAttestationSelect = () => {
+		if (selectedAttestationApplication) {
+			setShowAttestationMethodModal(false);
+			router.push(
+				`/dashboard/applications/${selectedAttestationApplication.id}/attestation`
+			);
+		}
+	};
+
+	const handleLiveCallSelect = () => {
+		setShowAttestationMethodModal(false);
+		setShowLiveCallConfirmationModal(true);
+	};
+
+	const handleAttestationModalClose = () => {
+		setShowAttestationMethodModal(false);
+		setSelectedAttestationApplication(null);
+	};
+
+	const handleLiveCallConfirm = async () => {
+		if (!selectedAttestationApplication) return;
+
+		try {
+			const response = await fetchWithTokenRefresh(
+				`/api/loan-applications/${selectedAttestationApplication.id}/request-live-call`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						attestationType: "MEETING",
+					}),
+				}
+			);
+
+			if (response) {
+				// Reload applications to show updated status
+				await loadApplications();
+				setShowLiveCallConfirmationModal(false);
+				setSelectedAttestationApplication(null);
+
+				alert(
+					"Live video call request submitted! Our legal team will contact you within 1-2 business days to schedule your appointment."
+				);
+			}
+		} catch (error) {
+			console.error("Error requesting live call:", error);
+			alert("Failed to submit live call request. Please try again.");
+		}
+	};
+
+	const handleLiveCallBack = () => {
+		setShowLiveCallConfirmationModal(false);
+		setShowAttestationMethodModal(true);
+	};
+
+	const handleLiveCallModalClose = () => {
+		setShowLiveCallConfirmationModal(false);
+		setSelectedAttestationApplication(null);
 	};
 
 	// Handle bar click to show details
@@ -948,1793 +1157,2753 @@ function LoansPageContent() {
 
 	return (
 		<DashboardLayout userName={userName} title="Loans & Applications">
-			<div className="max-w-7xl mx-auto overflow-hidden bg-offwhite min-h-screen">
-				{/* Repayment Schedule Chart - Full Width */}
-				<div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full mb-6 min-w-0">
-					<div className="p-6 min-w-0">
-						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
-							<div className="flex items-center space-x-2">
-								<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-									<ChartBarIcon className="h-5 w-5 text-purple-primary" />
+			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+				<div className="space-y-6">
+					{/* Repayment Schedule Chart - Full Width */}
+					<div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full mb-6 min-w-0">
+						<div className="p-6 min-w-0">
+							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
+								<div className="flex items-center space-x-2">
+									<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+										<ChartBarIcon className="h-5 w-5 text-purple-primary" />
+									</div>
+									<h3 className="text-lg font-heading text-purple-primary font-semibold">
+										Repayment Schedule
+									</h3>
 								</div>
-								<h3 className="text-lg font-heading text-purple-primary font-semibold">
-									Repayment Schedule
-								</h3>
+
+								{/* Time Filter Buttons */}
+								<div className="flex bg-gray-100 rounded-lg p-1 border border-gray-200 w-full sm:w-auto max-w-xs sm:max-w-none">
+									<button
+										onClick={() =>
+											setChartTimeFilter("year")
+										}
+										className={`flex-1 sm:flex-none px-3 py-2 text-sm rounded-md transition-colors font-body ${
+											chartTimeFilter === "year"
+												? "bg-purple-primary text-white shadow-sm"
+												: "text-gray-600 hover:text-purple-primary hover:bg-white"
+										}`}
+									>
+										<span className="hidden sm:inline">
+											This Year
+										</span>
+										<span className="sm:hidden">Year</span>
+									</button>
+									<button
+										onClick={() =>
+											setChartTimeFilter("all")
+										}
+										className={`flex-1 sm:flex-none px-3 py-2 text-sm rounded-md transition-colors font-body ${
+											chartTimeFilter === "all"
+												? "bg-purple-primary text-white shadow-sm"
+												: "text-gray-600 hover:text-purple-primary hover:bg-white"
+										}`}
+									>
+										<span className="hidden sm:inline">
+											All Time
+										</span>
+										<span className="sm:hidden">All</span>
+									</button>
+								</div>
 							</div>
 
-							{/* Time Filter Buttons */}
-							<div className="flex bg-gray-100 rounded-lg p-1 border border-gray-200 w-full sm:w-auto max-w-xs sm:max-w-none">
-								<button
-									onClick={() => setChartTimeFilter("year")}
-									className={`flex-1 sm:flex-none px-3 py-2 text-sm rounded-md transition-colors font-body ${
-										chartTimeFilter === "year"
-											? "bg-purple-primary text-white shadow-sm"
-											: "text-gray-600 hover:text-purple-primary hover:bg-white"
-									}`}
-								>
-									<span className="hidden sm:inline">
-										This Year
-									</span>
-									<span className="sm:hidden">Year</span>
-								</button>
-								<button
-									onClick={() => setChartTimeFilter("all")}
-									className={`flex-1 sm:flex-none px-3 py-2 text-sm rounded-md transition-colors font-body ${
-										chartTimeFilter === "all"
-											? "bg-purple-primary text-white shadow-sm"
-											: "text-gray-600 hover:text-purple-primary hover:bg-white"
-									}`}
-								>
-									<span className="hidden sm:inline">
-										All Time
-									</span>
-									<span className="sm:hidden">All</span>
-								</button>
-							</div>
-						</div>
+							{/* Chart Section */}
+							<div className="mb-6 min-w-0 overflow-hidden">
+								{(() => {
+									// Generate monthly data for all loans using proper payment allocation
+									const monthlyData = new Map();
+									const now = new Date();
 
-						{/* Chart Section */}
-						<div className="mb-6 min-w-0 overflow-hidden">
-							{(() => {
-								// Generate monthly data for all loans using proper payment allocation
-								const monthlyData = new Map();
-								const now = new Date();
+									// Process each loan individually
+									loans
+										.filter(
+											(loan) =>
+												loan.status === "ACTIVE" ||
+												loan.status ===
+													"PENDING_DISCHARGE"
+										)
+										.forEach((loan) => {
+											if (!loan.repayments) return;
 
-								// Process each loan individually
-								loans
-									.filter(
-										(loan) =>
-											loan.status === "ACTIVE" ||
-											loan.status === "PENDING_DISCHARGE"
-									)
-									.forEach((loan) => {
-										if (!loan.repayments) return;
+											// Sort repayments by due date (chronological order)
+											const sortedRepayments = [
+												...loan.repayments,
+											].sort(
+												(a, b) =>
+													new Date(
+														a.dueDate
+													).getTime() -
+													new Date(
+														b.dueDate
+													).getTime()
+											);
 
-										// Sort repayments by due date (chronological order)
-										const sortedRepayments = [
-											...loan.repayments,
-										].sort(
-											(a, b) =>
-												new Date(a.dueDate).getTime() -
-												new Date(b.dueDate).getTime()
-										);
+											// Process each repayment individually based on its actual status and payments
+											sortedRepayments.forEach(
+												(repayment) => {
+													const dueDate = new Date(
+														repayment.dueDate
+													);
+													const monthKey = `${dueDate.getFullYear()}-${String(
+														dueDate.getMonth() + 1
+													).padStart(2, "0")}`;
 
-										// Process each repayment individually based on its actual status and payments
-										sortedRepayments.forEach(
-											(repayment) => {
-												const dueDate = new Date(
-													repayment.dueDate
-												);
-												const monthKey = `${dueDate.getFullYear()}-${String(
-													dueDate.getMonth() + 1
-												).padStart(2, "0")}`;
+													if (
+														!monthlyData.has(
+															monthKey
+														)
+													) {
+														monthlyData.set(
+															monthKey,
+															{
+																month: monthKey,
+																date: dueDate,
+																totalScheduled: 0,
+																totalPaid: 0,
+																totalOutstanding: 0,
+																lateFees: 0, // Track total late fees for this month
+																paidLateFees: 0, // Track late fees that were paid
+																unpaidLateFees: 0, // Track late fees still owed
+															}
+														);
+													}
 
-												if (
-													!monthlyData.has(monthKey)
-												) {
-													monthlyData.set(monthKey, {
-														month: monthKey,
-														date: dueDate,
-														totalScheduled: 0,
-														totalPaid: 0,
-														totalOutstanding: 0,
-														lateFees: 0, // Track total late fees for this month
-														paidLateFees: 0, // Track late fees that were paid
-														unpaidLateFees: 0, // Track late fees still owed
-													});
-												}
+													const monthData =
+														monthlyData.get(
+															monthKey
+														);
 
-												const monthData =
-													monthlyData.get(monthKey);
+													// Calculate late fees for this specific repayment
+													let repaymentLateFees = 0;
+													const today = new Date();
+													today.setHours(0, 0, 0, 0);
+													const repaymentDueDate =
+														new Date(
+															repayment.dueDate
+														);
+													repaymentDueDate.setHours(
+														0,
+														0,
+														0,
+														0
+													);
 
-												// Calculate late fees for this specific repayment
-												let repaymentLateFees = 0;
-												const today = new Date();
-												today.setHours(0, 0, 0, 0);
-												const repaymentDueDate =
-													new Date(repayment.dueDate);
-												repaymentDueDate.setHours(
-													0,
-													0,
-													0,
-													0
-												);
-
-												// Check for late fees on this repayment
-												if (
-													loan.overdueInfo
-														?.overdueRepayments
-												) {
-													const overdueRepayment =
-														loan.overdueInfo.overdueRepayments.find(
-															(or) => {
-																const orDueDate =
-																	new Date(
-																		or.dueDate
+													// Check for late fees on this repayment
+													if (
+														loan.overdueInfo
+															?.overdueRepayments
+													) {
+														const overdueRepayment =
+															loan.overdueInfo.overdueRepayments.find(
+																(or) => {
+																	const orDueDate =
+																		new Date(
+																			or.dueDate
+																		);
+																	orDueDate.setHours(
+																		0,
+																		0,
+																		0,
+																		0
 																	);
-																orDueDate.setHours(
-																	0,
-																	0,
-																	0,
-																	0
-																);
-																return (
-																	orDueDate.getTime() ===
-																		repaymentDueDate.getTime() &&
-																	Math.abs(
-																		or.amount -
-																			repayment.amount
-																	) < 0.01
-																);
+																	return (
+																		orDueDate.getTime() ===
+																			repaymentDueDate.getTime() &&
+																		Math.abs(
+																			or.amount -
+																				repayment.amount
+																		) < 0.01
+																	);
+																}
+															);
+
+														if (
+															overdueRepayment &&
+															overdueRepayment.totalLateFees >
+																0
+														) {
+															repaymentLateFees =
+																overdueRepayment.totalLateFees;
+														}
+													}
+
+													// Calculate total amount for this repayment (scheduled + late fees)
+													const repaymentTotalAmount =
+														repayment.amount +
+														repaymentLateFees;
+
+													// Add to total scheduled for this month (ONLY the original scheduled amount)
+													monthData.totalScheduled +=
+														repayment.amount;
+													monthData.lateFees +=
+														repaymentLateFees;
+
+													// Determine payment status based on repayment status and actualAmount
+													if (
+														repayment.status ===
+														"COMPLETED"
+													) {
+														// Use actualAmount which includes late fees paid
+														const actualPaid =
+															repayment.actualAmount ||
+															repayment.amount;
+														monthData.totalPaid +=
+															actualPaid;
+
+														// For completed repayments, calculate late fees paid based on actualAmount vs scheduled amount
+														// This works even if the repayment is no longer in overdueInfo (since it's completed)
+														if (
+															actualPaid >
+															repayment.amount
+														) {
+															// The excess payment went to late fees
+															const lateFeesPaidFromExcess =
+																actualPaid -
+																repayment.amount;
+															monthData.paidLateFees +=
+																lateFeesPaidFromExcess;
+
+															// If we also have current overdue info for this repayment, use it to calculate unpaid late fees
+															if (
+																repaymentLateFees >
+																0
+															) {
+																const remainingLateFees =
+																	Math.max(
+																		0,
+																		repaymentLateFees -
+																			lateFeesPaidFromExcess
+																	);
+																monthData.unpaidLateFees +=
+																	remainingLateFees;
+															}
+														} else if (
+															repaymentLateFees >
+															0
+														) {
+															// No excess payment but there are late fees - all unpaid
+															monthData.unpaidLateFees +=
+																repaymentLateFees;
+														}
+
+														// Any remaining amount is outstanding (shouldn't happen for completed, but safety check)
+														if (
+															actualPaid <
+															repaymentTotalAmount
+														) {
+															monthData.totalOutstanding +=
+																repaymentTotalAmount -
+																actualPaid;
+														}
+													} else if (
+														repayment.status ===
+															"PENDING" &&
+														repayment.paymentType ===
+															"PARTIAL" &&
+														(repayment.actualAmount ??
+															0) > 0
+													) {
+														// Partially paid - use actualAmount for paid portion
+														const actualPaid =
+															repayment.actualAmount ??
+															0;
+
+														console.log(
+															`PARTIAL payment debug:`,
+															{
+																repaymentId:
+																	repayment.id,
+																status: repayment.status,
+																paymentType:
+																	repayment.paymentType,
+																amount: repayment.amount,
+																actualAmount:
+																	repayment.actualAmount,
+																actualPaid:
+																	actualPaid,
+																repaymentTotalAmount:
+																	repaymentTotalAmount,
+																monthKey:
+																	monthKey,
 															}
 														);
 
-													if (
-														overdueRepayment &&
-														overdueRepayment.totalLateFees >
-															0
-													) {
-														repaymentLateFees =
-															overdueRepayment.totalLateFees;
-													}
-												}
+														monthData.totalPaid +=
+															actualPaid;
+														monthData.totalOutstanding +=
+															repaymentTotalAmount -
+															actualPaid;
 
-												// Calculate total amount for this repayment (scheduled + late fees)
-												const repaymentTotalAmount =
-													repayment.amount +
-													repaymentLateFees;
-
-												// Add to total scheduled for this month (ONLY the original scheduled amount)
-												monthData.totalScheduled +=
-													repayment.amount;
-												monthData.lateFees +=
-													repaymentLateFees;
-
-												// Determine payment status based on repayment status and actualAmount
-												if (
-													repayment.status ===
-													"COMPLETED"
-												) {
-													// Use actualAmount which includes late fees paid
-													const actualPaid =
-														repayment.actualAmount ||
-														repayment.amount;
-													monthData.totalPaid +=
-														actualPaid;
-
-													// For completed repayments, calculate late fees paid based on actualAmount vs scheduled amount
-													// This works even if the repayment is no longer in overdueInfo (since it's completed)
-													if (
-														actualPaid >
-														repayment.amount
-													) {
-														// The excess payment went to late fees
-														const lateFeesPaidFromExcess =
-															actualPaid -
-															repayment.amount;
-														monthData.paidLateFees +=
-															lateFeesPaidFromExcess;
-
-														// If we also have current overdue info for this repayment, use it to calculate unpaid late fees
+														// Calculate how much of the late fees were paid
 														if (
 															repaymentLateFees >
 															0
 														) {
-															const remainingLateFees =
+															// If actualPaid > scheduled amount, the excess went to late fees
+															const excessPaid =
 																Math.max(
 																	0,
-																	repaymentLateFees -
-																		lateFeesPaidFromExcess
+																	actualPaid -
+																		repayment.amount
 																);
+															const lateFeesPaid =
+																Math.min(
+																	excessPaid,
+																	repaymentLateFees
+																);
+															monthData.paidLateFees +=
+																lateFeesPaid;
 															monthData.unpaidLateFees +=
-																remainingLateFees;
+																repaymentLateFees -
+																lateFeesPaid;
 														}
-													} else if (
-														repaymentLateFees > 0
-													) {
-														// No excess payment but there are late fees - all unpaid
-														monthData.unpaidLateFees +=
-															repaymentLateFees;
-													}
-
-													// Any remaining amount is outstanding (shouldn't happen for completed, but safety check)
-													if (
-														actualPaid <
-														repaymentTotalAmount
-													) {
+													} else {
+														// PENDING - nothing paid yet (excluding partial payments which are handled above)
 														monthData.totalOutstanding +=
-															repaymentTotalAmount -
-															actualPaid;
-													}
-												} else if (
-													repayment.status ===
-														"PENDING" &&
-													repayment.paymentType ===
-														"PARTIAL" &&
-													(repayment.actualAmount ??
-														0) > 0
-												) {
-													// Partially paid - use actualAmount for paid portion
-													const actualPaid =
-														repayment.actualAmount ??
-														0;
+															repaymentTotalAmount;
 
-													console.log(
-														`PARTIAL payment debug:`,
-														{
-															repaymentId:
-																repayment.id,
-															status: repayment.status,
-															paymentType:
-																repayment.paymentType,
-															amount: repayment.amount,
-															actualAmount:
-																repayment.actualAmount,
-															actualPaid:
-																actualPaid,
-															repaymentTotalAmount:
-																repaymentTotalAmount,
-															monthKey: monthKey,
+														// All late fees are unpaid
+														if (
+															repaymentLateFees >
+															0
+														) {
+															monthData.unpaidLateFees +=
+																repaymentLateFees;
 														}
-													);
-
-													monthData.totalPaid +=
-														actualPaid;
-													monthData.totalOutstanding +=
-														repaymentTotalAmount -
-														actualPaid;
-
-													// Calculate how much of the late fees were paid
-													if (repaymentLateFees > 0) {
-														// If actualPaid > scheduled amount, the excess went to late fees
-														const excessPaid =
-															Math.max(
-																0,
-																actualPaid -
-																	repayment.amount
-															);
-														const lateFeesPaid =
-															Math.min(
-																excessPaid,
-																repaymentLateFees
-															);
-														monthData.paidLateFees +=
-															lateFeesPaid;
-														monthData.unpaidLateFees +=
-															repaymentLateFees -
-															lateFeesPaid;
-													}
-												} else {
-													// PENDING - nothing paid yet (excluding partial payments which are handled above)
-													monthData.totalOutstanding +=
-														repaymentTotalAmount;
-
-													// All late fees are unpaid
-													if (repaymentLateFees > 0) {
-														monthData.unpaidLateFees +=
-															repaymentLateFees;
 													}
 												}
-											}
-										);
-									});
+											);
+										});
 
-								// Sort months chronologically and apply time filter
-								let sortedMonths = Array.from(
-									monthlyData.values()
-								).sort(
-									(a, b) =>
-										a.date.getTime() - b.date.getTime()
-								);
-
-								// Apply time filter
-								if (chartTimeFilter === "year") {
-									const currentYear =
-										new Date().getFullYear();
-									sortedMonths = sortedMonths.filter(
-										(month) =>
-											month.date.getFullYear() ===
-											currentYear
+									// Sort months chronologically and apply time filter
+									let sortedMonths = Array.from(
+										monthlyData.values()
+									).sort(
+										(a, b) =>
+											a.date.getTime() - b.date.getTime()
 									);
-								}
 
-								// Calculate responsive bar width and spacing based on number of months
-								const getBarConfig = (monthCount: number) => {
-									// Responsive bar sizing based on screen size and month count
-									let barClass;
-									if (monthCount <= 6) {
-										barClass = "flex-1 max-w-20 min-w-8"; // Wider bars for fewer months
-									} else if (monthCount <= 12) {
-										barClass = "flex-1 max-w-16 min-w-6"; // Medium bars
-									} else if (monthCount <= 24) {
-										barClass = "flex-1 max-w-12 min-w-4"; // Smaller bars for more months
-									} else {
-										barClass = "flex-1 max-w-8 min-w-3"; // Very thin bars for many months
+									// Apply time filter
+									if (chartTimeFilter === "year") {
+										const currentYear =
+											new Date().getFullYear();
+										sortedMonths = sortedMonths.filter(
+											(month) =>
+												month.date.getFullYear() ===
+												currentYear
+										);
 									}
 
-									return {
-										barClass,
-										containerClass:
-											"justify-between gap-0.5 sm:gap-1 md:gap-2",
-										scrollable: false, // Always full width, no scrolling
-										minWidth: null,
+									// Calculate responsive bar width and spacing based on number of months
+									const getBarConfig = (
+										monthCount: number
+									) => {
+										// Responsive bar sizing based on screen size and month count
+										let barClass;
+										if (monthCount <= 6) {
+											barClass =
+												"flex-1 max-w-20 min-w-8"; // Wider bars for fewer months
+										} else if (monthCount <= 12) {
+											barClass =
+												"flex-1 max-w-16 min-w-6"; // Medium bars
+										} else if (monthCount <= 24) {
+											barClass =
+												"flex-1 max-w-12 min-w-4"; // Smaller bars for more months
+										} else {
+											barClass = "flex-1 max-w-8 min-w-3"; // Very thin bars for many months
+										}
+
+										return {
+											barClass,
+											containerClass:
+												"justify-between gap-0.5 sm:gap-1 md:gap-2",
+											scrollable: false, // Always full width, no scrolling
+											minWidth: null,
+										};
 									};
-								};
 
-								const barConfig = getBarConfig(
-									sortedMonths.length
-								);
-								const {
-									barClass: barWidthClass,
-									containerClass,
-									scrollable,
-									minWidth,
-								} = barConfig;
-
-								if (sortedMonths.length === 0) {
-									return (
-										<div className="text-center text-gray-500 py-8 md:py-12">
-											<div className="bg-gray-50 rounded-lg p-6 md:p-8 border border-gray-200">
-												<ChartBarIcon className="h-12 w-12 md:h-16 md:w-16 text-gray-400 mx-auto mb-4" />
-												<p className="text-base md:text-lg font-medium font-heading text-gray-700">
-													No repayment schedule
-													available
-												</p>
-												<p className="text-sm text-gray-500 mt-2 font-body">
-													Apply for a loan to see your
-													payment timeline
-												</p>
-											</div>
-										</div>
+									const barConfig = getBarConfig(
+										sortedMonths.length
 									);
-								}
+									const {
+										barClass: barWidthClass,
+										containerClass,
+										scrollable,
+										minWidth,
+									} = barConfig;
 
-								return (
-									<div className="space-y-4 min-w-0">
-										{/* Vertical Bar Chart */}
-										<div className="relative h-64 sm:h-80 w-full min-w-0">
-											{/* Chart area - properly contained */}
-											<div className="absolute inset-0">
-												<div
-													className={`h-full flex items-end border-b border-gray-200 pt-4 px-2 pb-2 ${containerClass}`}
-													style={{
-														width: "100%",
-													}}
-												>
-													{sortedMonths.map(
-														(monthData) => {
-															// Calculate max amount considering both scheduled and actual paid amounts
-															// This ensures bars scale properly when late fees cause payments to exceed scheduled amounts
-															const maxAmount =
-																Math.max(
-																	...sortedMonths.map(
-																		(m) =>
-																			Math.max(
-																				m.totalScheduled,
-																				m.totalPaid +
-																					m.totalOutstanding
-																			)
-																	)
-																);
+									if (sortedMonths.length === 0) {
+										return (
+											<div className="text-center text-gray-500 py-8 md:py-12">
+												<div className="bg-gray-50 rounded-lg p-6 md:p-8 border border-gray-200">
+													<ChartBarIcon className="h-12 w-12 md:h-16 md:w-16 text-gray-400 mx-auto mb-4" />
+													<p className="text-base md:text-lg font-medium font-heading text-gray-700">
+														No repayment schedule
+														available
+													</p>
+													<p className="text-sm text-gray-500 mt-2 font-body">
+														Apply for a loan to see
+														your payment timeline
+													</p>
+												</div>
+											</div>
+										);
+									}
 
-															// Calculate the actual total for this month (what was actually paid + what's still owed)
-															const actualTotal =
-																monthData.totalPaid +
-																monthData.totalOutstanding;
-															const totalBarHeight =
-																(actualTotal /
-																	maxAmount) *
-																100;
-															const paidHeight =
-																maxAmount > 0
-																	? (monthData.totalPaid /
-																			maxAmount) *
-																	  100
-																	: 0;
-															const outstandingHeight =
-																maxAmount > 0
-																	? (monthData.totalOutstanding /
-																			maxAmount) *
-																	  100
-																	: 0;
-															const isPastMonth =
-																monthData.date <
-																now;
-															const isCurrentMonth =
-																monthData.date.getMonth() ===
-																	now.getMonth() &&
-																monthData.date.getFullYear() ===
-																	now.getFullYear();
+									return (
+										<div className="space-y-4 min-w-0">
+											{/* Vertical Bar Chart */}
+											<div className="relative h-64 sm:h-80 w-full min-w-0">
+												{/* Chart area - properly contained */}
+												<div className="absolute inset-0">
+													<div
+														className={`h-full flex items-end border-b border-gray-200 pt-4 px-2 pb-2 ${containerClass}`}
+														style={{
+															width: "100%",
+														}}
+													>
+														{sortedMonths.map(
+															(monthData) => {
+																// Calculate max amount considering both scheduled and actual paid amounts
+																// This ensures bars scale properly when late fees cause payments to exceed scheduled amounts
+																const maxAmount =
+																	Math.max(
+																		...sortedMonths.map(
+																			(
+																				m
+																			) =>
+																				Math.max(
+																					m.totalScheduled,
+																					m.totalPaid +
+																						m.totalOutstanding
+																				)
+																		)
+																	);
 
-															return (
-																<div
-																	key={
-																		monthData.month
-																	}
-																	className="flex flex-col items-center h-full flex-1"
-																>
-																	{/* Bar container */}
+																// Calculate the actual total for this month (what was actually paid + what's still owed)
+																const actualTotal =
+																	monthData.totalPaid +
+																	monthData.totalOutstanding;
+																const totalBarHeight =
+																	(actualTotal /
+																		maxAmount) *
+																	100;
+																const paidHeight =
+																	maxAmount >
+																	0
+																		? (monthData.totalPaid /
+																				maxAmount) *
+																		  100
+																		: 0;
+																const outstandingHeight =
+																	maxAmount >
+																	0
+																		? (monthData.totalOutstanding /
+																				maxAmount) *
+																		  100
+																		: 0;
+																const isPastMonth =
+																	monthData.date <
+																	now;
+																const isCurrentMonth =
+																	monthData.date.getMonth() ===
+																		now.getMonth() &&
+																	monthData.date.getFullYear() ===
+																		now.getFullYear();
+
+																return (
 																	<div
-																		className="relative flex-1 flex items-end w-full cursor-pointer hover:opacity-80 transition-opacity"
-																		style={{
-																			height: "200px",
-																		}}
-																		onClick={() =>
-																			handleBarClick(
-																				monthData
-																			)
+																		key={
+																			monthData.month
 																		}
+																		className="flex flex-col items-center h-full flex-1"
 																	>
-																		{/* Paid portion (bottom - green) */}
-																		{paidHeight >
-																			0 && (
-																			<div
-																				className={`${barWidthClass} bg-green-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 ${
-																					outstandingHeight ===
-																					0
-																						? "rounded-lg"
-																						: "rounded-b-lg"
-																				}`}
-																				style={{
-																					height: `${paidHeight}%`,
-																				}}
-																			/>
-																		)}
-
-																		{/* Outstanding portion (stacked on top of paid) */}
-																		{outstandingHeight >
-																			0 && (
-																			<div
-																				className={`${barWidthClass} absolute left-1/2 transform -translate-x-1/2 ${
-																					isPastMonth
-																						? "bg-red-500"
-																						: isCurrentMonth
-																						? "bg-amber-500"
-																						: "bg-blue-tertiary"
-																				} ${
-																					paidHeight ===
-																					0
-																						? "rounded-lg bottom-0"
-																						: "rounded-t-lg"
-																				}`}
-																				style={{
-																					height: `${outstandingHeight}%`,
-																					bottom: `${paidHeight}%`,
-																				}}
-																			/>
-																		)}
-
-																		{/* Data Label - Smart positioning */}
-																		{(() => {
-																			// Show actual total (paid + outstanding) instead of just scheduled
-																			const totalAmount =
-																				actualTotal;
-																			const shouldLabelBeInside =
-																				totalBarHeight >
-																				75; // If bar is taller than 75%, put label inside
-																			const shouldShowLabel =
-																				totalBarHeight >
-																				15; // Only show label if bar is at least 15% tall
-																			const labelPosition =
-																				shouldLabelBeInside
-																					? {
-																							top: `${
-																								100 -
-																								totalBarHeight +
-																								2
-																							}%`,
-																					  } // Inside the bar, starting from top
-																					: {
-																							bottom: `${
-																								totalBarHeight +
-																								3
-																							}%`,
-																					  }; // Outside the bar, above it
-
-																			if (
-																				!shouldShowLabel
-																			)
-																				return null;
-
-																			return (
+																		{/* Bar container */}
+																		<div
+																			className="relative flex-1 flex items-end w-full cursor-pointer hover:opacity-80 transition-opacity"
+																			style={{
+																				height: "200px",
+																			}}
+																			onClick={() =>
+																				handleBarClick(
+																					monthData
+																				)
+																			}
+																		>
+																			{/* Paid portion (bottom - green) */}
+																			{paidHeight >
+																				0 && (
 																				<div
-																					className={`absolute left-1/2 transform -translate-x-1/2 text-xs font-medium font-body pointer-events-none z-20 ${
-																						shouldLabelBeInside
-																							? "text-white"
-																							: "text-gray-600"
+																					className={`${barWidthClass} bg-green-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 ${
+																						outstandingHeight ===
+																						0
+																							? "rounded-lg"
+																							: "rounded-b-lg"
 																					}`}
 																					style={{
-																						...labelPosition,
-																						writingMode:
-																							"vertical-rl",
-																						textOrientation:
-																							"mixed",
-																						transform:
-																							"translateX(-50%) rotate(180deg)",
+																						height: `${paidHeight}%`,
 																					}}
-																				>
+																				/>
+																			)}
+
+																			{/* Outstanding portion (stacked on top of paid) */}
+																			{outstandingHeight >
+																				0 && (
+																				<div
+																					className={`${barWidthClass} absolute left-1/2 transform -translate-x-1/2 ${
+																						isPastMonth
+																							? "bg-red-500"
+																							: isCurrentMonth
+																							? "bg-amber-500"
+																							: "bg-blue-tertiary"
+																					} ${
+																						paidHeight ===
+																						0
+																							? "rounded-lg bottom-0"
+																							: "rounded-t-lg"
+																					}`}
+																					style={{
+																						height: `${outstandingHeight}%`,
+																						bottom: `${paidHeight}%`,
+																					}}
+																				/>
+																			)}
+
+																			{/* Data Label - Smart positioning */}
+																			{(() => {
+																				// Show actual total (paid + outstanding) instead of just scheduled
+																				const totalAmount =
+																					actualTotal;
+																				const shouldLabelBeInside =
+																					totalBarHeight >
+																					75; // If bar is taller than 75%, put label inside
+																				const shouldShowLabel =
+																					totalBarHeight >
+																					15; // Only show label if bar is at least 15% tall
+																				const labelPosition =
+																					shouldLabelBeInside
+																						? {
+																								top: `${
+																									100 -
+																									totalBarHeight +
+																									2
+																								}%`,
+																						  } // Inside the bar, starting from top
+																						: {
+																								bottom: `${
+																									totalBarHeight +
+																									3
+																								}%`,
+																						  }; // Outside the bar, above it
+
+																				if (
+																					!shouldShowLabel
+																				)
+																					return null;
+
+																				return (
+																					<div
+																						className={`absolute left-1/2 transform -translate-x-1/2 text-xs font-medium font-body pointer-events-none z-20 ${
+																							shouldLabelBeInside
+																								? "text-white"
+																								: "text-gray-600"
+																						}`}
+																						style={{
+																							...labelPosition,
+																							writingMode:
+																								"vertical-rl",
+																							textOrientation:
+																								"mixed",
+																							transform:
+																								"translateX(-50%) rotate(180deg)",
+																						}}
+																					>
+																						{formatCurrency(
+																							totalAmount
+																						)}
+																					</div>
+																				);
+																			})()}
+
+																			{/* Amount tooltip on hover - hidden on mobile */}
+																			<div className="hidden md:block absolute -top-16 left-1/2 transform -translate-x-1/2 bg-white border border-gray-200 shadow-lg text-gray-700 text-xs px-3 py-2 rounded-lg opacity-0 hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
+																				<div className="font-medium">
+																					Scheduled:{" "}
 																					{formatCurrency(
-																						totalAmount
+																						monthData.totalScheduled
 																					)}
 																				</div>
-																			);
-																		})()}
-
-																		{/* Amount tooltip on hover - hidden on mobile */}
-																		<div className="hidden md:block absolute -top-16 left-1/2 transform -translate-x-1/2 bg-white border border-gray-200 shadow-lg text-gray-700 text-xs px-3 py-2 rounded-lg opacity-0 hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
-																			<div className="font-medium">
-																				Scheduled:{" "}
-																				{formatCurrency(
-																					monthData.totalScheduled
+																				{(monthData.paidLateFees ||
+																					0) >
+																					0 && (
+																					<div className="text-green-600 font-medium">
+																						Late
+																						Fees
+																						Paid:{" "}
+																						{formatCurrency(
+																							monthData.paidLateFees ||
+																								0
+																						)}
+																					</div>
 																				)}
-																			</div>
-																			{(monthData.paidLateFees ||
-																				0) >
-																				0 && (
+																				{(monthData.unpaidLateFees ||
+																					0) >
+																					0 && (
+																					<div className="text-red-600 font-medium">
+																						Late
+																						Fees
+																						Owed:{" "}
+																						{formatCurrency(
+																							monthData.unpaidLateFees ||
+																								0
+																						)}
+																					</div>
+																				)}
 																				<div className="text-green-600 font-medium">
-																					Late
-																					Fees
 																					Paid:{" "}
 																					{formatCurrency(
-																						monthData.paidLateFees ||
-																							0
+																						monthData.totalPaid
 																					)}
 																				</div>
-																			)}
-																			{(monthData.unpaidLateFees ||
-																				0) >
-																				0 && (
-																				<div className="text-red-600 font-medium">
-																					Late
-																					Fees
-																					Owed:{" "}
+																				<div className="text-blue-tertiary font-medium">
+																					Outstanding:{" "}
 																					{formatCurrency(
-																						monthData.unpaidLateFees ||
-																							0
+																						monthData.totalOutstanding
 																					)}
 																				</div>
-																			)}
-																			<div className="text-green-600 font-medium">
-																				Paid:{" "}
-																				{formatCurrency(
-																					monthData.totalPaid
+																				{actualTotal !==
+																					monthData.totalScheduled && (
+																					<div className="font-medium border-t border-gray-200 pt-1 mt-1">
+																						Actual
+																						Total:{" "}
+																						{formatCurrency(
+																							actualTotal
+																						)}
+																					</div>
 																				)}
 																			</div>
-																			<div className="text-blue-tertiary font-medium">
-																				Outstanding:{" "}
-																				{formatCurrency(
-																					monthData.totalOutstanding
+																		</div>
+
+																		{/* X-axis label */}
+																		<div className="text-xs text-gray-500 text-center font-medium mt-2 whitespace-nowrap">
+																			<span className="hidden sm:inline">
+																				{monthData.date.toLocaleDateString(
+																					"en-US",
+																					{
+																						month: "short",
+																						year: "2-digit",
+																					}
 																				)}
-																			</div>
-																			{actualTotal !==
-																				monthData.totalScheduled && (
-																				<div className="font-medium border-t border-gray-200 pt-1 mt-1">
-																					Actual
-																					Total:{" "}
-																					{formatCurrency(
-																						actualTotal
-																					)}
-																				</div>
-																			)}
+																			</span>
+																			<span className="sm:hidden">
+																				{monthData.date.toLocaleDateString(
+																					"en-US",
+																					{
+																						month: "short",
+																					}
+																				)}
+																			</span>
 																		</div>
 																	</div>
-
-																	{/* X-axis label */}
-																	<div className="text-xs text-gray-500 text-center font-medium mt-2 whitespace-nowrap">
-																		<span className="hidden sm:inline">
-																			{monthData.date.toLocaleDateString(
-																				"en-US",
-																				{
-																					month: "short",
-																					year: "2-digit",
-																				}
-																			)}
-																		</span>
-																		<span className="sm:hidden">
-																			{monthData.date.toLocaleDateString(
-																				"en-US",
-																				{
-																					month: "short",
-																				}
-																			)}
-																		</span>
-																	</div>
-																</div>
-															);
-														}
-													)}
+																);
+															}
+														)}
+													</div>
 												</div>
 											</div>
-										</div>
 
-										{/* Legend */}
-										<div className="flex flex-wrap justify-center gap-4 md:gap-6 text-xs">
-											<div className="flex items-center gap-2">
-												<div className="w-3 h-3 bg-green-600 rounded"></div>
-												<span className="text-gray-600 font-body">
-													Paid
-												</span>
-											</div>
-											<div className="flex items-center gap-2">
-												<div className="w-3 h-3 bg-blue-tertiary rounded"></div>
-												<span className="text-gray-600 font-body">
-													Upcoming
-												</span>
-											</div>
-											<div className="flex items-center gap-2">
-												<div className="w-3 h-3 bg-amber-500 rounded"></div>
-												<span className="text-gray-600 font-body">
-													Due This Month
-												</span>
-											</div>
-											<div className="flex items-center gap-2">
-												<div className="w-3 h-3 bg-red-500 rounded"></div>
-												<span className="text-gray-600 font-body">
-													Overdue
-												</span>
-											</div>
-										</div>
-
-										{/* Selected Bar Details */}
-										{selectedBarData && (
-											<div className="bg-blue-tertiary/5 rounded-lg p-4 border border-blue-tertiary/20">
-												<div className="flex justify-between items-start mb-4">
-													<h4 className="text-base md:text-lg font-heading text-gray-700 font-semibold">
-														{selectedBarData.month}{" "}
-														Details
-													</h4>
-													<button
-														onClick={() =>
-															setSelectedBarData(
-																null
-															)
-														}
-														className="text-gray-500 hover:text-gray-700 transition-colors"
-													>
-														<XMarkIcon className="h-5 w-5" />
-													</button>
+											{/* Legend */}
+											<div className="flex flex-wrap justify-center gap-4 md:gap-6 text-xs">
+												<div className="flex items-center gap-2">
+													<div className="w-3 h-3 bg-green-600 rounded"></div>
+													<span className="text-gray-600 font-body">
+														Paid
+													</span>
 												</div>
-												<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-													<div className="text-left">
-														<div className="text-base md:text-lg font-semibold text-gray-700 mb-1 font-heading">
-															{formatCurrency(
-																selectedBarData.totalScheduled
-															)}
-														</div>
-														<div className="text-xs text-gray-500 font-body">
-															Scheduled Payment
-														</div>
+												<div className="flex items-center gap-2">
+													<div className="w-3 h-3 bg-blue-tertiary rounded"></div>
+													<span className="text-gray-600 font-body">
+														Upcoming
+													</span>
+												</div>
+												<div className="flex items-center gap-2">
+													<div className="w-3 h-3 bg-amber-500 rounded"></div>
+													<span className="text-gray-600 font-body">
+														Due This Month
+													</span>
+												</div>
+												<div className="flex items-center gap-2">
+													<div className="w-3 h-3 bg-red-500 rounded"></div>
+													<span className="text-gray-600 font-body">
+														Overdue
+													</span>
+												</div>
+											</div>
+
+											{/* Selected Bar Details */}
+											{selectedBarData && (
+												<div className="bg-blue-tertiary/5 rounded-lg p-4 border border-blue-tertiary/20">
+													<div className="flex justify-between items-start mb-4">
+														<h4 className="text-base md:text-lg font-heading text-gray-700 font-semibold">
+															{
+																selectedBarData.month
+															}{" "}
+															Details
+														</h4>
+														<button
+															onClick={() =>
+																setSelectedBarData(
+																	null
+																)
+															}
+															className="text-gray-500 hover:text-gray-700 transition-colors"
+														>
+															<XMarkIcon className="h-5 w-5" />
+														</button>
 													</div>
-													<div className="text-left">
-														<div className="text-base md:text-lg font-semibold text-green-600 mb-1 font-heading">
-															{formatCurrency(
-																selectedBarData.totalPaid
-															)}
+													<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+														<div className="text-left">
+															<div className="text-base md:text-lg font-semibold text-gray-700 mb-1 font-heading">
+																{formatCurrency(
+																	selectedBarData.totalScheduled
+																)}
+															</div>
+															<div className="text-xs text-gray-500 font-body">
+																Scheduled
+																Payment
+															</div>
 														</div>
-														<div className="text-xs text-green-600 font-body">
-															Total Paid
-														</div>
-													</div>
-													{selectedBarData.paidLateFees >
-														0 && (
 														<div className="text-left">
 															<div className="text-base md:text-lg font-semibold text-green-600 mb-1 font-heading">
 																{formatCurrency(
-																	selectedBarData.paidLateFees
+																	selectedBarData.totalPaid
 																)}
 															</div>
 															<div className="text-xs text-green-600 font-body">
-																Late Fees Paid
+																Total Paid
 															</div>
 														</div>
-													)}
-													{selectedBarData.unpaidLateFees >
-														0 && (
-														<div className="text-left">
-															<div className="text-base md:text-lg font-semibold text-red-600 mb-1 font-heading">
-																{formatCurrency(
-																	selectedBarData.unpaidLateFees
-																)}
+														{selectedBarData.paidLateFees >
+															0 && (
+															<div className="text-left">
+																<div className="text-base md:text-lg font-semibold text-green-600 mb-1 font-heading">
+																	{formatCurrency(
+																		selectedBarData.paidLateFees
+																	)}
+																</div>
+																<div className="text-xs text-green-600 font-body">
+																	Late Fees
+																	Paid
+																</div>
 															</div>
-															<div className="text-xs text-red-600 font-body">
-																Late Fees Owed
+														)}
+														{selectedBarData.unpaidLateFees >
+															0 && (
+															<div className="text-left">
+																<div className="text-base md:text-lg font-semibold text-red-600 mb-1 font-heading">
+																	{formatCurrency(
+																		selectedBarData.unpaidLateFees
+																	)}
+																</div>
+																<div className="text-xs text-red-600 font-body">
+																	Late Fees
+																	Owed
+																</div>
 															</div>
-														</div>
-													)}
-													{selectedBarData.upcoming >
-														0 && (
-														<div className="text-left">
-															<div className="text-base md:text-lg font-semibold text-blue-tertiary mb-1 font-heading">
-																{formatCurrency(
-																	selectedBarData.upcoming
-																)}
+														)}
+														{selectedBarData.upcoming >
+															0 && (
+															<div className="text-left">
+																<div className="text-base md:text-lg font-semibold text-blue-tertiary mb-1 font-heading">
+																	{formatCurrency(
+																		selectedBarData.upcoming
+																	)}
+																</div>
+																<div className="text-xs text-blue-tertiary font-body">
+																	Upcoming
+																</div>
 															</div>
-															<div className="text-xs text-blue-tertiary font-body">
-																Upcoming
+														)}
+														{selectedBarData.overdue >
+															0 && (
+															<div className="text-left">
+																<div className="text-base md:text-lg font-semibold text-red-600 mb-1 font-heading">
+																	{formatCurrency(
+																		selectedBarData.overdue
+																	)}
+																</div>
+																<div className="text-xs text-red-600 font-body">
+																	Overdue
+																</div>
 															</div>
-														</div>
-													)}
-													{selectedBarData.overdue >
-														0 && (
-														<div className="text-left">
-															<div className="text-base md:text-lg font-semibold text-red-600 mb-1 font-heading">
-																{formatCurrency(
-																	selectedBarData.overdue
-																)}
-															</div>
-															<div className="text-xs text-red-600 font-body">
-																Overdue
-															</div>
-														</div>
-													)}
+														)}
+													</div>
 												</div>
-											</div>
-										)}
+											)}
 
-										{/* Summary Stats */}
-										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-											<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
-												<div className="text-base md:text-lg font-semibold text-green-600 font-heading">
-													{formatCurrency(
-														loanSummary.totalRepaid ||
-															0
-													)}
+											{/* Summary Stats */}
+											<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+												<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
+													<div className="text-base md:text-lg font-semibold text-green-600 font-heading">
+														{formatCurrency(
+															loanSummary.totalRepaid ||
+																0
+														)}
+													</div>
+													<div className="text-xs text-green-600 font-body">
+														Total Paid
+													</div>
 												</div>
-												<div className="text-xs text-green-600 font-body">
-													Total Paid
+												<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
+													<div className="text-base md:text-lg font-semibold text-blue-tertiary font-heading">
+														{formatCurrency(
+															loanSummary.totalOutstanding ||
+																0
+														)}
+													</div>
+													<div className="text-xs text-blue-tertiary font-body">
+														Outstanding
+													</div>
 												</div>
-											</div>
-											<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
-												<div className="text-base md:text-lg font-semibold text-blue-tertiary font-heading">
-													{formatCurrency(
-														loanSummary.totalOutstanding ||
-															0
-													)}
+												<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
+													<div className="text-base md:text-lg font-semibold text-amber-600 font-heading">
+														{formatCurrency(
+															(() => {
+																const now =
+																	new Date();
+																const currentMonth =
+																	sortedMonths.find(
+																		(
+																			month
+																		) =>
+																			month.date.getMonth() ===
+																				now.getMonth() &&
+																			month.date.getFullYear() ===
+																				now.getFullYear()
+																	);
+																return currentMonth
+																	? currentMonth.totalOutstanding
+																	: 0;
+															})()
+														)}
+													</div>
+													<div className="text-xs text-amber-600 font-body">
+														Due This Month
+													</div>
 												</div>
-												<div className="text-xs text-blue-tertiary font-body">
-													Outstanding
-												</div>
-											</div>
-											<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
-												<div className="text-base md:text-lg font-semibold text-amber-600 font-heading">
-													{formatCurrency(
-														(() => {
-															const now =
-																new Date();
-															const currentMonth =
-																sortedMonths.find(
-																	(month) =>
-																		month.date.getMonth() ===
-																			now.getMonth() &&
-																		month.date.getFullYear() ===
-																			now.getFullYear()
-																);
-															return currentMonth
-																? currentMonth.totalOutstanding
-																: 0;
-														})()
-													)}
-												</div>
-												<div className="text-xs text-amber-600 font-body">
-													Due This Month
-												</div>
-											</div>
-											<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
-												<div className="text-base md:text-lg font-semibold text-purple-primary font-heading">
-													{Math.round(
-														sortedMonths.reduce(
-															(sum, month) =>
-																sum +
-																month.totalScheduled,
-															0
-														) > 0
-															? (sortedMonths.reduce(
-																	(
-																		sum,
-																		month
-																	) =>
-																		sum +
-																		month.totalPaid,
-																	0
-															  ) /
-																	sortedMonths.reduce(
+												<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
+													<div className="text-base md:text-lg font-semibold text-purple-primary font-heading">
+														{Math.round(
+															sortedMonths.reduce(
+																(sum, month) =>
+																	sum +
+																	month.totalScheduled,
+																0
+															) > 0
+																? (sortedMonths.reduce(
 																		(
 																			sum,
 																			month
 																		) =>
 																			sum +
-																			month.totalScheduled,
+																			month.totalPaid,
 																		0
-																	)) *
-																	100
-															: 0
-													)}
-													%
-												</div>
-												<div className="text-xs text-purple-primary font-body">
-													Overall Progress
+																  ) /
+																		sortedMonths.reduce(
+																			(
+																				sum,
+																				month
+																			) =>
+																				sum +
+																				month.totalScheduled,
+																			0
+																		)) *
+																		100
+																: 0
+														)}
+														%
+													</div>
+													<div className="text-xs text-purple-primary font-body">
+														Overall Progress
+													</div>
 												</div>
 											</div>
 										</div>
-									</div>
-								);
-							})()}
-						</div>
-					</div>
-				</div>
-
-				{/* Loans and Applications Tabs */}
-				<div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full overflow-hidden">
-					{/* Card Header */}
-					<div className="p-6 pb-0">
-						<div className="flex items-center space-x-2 mb-6">
-							<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-								<CreditCardIcon className="h-5 w-5 text-purple-primary" />
-							</div>
-							<h3 className="text-lg font-heading text-purple-primary font-semibold">
-								Your Loans
-							</h3>
-						</div>
-					</div>
-
-					{/* Tab Navigation - Responsive */}
-					<div className="border-b border-gray-200 overflow-x-auto">
-						<nav
-							className="flex space-x-6 md:space-x-8 px-4 md:px-6 min-w-max"
-							aria-label="Tabs"
-						>
-							<button
-								onClick={() => setActiveTab("loans")}
-								className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
-									activeTab === "loans"
-										? "border-purple-primary text-purple-primary"
-										: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-								}`}
-							>
-								<div className="flex items-center space-x-2">
-									<CreditCardIcon className="h-4 w-4 md:h-5 md:w-5" />
-									<span className="hidden sm:inline">
-										Active Loans
-									</span>
-									<span className="sm:hidden">Active</span>
-									{loans.filter((loan) =>
-										[
-											"ACTIVE",
-											"PENDING_DISCHARGE",
-										].includes(loan.status.toUpperCase())
-									).length > 0 && (
-										<span className="bg-purple-primary/10 text-purple-primary py-0.5 px-2 rounded-full text-xs font-medium border border-purple-primary/20 font-body">
-											{
-												loans.filter((loan) =>
-													[
-														"ACTIVE",
-														"PENDING_DISCHARGE",
-													].includes(
-														loan.status.toUpperCase()
-													)
-												).length
-											}
-										</span>
-									)}
-								</div>
-							</button>
-							<button
-								onClick={() => setActiveTab("discharged")}
-								className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
-									activeTab === "discharged"
-										? "border-purple-primary text-purple-primary"
-										: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-								}`}
-							>
-								<div className="flex items-center space-x-2">
-									<CheckCircleIcon className="h-4 w-4 md:h-5 md:w-5" />
-									<span>Discharged</span>
-									{loans.filter(
-										(loan) =>
-											loan.status.toUpperCase() ===
-											"DISCHARGED"
-									).length > 0 && (
-										<span className="bg-purple-primary/10 text-purple-primary py-0.5 px-2 rounded-full text-xs font-medium border border-purple-primary/20 font-body">
-											{
-												loans.filter(
-													(loan) =>
-														loan.status.toUpperCase() ===
-														"DISCHARGED"
-												).length
-											}
-										</span>
-									)}
-								</div>
-							</button>
-							<button
-								onClick={() => setActiveTab("applications")}
-								className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
-									activeTab === "applications"
-										? "border-purple-primary text-purple-primary"
-										: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-								}`}
-							>
-								<div className="flex items-center space-x-2">
-									<DocumentTextIcon className="h-4 w-4 md:h-5 md:w-5" />
-									<span>Applications</span>
-									{applications.filter(
-										(app) =>
-											!["ACTIVE", "INCOMPLETE"].includes(
-												app.status.toUpperCase()
-											)
-									).length > 0 && (
-										<span className="bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full text-xs font-medium border border-gray-300 font-body">
-											{
-												applications.filter(
-													(app) =>
-														![
-															"ACTIVE",
-															"INCOMPLETE",
-														].includes(
-															app.status.toUpperCase()
-														)
-												).length
-											}
-										</span>
-									)}
-								</div>
-							</button>
-							<button
-								onClick={() => setActiveTab("incomplete")}
-								className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
-									activeTab === "incomplete"
-										? "border-purple-primary text-purple-primary"
-										: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-								}`}
-							>
-								<div className="flex items-center space-x-2">
-									<ClockIcon className="h-4 w-4 md:h-5 md:w-5" />
-									<span>Incomplete</span>
-									{applications.filter(
-										(app) =>
-											app.status.toUpperCase() ===
-											"INCOMPLETE"
-									).length > 0 && (
-										<span className="bg-yellow-100 text-yellow-700 py-0.5 px-2 rounded-full text-xs font-medium border border-yellow-200 font-body">
-											{
-												applications.filter(
-													(app) =>
-														app.status.toUpperCase() ===
-														"INCOMPLETE"
-												).length
-											}
-										</span>
-									)}
-								</div>
-							</button>
-						</nav>
-					</div>
-
-					{/* Tab Content */}
-					<div className="p-6 min-w-0">
-						{(() => {
-							if (activeTab === "loans") {
-								// Active Loans Content
-								const activeLoans = loans.filter((loan) => {
-									const status = loan.status.toUpperCase();
-									return (
-										([
-											"ACTIVE",
-											"PENDING_DISCHARGE",
-										].includes(status) &&
-											loan.outstandingBalance > 0) ||
-										status === "PENDING_DISCHARGE"
 									);
-								});
+								})()}
+							</div>
+						</div>
+					</div>
 
-								if (activeLoans.length > 0) {
-									return (
-										<div className="space-y-6 min-w-0">
-											{activeLoans.map((loan) => {
-												const daysUntilDue =
-													calculateDaysUntilDue(
-														loan.nextPaymentDue
-													);
-												const urgency =
-													getPaymentUrgency(
-														daysUntilDue
-													);
-												const isExpanded =
-													showLoanDetails[loan.id];
+					{/* Loans and Applications Tabs */}
+					<div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full overflow-hidden">
+						{/* Card Header */}
+						<div className="p-6 pb-0">
+							<div className="flex items-center space-x-2 mb-6">
+								<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+									<CreditCardIcon className="h-5 w-5 text-purple-primary" />
+								</div>
+								<h3 className="text-lg font-heading text-purple-primary font-semibold">
+									Your Loans
+								</h3>
+							</div>
+						</div>
 
-												return (
-													<div
-														key={loan.id}
-														className="border border-gray-200 rounded-xl overflow-hidden hover:border-purple-primary transition-colors bg-white shadow-sm w-full min-w-0"
-													>
-														{/* Loan Header */}
-														<div className="p-6 bg-gray-50/50">
-															<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-3 sm:space-y-0">
-																<div className="flex items-center space-x-3">
-																	<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-																		<CreditCardIcon className="h-5 w-5 md:h-6 md:w-6 text-purple-primary" />
-																	</div>
-																	<div>
-																		<h4 className="text-base md:text-lg font-semibold text-gray-700 font-heading">
-																			{
-																				loan
-																					.application
-																					.product
-																					.name
-																			}
-																		</h4>
-																		<p className="text-sm text-gray-500 font-body">
-																			Loan
-																			ID:{" "}
-																			{loan.id
-																				.slice(
-																					-8
-																				)
-																				.toUpperCase()}
-																		</p>
-																	</div>
-																</div>
-																<div className="text-left sm:text-right">
-																	{getStatusBadge(
-																		loan.status
-																	)}
-																</div>
-															</div>
+						{/* Tab Navigation - Responsive */}
+						<div className="border-b border-gray-200 overflow-x-auto">
+							<nav
+								className="flex space-x-6 md:space-x-8 px-4 md:px-6 min-w-max"
+								aria-label="Tabs"
+							>
+								<button
+									onClick={() => setActiveTab("loans")}
+									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
+										activeTab === "loans"
+											? "border-purple-primary text-purple-primary"
+											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+									}`}
+								>
+									<div className="flex items-center space-x-2">
+										<CreditCardIcon className="h-4 w-4 md:h-5 md:w-5" />
+										<span className="hidden sm:inline">
+											Active Loans
+										</span>
+										<span className="sm:hidden">
+											Active
+										</span>
+										{loans.filter((loan) =>
+											[
+												"ACTIVE",
+												"PENDING_DISCHARGE",
+											].includes(
+												loan.status.toUpperCase()
+											)
+										).length > 0 && (
+											<span className="bg-purple-primary/10 text-purple-primary py-0.5 px-2 rounded-full text-xs font-medium border border-purple-primary/20 font-body">
+												{
+													loans.filter((loan) =>
+														[
+															"ACTIVE",
+															"PENDING_DISCHARGE",
+														].includes(
+															loan.status.toUpperCase()
+														)
+													).length
+												}
+											</span>
+										)}
+									</div>
+								</button>
+								<button
+									onClick={() => setActiveTab("discharged")}
+									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
+										activeTab === "discharged"
+											? "border-purple-primary text-purple-primary"
+											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+									}`}
+								>
+									<div className="flex items-center space-x-2">
+										<CheckCircleIcon className="h-4 w-4 md:h-5 md:w-5" />
+										<span>Discharged</span>
+										{loans.filter(
+											(loan) =>
+												loan.status.toUpperCase() ===
+												"DISCHARGED"
+										).length > 0 && (
+											<span className="bg-purple-primary/10 text-purple-primary py-0.5 px-2 rounded-full text-xs font-medium border border-purple-primary/20 font-body">
+												{
+													loans.filter(
+														(loan) =>
+															loan.status.toUpperCase() ===
+															"DISCHARGED"
+													).length
+												}
+											</span>
+										)}
+									</div>
+								</button>
+								<button
+									onClick={() => setActiveTab("applications")}
+									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
+										activeTab === "applications"
+											? "border-purple-primary text-purple-primary"
+											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+									}`}
+								>
+									<div className="flex items-center space-x-2">
+										<DocumentTextIcon className="h-4 w-4 md:h-5 md:w-5" />
+										<span>Applications</span>
+										{applications.filter(
+											(app) =>
+												![
+													"ACTIVE",
+													"INCOMPLETE",
+												].includes(
+													app.status.toUpperCase()
+												)
+										).length > 0 && (
+											<span className="bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full text-xs font-medium border border-gray-300 font-body">
+												{
+													applications.filter(
+														(app) =>
+															![
+																"ACTIVE",
+																"INCOMPLETE",
+															].includes(
+																app.status.toUpperCase()
+															)
+													).length
+												}
+											</span>
+										)}
+									</div>
+								</button>
+								<button
+									onClick={() => setActiveTab("incomplete")}
+									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap ${
+										activeTab === "incomplete"
+											? "border-purple-primary text-purple-primary"
+											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+									}`}
+								>
+									<div className="flex items-center space-x-2">
+										<ClockIcon className="h-4 w-4 md:h-5 md:w-5" />
+										<span>Incomplete</span>
+										{applications.filter(
+											(app) =>
+												app.status.toUpperCase() ===
+												"INCOMPLETE"
+										).length > 0 && (
+											<span className="bg-yellow-100 text-yellow-700 py-0.5 px-2 rounded-full text-xs font-medium border border-yellow-200 font-body">
+												{
+													applications.filter(
+														(app) =>
+															app.status.toUpperCase() ===
+															"INCOMPLETE"
+													).length
+												}
+											</span>
+										)}
+									</div>
+								</button>
+							</nav>
+						</div>
 
-															{/* Overdue Payment Alert */}
-															{loan.overdueInfo
-																?.hasOverduePayments && (
-																<div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
-																	<div className="flex items-center">
-																		<ExclamationTriangleIcon className="h-5 w-5 text-red-600 mr-3 flex-shrink-0" />
-																		<div className="flex-1">
-																			<h4 className="text-sm font-semibold text-red-700 mb-1 font-heading">
-																				Overdue
-																				Payment
-																			</h4>
-																			<p className="text-sm text-red-600 font-body">
-																				Total
-																				amount
-																				due:{" "}
-																				{formatCurrency(
+						{/* Tab Content */}
+						<div className="p-6 min-w-0">
+							{(() => {
+								if (activeTab === "loans") {
+									// Active Loans Content
+									const activeLoans = loans.filter((loan) => {
+										const status =
+											loan.status.toUpperCase();
+										return (
+											([
+												"ACTIVE",
+												"PENDING_DISCHARGE",
+											].includes(status) &&
+												loan.outstandingBalance > 0) ||
+											status === "PENDING_DISCHARGE"
+										);
+									});
+
+									if (activeLoans.length > 0) {
+										return (
+											<div className="space-y-6 min-w-0">
+												{activeLoans.map((loan) => {
+													const daysUntilDue =
+														calculateDaysUntilDue(
+															loan.nextPaymentDue
+														);
+													const urgency =
+														getPaymentUrgency(
+															daysUntilDue
+														);
+													const isExpanded =
+														showLoanDetails[
+															loan.id
+														];
+
+													return (
+														<div
+															key={loan.id}
+															className="border border-gray-200 rounded-xl overflow-hidden hover:border-purple-primary transition-colors bg-white shadow-sm w-full min-w-0"
+														>
+															{/* Loan Header */}
+															<div className="p-6 bg-gray-50/50">
+																<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-3 sm:space-y-0">
+																	<div className="flex items-center space-x-3">
+																		<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+																			<CreditCardIcon className="h-5 w-5 md:h-6 md:w-6 text-purple-primary" />
+																		</div>
+																		<div>
+																			<h4 className="text-base md:text-lg font-semibold text-gray-700 font-heading">
+																				{
 																					loan
-																						.overdueInfo
-																						.totalOverdueAmount +
+																						.application
+																						.product
+																						.name
+																				}
+																			</h4>
+																			<p className="text-sm text-gray-500 font-body">
+																				Loan
+																				ID:{" "}
+																				{loan.id
+																					.slice(
+																						-8
+																					)
+																					.toUpperCase()}
+																			</p>
+																		</div>
+																	</div>
+																	<div className="text-left sm:text-right">
+																		{getStatusBadge(
+																			loan.status
+																		)}
+																	</div>
+																</div>
+
+																{/* Overdue Payment Alert */}
+																{loan
+																	.overdueInfo
+																	?.hasOverduePayments && (
+																	<div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+																		<div className="flex items-center">
+																			<ExclamationTriangleIcon className="h-5 w-5 text-red-600 mr-3 flex-shrink-0" />
+																			<div className="flex-1">
+																				<h4 className="text-sm font-semibold text-red-700 mb-1 font-heading">
+																					Overdue
+																					Payment
+																				</h4>
+																				<p className="text-sm text-red-600 font-body">
+																					Total
+																					amount
+																					due:{" "}
+																					{formatCurrency(
 																						loan
 																							.overdueInfo
-																							.totalLateFees
-																				)}
-																				{loan
-																					.overdueInfo
-																					.totalLateFees >
-																					0 && (
-																					<span className="text-xs text-red-500 block mt-1">
-																						Includes{" "}
-																						{formatCurrency(
+																							.totalOverdueAmount +
 																							loan
 																								.overdueInfo
 																								.totalLateFees
-																						)}{" "}
-																						in
-																						late
-																						fees
-																					</span>
-																				)}
-																			</p>
-																			{(() => {
-																				// Calculate days overdue from the earliest overdue payment
-																				const today =
-																					new Date();
-																				today.setHours(
-																					0,
-																					0,
-																					0,
-																					0
-																				);
-
-																				// Find the earliest overdue repayment
-																				let earliestOverdueDate =
-																					null;
-																				if (
-																					loan.repayments &&
-																					loan
-																						.repayments
-																						.length >
+																					)}
+																					{loan
+																						.overdueInfo
+																						.totalLateFees >
+																						0 && (
+																						<span className="text-xs text-red-500 block mt-1">
+																							Includes{" "}
+																							{formatCurrency(
+																								loan
+																									.overdueInfo
+																									.totalLateFees
+																							)}{" "}
+																							in
+																							late
+																							fees
+																						</span>
+																					)}
+																				</p>
+																				{(() => {
+																					// Calculate days overdue from the earliest overdue payment
+																					const today =
+																						new Date();
+																					today.setHours(
+																						0,
+																						0,
+																						0,
 																						0
-																				) {
-																					const overdueRepayments =
-																						loan.repayments.filter(
-																							(
-																								repayment
-																							) => {
-																								const dueDate =
-																									new Date(
-																										repayment.dueDate
+																					);
+
+																					// Find the earliest overdue repayment
+																					let earliestOverdueDate =
+																						null;
+																					if (
+																						loan.repayments &&
+																						loan
+																							.repayments
+																							.length >
+																							0
+																					) {
+																						const overdueRepayments =
+																							loan.repayments.filter(
+																								(
+																									repayment
+																								) => {
+																									const dueDate =
+																										new Date(
+																											repayment.dueDate
+																										);
+																									dueDate.setHours(
+																										0,
+																										0,
+																										0,
+																										0
 																									);
-																								dueDate.setHours(
-																									0,
-																									0,
-																									0,
-																									0
-																								);
-																								return (
-																									(repayment.status ===
-																										"PENDING" ||
-																										repayment.status ===
-																											"PARTIAL") &&
-																									dueDate <
-																										today
-																								);
-																							}
-																						);
+																									return (
+																										(repayment.status ===
+																											"PENDING" ||
+																											repayment.status ===
+																												"PARTIAL") &&
+																										dueDate <
+																											today
+																									);
+																								}
+																							);
+
+																						if (
+																							overdueRepayments.length >
+																							0
+																						) {
+																							earliestOverdueDate =
+																								overdueRepayments.reduce(
+																									(
+																										earliest,
+																										current
+																									) => {
+																										const currentDate =
+																											new Date(
+																												current.dueDate
+																											);
+																										const earliestDate =
+																											new Date(
+																												earliest.dueDate
+																											);
+																										return currentDate <
+																											earliestDate
+																											? current
+																											: earliest;
+																									}
+																								).dueDate;
+																						}
+																					}
 
 																					if (
-																						overdueRepayments.length >
-																						0
+																						earliestOverdueDate
 																					) {
-																						earliestOverdueDate =
-																							overdueRepayments.reduce(
-																								(
-																									earliest,
-																									current
-																								) => {
-																									const currentDate =
-																										new Date(
-																											current.dueDate
-																										);
-																									const earliestDate =
-																										new Date(
-																											earliest.dueDate
-																										);
-																									return currentDate <
-																										earliestDate
-																										? current
-																										: earliest;
-																								}
-																							).dueDate;
-																					}
-																				}
+																						const daysOverdue =
+																							Math.floor(
+																								(today.getTime() -
+																									new Date(
+																										earliestOverdueDate
+																									).getTime()) /
+																									(1000 *
+																										60 *
+																										60 *
+																										24)
+																							);
 
-																				if (
-																					earliestOverdueDate
-																				) {
-																					const daysOverdue =
-																						Math.floor(
-																							(today.getTime() -
-																								new Date(
-																									earliestOverdueDate
-																								).getTime()) /
-																								(1000 *
-																									60 *
-																									60 *
-																									24)
+																						return (
+																							<span className="text-xs text-red-600 block mt-1 font-medium">
+																								⏰{" "}
+																								{
+																									daysOverdue
+																								}{" "}
+																								day
+																								{daysOverdue !==
+																								1
+																									? "s"
+																									: ""}{" "}
+																								overdue
+																							</span>
 																						);
+																					}
+																					return null;
+																				})()}
+																			</div>
+																		</div>
+																	</div>
+																)}
 
-																					return (
-																						<span className="text-xs text-red-600 block mt-1 font-medium">
-																							⏰{" "}
-																							{
-																								daysOverdue
-																							}{" "}
-																							day
-																							{daysOverdue !==
-																							1
-																								? "s"
-																								: ""}{" "}
-																							overdue
-																						</span>
+																{/* Loan Summary Stats */}
+																<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-4">
+																	<div>
+																		<p className="text-sm text-gray-500 mb-1 font-body">
+																			Outstanding
+																			Balance
+																		</p>
+																		<p className="text-base md:text-lg font-semibold text-purple-primary font-heading">
+																			{formatCurrency(
+																				loan.outstandingBalance
+																			)}
+																		</p>
+																	</div>
+																	<div>
+																		{(() => {
+																			const nextPayment =
+																				loan.nextPaymentInfo || {
+																					amount: loan.monthlyPayment,
+																					isOverdue:
+																						false,
+																					includesLateFees:
+																						false,
+																					description:
+																						"Monthly Payment",
+																				};
+																			return (
+																				<>
+																					<p className="text-sm text-gray-500 mb-1 font-body">
+																						{
+																							nextPayment.description
+																						}
+																					</p>
+																					<p
+																						className={`text-base md:text-lg font-semibold font-heading ${
+																							nextPayment.isOverdue
+																								? "text-red-600"
+																								: "text-purple-primary"
+																						}`}
+																					>
+																						{nextPayment.amount >
+																						0
+																							? formatCurrency(
+																									nextPayment.amount
+																							  )
+																							: "Fully Paid"}
+																					</p>
+																					{nextPayment.includesLateFees && (
+																						<p className="text-xs text-red-600 font-body">
+																							Includes
+																							late
+																							fees
+																						</p>
+																					)}
+																				</>
+																			);
+																		})()}
+																	</div>
+
+																	<div>
+																		{(() => {
+																			const performance =
+																				calculatePaymentPerformance(
+																					loan
+																				);
+																			return (
+																				<>
+																					<p className="text-sm text-gray-500 mb-1 font-body">
+																						Payment
+																						Performance
+																					</p>
+																					{performance.percentage !==
+																					null ? (
+																						<>
+																							<p
+																								className={`text-base md:text-lg font-semibold font-heading ${getPerformanceColor(
+																									performance.percentage
+																								)}`}
+																							>
+																								{
+																									performance.percentage
+																								}
+
+																								%
+																							</p>
+																							<p className="text-xs text-gray-500 font-body">
+																								{
+																									performance.onTimeCount
+																								}{" "}
+																								of{" "}
+																								{
+																									performance.totalCount
+																								}{" "}
+																								on-time
+																							</p>
+																						</>
+																					) : (
+																						<>
+																							<p className="text-base md:text-lg font-semibold text-gray-500 font-heading">
+																								N/A
+																							</p>
+																							<p className="text-xs text-gray-500 font-body">
+																								No
+																								payments
+																								yet
+																							</p>
+																						</>
+																					)}
+																				</>
+																			);
+																		})()}
+																	</div>
+																	<div>
+																		<p className="text-sm text-gray-500 mb-1 font-body">
+																			Next
+																			Payment
+																			Due
+																		</p>
+																		{loan.nextPaymentDue ? (
+																			<>
+																				<p
+																					className={`text-base md:text-lg font-semibold font-heading ${urgency.color}`}
+																				>
+																					{formatDate(
+																						loan.nextPaymentDue
+																					)}
+																				</p>
+																				<p
+																					className={`text-xs font-body ${urgency.color}`}
+																				>
+																					{
+																						urgency.text
+																					}
+																				</p>
+																			</>
+																		) : (
+																			<p className="text-base md:text-lg font-semibold text-gray-500 font-heading">
+																				N/A
+																			</p>
+																		)}
+																	</div>
+																</div>
+
+																{/* Progress Bar */}
+																<div className="mb-4">
+																	{(() => {
+																		// Calculate progress based on the backend-calculated outstanding balance
+																		// The outstandingBalance already includes late fees and is updated by backend
+																		const totalOriginalAmount =
+																			loan.totalAmount ||
+																			loan.principalAmount ||
+																			0;
+																		const currentOutstanding =
+																			loan.outstandingBalance ||
+																			0;
+
+																		// Calculate total amount that has been owed (original + any late fees that were added)
+																		// If currentOutstanding > totalOriginalAmount, it means late fees were added
+																		const totalAmountOwed =
+																			Math.max(
+																				totalOriginalAmount,
+																				currentOutstanding
+																			);
+
+																		// If we have late fees info, use the more accurate calculation
+																		let actualTotalOwed =
+																			totalAmountOwed;
+																		if (
+																			loan
+																				.overdueInfo
+																				?.hasOverduePayments &&
+																			loan
+																				.overdueInfo
+																				.totalLateFees >
+																				0
+																		) {
+																			// Total originally owed + late fees that have been added
+																			actualTotalOwed =
+																				totalOriginalAmount +
+																				loan
+																					.overdueInfo
+																					.totalLateFees;
+																		}
+
+																		const paidAmount =
+																			Math.max(
+																				0,
+																				actualTotalOwed -
+																					currentOutstanding
+																			);
+
+																		const progressPercent =
+																			actualTotalOwed >
+																			0
+																				? Math.min(
+																						100,
+																						Math.max(
+																							0,
+																							Math.round(
+																								(paidAmount /
+																									actualTotalOwed) *
+																									100
+																							)
+																						)
+																				  )
+																				: 0;
+
+																		return (
+																			<>
+																				<div className="flex justify-between text-sm text-gray-500 mb-2 font-body">
+																					<span>
+																						Repayment
+																						Progress
+																					</span>
+																					<span>
+																						{
+																							progressPercent
+																						}
+
+																						%
+																					</span>
+																				</div>
+																				<div className="w-full bg-gray-200 rounded-full h-3">
+																					<div
+																						className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-300"
+																						style={{
+																							width: `${progressPercent}%`,
+																						}}
+																					></div>
+																				</div>
+																				<div className="flex justify-between text-xs text-gray-500 mt-1 font-body">
+																					<span>
+																						Paid:{" "}
+																						{formatCurrency(
+																							paidAmount
+																						)}
+																					</span>
+																					<span>
+																						Outstanding:{" "}
+																						{formatCurrency(
+																							currentOutstanding
+																						)}
+																					</span>
+																				</div>
+																			</>
+																		);
+																	})()}
+																</div>
+
+																{/* Action Buttons */}
+																<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 sm:space-x-4">
+																	<button
+																		onClick={() =>
+																			toggleLoanDetails(
+																				loan.id
+																			)
+																		}
+																		className="flex items-center justify-center sm:justify-start text-sm text-purple-primary hover:text-purple-600 font-medium font-body transition-colors"
+																	>
+																		<span className="hidden sm:inline">
+																			{isExpanded
+																				? "Hide Details"
+																				: "View Details"}
+																		</span>
+																		<span className="sm:hidden">
+																			{isExpanded
+																				? "Hide"
+																				: "Details"}
+																		</span>
+																		{isExpanded ? (
+																			<ChevronUpIcon className="ml-1 h-4 w-4" />
+																		) : (
+																			<ChevronDownIcon className="ml-1 h-4 w-4" />
+																		)}
+																	</button>
+																	{loan.status.toUpperCase() !==
+																		"PENDING_DISCHARGE" && (
+																		<button
+																			onClick={async () => {
+																				setSelectedLoan(
+																					loan
+																				);
+																				loadWalletBalance();
+																				// Load late fee info if loan has overdue payments
+																				if (
+																					loan
+																						.overdueInfo
+																						?.hasOverduePayments
+																				) {
+																					await loadLateFeeInfo(
+																						loan.id
 																					);
 																				}
-																				return null;
-																			})()}
+																				setShowLoanRepayModal(
+																					true
+																				);
+																			}}
+																			className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors w-full sm:w-auto shadow-sm"
+																		>
+																			<span className="hidden sm:inline">
+																				Make
+																				Payment
+																			</span>
+																			<span className="sm:hidden">
+																				Pay
+																			</span>
+																			<ArrowRightIcon className="ml-2 h-4 w-4" />
+																		</button>
+																	)}
+																</div>
+															</div>
+
+															{/* Expanded Loan Details */}
+															{isExpanded && (
+																<div className="p-6 border-t border-gray-200 bg-gray-50/30">
+																	<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+																		{/* Loan Information */}
+																		<div>
+																			<h5 className="text-base md:text-lg font-semibold text-gray-700 mb-4 font-heading">
+																				Loan
+																				Information
+																			</h5>
+																			<div className="space-y-3 text-sm">
+																				<div className="flex justify-between">
+																					<span className="text-gray-500 font-body">
+																						Principal
+																						Amount
+																					</span>
+																					<span className="font-medium text-gray-700 font-body">
+																						{formatCurrency(
+																							loan.principalAmount
+																						)}
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500 font-body">
+																						Monthly
+																						Payment
+																					</span>
+																					<span className="font-medium text-gray-700 font-body">
+																						{formatCurrency(
+																							loan.monthlyPayment
+																						)}
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500 font-body">
+																						Interest
+																						Rate
+																					</span>
+																					<span className="font-medium text-gray-700 font-body">
+																						{
+																							loan.interestRate
+																						}
+
+																						%
+																						per
+																						month
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500 font-body">
+																						Loan
+																						Term
+																					</span>
+																					<span className="font-medium text-gray-700 font-body">
+																						{
+																							loan.term
+																						}{" "}
+																						months
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500 font-body">
+																						Disbursed
+																						Date
+																					</span>
+																					<span className="font-medium text-gray-700 font-body">
+																						{formatDate(
+																							loan.disbursedAt
+																						)}
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500 font-body">
+																						Application
+																						Date
+																					</span>
+																					<span className="font-medium text-gray-700 font-body">
+																						{formatDate(
+																							loan
+																								.application
+																								.createdAt
+																						)}
+																					</span>
+																				</div>
+																			</div>
+																		</div>
+
+																		{/* Recent Payments */}
+																		<div>
+																			<h5 className="text-base md:text-md font-semibold text-gray-700 mb-4 font-heading">
+																				Recent
+																				Payments
+																			</h5>
+																			{loadingTransactions[
+																				loan
+																					.id
+																			] ? (
+																				<div className="flex items-center justify-center py-4">
+																					<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
+																					<span className="ml-2 text-sm text-gray-500">
+																						Loading
+																						payments...
+																					</span>
+																				</div>
+																			) : loanTransactions[
+																					loan
+																						.id
+																			  ] &&
+																			  loanTransactions[
+																					loan
+																						.id
+																			  ]
+																					.length >
+																					0 ? (
+																				<div className="space-y-2">
+																					{loanTransactions[
+																						loan
+																							.id
+																					]
+																						.slice(
+																							0,
+																							3
+																						)
+																						.map(
+																							(
+																								transaction: WalletTransaction
+																							) => (
+																								<div
+																									key={
+																										transaction.id
+																									}
+																									className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
+																								>
+																									<div>
+																										<p className="text-sm font-medium text-gray-700">
+																											{formatCurrency(
+																												transaction.amount
+																											)}
+																										</p>
+																										<p className="text-xs text-gray-500">
+																											{formatDate(
+																												transaction.createdAt
+																											)}
+																										</p>
+																										<p className="text-xs text-gray-500">
+																											{
+																												transaction.description
+																											}
+																										</p>
+																									</div>
+																									{getStatusBadge(
+																										transaction.status
+																									)}
+																								</div>
+																							)
+																						)}
+																					{loanTransactions[
+																						loan
+																							.id
+																					]
+																						.length >
+																						3 && (
+																						<p className="text-xs text-gray-500 text-center mt-2">
+																							Showing
+																							latest
+																							3
+																							payments
+																						</p>
+																					)}
+																				</div>
+																			) : (
+																				<div className="text-center py-4">
+																					<p className="text-sm text-gray-500 mb-2">
+																						No
+																						payment
+																						history
+																						available
+																					</p>
+																					<p className="text-xs text-gray-500">
+																						Payment
+																						history
+																						will
+																						appear
+																						here
+																						once
+																						you
+																						make
+																						your
+																						first
+																						payment
+																					</p>
+																				</div>
+																			)}
 																		</div>
 																	</div>
 																</div>
 															)}
+														</div>
+													);
+												})}
+											</div>
+										);
+									} else {
+										return (
+											<div className="text-center py-12">
+												<CreditCardIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+													No Active Loans
+												</h4>
+												<p className="text-gray-500 mb-6 font-body">
+													You don't have any active
+													loans at the moment.
+												</p>
+												<Link
+													href="/dashboard/apply"
+													className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
+												>
+													<PlusIcon className="h-5 w-5 mr-2" />
+													Apply for Your First Loan
+												</Link>
+											</div>
+										);
+									}
+								} else if (activeTab === "discharged") {
+									// Discharged Loans Content
+									const dischargedLoans = loans.filter(
+										(loan) => {
+											const status =
+												loan.status.toUpperCase();
+											return (
+												[
+													"DISCHARGED",
+													"COMPLETED",
+													"PAID",
+													"CLOSED",
+													"SETTLED",
+												].includes(status) ||
+												(loan.outstandingBalance ===
+													0 &&
+													status === "ACTIVE")
+											);
+										}
+									);
 
-															{/* Loan Summary Stats */}
-															<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-4">
-																<div>
-																	<p className="text-sm text-gray-500 mb-1 font-body">
-																		Outstanding
-																		Balance
-																	</p>
-																	<p className="text-base md:text-lg font-semibold text-purple-primary font-heading">
-																		{formatCurrency(
-																			loan.outstandingBalance
-																		)}
-																	</p>
-																</div>
-																<div>
-																	{(() => {
-																		const nextPayment =
-																			loan.nextPaymentInfo || {
-																				amount: loan.monthlyPayment,
-																				isOverdue:
-																					false,
-																				includesLateFees:
-																					false,
-																				description:
-																					"Monthly Payment",
-																			};
-																		return (
-																			<>
-																				<p className="text-sm text-gray-500 mb-1 font-body">
-																					{
-																						nextPayment.description
-																					}
-																				</p>
-																				<p
-																					className={`text-base md:text-lg font-semibold font-heading ${
-																						nextPayment.isOverdue
-																							? "text-red-600"
-																							: "text-purple-primary"
-																					}`}
-																				>
-																					{nextPayment.amount >
-																					0
-																						? formatCurrency(
-																								nextPayment.amount
-																						  )
-																						: "Fully Paid"}
-																				</p>
-																				{nextPayment.includesLateFees && (
-																					<p className="text-xs text-red-600 font-body">
-																						Includes
-																						late
-																						fees
-																					</p>
-																				)}
-																			</>
-																		);
-																	})()}
-																</div>
+									if (dischargedLoans.length > 0) {
+										return (
+											<div className="space-y-6 min-w-0">
+												{dischargedLoans.map((loan) => {
+													const isExpanded =
+														showLoanDetails[
+															loan.id
+														];
 
-																<div>
-																	{(() => {
-																		const performance =
-																			calculatePaymentPerformance(
-																				loan
-																			);
-																		return (
-																			<>
-																				<p className="text-sm text-gray-500 mb-1 font-body">
-																					Payment
-																					Performance
-																				</p>
-																				{performance.percentage !==
-																				null ? (
-																					<>
-																						<p
-																							className={`text-base md:text-lg font-semibold font-heading ${getPerformanceColor(
-																								performance.percentage
-																							)}`}
-																						>
-																							{
-																								performance.percentage
-																							}
-
-																							%
-																						</p>
-																						<p className="text-xs text-gray-500 font-body">
-																							{
-																								performance.onTimeCount
-																							}{" "}
-																							of{" "}
-																							{
-																								performance.totalCount
-																							}{" "}
-																							on-time
-																						</p>
-																					</>
-																				) : (
-																					<>
-																						<p className="text-base md:text-lg font-semibold text-gray-500 font-heading">
-																							N/A
-																						</p>
-																						<p className="text-xs text-gray-500 font-body">
-																							No
-																							payments
-																							yet
-																						</p>
-																					</>
-																				)}
-																			</>
-																		);
-																	})()}
-																</div>
-																<div>
-																	<p className="text-sm text-gray-500 mb-1 font-body">
-																		Next
-																		Payment
-																		Due
-																	</p>
-																	{loan.nextPaymentDue ? (
-																		<>
-																			<p
-																				className={`text-base md:text-lg font-semibold font-heading ${urgency.color}`}
-																			>
-																				{formatDate(
-																					loan.nextPaymentDue
-																				)}
-																			</p>
-																			<p
-																				className={`text-xs font-body ${urgency.color}`}
-																			>
+													return (
+														<div
+															key={loan.id}
+															className="border border-gray-200 rounded-xl overflow-hidden hover:border-purple-primary transition-colors bg-white shadow-sm"
+														>
+															{/* Loan Header */}
+															<div className="p-6 bg-gray-50/50">
+																<div className="flex items-center justify-between mb-4">
+																	<div className="flex items-center space-x-3">
+																		<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+																			<CheckCircleIcon className="h-6 w-6 text-purple-primary" />
+																		</div>
+																		<div>
+																			<h4 className="text-lg font-semibold text-gray-700">
 																				{
-																					urgency.text
+																					loan
+																						.application
+																						.product
+																						.name
 																				}
-																			</p>
-																		</>
-																	) : (
-																		<p className="text-base md:text-lg font-semibold text-gray-500 font-heading">
-																			N/A
-																		</p>
-																	)}
-																</div>
-															</div>
-
-															{/* Progress Bar */}
-															<div className="mb-4">
-																{(() => {
-																	// Calculate progress based on the backend-calculated outstanding balance
-																	// The outstandingBalance already includes late fees and is updated by backend
-																	const totalOriginalAmount =
-																		loan.totalAmount ||
-																		loan.principalAmount ||
-																		0;
-																	const currentOutstanding =
-																		loan.outstandingBalance ||
-																		0;
-
-																	// Calculate total amount that has been owed (original + any late fees that were added)
-																	// If currentOutstanding > totalOriginalAmount, it means late fees were added
-																	const totalAmountOwed =
-																		Math.max(
-																			totalOriginalAmount,
-																			currentOutstanding
-																		);
-
-																	// If we have late fees info, use the more accurate calculation
-																	let actualTotalOwed =
-																		totalAmountOwed;
-																	if (
-																		loan
-																			.overdueInfo
-																			?.hasOverduePayments &&
-																		loan
-																			.overdueInfo
-																			.totalLateFees >
-																			0
-																	) {
-																		// Total originally owed + late fees that have been added
-																		actualTotalOwed =
-																			totalOriginalAmount +
-																			loan
-																				.overdueInfo
-																				.totalLateFees;
-																	}
-
-																	const paidAmount =
-																		Math.max(
-																			0,
-																			actualTotalOwed -
-																				currentOutstanding
-																		);
-
-																	const progressPercent =
-																		actualTotalOwed >
-																		0
-																			? Math.min(
-																					100,
-																					Math.max(
-																						0,
-																						Math.round(
-																							(paidAmount /
-																								actualTotalOwed) *
-																								100
-																						)
+																			</h4>
+																			<p className="text-sm text-gray-500">
+																				Loan
+																				ID:{" "}
+																				{loan.id
+																					.slice(
+																						-8
 																					)
-																			  )
-																			: 0;
+																					.toUpperCase()}
+																			</p>
+																		</div>
+																	</div>
+																	<div className="text-right">
+																		{getStatusBadge(
+																			loan.status
+																		)}
+																	</div>
+																</div>
 
-																	return (
-																		<>
-																			<div className="flex justify-between text-sm text-gray-500 mb-2 font-body">
-																				<span>
-																					Repayment
-																					Progress
-																				</span>
-																				<span>
-																					{
-																						progressPercent
-																					}
+																{/* Loan Summary Stats */}
+																<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+																	<div>
+																		<p className="text-sm text-gray-500 mb-1">
+																			Total
+																			Repaid
+																		</p>
+																		<p className="text-lg font-semibold text-green-600">
+																			{formatCurrency(
+																				loan.totalAmount
+																			)}
+																		</p>
+																	</div>
+																	<div>
+																		{(() => {
+																			const performance =
+																				calculatePaymentPerformance(
+																					loan
+																				);
+																			return (
+																				<>
+																					<p className="text-sm text-gray-500 mb-1">
+																						Payment
+																						Performance
+																					</p>
+																					{performance.percentage !==
+																					null ? (
+																						<>
+																							<p
+																								className={`text-lg font-semibold ${getPerformanceColor(
+																									performance.percentage
+																								)}`}
+																							>
+																								{
+																									performance.percentage
+																								}
 
-																					%
-																				</span>
-																			</div>
-																			<div className="w-full bg-gray-200 rounded-full h-3">
-																				<div
-																					className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-300"
-																					style={{
-																						width: `${progressPercent}%`,
-																					}}
-																				></div>
-																			</div>
-																			<div className="flex justify-between text-xs text-gray-500 mt-1 font-body">
-																				<span>
-																					Paid:{" "}
-																					{formatCurrency(
-																						paidAmount
+																								%
+																							</p>
+																							<p className="text-xs text-gray-500">
+																								{
+																									performance.onTimeCount
+																								}{" "}
+																								of{" "}
+																								{
+																									performance.totalCount
+																								}{" "}
+																								on-time
+																							</p>
+																						</>
+																					) : (
+																						<>
+																							<p className="text-lg font-semibold text-gray-500">
+																								N/A
+																							</p>
+																							<p className="text-xs text-gray-500">
+																								No
+																								payments
+																								yet
+																							</p>
+																						</>
 																					)}
-																				</span>
-																				<span>
-																					Outstanding:{" "}
-																					{formatCurrency(
-																						currentOutstanding
-																					)}
-																				</span>
-																			</div>
-																		</>
-																	);
-																})()}
-															</div>
+																				</>
+																			);
+																		})()}
+																	</div>
+																	<div>
+																		<p className="text-sm text-gray-500 mb-1">
+																			Discharged
+																			Date
+																		</p>
+																		<p className="text-lg font-semibold text-purple-primary">
+																			{formatDate(
+																				loan.disbursedAt
+																			)}
+																		</p>
+																	</div>
+																</div>
 
-															{/* Action Buttons */}
-															<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 sm:space-x-4">
-																<button
-																	onClick={() =>
-																		toggleLoanDetails(
-																			loan.id
-																		)
-																	}
-																	className="flex items-center justify-center sm:justify-start text-sm text-purple-primary hover:text-purple-600 font-medium font-body transition-colors"
-																>
-																	<span className="hidden sm:inline">
+																{/* Completion Badge */}
+																<div className="mb-4">
+																	<div className="flex items-center p-4 bg-purple-primary/10 rounded-xl border border-purple-primary/20">
+																		<CheckCircleIcon className="h-8 w-8 text-purple-primary mr-3" />
+																		<div>
+																			<p className="text-lg font-semibold text-purple-primary">
+																				Loan
+																				Fully
+																				Repaid
+																			</p>
+																			<p className="text-sm text-gray-600">
+																				Congratulations
+																				on
+																				completing
+																				your
+																				loan!
+																			</p>
+																		</div>
+																	</div>
+																</div>
+
+																{/* Action Buttons */}
+																<div className="flex items-center justify-between">
+																	<button
+																		onClick={() =>
+																			toggleLoanDetails(
+																				loan.id
+																			)
+																		}
+																		className="flex items-center text-sm text-purple-primary hover:text-purple-600 font-medium"
+																	>
 																		{isExpanded
 																			? "Hide Details"
 																			: "View Details"}
-																	</span>
-																	<span className="sm:hidden">
-																		{isExpanded
-																			? "Hide"
-																			: "Details"}
-																	</span>
-																	{isExpanded ? (
-																		<ChevronUpIcon className="ml-1 h-4 w-4" />
-																	) : (
-																		<ChevronDownIcon className="ml-1 h-4 w-4" />
-																	)}
-																</button>
-																{loan.status.toUpperCase() !==
-																	"PENDING_DISCHARGE" && (
-																	<button
-																		onClick={async () => {
-																			setSelectedLoan(
-																				loan
-																			);
-																			loadWalletBalance();
-																			// Load late fee info if loan has overdue payments
-																			if (
-																				loan
-																					.overdueInfo
-																					?.hasOverduePayments
-																			) {
-																				await loadLateFeeInfo(
-																					loan.id
-																				);
-																			}
-																			setShowLoanRepayModal(
-																				true
-																			);
-																		}}
-																		className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors w-full sm:w-auto shadow-sm"
-																	>
-																		<span className="hidden sm:inline">
-																			Make
-																			Payment
-																		</span>
-																		<span className="sm:hidden">
-																			Pay
-																		</span>
-																		<ArrowRightIcon className="ml-2 h-4 w-4" />
+																		{isExpanded ? (
+																			<ChevronUpIcon className="ml-1 h-4 w-4" />
+																		) : (
+																			<ChevronDownIcon className="ml-1 h-4 w-4" />
+																		)}
 																	</button>
-																)}
+																</div>
 															</div>
-														</div>
 
-														{/* Expanded Loan Details */}
-														{isExpanded && (
-															<div className="p-6 border-t border-gray-200 bg-gray-50/30">
-																<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-																	{/* Loan Information */}
-																	<div>
-																		<h5 className="text-base md:text-lg font-semibold text-gray-700 mb-4 font-heading">
-																			Loan
-																			Information
-																		</h5>
-																		<div className="space-y-3 text-sm">
-																			<div className="flex justify-between">
-																				<span className="text-gray-500 font-body">
-																					Principal
-																					Amount
-																				</span>
-																				<span className="font-medium text-gray-700 font-body">
-																					{formatCurrency(
-																						loan.principalAmount
-																					)}
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500 font-body">
-																					Monthly
-																					Payment
-																				</span>
-																				<span className="font-medium text-gray-700 font-body">
-																					{formatCurrency(
-																						loan.monthlyPayment
-																					)}
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500 font-body">
-																					Interest
-																					Rate
-																				</span>
-																				<span className="font-medium text-gray-700 font-body">
-																					{
-																						loan.interestRate
-																					}
+															{/* Expanded Loan Details */}
+															{isExpanded && (
+																<div className="p-6 border-t border-gray-200 bg-gray-50/30">
+																	<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+																		{/* Loan Information */}
+																		<div>
+																			<h5 className="text-md font-semibold text-gray-700 mb-4">
+																				Loan
+																				Information
+																			</h5>
+																			<div className="space-y-3 text-sm">
+																				<div className="flex justify-between">
+																					<span className="text-gray-500">
+																						Principal
+																						Amount
+																					</span>
+																					<span className="font-medium text-gray-700">
+																						{formatCurrency(
+																							loan.principalAmount
+																						)}
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500">
+																						Interest
+																						Rate
+																					</span>
+																					<span className="font-medium text-gray-700">
+																						{
+																							loan.interestRate
+																						}
 
-																					%
-																					per
-																					month
-																				</span>
+																						%
+																						per
+																						month
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500">
+																						Loan
+																						Term
+																					</span>
+																					<span className="font-medium text-gray-700">
+																						{
+																							loan.term
+																						}{" "}
+																						months
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500">
+																						Disbursed
+																						Date
+																					</span>
+																					<span className="font-medium text-gray-700">
+																						{formatDate(
+																							loan.disbursedAt
+																						)}
+																					</span>
+																				</div>
+																				<div className="flex justify-between">
+																					<span className="text-gray-500">
+																						Application
+																						Date
+																					</span>
+																					<span className="font-medium text-gray-700">
+																						{formatDate(
+																							loan
+																								.application
+																								.createdAt
+																						)}
+																					</span>
+																				</div>
 																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500 font-body">
-																					Loan
-																					Term
-																				</span>
-																				<span className="font-medium text-gray-700 font-body">
-																					{
-																						loan.term
-																					}{" "}
-																					months
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500 font-body">
-																					Disbursed
-																					Date
-																				</span>
-																				<span className="font-medium text-gray-700 font-body">
-																					{formatDate(
-																						loan.disbursedAt
-																					)}
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500 font-body">
-																					Application
-																					Date
-																				</span>
-																				<span className="font-medium text-gray-700 font-body">
-																					{formatDate(
+																		</div>
+
+																		{/* Payment History */}
+																		<div>
+																			<h5 className="text-md font-semibold text-gray-700 mb-4">
+																				Payment
+																				History
+																			</h5>
+																			{loadingTransactions[
+																				loan
+																					.id
+																			] ? (
+																				<div className="flex items-center justify-center py-4">
+																					<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
+																					<span className="ml-2 text-sm text-gray-500">
+																						Loading
+																						payments...
+																					</span>
+																				</div>
+																			) : loanTransactions[
+																					loan
+																						.id
+																			  ] &&
+																			  loanTransactions[
+																					loan
+																						.id
+																			  ]
+																					.length >
+																					0 ? (
+																				<div className="space-y-2">
+																					{loanTransactions[
 																						loan
-																							.application
-																							.createdAt
+																							.id
+																					]
+																						.slice(
+																							0,
+																							3
+																						)
+																						.map(
+																							(
+																								transaction: WalletTransaction
+																							) => (
+																								<div
+																									key={
+																										transaction.id
+																									}
+																									className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
+																								>
+																									<div>
+																										<p className="text-sm font-medium text-gray-700">
+																											{formatCurrency(
+																												transaction.amount
+																											)}
+																										</p>
+																										<p className="text-xs text-gray-500">
+																											{formatDate(
+																												transaction.createdAt
+																											)}
+																										</p>
+																										<p className="text-xs text-gray-500">
+																											{
+																												transaction.description
+																											}
+																										</p>
+																									</div>
+																									{getStatusBadge(
+																										transaction.status
+																									)}
+																								</div>
+																							)
+																						)}
+																					{loanTransactions[
+																						loan
+																							.id
+																					]
+																						.length >
+																						3 && (
+																						<p className="text-xs text-gray-400 text-center mt-2">
+																							Showing
+																							latest
+																							3
+																							payments
+																						</p>
 																					)}
-																				</span>
+																				</div>
+																			) : (
+																				<div className="text-center py-4">
+																					<p className="text-sm text-gray-400">
+																						No
+																						payment
+																						history
+																						available
+																					</p>
+																				</div>
+																			)}
+																		</div>
+																	</div>
+																</div>
+															)}
+														</div>
+													);
+												})}
+											</div>
+										);
+									} else {
+										return (
+											<div className="text-center py-12">
+												<CheckCircleIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+													No Discharged Loans
+												</h4>
+												<p className="text-gray-500 mb-6 font-body">
+													Loans that have been fully
+													repaid will appear here.
+												</p>
+											</div>
+										);
+									}
+								} else if (activeTab === "applications") {
+									// Applications Content (excluding ACTIVE and INCOMPLETE)
+									const filteredApplications =
+										applications.filter(
+											(app) =>
+												![
+													"ACTIVE",
+													"INCOMPLETE",
+												].includes(
+													app.status.toUpperCase()
+												)
+										);
+
+									if (filteredApplications.length > 0) {
+										return (
+											<div className="space-y-4">
+												{filteredApplications.map(
+													(app) => {
+														const isExpanded =
+															showApplicationDetails[
+																app.id
+															];
+
+														return (
+															<div
+																key={app.id}
+																className="border border-gray-200 rounded-xl overflow-hidden hover:border-purple-primary transition-colors bg-white shadow-sm"
+															>
+																{/* Application Header */}
+																<div className="p-6 bg-gray-50/50">
+																	<div className="flex items-center justify-between mb-4">
+																		<div className="flex items-center space-x-3">
+																			<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+																				<DocumentTextIcon className="h-6 w-6 text-purple-primary" />
 																			</div>
+																			<div>
+																				<h4 className="text-lg font-semibold text-gray-700 font-heading">
+																					{app
+																						.product
+																						?.name ||
+																						"Unknown Product"}
+																				</h4>
+																				<p className="text-sm text-gray-500 font-body">
+																					Application
+																					ID:{" "}
+																					{app.id
+																						.slice(
+																							-8
+																						)
+																						.toUpperCase()}
+																				</p>
+																			</div>
+																		</div>
+																		<span
+																			className={`px-3 py-1 rounded-full text-xs font-medium ${getApplicationStatusColor(
+																				app.status,
+																				app.attestationType
+																			)}`}
+																		>
+																			{getApplicationStatusLabel(
+																				app.status,
+																				app.attestationType
+																			)}
+																		</span>
+																	</div>
+
+																	{/* Live Call Information Banner */}
+																	{app.status ===
+																		"PENDING_ATTESTATION" &&
+																		app.attestationType ===
+																			"MEETING" && (
+																			<div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-4">
+																				<div className="flex items-center">
+																					<VideoCameraIcon className="h-5 w-5 text-purple-600 mr-3 flex-shrink-0" />
+																					<div className="flex-1">
+																						<h4 className="text-sm font-semibold text-purple-700 mb-1 font-heading">
+																							Live
+																							Video
+																							Call
+																							Requested
+																						</h4>
+																						<p className="text-sm text-purple-600 font-body">
+																							Our
+																							legal
+																							team
+																							will
+																							contact
+																							you
+																							within
+																							1-2
+																							business
+																							days
+																							to
+																							schedule
+																							your
+																							live
+																							video
+																							call
+																							attestation.
+																							Please
+																							keep
+																							your
+																							phone
+																							accessible.
+																						</p>
+																						{app.attestationNotes && (
+																							<p className="text-xs text-purple-500 mt-2 italic font-body">
+																								Note:{" "}
+																								{
+																									app.attestationNotes
+																								}
+																							</p>
+																						)}
+																					</div>
+																				</div>
+																			</div>
+																		)}
+
+																	<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+																		<div>
+																			<p className="text-sm text-gray-500 mb-1 font-body">
+																				Amount
+																			</p>
+																			<p className="text-lg font-semibold text-gray-700 font-heading">
+																				{app.amount
+																					? formatCurrency(
+																							app.amount
+																					  )
+																					: "-"}
+																			</p>
+																		</div>
+																		<div>
+																			<p className="text-sm text-gray-500 mb-1 font-body">
+																				Term
+																			</p>
+																			<p className="text-lg font-semibold text-gray-700 font-heading">
+																				{app.term
+																					? `${app.term} months`
+																					: "-"}
+																			</p>
+																		</div>
+																		<div>
+																			<p className="text-sm text-gray-500 mb-1 font-body">
+																				Purpose
+																			</p>
+																			<p className="text-lg font-semibold text-gray-700 font-heading">
+																				{app.purpose ||
+																					"-"}
+																			</p>
+																		</div>
+																		<div>
+																			<p className="text-sm text-gray-500 mb-1 font-body">
+																				Applied
+																				On
+																			</p>
+																			<p className="text-lg font-semibold text-gray-700 font-heading">
+																				{formatDate(
+																					app.updatedAt
+																				)}
+																			</p>
 																		</div>
 																	</div>
 
-																	{/* Recent Payments */}
-																	<div>
-																		<h5 className="text-base md:text-md font-semibold text-gray-700 mb-4 font-heading">
-																			Recent
-																			Payments
-																		</h5>
-																		{loadingTransactions[
-																			loan
-																				.id
-																		] ? (
-																			<div className="flex items-center justify-center py-4">
-																				<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
-																				<span className="ml-2 text-sm text-gray-500">
-																					Loading
-																					payments...
-																				</span>
-																			</div>
-																		) : loanTransactions[
-																				loan
-																					.id
-																		  ] &&
-																		  loanTransactions[
-																				loan
-																					.id
-																		  ]
-																				.length >
-																				0 ? (
-																			<div className="space-y-2">
-																				{loanTransactions[
-																					loan
-																						.id
-																				]
-																					.slice(
-																						0,
-																						3
-																					)
-																					.map(
-																						(
-																							transaction: WalletTransaction
-																						) => (
-																							<div
-																								key={
-																									transaction.id
-																								}
-																								className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
-																							>
-																								<div>
-																									<p className="text-sm font-medium text-gray-700">
-																										{formatCurrency(
-																											transaction.amount
-																										)}
-																									</p>
-																									<p className="text-xs text-gray-500">
-																										{formatDate(
-																											transaction.createdAt
-																										)}
-																									</p>
-																									<p className="text-xs text-gray-500">
-																										{
-																											transaction.description
-																										}
-																									</p>
-																								</div>
-																								{getStatusBadge(
-																									transaction.status
-																								)}
+																	{/* Action Buttons */}
+																	<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 sm:space-x-4">
+																		<button
+																			onClick={() =>
+																				toggleApplicationDetails(
+																					app.id
+																				)
+																			}
+																			className="flex items-center justify-center sm:justify-start text-sm text-purple-primary hover:text-purple-600 font-medium font-body transition-colors"
+																		>
+																			<span className="hidden sm:inline">
+																				{isExpanded
+																					? "Hide Details"
+																					: "View Details"}
+																			</span>
+																			<span className="sm:hidden">
+																				{isExpanded
+																					? "Hide"
+																					: "Details"}
+																			</span>
+																			{isExpanded ? (
+																				<ChevronUpIcon className="ml-1 h-4 w-4" />
+																			) : (
+																				<ChevronDownIcon className="ml-1 h-4 w-4" />
+																			)}
+																		</button>
+																		<div className="flex items-center space-x-3">
+																			{app.status ===
+																				"PENDING_ATTESTATION" && (
+																				<>
+																					{app.attestationType ===
+																					"MEETING" ? (
+																						<div className="flex items-center space-x-3">
+																							<div className="flex items-center px-4 py-2 border border-purple-200 text-sm font-medium rounded-md text-purple-700 bg-purple-50">
+																								<ClockIcon className="h-4 w-4 mr-2" />
+																								Live
+																								Call
+																								Requested
 																							</div>
-																						)
+																							<button
+																								onClick={() =>
+																									handleAttestationMethodSelect(
+																										app
+																									)
+																								}
+																								className="inline-flex items-center px-3 py-2 border border-cyan-200 text-sm font-medium rounded-md text-cyan-600 bg-cyan-50 hover:bg-cyan-100 transition-colors"
+																								title="Switch to instant video attestation instead"
+																							>
+																								Switch
+																								to
+																								Instant
+																							</button>
+																						</div>
+																					) : (
+																						<button
+																							onClick={() =>
+																								handleAttestationMethodSelect(
+																									app
+																								)
+																							}
+																							className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 transition-colors"
+																						>
+																							Continue
+																							Attestation
+																							<ArrowRightIcon className="ml-2 h-4 w-4" />
+																						</button>
 																					)}
-																				{loanTransactions[
-																					loan
-																						.id
-																				]
-																					.length >
-																					3 && (
-																					<p className="text-xs text-gray-500 text-center mt-2">
-																						Showing
-																						latest
-																						3
-																						payments
-																					</p>
-																				)}
-																			</div>
-																		) : (
-																			<div className="text-center py-4">
-																				<p className="text-sm text-gray-500 mb-2">
-																					No
-																					payment
-																					history
-																					available
-																				</p>
-																				<p className="text-xs text-gray-500">
-																					Payment
-																					history
-																					will
-																					appear
-																					here
-																					once
-																					you
-																					make
-																					your
-																					first
-																					payment
-																				</p>
-																			</div>
-																		)}
+																				</>
+																			)}
+																			{[
+																				"PENDING_APP_FEE",
+																				"PENDING_KYC",
+																				"PENDING_APPROVAL",
+																			].includes(
+																				app.status
+																			) && (
+																				<button
+																					onClick={() => {
+																						setSelectedApplication(
+																							app
+																						);
+																						setShowWithdrawModal(
+																							true
+																						);
+																					}}
+																					className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+																				>
+																					Withdraw
+																				</button>
+																			)}
+																		</div>
 																	</div>
 																</div>
+
+																{/* Expanded Application Details */}
+																{isExpanded && (
+																	<div className="p-6 border-t border-gray-200 bg-gray-50/30">
+																		<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+																			{/* Application Information */}
+																			<div>
+																				<h5 className="text-base md:text-lg font-semibold text-gray-700 mb-4 font-heading">
+																					Application
+																					Information
+																				</h5>
+																				<div className="space-y-3 text-sm">
+																					<div className="flex justify-between">
+																						<span className="text-gray-500 font-body">
+																							Product
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app
+																								.product
+																								?.name ||
+																								"Unknown"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between">
+																						<span className="text-gray-500 font-body">
+																							Loan
+																							Amount
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app.amount
+																								? formatCurrency(
+																										app.amount
+																								  )
+																								: "-"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between">
+																						<span className="text-gray-500 font-body">
+																							Loan
+																							Term
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app.term
+																								? `${app.term} months`
+																								: "-"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between">
+																						<span className="text-gray-500 font-body">
+																							Loan
+																							Purpose
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app.purpose ||
+																								"-"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between">
+																						<span className="text-gray-500 font-body">
+																							Created
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{formatDate(
+																								app.createdAt
+																							)}
+																						</span>
+																					</div>
+																					<div className="flex justify-between">
+																						<span className="text-gray-500 font-body">
+																							Last
+																							Updated
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{formatDate(
+																								app.updatedAt
+																							)}
+																						</span>
+																					</div>
+																					{app.status ===
+																						"PENDING_ATTESTATION" &&
+																						app.attestationType ===
+																							"MEETING" && (
+																							<div className="pt-3 border-t border-gray-200">
+																								<div className="flex justify-between">
+																									<span className="text-gray-500 font-body">
+																										Attestation
+																										Type
+																									</span>
+																									<span className="font-medium text-purple-700 font-body">
+																										Live
+																										Video
+																										Call
+																									</span>
+																								</div>
+																								{app.attestationNotes && (
+																									<div className="mt-2">
+																										<span className="text-gray-500 font-body text-sm">
+																											Notes:{" "}
+																											{
+																												app.attestationNotes
+																											}
+																										</span>
+																									</div>
+																								)}
+																								<div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+																									<div className="flex items-start space-x-3">
+																										<VideoCameraIcon className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+																										<div className="flex-1 min-w-0">
+																											<p className="text-sm text-amber-800 font-medium font-body">
+																												Live
+																												Call
+																												Requested
+																											</p>
+																											<p className="text-xs text-amber-700 font-body mt-1">
+																												Our
+																												legal
+																												team
+																												will
+																												contact
+																												you
+																												within
+																												3-5
+																												business
+																												days
+																												to
+																												schedule
+																												your
+																												attestation.
+																											</p>
+																											<button
+																												onClick={() =>
+																													handleAttestationMethodSelect(
+																														app
+																													)
+																												}
+																												className="mt-2 text-xs text-cyan-600 hover:text-cyan-700 underline font-medium font-body transition-colors"
+																											>
+																												Changed
+																												your
+																												mind?
+																												Switch
+																												to
+																												instant
+																												video
+																											</button>
+																										</div>
+																									</div>
+																								</div>
+																							</div>
+																						)}
+																				</div>
+																			</div>
+
+																			{/* Application History */}
+																			<div>
+																				<h5 className="text-base md:text-lg font-semibold text-gray-700 mb-4 font-heading">
+																					Application
+																					History
+																				</h5>
+																				{loadingApplicationHistory[
+																					app
+																						.id
+																				] ? (
+																					<div className="flex items-center justify-center py-4">
+																						<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
+																						<span className="ml-2 text-sm text-gray-500">
+																							Loading
+																							history...
+																						</span>
+																					</div>
+																				) : applicationHistory[
+																						app
+																							.id
+																				  ] &&
+																				  applicationHistory[
+																						app
+																							.id
+																				  ]
+																						.length >
+																						0 ? (
+																					<div className="space-y-3">
+																						{applicationHistory[
+																							app
+																								.id
+																						].map(
+																							(
+																								historyItem
+																							) => (
+																								<div
+																									key={
+																										historyItem.id
+																									}
+																									className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-200"
+																								>
+																									<div className="w-8 h-8 bg-blue-tertiary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+																										<ClockIcon className="h-4 w-4 text-blue-tertiary" />
+																									</div>
+																									<div className="flex-1 min-w-0">
+																										<p className="text-sm font-medium text-gray-700 font-body">
+																											{getHistoryActionDescription(
+																												historyItem.previousStatus,
+																												historyItem.newStatus
+																											)}
+																										</p>
+																										<div className="flex items-center justify-between text-xs text-gray-500 mt-1 font-body">
+																											<span>
+																												{
+																													historyItem.changedBy
+																												}
+																											</span>
+																											<span>
+																												{formatDateTime(
+																													historyItem.createdAt
+																												)}
+																											</span>
+																										</div>
+																										{historyItem.notes && (
+																											<p className="text-xs text-gray-600 mt-2 italic font-body">
+																												"
+																												{
+																													historyItem.notes
+																												}
+
+																												"
+																											</p>
+																										)}
+																									</div>
+																								</div>
+																							)
+																						)}
+																					</div>
+																				) : (
+																					<div className="text-center py-4">
+																						<p className="text-sm text-gray-500 mb-2 font-body">
+																							No
+																							history
+																							available
+																						</p>
+																						<p className="text-xs text-gray-500 font-body">
+																							Application
+																							history
+																							will
+																							appear
+																							here
+																							once
+																							status
+																							changes
+																							occur
+																						</p>
+																					</div>
+																				)}
+																			</div>
+																		</div>
+																	</div>
+																)}
 															</div>
-														)}
-													</div>
-												);
-											})}
-										</div>
-									);
-								} else {
-									return (
-										<div className="text-center py-12">
-											<CreditCardIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-											<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
-												No Active Loans
-											</h4>
-											<p className="text-gray-500 mb-6 font-body">
-												You don't have any active loans
-												at the moment.
-											</p>
-											<Link
-												href="/dashboard/apply"
-												className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
-											>
-												<PlusIcon className="h-5 w-5 mr-2" />
-												Apply for Your First Loan
-											</Link>
-										</div>
-									);
-								}
-							} else if (activeTab === "discharged") {
-								// Discharged Loans Content
-								const dischargedLoans = loans.filter((loan) => {
-									const status = loan.status.toUpperCase();
-									return (
-										[
-											"DISCHARGED",
-											"COMPLETED",
-											"PAID",
-											"CLOSED",
-											"SETTLED",
-										].includes(status) ||
-										(loan.outstandingBalance === 0 &&
-											status === "ACTIVE")
-									);
-								});
+														);
+													}
+												)}
+											</div>
+										);
+									} else {
+										return (
+											<div className="text-center py-12">
+												<DocumentTextIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+													No Applications Found
+												</h4>
+												<p className="text-gray-500 mb-6 font-body">
+													You haven't submitted any
+													loan applications yet.
+												</p>
+												<Link
+													href="/dashboard/apply"
+													className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
+												>
+													<PlusIcon className="h-5 w-5 mr-2" />
+													Apply for a Loan
+												</Link>
+											</div>
+										);
+									}
+								} else if (activeTab === "incomplete") {
+									// Incomplete Applications Content
+									const incompleteApplications =
+										applications.filter(
+											(app) =>
+												app.status.toUpperCase() ===
+												"INCOMPLETE"
+										);
 
-								if (dischargedLoans.length > 0) {
-									return (
-										<div className="space-y-6 min-w-0">
-											{dischargedLoans.map((loan) => {
-												const isExpanded =
-													showLoanDetails[loan.id];
-
-												return (
-													<div
-														key={loan.id}
-														className="border border-gray-200 rounded-xl overflow-hidden hover:border-purple-primary transition-colors bg-white shadow-sm"
-													>
-														{/* Loan Header */}
-														<div className="p-6 bg-gray-50/50">
+									if (incompleteApplications.length > 0) {
+										return (
+											<div className="space-y-4">
+												{incompleteApplications.map(
+													(app) => (
+														<div
+															key={app.id}
+															className="border border-yellow-200 rounded-xl p-6 hover:border-yellow-400 transition-colors bg-yellow-50"
+														>
 															<div className="flex items-center justify-between mb-4">
 																<div className="flex items-center space-x-3">
-																	<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-																		<CheckCircleIcon className="h-6 w-6 text-purple-primary" />
+																	<div className="p-2 bg-yellow-100 rounded-lg border border-yellow-200">
+																		<ClockIcon className="h-6 w-6 text-yellow-600" />
 																	</div>
 																	<div>
 																		<h4 className="text-lg font-semibold text-gray-700">
-																			{
-																				loan
-																					.application
-																					.product
-																					.name
-																			}
+																			{app
+																				.product
+																				?.name ||
+																				"Unknown Product"}
 																		</h4>
 																		<p className="text-sm text-gray-500">
-																			Loan
+																			Application
 																			ID:{" "}
-																			{loan.id
+																			{app.id
 																				.slice(
 																					-8
 																				)
@@ -2742,683 +3911,169 @@ function LoansPageContent() {
 																		</p>
 																	</div>
 																</div>
-																<div className="text-right">
-																	{getStatusBadge(
-																		loan.status
-																	)}
-																</div>
+																<span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
+																	Incomplete
+																</span>
 															</div>
 
-															{/* Loan Summary Stats */}
 															<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
 																<div>
 																	<p className="text-sm text-gray-500 mb-1">
-																		Total
-																		Repaid
+																		Amount
 																	</p>
-																	<p className="text-lg font-semibold text-green-600">
-																		{formatCurrency(
-																			loan.totalAmount
-																		)}
+																	<p className="text-lg font-semibold text-gray-700">
+																		{app.amount
+																			? formatCurrency(
+																					app.amount
+																			  )
+																			: "-"}
 																	</p>
-																</div>
-																<div>
-																	{(() => {
-																		const performance =
-																			calculatePaymentPerformance(
-																				loan
-																			);
-																		return (
-																			<>
-																				<p className="text-sm text-gray-500 mb-1">
-																					Payment
-																					Performance
-																				</p>
-																				{performance.percentage !==
-																				null ? (
-																					<>
-																						<p
-																							className={`text-lg font-semibold ${getPerformanceColor(
-																								performance.percentage
-																							)}`}
-																						>
-																							{
-																								performance.percentage
-																							}
-
-																							%
-																						</p>
-																						<p className="text-xs text-gray-500">
-																							{
-																								performance.onTimeCount
-																							}{" "}
-																							of{" "}
-																							{
-																								performance.totalCount
-																							}{" "}
-																							on-time
-																						</p>
-																					</>
-																				) : (
-																					<>
-																						<p className="text-lg font-semibold text-gray-500">
-																							N/A
-																						</p>
-																						<p className="text-xs text-gray-500">
-																							No
-																							payments
-																							yet
-																						</p>
-																					</>
-																				)}
-																			</>
-																		);
-																	})()}
 																</div>
 																<div>
 																	<p className="text-sm text-gray-500 mb-1">
-																		Discharged
-																		Date
+																		Term
 																	</p>
-																	<p className="text-lg font-semibold text-purple-primary">
+																	<p className="text-lg font-semibold text-gray-700">
+																		{app.term
+																			? `${app.term} months`
+																			: "-"}
+																	</p>
+																</div>
+																<div>
+																	<p className="text-sm text-gray-500 mb-1">
+																		Purpose
+																	</p>
+																	<p className="text-lg font-semibold text-gray-700">
+																		{app.purpose ||
+																			"-"}
+																	</p>
+																</div>
+																<div>
+																	<p className="text-sm text-gray-500 mb-1">
+																		Started
+																		On
+																	</p>
+																	<p className="text-lg font-semibold text-gray-700">
 																		{formatDate(
-																			loan.disbursedAt
+																			app.createdAt
 																		)}
 																	</p>
 																</div>
 															</div>
 
-															{/* Completion Badge */}
-															<div className="mb-4">
-																<div className="flex items-center p-4 bg-purple-primary/10 rounded-xl border border-purple-primary/20">
-																	<CheckCircleIcon className="h-8 w-8 text-purple-primary mr-3" />
+															<div className="bg-yellow-100 border border-yellow-200 rounded-xl p-4 mb-4">
+																<div className="flex items-center">
+																	<ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 mr-2" />
 																	<div>
-																		<p className="text-lg font-semibold text-purple-primary">
-																			Loan
-																			Fully
-																			Repaid
+																		<p className="text-sm font-medium text-yellow-700">
+																			Application
+																			Incomplete
 																		</p>
-																		<p className="text-sm text-gray-600">
-																			Congratulations
-																			on
-																			completing
+																		<p className="text-sm text-yellow-600">
+																			Complete
 																			your
-																			loan!
+																			application
+																			to
+																			proceed
+																			with
+																			the
+																			loan
+																			process.
 																		</p>
 																	</div>
 																</div>
 															</div>
 
-															{/* Action Buttons */}
 															<div className="flex items-center justify-between">
-																<button
-																	onClick={() =>
-																		toggleLoanDetails(
-																			loan.id
-																		)
-																	}
-																	className="flex items-center text-sm text-purple-primary hover:text-purple-600 font-medium"
-																>
-																	{isExpanded
-																		? "Hide Details"
-																		: "View Details"}
-																	{isExpanded ? (
-																		<ChevronUpIcon className="ml-1 h-4 w-4" />
-																	) : (
-																		<ChevronDownIcon className="ml-1 h-4 w-4" />
-																	)}
-																</button>
-															</div>
-														</div>
-
-														{/* Expanded Loan Details */}
-														{isExpanded && (
-															<div className="p-6 border-t border-gray-200 bg-gray-50/30">
-																<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-																	{/* Loan Information */}
-																	<div>
-																		<h5 className="text-md font-semibold text-gray-700 mb-4">
-																			Loan
-																			Information
-																		</h5>
-																		<div className="space-y-3 text-sm">
-																			<div className="flex justify-between">
-																				<span className="text-gray-500">
-																					Principal
-																					Amount
-																				</span>
-																				<span className="font-medium text-gray-700">
-																					{formatCurrency(
-																						loan.principalAmount
-																					)}
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500">
-																					Interest
-																					Rate
-																				</span>
-																				<span className="font-medium text-gray-700">
-																					{
-																						loan.interestRate
-																					}
-
-																					%
-																					per
-																					month
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500">
-																					Loan
-																					Term
-																				</span>
-																				<span className="font-medium text-gray-700">
-																					{
-																						loan.term
-																					}{" "}
-																					months
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500">
-																					Disbursed
-																					Date
-																				</span>
-																				<span className="font-medium text-gray-700">
-																					{formatDate(
-																						loan.disbursedAt
-																					)}
-																				</span>
-																			</div>
-																			<div className="flex justify-between">
-																				<span className="text-gray-500">
-																					Application
-																					Date
-																				</span>
-																				<span className="font-medium text-gray-700">
-																					{formatDate(
-																						loan
-																							.application
-																							.createdAt
-																					)}
-																				</span>
-																			</div>
-																		</div>
-																	</div>
-
-																	{/* Payment History */}
-																	<div>
-																		<h5 className="text-md font-semibold text-gray-700 mb-4">
-																			Payment
-																			History
-																		</h5>
-																		{loadingTransactions[
-																			loan
-																				.id
-																		] ? (
-																			<div className="flex items-center justify-center py-4">
-																				<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
-																				<span className="ml-2 text-sm text-gray-500">
-																					Loading
-																					payments...
-																				</span>
-																			</div>
-																		) : loanTransactions[
-																				loan
-																					.id
-																		  ] &&
-																		  loanTransactions[
-																				loan
-																					.id
-																		  ]
-																				.length >
-																				0 ? (
-																			<div className="space-y-2">
-																				{loanTransactions[
-																					loan
-																						.id
-																				]
-																					.slice(
-																						0,
-																						3
-																					)
-																					.map(
-																						(
-																							transaction: WalletTransaction
-																						) => (
-																							<div
-																								key={
-																									transaction.id
-																								}
-																								className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
-																							>
-																								<div>
-																									<p className="text-sm font-medium text-gray-700">
-																										{formatCurrency(
-																											transaction.amount
-																										)}
-																									</p>
-																									<p className="text-xs text-gray-500">
-																										{formatDate(
-																											transaction.createdAt
-																										)}
-																									</p>
-																									<p className="text-xs text-gray-500">
-																										{
-																											transaction.description
-																										}
-																									</p>
-																								</div>
-																								{getStatusBadge(
-																									transaction.status
-																								)}
-																							</div>
-																						)
-																					)}
-																				{loanTransactions[
-																					loan
-																						.id
-																				]
-																					.length >
-																					3 && (
-																					<p className="text-xs text-gray-400 text-center mt-2">
-																						Showing
-																						latest
-																						3
-																						payments
-																					</p>
-																				)}
-																			</div>
-																		) : (
-																			<div className="text-center py-4">
-																				<p className="text-sm text-gray-400">
-																					No
-																					payment
-																					history
-																					available
-																				</p>
-																			</div>
-																		)}
-																	</div>
-																</div>
-															</div>
-														)}
-													</div>
-												);
-											})}
-										</div>
-									);
-								} else {
-									return (
-										<div className="text-center py-12">
-											<CheckCircleIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-											<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
-												No Discharged Loans
-											</h4>
-											<p className="text-gray-500 mb-6 font-body">
-												Loans that have been fully
-												repaid will appear here.
-											</p>
-										</div>
-									);
-								}
-							} else if (activeTab === "applications") {
-								// Applications Content (excluding ACTIVE and INCOMPLETE)
-								const filteredApplications =
-									applications.filter(
-										(app) =>
-											!["ACTIVE", "INCOMPLETE"].includes(
-												app.status.toUpperCase()
-											)
-									);
-
-								if (filteredApplications.length > 0) {
-									return (
-										<div className="space-y-4">
-											{filteredApplications.map((app) => (
-												<div
-													key={app.id}
-													className="border border-gray-200 rounded-xl p-6 hover:border-purple-primary transition-colors bg-white shadow-sm"
-												>
-													<div className="flex items-center justify-between mb-4">
-														<div className="flex items-center space-x-3">
-															<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-																<DocumentTextIcon className="h-6 w-6 text-purple-primary" />
-															</div>
-															<div>
-																<h4 className="text-lg font-semibold text-gray-700 font-heading">
-																	{app.product
-																		?.name ||
-																		"Unknown Product"}
-																</h4>
-																<p className="text-sm text-gray-500 font-body">
-																	Application
-																	ID:{" "}
-																	{app.id
-																		.slice(
-																			-8
-																		)
-																		.toUpperCase()}
-																</p>
-															</div>
-														</div>
-														<span
-															className={`px-3 py-1 rounded-full text-xs font-medium ${getApplicationStatusColor(
-																app.status
-															)}`}
-														>
-															{getApplicationStatusLabel(
-																app.status
-															)}
-														</span>
-													</div>
-
-													<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-														<div>
-															<p className="text-sm text-gray-500 mb-1 font-body">
-																Amount
-															</p>
-															<p className="text-lg font-semibold text-gray-700 font-heading">
-																{app.amount
-																	? formatCurrency(
-																			app.amount
-																	  )
-																	: "-"}
-															</p>
-														</div>
-														<div>
-															<p className="text-sm text-gray-500 mb-1 font-body">
-																Term
-															</p>
-															<p className="text-lg font-semibold text-gray-700 font-heading">
-																{app.term
-																	? `${app.term} months`
-																	: "-"}
-															</p>
-														</div>
-														<div>
-															<p className="text-sm text-gray-500 mb-1 font-body">
-																Purpose
-															</p>
-															<p className="text-lg font-semibold text-gray-700 font-heading">
-																{app.purpose ||
-																	"-"}
-															</p>
-														</div>
-														<div>
-															<p className="text-sm text-gray-500 mb-1 font-body">
-																Applied On
-															</p>
-															<p className="text-lg font-semibold text-gray-700 font-heading">
-																{formatDate(
-																	app.updatedAt
-																)}
-															</p>
-														</div>
-													</div>
-
-													<div className="flex items-center justify-between">
-														<div className="text-sm text-gray-500"></div>
-														<div className="flex items-center space-x-3">
-															<button
-																onClick={() =>
-																	handleViewApplicationDetails(
-																		app.id
-																	)
-																}
-																className="bg-white hover:bg-gray-50 text-purple-primary border border-purple-primary inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors"
-															>
-																View Details
-															</button>
-															{[
-																"PENDING_APP_FEE",
-																"PENDING_KYC",
-																"PENDING_APPROVAL",
-															].includes(
-																app.status
-															) && (
-																<button
-																	onClick={() => {
-																		setSelectedApplication(
-																			app
-																		);
-																		setShowWithdrawModal(
-																			true
-																		);
-																	}}
-																	className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
-																>
-																	Withdraw
-																</button>
-															)}
-														</div>
-													</div>
-												</div>
-											))}
-										</div>
-									);
-								} else {
-									return (
-										<div className="text-center py-12">
-											<DocumentTextIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-											<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
-												No Applications Found
-											</h4>
-											<p className="text-gray-500 mb-6 font-body">
-												You haven't submitted any loan
-												applications yet.
-											</p>
-											<Link
-												href="/dashboard/apply"
-												className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
-											>
-												<PlusIcon className="h-5 w-5 mr-2" />
-												Apply for a Loan
-											</Link>
-										</div>
-									);
-								}
-							} else if (activeTab === "incomplete") {
-								// Incomplete Applications Content
-								const incompleteApplications =
-									applications.filter(
-										(app) =>
-											app.status.toUpperCase() ===
-											"INCOMPLETE"
-									);
-
-								if (incompleteApplications.length > 0) {
-									return (
-										<div className="space-y-4">
-											{incompleteApplications.map(
-												(app) => (
-													<div
-														key={app.id}
-														className="border border-yellow-200 rounded-xl p-6 hover:border-yellow-400 transition-colors bg-yellow-50"
-													>
-														<div className="flex items-center justify-between mb-4">
-															<div className="flex items-center space-x-3">
-																<div className="p-2 bg-yellow-100 rounded-lg border border-yellow-200">
-																	<ClockIcon className="h-6 w-6 text-yellow-600" />
-																</div>
-																<div>
-																	<h4 className="text-lg font-semibold text-gray-700">
-																		{app
-																			.product
-																			?.name ||
-																			"Unknown Product"}
-																	</h4>
-																	<p className="text-sm text-gray-500">
-																		Application
-																		ID:{" "}
-																		{app.id
-																			.slice(
-																				-8
-																			)
-																			.toUpperCase()}
-																	</p>
-																</div>
-															</div>
-															<span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
-																Incomplete
-															</span>
-														</div>
-
-														<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-															<div>
-																<p className="text-sm text-gray-500 mb-1">
-																	Amount
-																</p>
-																<p className="text-lg font-semibold text-gray-700">
-																	{app.amount
-																		? formatCurrency(
-																				app.amount
-																		  )
-																		: "-"}
-																</p>
-															</div>
-															<div>
-																<p className="text-sm text-gray-500 mb-1">
-																	Term
-																</p>
-																<p className="text-lg font-semibold text-gray-700">
-																	{app.term
-																		? `${app.term} months`
-																		: "-"}
-																</p>
-															</div>
-															<div>
-																<p className="text-sm text-gray-500 mb-1">
-																	Purpose
-																</p>
-																<p className="text-lg font-semibold text-gray-700">
-																	{app.purpose ||
-																		"-"}
-																</p>
-															</div>
-															<div>
-																<p className="text-sm text-gray-500 mb-1">
-																	Started On
-																</p>
-																<p className="text-lg font-semibold text-gray-700">
-																	{formatDate(
-																		app.createdAt
-																	)}
-																</p>
-															</div>
-														</div>
-
-														<div className="bg-yellow-100 border border-yellow-200 rounded-xl p-4 mb-4">
-															<div className="flex items-center">
-																<ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 mr-2" />
-																<div>
-																	<p className="text-sm font-medium text-yellow-700">
-																		Application
-																		Incomplete
-																	</p>
-																	<p className="text-sm text-yellow-600">
+																<div className="text-sm text-gray-500">
+																	<span className="text-yellow-700 font-medium">
 																		Complete
 																		your
 																		application
 																		to
 																		proceed
-																		with the
-																		loan
-																		process.
-																	</p>
+																	</span>
+																</div>
+																<div className="flex items-center space-x-3">
+																	<button
+																		onClick={() => {
+																			setSelectedDeleteApplication(
+																				app
+																			);
+																			setShowDeleteModal(
+																				true
+																			);
+																		}}
+																		className="inline-flex items-center px-3 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors font-body"
+																	>
+																		<svg
+																			className="h-4 w-4 mr-1"
+																			fill="none"
+																			viewBox="0 0 24 24"
+																			stroke="currentColor"
+																		>
+																			<path
+																				strokeLinecap="round"
+																				strokeLinejoin="round"
+																				strokeWidth={
+																					2
+																				}
+																				d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+																			/>
+																		</svg>
+																		Delete
+																	</button>
+																	<Link
+																		href={`/dashboard/apply?applicationId=${
+																			app.id
+																		}&step=${
+																			app.appStep
+																		}&productCode=${
+																			app
+																				.product
+																				?.code ||
+																			""
+																		}`}
+																		className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 transition-colors font-body"
+																	>
+																		Resume
+																		Application
+																		<ArrowRightIcon className="ml-2 h-4 w-4" />
+																	</Link>
 																</div>
 															</div>
 														</div>
-
-														<div className="flex items-center justify-between">
-															<div className="text-sm text-gray-500">
-																<span className="text-yellow-700 font-medium">
-																	Complete
-																	your
-																	application
-																	to proceed
-																</span>
-															</div>
-															<div className="flex items-center space-x-3">
-																<button
-																	onClick={() => {
-																		setSelectedDeleteApplication(
-																			app
-																		);
-																		setShowDeleteModal(
-																			true
-																		);
-																	}}
-																	className="inline-flex items-center px-3 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors font-body"
-																>
-																	<svg
-																		className="h-4 w-4 mr-1"
-																		fill="none"
-																		viewBox="0 0 24 24"
-																		stroke="currentColor"
-																	>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={
-																				2
-																			}
-																			d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-																		/>
-																	</svg>
-																	Delete
-																</button>
-																<Link
-																	href={`/dashboard/apply?applicationId=${
-																		app.id
-																	}&step=${
-																		app.appStep
-																	}&productCode=${
-																		app
-																			.product
-																			?.code ||
-																		""
-																	}`}
-																	className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 transition-colors font-body"
-																>
-																	Resume
-																	Application
-																	<ArrowRightIcon className="ml-2 h-4 w-4" />
-																</Link>
-															</div>
-														</div>
-													</div>
-												)
-											)}
-										</div>
-									);
-								} else {
-									return (
-										<div className="text-center py-12">
-											<ClockIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-											<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
-												No Incomplete Applications
-											</h4>
-											<p className="text-gray-500 mb-6 font-body">
-												All your applications have been
-												completed or you haven't started
-												any yet.
-											</p>
-											<Link
-												href="/dashboard/apply"
-												className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
-											>
-												<PlusIcon className="h-5 w-5 mr-2" />
-												Start New Application
-											</Link>
-										</div>
-									);
+													)
+												)}
+											</div>
+										);
+									} else {
+										return (
+											<div className="text-center py-12">
+												<ClockIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+													No Incomplete Applications
+												</h4>
+												<p className="text-gray-500 mb-6 font-body">
+													All your applications have
+													been completed or you
+													haven't started any yet.
+												</p>
+												<Link
+													href="/dashboard/apply"
+													className="bg-purple-primary hover:bg-purple-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
+												>
+													<PlusIcon className="h-5 w-5 mr-2" />
+													Start New Application
+												</Link>
+											</div>
+										);
+									}
 								}
-							}
 
-							return null;
-						})()}
+								return null;
+							})()}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -4164,7 +4819,8 @@ function LoansPageContent() {
 											Status:{" "}
 											<span className="text-gray-700 font-medium">
 												{getApplicationStatusLabel(
-													selectedApplication.status
+													selectedApplication.status,
+													selectedApplication.attestationType
 												)}
 											</span>
 										</p>
@@ -4267,7 +4923,8 @@ function LoansPageContent() {
 											Status:{" "}
 											<span className="text-gray-700 font-medium">
 												{getApplicationStatusLabel(
-													selectedDeleteApplication.status
+													selectedDeleteApplication.status,
+													selectedDeleteApplication.attestationType
 												)}
 											</span>
 										</p>
@@ -4304,6 +4961,27 @@ function LoansPageContent() {
 					</div>
 				</div>
 			)}
+
+			{/* Attestation Method Selection Modal */}
+			{showAttestationMethodModal && selectedAttestationApplication && (
+				<AttestationMethodModal
+					onClose={handleAttestationModalClose}
+					onInstantSelect={handleInstantAttestationSelect}
+					onLiveCallSelect={handleLiveCallSelect}
+					applicationId={selectedAttestationApplication.id}
+				/>
+			)}
+
+			{/* Live Call Confirmation Modal */}
+			{showLiveCallConfirmationModal &&
+				selectedAttestationApplication && (
+					<LiveCallConfirmationModal
+						applicationId={selectedAttestationApplication.id}
+						onClose={handleLiveCallModalClose}
+						onConfirm={handleLiveCallConfirm}
+						onBackToInstant={handleLiveCallBack}
+					/>
+				)}
 		</DashboardLayout>
 	);
 }

@@ -144,6 +144,7 @@ function AdminApplicationsPageContent() {
 				"PENDING_APP_FEE",
 				"PENDING_KYC",
 				"PENDING_APPROVAL",
+				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
 			];
@@ -154,12 +155,24 @@ function AdminApplicationsPageContent() {
 		getInitialFilters()
 	);
 
-	// Additional states for approval and disbursement
+	// Additional states for approval, attestation, and disbursement
 	const [decisionNotes, setDecisionNotes] = useState("");
 	const [disbursementNotes, setDisbursementNotes] = useState("");
 	const [disbursementReference, setDisbursementReference] = useState("");
 	const [processingDecision, setProcessingDecision] = useState(false);
 	const [processingDisbursement, setProcessingDisbursement] = useState(false);
+
+	// Attestation states
+	const [attestationType, setAttestationType] = useState<
+		"IMMEDIATE" | "MEETING"
+	>("IMMEDIATE");
+	const [attestationNotes, setAttestationNotes] = useState("");
+	const [attestationVideoWatched, setAttestationVideoWatched] =
+		useState(false);
+	const [attestationTermsAccepted, setAttestationTermsAccepted] =
+		useState(false);
+	const [meetingCompletedAt, setMeetingCompletedAt] = useState("");
+	const [processingAttestation, setProcessingAttestation] = useState(false);
 
 	// Generate disbursement reference when application is selected for disbursement
 	useEffect(() => {
@@ -195,6 +208,8 @@ function AdminApplicationsPageContent() {
 				return ClipboardDocumentCheckIcon;
 			case "PENDING_APPROVAL":
 				return DocumentMagnifyingGlassIcon;
+			case "PENDING_ATTESTATION":
+				return ClipboardDocumentCheckIcon;
 			case "PENDING_SIGNATURE":
 				return DocumentTextIcon;
 			case "PENDING_DISBURSEMENT":
@@ -218,6 +233,8 @@ function AdminApplicationsPageContent() {
 				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
 			case "PENDING_APPROVAL":
 				return "bg-amber-500/20 text-amber-200 border-amber-400/20";
+			case "PENDING_ATTESTATION":
+				return "bg-cyan-500/20 text-cyan-200 border-cyan-400/20";
 			case "PENDING_SIGNATURE":
 				return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
 			case "PENDING_DISBURSEMENT":
@@ -241,6 +258,8 @@ function AdminApplicationsPageContent() {
 				return "Pending KYC";
 			case "PENDING_APPROVAL":
 				return "Pending Approval";
+			case "PENDING_ATTESTATION":
+				return "Pending Attestation";
 			case "PENDING_SIGNATURE":
 				return "Pending Signature";
 			case "PENDING_DISBURSEMENT":
@@ -481,6 +500,8 @@ function AdminApplicationsPageContent() {
 		// Auto-switch to appropriate tab based on status
 		if (application.status === "PENDING_APPROVAL") {
 			setSelectedTab("approval");
+		} else if (application.status === "PENDING_ATTESTATION") {
+			setSelectedTab("attestation");
 		} else if (application.status === "PENDING_DISBURSEMENT") {
 			setSelectedTab("disbursement");
 		} else {
@@ -753,6 +774,101 @@ function AdminApplicationsPageContent() {
 		}
 	};
 
+	// Attestation completion handler
+	const handleAttestationCompletion = async () => {
+		if (!selectedApplication) return;
+
+		// Validation based on attestation type
+		if (attestationType === "IMMEDIATE") {
+			if (!attestationVideoWatched || !attestationTermsAccepted) {
+				setError(
+					"For immediate attestation, video must be watched and terms must be accepted"
+				);
+				return;
+			}
+		} else if (attestationType === "MEETING") {
+			if (!meetingCompletedAt) {
+				setError(
+					"For meeting attestation, please provide the meeting completion date"
+				);
+				return;
+			}
+		}
+
+		// Show confirmation dialog
+		const confirmMessage = `Are you sure you want to mark attestation as completed for ${selectedApplication.user?.fullName}?\n\nType: ${attestationType}\nThis will move the application to PENDING_SIGNATURE status.`;
+
+		if (!window.confirm(confirmMessage)) {
+			return;
+		}
+
+		setProcessingAttestation(true);
+		try {
+			const response = await fetch(
+				`/api/admin/applications/${selectedApplication.id}/complete-attestation`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem(
+							"adminToken"
+						)}`,
+					},
+					body: JSON.stringify({
+						attestationType,
+						attestationNotes:
+							attestationNotes ||
+							`${attestationType} attestation completed by admin`,
+						attestationVideoWatched:
+							attestationType === "IMMEDIATE"
+								? attestationVideoWatched
+								: false,
+						attestationTermsAccepted:
+							attestationType === "IMMEDIATE"
+								? attestationTermsAccepted
+								: true,
+						meetingCompletedAt:
+							attestationType === "MEETING"
+								? meetingCompletedAt
+								: null,
+					}),
+				}
+			);
+
+			if (response.ok) {
+				const data = await response.json();
+				// Refresh the application data
+				await fetchApplications();
+				await fetchApplicationHistory(selectedApplication.id);
+
+				// Reset attestation form
+				setAttestationType("IMMEDIATE");
+				setAttestationNotes("");
+				setAttestationVideoWatched(false);
+				setAttestationTermsAccepted(false);
+				setMeetingCompletedAt("");
+
+				// Update selected application
+				setSelectedApplication((prev) =>
+					prev ? { ...prev, status: "PENDING_SIGNATURE" } : null
+				);
+			} else {
+				const errorData = await response.json();
+				console.error("Attestation completion error:", errorData);
+				setError(
+					errorData.error ||
+						errorData.message ||
+						"Failed to complete attestation"
+				);
+			}
+		} catch (error) {
+			console.error("Error completing attestation:", error);
+			setError("Failed to complete attestation");
+		} finally {
+			setProcessingAttestation(false);
+		}
+	};
+
 	// Disbursement handler
 	const handleDisbursement = async () => {
 		if (!selectedApplication || !disbursementReference) return;
@@ -945,6 +1061,7 @@ function AdminApplicationsPageContent() {
 						"PENDING_APP_FEE",
 						"PENDING_KYC",
 						"PENDING_APPROVAL",
+						"PENDING_ATTESTATION",
 						"PENDING_SIGNATURE",
 						"PENDING_DISBURSEMENT",
 						"REJECTED",
@@ -1156,6 +1273,23 @@ function AdminApplicationsPageContent() {
 										>
 											<DocumentMagnifyingGlassIcon className="inline h-4 w-4 mr-1" />
 											Approval
+										</div>
+									)}
+									{/* Show Attestation tab for PENDING_ATTESTATION applications */}
+									{selectedApplication.status ===
+										"PENDING_ATTESTATION" && (
+										<div
+											className={`px-4 py-2 cursor-pointer transition-colors ${
+												selectedTab === "attestation"
+													? "border-b-2 border-cyan-400 font-medium text-white"
+													: "text-gray-400 hover:text-gray-200"
+											}`}
+											onClick={() =>
+												setSelectedTab("attestation")
+											}
+										>
+											<ClipboardDocumentCheckIcon className="inline h-4 w-4 mr-1" />
+											Attestation
 										</div>
 									)}
 									{/* Show Disbursement tab for PENDING_DISBURSEMENT applications */}
@@ -1695,6 +1829,304 @@ function AdminApplicationsPageContent() {
 									</div>
 								)}
 
+								{/* Attestation Tab */}
+								{selectedTab === "attestation" && (
+									<div>
+										{/* Attestation Section */}
+										<div className="border border-cyan-500/30 rounded-lg p-6 bg-cyan-500/10 mb-6">
+											<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+												<ClipboardDocumentCheckIcon className="h-6 w-6 mr-2 text-cyan-400" />
+												Loan Terms Attestation
+											</h4>
+
+											{/* Application Summary */}
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Applicant
+													</h5>
+													<p className="text-white">
+														{
+															selectedApplication
+																.user?.fullName
+														}
+													</p>
+													<p className="text-sm text-gray-400">
+														{
+															selectedApplication
+																.user?.email
+														}
+													</p>
+												</div>
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Loan Details
+													</h5>
+													<p className="text-white">
+														{selectedApplication.amount
+															? formatCurrency(
+																	selectedApplication.amount
+															  )
+															: "Amount not set"}
+													</p>
+													<p className="text-sm text-gray-400">
+														{selectedApplication.term
+															? `${selectedApplication.term} months`
+															: "Term not set"}
+													</p>
+												</div>
+											</div>
+
+											{/* Attestation Type Selection */}
+											<div className="mb-6">
+												<label className="block text-sm font-medium text-gray-300 mb-3">
+													Attestation Type
+												</label>
+												<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+													<div
+														className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+															attestationType ===
+															"IMMEDIATE"
+																? "border-cyan-400/50 bg-cyan-500/10"
+																: "border-gray-600 bg-gray-800/30 hover:border-gray-500"
+														}`}
+														onClick={() =>
+															setAttestationType(
+																"IMMEDIATE"
+															)
+														}
+													>
+														<div className="flex items-center mb-2">
+															<input
+																type="radio"
+																checked={
+																	attestationType ===
+																	"IMMEDIATE"
+																}
+																onChange={() =>
+																	setAttestationType(
+																		"IMMEDIATE"
+																	)
+																}
+																className="mr-2"
+															/>
+															<h6 className="text-white font-medium">
+																Immediate
+																Attestation
+															</h6>
+														</div>
+														<p className="text-sm text-gray-400">
+															Customer watches
+															video and accepts
+															terms online
+														</p>
+													</div>
+													<div
+														className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+															attestationType ===
+															"MEETING"
+																? "border-cyan-400/50 bg-cyan-500/10"
+																: "border-gray-600 bg-gray-800/30 hover:border-gray-500"
+														}`}
+														onClick={() =>
+															setAttestationType(
+																"MEETING"
+															)
+														}
+													>
+														<div className="flex items-center mb-2">
+															<input
+																type="radio"
+																checked={
+																	attestationType ===
+																	"MEETING"
+																}
+																onChange={() =>
+																	setAttestationType(
+																		"MEETING"
+																	)
+																}
+																className="mr-2"
+															/>
+															<h6 className="text-white font-medium">
+																Meeting with
+																Lawyer
+															</h6>
+														</div>
+														<p className="text-sm text-gray-400">
+															Schedule meeting
+															with legal counsel
+														</p>
+													</div>
+												</div>
+											</div>
+
+											{/* Immediate Attestation Form */}
+											{attestationType ===
+												"IMMEDIATE" && (
+												<div className="mb-6 p-4 bg-gray-800/30 rounded-lg">
+													<h6 className="text-white font-medium mb-3">
+														Immediate Attestation
+														Requirements
+													</h6>
+													<div className="space-y-3">
+														<div className="flex items-center">
+															<input
+																type="checkbox"
+																checked={
+																	attestationVideoWatched
+																}
+																onChange={(e) =>
+																	setAttestationVideoWatched(
+																		e.target
+																			.checked
+																	)
+																}
+																className="mr-3"
+															/>
+															<label className="text-gray-300">
+																Customer has
+																watched the loan
+																terms video
+															</label>
+														</div>
+														<div className="flex items-center">
+															<input
+																type="checkbox"
+																checked={
+																	attestationTermsAccepted
+																}
+																onChange={(e) =>
+																	setAttestationTermsAccepted(
+																		e.target
+																			.checked
+																	)
+																}
+																className="mr-3"
+															/>
+															<label className="text-gray-300">
+																Customer has
+																accepted the
+																loan terms and
+																conditions
+															</label>
+														</div>
+													</div>
+												</div>
+											)}
+
+											{/* Meeting Attestation Form */}
+											{attestationType === "MEETING" && (
+												<div className="mb-6 p-4 bg-gray-800/30 rounded-lg">
+													<h6 className="text-white font-medium mb-3">
+														Meeting Attestation
+														Details
+													</h6>
+													<div>
+														<label className="block text-sm font-medium text-gray-300 mb-2">
+															Meeting Completion
+															Date & Time
+														</label>
+														<input
+															type="datetime-local"
+															value={
+																meetingCompletedAt
+															}
+															onChange={(e) =>
+																setMeetingCompletedAt(
+																	e.target
+																		.value
+																)
+															}
+															className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+														/>
+													</div>
+												</div>
+											)}
+
+											{/* Attestation Notes */}
+											<div className="mb-6">
+												<label className="block text-sm font-medium text-gray-300 mb-2">
+													Attestation Notes (Optional)
+												</label>
+												<textarea
+													value={attestationNotes}
+													onChange={(e) =>
+														setAttestationNotes(
+															e.target.value
+														)
+													}
+													placeholder="Add notes about the attestation process..."
+													className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+													rows={3}
+												/>
+											</div>
+
+											{/* Complete Attestation Button */}
+											<div className="flex space-x-4">
+												<button
+													onClick={
+														handleAttestationCompletion
+													}
+													disabled={
+														processingAttestation ||
+														(attestationType ===
+															"IMMEDIATE" &&
+															(!attestationVideoWatched ||
+																!attestationTermsAccepted)) ||
+														(attestationType ===
+															"MEETING" &&
+															!meetingCompletedAt)
+													}
+													className="flex items-center px-6 py-3 bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-600/50 text-white font-medium rounded-lg transition-colors"
+												>
+													<CheckCircleIcon className="h-5 w-5 mr-2" />
+													{processingAttestation
+														? "Processing..."
+														: "Complete Attestation"}
+												</button>
+											</div>
+
+											{/* Process Information */}
+											<div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+												<h5 className="text-sm font-medium text-blue-200 mb-2">
+													Attestation Process
+												</h5>
+												<ul className="text-xs text-blue-200 space-y-1">
+													<li>
+														•{" "}
+														<strong>
+															Immediate:
+														</strong>{" "}
+														Customer confirms they
+														have watched the video
+														and accepted terms
+													</li>
+													<li>
+														•{" "}
+														<strong>
+															Meeting:
+														</strong>{" "}
+														Legal counsel meeting
+														completed and terms
+														explained
+													</li>
+													<li>
+														• Application will move
+														to PENDING_SIGNATURE
+														status upon completion
+													</li>
+													<li>
+														• All attestation
+														details are logged in
+														the audit trail
+													</li>
+												</ul>
+											</div>
+										</div>
+									</div>
+								)}
+
 								{/* Disbursement Tab */}
 								{selectedTab === "disbursement" && (
 									<div>
@@ -1937,6 +2369,7 @@ function AdminApplicationsPageContent() {
 													"PENDING_APP_FEE",
 													"PENDING_KYC",
 													"PENDING_APPROVAL",
+													"PENDING_ATTESTATION",
 													"PENDING_SIGNATURE",
 													"PENDING_DISBURSEMENT",
 													"REJECTED",

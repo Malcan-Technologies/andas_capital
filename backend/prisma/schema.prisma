@@ -164,32 +164,41 @@ model LoanRepayment {
 }
 
 model LoanApplication {
-  id               String                   @id @default(cuid())
-  userId           String
-  productId        String
-  amount           Float?
-  term             Int?
-  status           String                   @default("INCOMPLETE")
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  acceptTerms      Boolean                  @default(false)
-  appStep          Int                      @default(0)
-  applicationFee   Float?
-  interestRate     Float?
-  lateFee          Float?
-  legalFee         Float?
-  monthlyRepayment Float?
-  netDisbursement  Float?
-  originationFee   Float?
-  paidAppFee       Boolean                  @default(false)
-  purpose          String?
-  urlLink          String?                  @unique
-  product          Product                  @relation(fields: [productId], references: [id])
-  user             User                     @relation(fields: [userId], references: [id])
-  loan             Loan?
-  documents        UserDocument[]
-  disbursement     LoanDisbursement?
-  history          LoanApplicationHistory[]
+  id                       String                   @id @default(cuid())
+  userId                   String
+  productId                String
+  amount                   Float?
+  term                     Int?
+  status                   String                   @default("INCOMPLETE")
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  acceptTerms              Boolean                  @default(false)
+  appStep                  Int                      @default(0)
+  applicationFee           Float?
+  interestRate             Float?
+  lateFee                  Float?
+  legalFee                 Float?
+  monthlyRepayment         Float?
+  netDisbursement          Float?
+  originationFee           Float?
+  paidAppFee               Boolean                  @default(false)
+  purpose                  String?
+  urlLink                  String?                  @unique
+  // Attestation fields
+  attestationType          String? // "IMMEDIATE" or "MEETING"
+  attestationCompleted     Boolean                  @default(false)
+  attestationDate          DateTime?
+  attestationNotes         String?
+  attestationVideoWatched  Boolean                  @default(false)
+  attestationTermsAccepted Boolean                  @default(false)
+  meetingScheduledAt       DateTime?
+  meetingCompletedAt       DateTime?
+  product                  Product                  @relation(fields: [productId], references: [id])
+  user                     User                     @relation(fields: [userId], references: [id])
+  loan                     Loan?
+  documents                UserDocument[]
+  disbursement             LoanDisbursement?
+  history                  LoanApplicationHistory[]
 
   @@map("loan_applications")
 }

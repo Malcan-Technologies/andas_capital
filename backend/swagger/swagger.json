@@ -1084,6 +1084,109 @@
         }
       }
     },
+    "/api/admin/applications/live-attestations": {
+      "get": {
+        "summary": "Get all live video call attestation requests",
+        "tags": [
+          "Admin - Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of live attestation requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LoanApplication"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/admin/applications/{id}/complete-live-attestation": {
+      "post": {
+        "summary": "Complete live video call attestation for an application",
+        "tags": [
+          "Admin - Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The loan application ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "description": "Admin notes about the live call"
+                  },
+                  "meetingCompletedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the meeting was completed"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Live attestation completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or application not in correct status"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
     "/api/admin/applications/{id}": {
       "get": {
         "summary": "Get a specific loan application (admin only)",
@@ -2649,6 +2752,89 @@
         }
       }
     },
+    "/api/admin/applications/{id}/complete-attestation": {
+      "post": {
+        "summary": "Mark attestation as completed and move to next stage (admin only)",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The loan application ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attestationType": {
+                    "type": "string",
+                    "enum": [
+                      "IMMEDIATE",
+                      "MEETING"
+                    ]
+                  },
+                  "attestationNotes": {
+                    "type": "string"
+                  },
+                  "attestationVideoWatched": {
+                    "type": "boolean"
+                  },
+                  "attestationTermsAccepted": {
+                    "type": "boolean"
+                  },
+                  "meetingCompletedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Attestation completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or application not in correct status"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Access denied, admin privileges required"
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
     "/api/auth/login": {
       "post": {
         "summary": "Login with phone number and password",
@@ -3510,6 +3696,230 @@
           },
           "404": {
             "description": "Document or file not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/complete-attestation": {
+      "post": {
+        "summary": "Complete attestation for loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The loan application ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attestationType": {
+                    "type": "string",
+                    "enum": [
+                      "IMMEDIATE",
+                      "MEETING"
+                    ]
+                  },
+                  "attestationVideoWatched": {
+                    "type": "boolean"
+                  },
+                  "attestationTermsAccepted": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Attestation completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or application not in correct status"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Access denied - not your application"
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/history": {
+      "get": {
+        "summary": "Get loan application status history for current user",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The loan application ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Application history timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "applicationId": {
+                      "type": "string"
+                    },
+                    "currentStatus": {
+                      "type": "string"
+                    },
+                    "timeline": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "applicationId": {
+                            "type": "string"
+                          },
+                          "previousStatus": {
+                            "type": "string"
+                          },
+                          "newStatus": {
+                            "type": "string"
+                          },
+                          "changedBy": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "notes": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/request-live-call": {
+      "post": {
+        "summary": "Request live video call attestation for loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The loan application ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attestationType": {
+                    "type": "string",
+                    "enum": [
+                      "MEETING"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Live call request submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplication"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or application not in correct status"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Access denied - not your application"
+          },
+          "404": {
+            "description": "Application not found"
           },
           "500": {
             "description": "Server error"

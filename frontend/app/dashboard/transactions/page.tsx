@@ -194,158 +194,162 @@ export default function TransactionsPage() {
 
 	return (
 		<DashboardLayout userName={userName} title="Transactions">
-			<div className="max-w-7xl mx-auto">
-				<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-					{/* Card Header */}
-					<div className="p-6 pb-0">
-						<div className="flex items-center space-x-2 mb-6">
-							<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-								<WalletIcon className="h-5 w-5 text-purple-primary" />
+			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+				<div className="space-y-6">
+					<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+						{/* Card Header */}
+						<div className="p-6 pb-0">
+							<div className="flex items-center space-x-2 mb-6">
+								<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+									<WalletIcon className="h-5 w-5 text-purple-primary" />
+								</div>
+								<h3 className="text-lg font-heading text-purple-primary font-semibold">
+									All Transactions
+								</h3>
+								<span className="text-sm text-gray-500 font-body ml-auto">
+									{transactions.length} Total Transaction
+									{transactions.length !== 1 ? "s" : ""}
+								</span>
 							</div>
-							<h3 className="text-lg font-heading text-purple-primary font-semibold">
-								All Transactions
-							</h3>
-							<span className="text-sm text-gray-500 font-body ml-auto">
-								{transactions.length} Total Transaction
-								{transactions.length !== 1 ? "s" : ""}
-							</span>
 						</div>
-					</div>
 
-					<div className="p-6 pt-0">
-						{/* Transaction Type Filter */}
-						{transactions.length > 0 && (
-							<div className="mb-6">
-								<div className="flex flex-wrap gap-2">
-									{[
-										"ALL",
-										"DEPOSIT",
-										"WITHDRAWAL",
-										"LOAN_DISBURSEMENT",
-										"LOAN_REPAYMENT",
-									].map((type) => (
-										<button
-											key={type}
-											onClick={() =>
-												setTransactionFilter(type)
-											}
-											className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors font-body ${
-												transactionFilter === type
-													? "bg-purple-primary text-white"
-													: "bg-gray-100 text-gray-700 hover:bg-blue-tertiary hover:text-white"
-											}`}
-										>
-											{getTransactionTypeLabel(type)}
-										</button>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Transactions List */}
-						<div className="space-y-4">
-							{loading ? (
-								<div className="text-center py-8">
-									<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-									<p className="mt-4 text-gray-500 font-body">
-										Loading transactions...
-									</p>
-								</div>
-							) : getFilteredTransactions().length > 0 ? (
-								<div className="space-y-4">
-									{getFilteredTransactions().map(
-										(transaction) => (
-											<div
-												key={transaction.id}
-												className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-offwhite hover:border-purple-primary/30 transition-all duration-200 bg-white"
+						<div className="p-6 pt-0">
+							{/* Transaction Type Filter */}
+							{transactions.length > 0 && (
+								<div className="mb-6">
+									<div className="flex flex-wrap gap-2">
+										{[
+											"ALL",
+											"DEPOSIT",
+											"WITHDRAWAL",
+											"LOAN_DISBURSEMENT",
+											"LOAN_REPAYMENT",
+										].map((type) => (
+											<button
+												key={type}
+												onClick={() =>
+													setTransactionFilter(type)
+												}
+												className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors font-body ${
+													transactionFilter === type
+														? "bg-purple-primary text-white"
+														: "bg-gray-100 text-gray-700 hover:bg-blue-tertiary hover:text-white"
+												}`}
 											>
-												<div className="flex items-center space-x-4 min-w-0 flex-1">
-													<div className="p-2 bg-gray-50 rounded-xl flex-shrink-0 border border-gray-200">
-														{getTransactionIcon(
-															transaction.type
-														)}
-													</div>
-													<div className="min-w-0 flex-1">
-														<p className="font-semibold text-gray-700 truncate font-body">
-															{
-																transaction.description
-															}
-														</p>
-														<p className="text-sm text-gray-500 mt-1 font-body">
-															{formatDateTime(
-																transaction.createdAt
-															)}
-														</p>
-														{transaction.reference && (
-															<p className="text-xs text-gray-500 truncate font-body">
-																Ref:{" "}
-																{
-																	transaction.reference
-																}
-															</p>
-														)}
-													</div>
-												</div>
-												<div className="text-right flex-shrink-0 ml-4">
-													<p
-														className={`font-bold text-lg font-body ${
-															transaction.type ===
-															"LOAN_REPAYMENT"
-																? "text-green-600"
-																: transaction.amount >
-																  0
-																? "text-purple-primary"
-																: "text-blue-tertiary"
-														}`}
-													>
-														{transaction.amount > 0
-															? "+"
-															: ""}
-														{formatCurrency(
-															transaction.amount
-														)}
-													</p>
-													<div className="mt-1">
-														{getStatusBadge(
-															transaction.status
-														)}
-													</div>
-												</div>
-											</div>
-										)
-									)}
-								</div>
-							) : transactions.length > 0 ? (
-								<div className="text-center py-12">
-									<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-									<p className="text-gray-500 mb-2 font-body">
-										No{" "}
-										{getTransactionTypeLabel(
-											transactionFilter
-										).toLowerCase()}{" "}
-										transactions found
-									</p>
-									<button
-										onClick={() =>
-											setTransactionFilter("ALL")
-										}
-										className="text-sm text-purple-primary hover:text-blue-tertiary font-medium font-body transition-colors"
-									>
-										Show all transactions
-									</button>
-								</div>
-							) : (
-								<div className="text-center py-12">
-									<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-									<h4 className="text-lg font-medium text-gray-700 mb-2 font-heading">
-										No Transactions Yet
-									</h4>
-									<p className="text-gray-500 mb-4 font-body">
-										Your transaction history will appear
-										here once you start using your wallet.
-									</p>
+												{getTransactionTypeLabel(type)}
+											</button>
+										))}
+									</div>
 								</div>
 							)}
+
+							{/* Transactions List */}
+							<div className="space-y-4">
+								{loading ? (
+									<div className="text-center py-8">
+										<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+										<p className="mt-4 text-gray-500 font-body">
+											Loading transactions...
+										</p>
+									</div>
+								) : getFilteredTransactions().length > 0 ? (
+									<div className="space-y-4">
+										{getFilteredTransactions().map(
+											(transaction) => (
+												<div
+													key={transaction.id}
+													className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-offwhite hover:border-purple-primary/30 transition-all duration-200 bg-white"
+												>
+													<div className="flex items-center space-x-4 min-w-0 flex-1">
+														<div className="p-2 bg-gray-50 rounded-xl flex-shrink-0 border border-gray-200">
+															{getTransactionIcon(
+																transaction.type
+															)}
+														</div>
+														<div className="min-w-0 flex-1">
+															<p className="font-semibold text-gray-700 truncate font-body">
+																{
+																	transaction.description
+																}
+															</p>
+															<p className="text-sm text-gray-500 mt-1 font-body">
+																{formatDateTime(
+																	transaction.createdAt
+																)}
+															</p>
+															{transaction.reference && (
+																<p className="text-xs text-gray-500 truncate font-body">
+																	Ref:{" "}
+																	{
+																		transaction.reference
+																	}
+																</p>
+															)}
+														</div>
+													</div>
+													<div className="text-right flex-shrink-0 ml-4">
+														<p
+															className={`font-bold text-lg font-body ${
+																transaction.type ===
+																"LOAN_REPAYMENT"
+																	? "text-green-600"
+																	: transaction.amount >
+																	  0
+																	? "text-purple-primary"
+																	: "text-blue-tertiary"
+															}`}
+														>
+															{transaction.amount >
+															0
+																? "+"
+																: ""}
+															{formatCurrency(
+																transaction.amount
+															)}
+														</p>
+														<div className="mt-1">
+															{getStatusBadge(
+																transaction.status
+															)}
+														</div>
+													</div>
+												</div>
+											)
+										)}
+									</div>
+								) : transactions.length > 0 ? (
+									<div className="text-center py-12">
+										<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+										<p className="text-gray-500 mb-2 font-body">
+											No{" "}
+											{getTransactionTypeLabel(
+												transactionFilter
+											).toLowerCase()}{" "}
+											transactions found
+										</p>
+										<button
+											onClick={() =>
+												setTransactionFilter("ALL")
+											}
+											className="text-sm text-purple-primary hover:text-blue-tertiary font-medium font-body transition-colors"
+										>
+											Show all transactions
+										</button>
+									</div>
+								) : (
+									<div className="text-center py-12">
+										<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+										<h4 className="text-lg font-medium text-gray-700 mb-2 font-heading">
+											No Transactions Yet
+										</h4>
+										<p className="text-gray-500 mb-4 font-body">
+											Your transaction history will appear
+											here once you start using your
+											wallet.
+										</p>
+									</div>
+								)}
+							</div>
 						</div>
 					</div>
 				</div>

@@ -23,6 +23,7 @@ import {
 	CreditCardIcon,
 	ReceiptPercentIcon,
 	ExclamationTriangleIcon,
+	VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import {
 	AdminTokenStorage,
@@ -184,6 +185,11 @@ export default function AdminLayout({
 			name: "Overdue Payments",
 			href: "/dashboard/late-fees",
 			icon: ExclamationTriangleIcon,
+		},
+		{
+			name: "Live Attestations",
+			href: "/dashboard/live-attestations",
+			icon: VideoCameraIcon,
 		},
 		{ name: "Users", href: "/dashboard/users", icon: UserGroupIcon },
 		{ name: "Reports", href: "/dashboard/reports", icon: ChartBarIcon },

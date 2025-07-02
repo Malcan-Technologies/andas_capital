@@ -173,6 +173,7 @@ export default function DashboardPage() {
 					"PENDING_KYC",
 					"PENDING_APPROVAL",
 					"APPROVED",
+					"PENDING_ATTESTATION",
 					"REJECTED",
 				].includes(app.status)
 			);
@@ -469,348 +470,228 @@ export default function DashboardPage() {
 
 	return (
 		<DashboardLayout userName={userName}>
-			<div className="max-w-7xl mx-auto">
-				{/* Incomplete Application Notification Card */}
-				{incompleteApplications.length > 0 &&
-					(() => {
-						const filteredApps = incompleteApplications.filter(
-							(app) =>
-								[
-									"INCOMPLETE",
-									"PENDING_APP_FEE",
-									"APPROVED",
-								].includes(app.status)
-						);
+			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+				<div className="space-y-6">
+					{/* Incomplete Application Notification Card */}
+					{incompleteApplications.length > 0 &&
+						(() => {
+							const filteredApps = incompleteApplications.filter(
+								(app) =>
+									[
+										"INCOMPLETE",
+										"PENDING_APP_FEE",
+										"APPROVED",
+										"PENDING_ATTESTATION",
+									].includes(app.status)
+							);
 
-						if (filteredApps.length === 0) return null;
+							if (filteredApps.length === 0) return null;
 
-						const currentApp =
-							filteredApps[currentNotificationIndex] ||
-							filteredApps[0];
+							const currentApp =
+								filteredApps[currentNotificationIndex] ||
+								filteredApps[0];
 
-						const getAnnouncementContent = (status: string) => {
-							switch (status) {
-								case "INCOMPLETE":
-									return {
-										title: "Complete Your Loan Application",
-										description: `You have an incomplete application for ${
-											currentApp.product?.name || "loan"
-										}${
-											currentApp.amount
-												? ` of ${formatCurrency(
-														parseFloat(
-															currentApp.amount
+							const getAnnouncementContent = (status: string) => {
+								switch (status) {
+									case "INCOMPLETE":
+										return {
+											title: "Complete Your Loan Application",
+											description: `You have an incomplete application for ${
+												currentApp.product?.name ||
+												"loan"
+											}${
+												currentApp.amount
+													? ` of ${formatCurrency(
+															parseFloat(
+																currentApp.amount
+															)
+													  )}`
+													: ""
+											}`,
+											buttonText: "Resume",
+											buttonHref: `/dashboard/apply?applicationId=${
+												currentApp.id
+											}&step=${
+												currentApp.appStep
+											}&productCode=${
+												currentApp.product?.code || ""
+											}`,
+											icon: (
+												<ClockIcon className="h-6 w-6 text-amber-600" />
+											),
+										};
+									case "PENDING_APP_FEE":
+										return {
+											title: "Application Fee Payment Required",
+											description: `Your loan application is pending fee payment for ${
+												currentApp.product?.name ||
+												"loan"
+											}${
+												currentApp.amount
+													? ` of ${formatCurrency(
+															parseFloat(
+																currentApp.amount
+															)
+													  )}`
+													: ""
+											}`,
+											buttonText: "Pay",
+											buttonHref: `/dashboard/applications/${currentApp.id}`,
+											icon: (
+												<CreditCardIcon className="h-6 w-6 text-amber-600" />
+											),
+										};
+									case "APPROVED":
+										return {
+											title: "🎉 Loan Application Approved!",
+											description: `Congratulations! Your application for ${
+												currentApp.product?.name ||
+												"loan"
+											}${
+												currentApp.amount
+													? ` of ${formatCurrency(
+															parseFloat(
+																currentApp.amount
+															)
+													  )}`
+													: ""
+											} has been approved`,
+											buttonText: "View Details",
+											buttonHref: `/dashboard/applications/${currentApp.id}`,
+											icon: (
+												<CheckCircleIcon className="h-6 w-6 text-green-600" />
+											),
+										};
+									case "PENDING_ATTESTATION":
+										return {
+											title: "Attestation Required",
+											description: `Your approved loan for ${
+												currentApp.product?.name ||
+												"loan"
+											}${
+												currentApp.amount
+													? ` of ${formatCurrency(
+															parseFloat(
+																currentApp.amount
+															)
+													  )}`
+													: ""
+											} requires attestation to proceed`,
+											buttonText: "Complete Attestation",
+											buttonHref: `/dashboard/loans?tab=applications`,
+											icon: (
+												<svg
+													className="h-6 w-6 text-cyan-600"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+													/>
+												</svg>
+											),
+										};
+									default:
+										return {
+											title: "Application Update",
+											description: `Your loan application requires attention`,
+											buttonText: "View Application",
+											buttonHref: `/dashboard/applications/${currentApp.id}`,
+											icon: (
+												<ClockIcon className="h-6 w-6 text-amber-600" />
+											),
+										};
+								}
+							};
+
+							const content = getAnnouncementContent(
+								currentApp.status
+							);
+
+							return (
+								<div>
+									<div className="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-6">
+										{/* Subtle navigation dots for multiple notifications */}
+										{filteredApps.length > 1 && (
+											<div className="flex items-center justify-center mb-4">
+												<div className="flex items-center space-x-2">
+													{filteredApps.map(
+														(_, index) => (
+															<button
+																key={index}
+																onClick={() =>
+																	setCurrentNotificationIndex(
+																		index
+																	)
+																}
+																className={`w-2 h-2 rounded-full transition-all duration-200 ${
+																	index ===
+																	currentNotificationIndex
+																		? "bg-amber-500 w-6"
+																		: "bg-amber-300 hover:bg-amber-400"
+																}`}
+																title={`View notification ${
+																	index + 1
+																}`}
+															/>
 														)
-												  )}`
-												: ""
-										}`,
-										buttonText: "Resume",
-										buttonHref: `/dashboard/apply?applicationId=${
-											currentApp.id
-										}&step=${
-											currentApp.appStep
-										}&productCode=${
-											currentApp.product?.code || ""
-										}`,
-										icon: (
-											<ClockIcon className="h-6 w-6 text-amber-600" />
-										),
-									};
-								case "PENDING_APP_FEE":
-									return {
-										title: "Application Fee Payment Required",
-										description: `Your loan application is pending fee payment for ${
-											currentApp.product?.name || "loan"
-										}${
-											currentApp.amount
-												? ` of ${formatCurrency(
-														parseFloat(
-															currentApp.amount
-														)
-												  )}`
-												: ""
-										}`,
-										buttonText: "Pay",
-										buttonHref: `/dashboard/applications/${currentApp.id}`,
-										icon: (
-											<CreditCardIcon className="h-6 w-6 text-amber-600" />
-										),
-									};
-								case "APPROVED":
-									return {
-										title: "🎉 Loan Application Approved!",
-										description: `Congratulations! Your application for ${
-											currentApp.product?.name || "loan"
-										}${
-											currentApp.amount
-												? ` of ${formatCurrency(
-														parseFloat(
-															currentApp.amount
-														)
-												  )}`
-												: ""
-										} has been approved`,
-										buttonText: "View Details",
-										buttonHref: `/dashboard/applications/${currentApp.id}`,
-										icon: (
-											<CheckCircleIcon className="h-6 w-6 text-green-600" />
-										),
-									};
-								default:
-									return {
-										title: "Application Update",
-										description: `Your loan application requires attention`,
-										buttonText: "View Application",
-										buttonHref: `/dashboard/applications/${currentApp.id}`,
-										icon: (
-											<ClockIcon className="h-6 w-6 text-amber-600" />
-										),
-									};
-							}
-						};
-
-						const content = getAnnouncementContent(
-							currentApp.status
-						);
-
-						return (
-							<div className="mb-6">
-								<div className="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-6">
-									{/* Subtle navigation dots for multiple notifications */}
-									{filteredApps.length > 1 && (
-										<div className="flex items-center justify-center mb-4">
-											<div className="flex items-center space-x-2">
-												{filteredApps.map(
-													(_, index) => (
-														<button
-															key={index}
-															onClick={() =>
-																setCurrentNotificationIndex(
-																	index
-																)
-															}
-															className={`w-2 h-2 rounded-full transition-all duration-200 ${
-																index ===
-																currentNotificationIndex
-																	? "bg-amber-500 w-6"
-																	: "bg-amber-300 hover:bg-amber-400"
-															}`}
-															title={`View notification ${
-																index + 1
-															}`}
-														/>
-													)
-												)}
-											</div>
-										</div>
-									)}
-
-									<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-										<div className="flex items-start space-x-4">
-											<div className="flex-shrink-0">
-												<div className="p-2 bg-amber-100 rounded-xl border border-amber-200">
-													{content.icon}
+													)}
 												</div>
 											</div>
-											<div className="flex-1">
-												<h3 className="text-lg font-heading text-gray-700">
-													{content.title}
-												</h3>
-												<p className="text-gray-600 text-sm mt-1 font-body">
-													{content.description}
-												</p>
-												<p className="text-gray-500 text-xs mt-1 font-body">
-													{currentApp.status ===
-													"APPROVED"
-														? "Approved on"
-														: "Started on"}{" "}
-													{formatDate(
-														currentApp.status ===
-															"APPROVED"
-															? currentApp.approvedAt ||
-																	currentApp.updatedAt
-															: currentApp.createdAt
-													)}
-												</p>
-											</div>
-										</div>
-										<div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-											<Link
-												href={content.buttonHref}
-												className="bg-amber-500 text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-amber-600 transition inline-flex items-center justify-center text-sm"
-											>
-												<svg
-													className="h-4 w-4 mr-2"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d={
-															currentApp.status ===
-															"PENDING_APP_FEE"
-																? "M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-																: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-														}
-													/>
-												</svg>
-												{content.buttonText}
-											</Link>
-											<button
-												onClick={() => {
-													const newApps =
-														incompleteApplications.filter(
-															(a) =>
-																a.id !==
-																currentApp.id
-														);
-													setIncompleteApplications(
-														newApps
-													);
-													// Adjust current index if needed
-													if (
-														currentNotificationIndex >=
-														filteredApps.length - 1
-													) {
-														setCurrentNotificationIndex(
-															0
-														);
-													}
-												}}
-												className="inline-flex items-center justify-center px-3 py-2 text-gray-500 hover:text-gray-700 text-sm transition-colors"
-												title="Dismiss"
-											>
-												<svg
-													className="h-4 w-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d="M6 18L18 6M6 6l12 12"
-													/>
-												</svg>
-											</button>
-										</div>
-									</div>
-								</div>
-							</div>
-						);
-					})()}
-
-				{/* Loans & Applications Card - Spans 2 columns */}
-				<div className="break-inside-avoid bg-white rounded-xl shadow-md mb-6 border border-purple-primary/10">
-					<div className="p-6">
-						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
-							<div className="flex items-center space-x-3">
-								<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
-									<CreditCardIcon className="h-8 w-8 text-purple-primary" />
-								</div>
-								<div>
-									<h2 className="text-xl font-heading text-purple-primary">
-										Loans
-									</h2>
-									<p className="text-gray-700 text-sm font-body">
-										Your borrowing overview
-									</p>
-								</div>
-							</div>
-							<Link
-								href="/dashboard/loans"
-								className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
-							>
-								View All
-								<ArrowRightIcon className="ml-1 h-4 w-4" />
-							</Link>
-						</div>
-
-						{/* Main Content Grid - Chart and Stats */}
-						<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-							{/* Donut Chart Section */}
-							<div className="flex flex-col items-center justify-center">
-								<PieChart
-									borrowed={loanSummary.totalBorrowed || 0}
-									repaid={loanSummary.totalRepaid || 0}
-									size={240}
-									theme="light"
-								/>
-							</div>
-
-							{/* Stats Section */}
-							<div className="lg:col-span-2 space-y-4">
-								{/* Main Balance */}
-								<div className="text-center lg:text-left">
-									<p className="text-gray-500 text-sm mb-1 font-body">
-										Total Outstanding
-									</p>
-									<p className="text-4xl font-bold mb-2 text-purple-primary font-heading">
-										{formatCurrency(
-											loanSummary.totalOutstanding || 0
 										)}
-									</p>
-									<p className="text-gray-500 text-sm font-body">
-										of{" "}
-										{formatCurrency(
-											loanSummary.totalBorrowed || 0
-										)}{" "}
-										borrowed
-									</p>
-								</div>
 
-								{/* Quick Stats Grid */}
-								<div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-									<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-										<div className="flex items-center space-x-2 mb-2">
-											<svg
-												className="h-4 w-4 text-blue-tertiary"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-													d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-												/>
-											</svg>
-											<span className="text-xs font-medium text-gray-500 font-body">
-												Total Paid
-											</span>
-										</div>
-										<p className="text-lg font-bold text-blue-tertiary font-heading">
-											{formatCurrency(
-												loanSummary.totalRepaid || 0
-											)}
-										</p>
-									</div>
-									{(() => {
-										const nextPaymentInfo =
-											calculateNextPaymentInfo();
-										const isOverdue =
-											nextPaymentInfo.isOverdue;
-
-										return (
-											<div
-												className={`rounded-xl p-6 border ${
-													isOverdue
-														? "bg-red-50 border-red-200"
-														: "bg-blue-tertiary/5 border-blue-tertiary/20"
-												}`}
-											>
-												<div className="flex items-center space-x-2 mb-2">
+										<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+											<div className="flex items-start space-x-4">
+												<div className="flex-shrink-0">
+													<div className="p-2 bg-amber-100 rounded-xl border border-amber-200">
+														{content.icon}
+													</div>
+												</div>
+												<div className="flex-1">
+													<h3 className="text-lg font-heading text-gray-700">
+														{content.title}
+													</h3>
+													<p className="text-gray-600 text-sm mt-1 font-body">
+														{content.description}
+													</p>
+													<p className="text-gray-500 text-xs mt-1 font-body">
+														{currentApp.status ===
+														"APPROVED"
+															? "Approved on"
+															: currentApp.status ===
+															  "PENDING_ATTESTATION"
+															? "Requires attestation since"
+															: "Started on"}{" "}
+														{formatDate(
+															currentApp.status ===
+																"APPROVED"
+																? currentApp.approvedAt ||
+																		currentApp.updatedAt
+																: currentApp.status ===
+																  "PENDING_ATTESTATION"
+																? currentApp.approvedAt ||
+																  currentApp.updatedAt
+																: currentApp.createdAt
+														)}
+													</p>
+												</div>
+											</div>
+											<div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+												<Link
+													href={content.buttonHref}
+													className={`font-medium px-6 py-3 rounded-xl shadow transition inline-flex items-center justify-center text-sm text-white ${
+														currentApp.status ===
+														"PENDING_ATTESTATION"
+															? "bg-cyan-500 hover:bg-cyan-600"
+															: "bg-amber-500 hover:bg-amber-600"
+													}`}
+												>
 													<svg
-														className={`h-4 w-4 ${
-															isOverdue
-																? "text-red-500"
-																: "text-blue-tertiary"
-														}`}
+														className="h-4 w-4 mr-2"
 														fill="none"
 														stroke="currentColor"
 														viewBox="0 0 24 24"
@@ -819,54 +700,213 @@ export default function DashboardPage() {
 															strokeLinecap="round"
 															strokeLinejoin="round"
 															strokeWidth={2}
-															d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+															d={
+																currentApp.status ===
+																"PENDING_APP_FEE"
+																	? "M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+																	: currentApp.status ===
+																	  "PENDING_ATTESTATION"
+																	? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+																	: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+															}
 														/>
 													</svg>
-													<span
-														className={`text-xs font-medium font-body ${
-															isOverdue
-																? "text-red-600"
-																: "text-gray-500"
-														}`}
+													{content.buttonText}
+												</Link>
+												<button
+													onClick={() => {
+														const newApps =
+															incompleteApplications.filter(
+																(a) =>
+																	a.id !==
+																	currentApp.id
+															);
+														setIncompleteApplications(
+															newApps
+														);
+														// Adjust current index if needed
+														if (
+															currentNotificationIndex >=
+															filteredApps.length -
+																1
+														) {
+															setCurrentNotificationIndex(
+																0
+															);
+														}
+													}}
+													className="inline-flex items-center justify-center px-3 py-2 text-gray-500 hover:text-gray-700 text-sm transition-colors"
+													title="Dismiss"
+												>
+													<svg
+														className="h-4 w-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
 													>
-														{isOverdue
-															? "Overdue Payment"
-															: "Next Payment"}
-													</span>
-												</div>
-												<p
-													className={`text-lg font-bold font-heading ${
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M6 18L18 6M6 6l12 12"
+														/>
+													</svg>
+												</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							);
+						})()}
+
+					{/* Loans & Applications Card - Spans 2 columns */}
+					<div className="break-inside-avoid bg-white rounded-xl shadow-md border border-purple-primary/10">
+						<div className="p-6">
+							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
+								<div className="flex items-center space-x-3">
+									<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
+										<CreditCardIcon className="h-8 w-8 text-purple-primary" />
+									</div>
+									<div>
+										<h2 className="text-xl font-heading text-purple-primary">
+											Loans
+										</h2>
+										<p className="text-gray-700 text-sm font-body">
+											Your borrowing overview
+										</p>
+									</div>
+								</div>
+								<Link
+									href="/dashboard/loans"
+									className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
+								>
+									View All
+									<ArrowRightIcon className="ml-1 h-4 w-4" />
+								</Link>
+							</div>
+
+							{/* Main Content Grid - Chart and Stats */}
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+								{/* Donut Chart Section */}
+								<div className="flex flex-col items-center justify-center">
+									<PieChart
+										borrowed={
+											loanSummary.totalBorrowed || 0
+										}
+										repaid={loanSummary.totalRepaid || 0}
+										size={240}
+										theme="light"
+									/>
+								</div>
+
+								{/* Stats Section */}
+								<div className="lg:col-span-2 space-y-4">
+									{/* Main Balance */}
+									<div className="text-center lg:text-left">
+										<p className="text-gray-500 text-sm mb-1 font-body">
+											Total Outstanding
+										</p>
+										<p className="text-4xl font-bold mb-2 text-purple-primary font-heading">
+											{formatCurrency(
+												loanSummary.totalOutstanding ||
+													0
+											)}
+										</p>
+										<p className="text-gray-500 text-sm font-body">
+											of{" "}
+											{formatCurrency(
+												loanSummary.totalBorrowed || 0
+											)}{" "}
+											borrowed
+										</p>
+									</div>
+
+									{/* Quick Stats Grid */}
+									<div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+										<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
+											<div className="flex items-center space-x-2 mb-2">
+												<svg
+													className="h-4 w-4 text-blue-tertiary"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+													/>
+												</svg>
+												<span className="text-xs font-medium text-gray-500 font-body">
+													Total Paid
+												</span>
+											</div>
+											<p className="text-lg font-bold text-blue-tertiary font-heading">
+												{formatCurrency(
+													loanSummary.totalRepaid || 0
+												)}
+											</p>
+										</div>
+										{(() => {
+											const nextPaymentInfo =
+												calculateNextPaymentInfo();
+											const isOverdue =
+												nextPaymentInfo.isOverdue;
+
+											return (
+												<div
+													className={`rounded-xl p-6 border ${
 														isOverdue
-															? "text-red-600"
-															: "text-blue-tertiary"
+															? "bg-red-50 border-red-200"
+															: "bg-blue-tertiary/5 border-blue-tertiary/20"
 													}`}
 												>
-													{nextPaymentInfo.amount > 0
-														? formatCurrency(
-																nextPaymentInfo.amount
-														  )
-														: "No payments"}
-												</p>
-												{nextPaymentInfo.dueDate && (
+													<div className="flex items-center space-x-2 mb-2">
+														<svg
+															className={`h-4 w-4 ${
+																isOverdue
+																	? "text-red-500"
+																	: "text-blue-tertiary"
+															}`}
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																strokeLinecap="round"
+																strokeLinejoin="round"
+																strokeWidth={2}
+																d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+															/>
+														</svg>
+														<span
+															className={`text-xs font-medium font-body ${
+																isOverdue
+																	? "text-red-600"
+																	: "text-gray-500"
+															}`}
+														>
+															{isOverdue
+																? "Overdue Payment"
+																: "Next Payment"}
+														</span>
+													</div>
 													<p
-														className={`text-xs mt-1 font-body ${
+														className={`text-lg font-bold font-heading ${
 															isOverdue
-																? "text-red-500"
-																: "text-gray-500"
+																? "text-red-600"
+																: "text-blue-tertiary"
 														}`}
 													>
-														{isOverdue
-															? "Was due"
-															: "Due"}{" "}
-														{formatDate(
-															nextPaymentInfo.dueDate
-														)}
+														{nextPaymentInfo.amount >
+														0
+															? formatCurrency(
+																	nextPaymentInfo.amount
+															  )
+															: "No payments"}
 													</p>
-												)}
-												{nextPaymentInfo.description !==
-													"No payments due" &&
-													nextPaymentInfo.amount >
-														0 && (
+													{nextPaymentInfo.dueDate && (
 														<p
 															className={`text-xs mt-1 font-body ${
 																isOverdue
@@ -874,18 +914,328 @@ export default function DashboardPage() {
 																	: "text-gray-500"
 															}`}
 														>
-															{
-																nextPaymentInfo.description
-															}
+															{isOverdue
+																? "Was due"
+																: "Due"}{" "}
+															{formatDate(
+																nextPaymentInfo.dueDate
+															)}
 														</p>
 													)}
+													{nextPaymentInfo.description !==
+														"No payments due" &&
+														nextPaymentInfo.amount >
+															0 && (
+															<p
+																className={`text-xs mt-1 font-body ${
+																	isOverdue
+																		? "text-red-500"
+																		: "text-gray-500"
+																}`}
+															>
+																{
+																	nextPaymentInfo.description
+																}
+															</p>
+														)}
+												</div>
+											);
+										})()}
+										<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
+											<div className="flex items-center space-x-2 mb-2">
+												<svg
+													className="h-4 w-4 text-blue-tertiary"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+													/>
+												</svg>
+												<span className="text-xs font-medium text-gray-500 font-body">
+													Active Loans
+												</span>
 											</div>
-										);
-									})()}
+											<p className="text-lg font-bold text-blue-tertiary font-heading">
+												{loans.length}
+											</p>
+											<p className="text-xs text-gray-500 mt-1 font-body">
+												{loans.length === 1
+													? "loan"
+													: "loans"}{" "}
+												active
+											</p>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Late Fees Alert - Show when there are overdue payments with late fees */}
+							{(() => {
+								const loansWithLateFees = loans.filter(
+									(loan) =>
+										loan.overdueInfo?.hasOverduePayments &&
+										loan.overdueInfo?.totalLateFees > 0
+								);
+
+								if (loansWithLateFees.length === 0) return null;
+
+								const totalLateFees = loansWithLateFees.reduce(
+									(sum, loan) =>
+										sum +
+										(loan.overdueInfo?.totalLateFees || 0),
+									0
+								);
+
+								return (
+									<div className="bg-red-50 rounded-xl p-6 border border-red-200">
+										<div className="flex items-start space-x-4">
+											<div className="flex-shrink-0">
+												<div className="p-2 bg-red-100 rounded-xl border border-red-200">
+													<ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+												</div>
+											</div>
+											<div className="flex-1">
+												<h3 className="text-lg font-heading text-red-800 mb-1">
+													Late Fees Applied
+												</h3>
+												<p className="text-red-700 text-sm mb-2 font-body">
+													You have{" "}
+													{formatCurrency(
+														totalLateFees
+													)}{" "}
+													in late fees across{" "}
+													{loansWithLateFees.length}{" "}
+													{loansWithLateFees.length ===
+													1
+														? "loan"
+														: "loans"}
+													. Pay your overdue amounts
+													to avoid additional charges.
+												</p>
+												<div className="flex flex-wrap gap-2">
+													{loansWithLateFees.map(
+														(loan, index) => (
+															<span
+																key={loan.id}
+																className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200"
+															>
+																{loan
+																	.application
+																	?.product
+																	?.name ||
+																	`Loan ${
+																		index +
+																		1
+																	}`}
+																:{" "}
+																{formatCurrency(
+																	loan
+																		.overdueInfo
+																		?.totalLateFees ||
+																		0
+																)}
+															</span>
+														)
+													)}
+												</div>
+											</div>
+											<Link
+												href="/dashboard/loans"
+												className="bg-red-600 text-white font-medium px-4 py-2 rounded-xl shadow hover:bg-red-700 transition text-sm inline-flex items-center"
+											>
+												View Details
+												<ArrowRightIcon className="ml-1 h-4 w-4" />
+											</Link>
+										</div>
+									</div>
+								);
+							})()}
+
+							{/* CTA Section - Show when no loans */}
+							{loans.length === 0 && (
+								<div className="bg-blue-tertiary/5 rounded-xl p-6 text-center border border-blue-tertiary/20">
+									<div className="p-3 bg-purple-primary/20 rounded-xl w-fit mx-auto mb-4 border border-purple-primary/30">
+										<CreditCardIcon className="h-8 w-8 text-purple-primary" />
+									</div>
+									<h3 className="font-heading text-lg mb-2 text-purple-primary">
+										Ready to Get Started?
+									</h3>
+									<p className="text-gray-700 text-sm mb-4 font-body">
+										Apply for your first loan and start
+										building your credit history
+									</p>
+									<Link
+										href="/dashboard/apply"
+										className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition inline-flex items-center"
+									>
+										Apply for a Loan
+										<ArrowRightIcon className="ml-2 h-4 w-4" />
+									</Link>
+								</div>
+							)}
+						</div>
+					</div>
+
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+						{/* Wallet Card */}
+						<div className="break-inside-avoid bg-white rounded-xl shadow-md border border-blue-tertiary/10">
+							<div className="p-6">
+								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
+									<div className="flex items-center space-x-3">
+										<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
+											<WalletIcon className="h-8 w-8 text-purple-primary" />
+										</div>
+										<div>
+											<h2 className="text-xl font-heading text-purple-primary">
+												Wallet
+											</h2>
+											<p className="text-gray-700 text-sm font-body">
+												Your financial hub
+											</p>
+										</div>
+									</div>
+									<Link
+										href="/dashboard/wallet"
+										className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
+									>
+										Manage
+										<ArrowRightIcon className="ml-1 h-4 w-4" />
+									</Link>
+								</div>
+
+								{/* Main Balance */}
+								<div className="mb-6">
+									<div className="text-center">
+										<p className="text-gray-500 text-sm mb-1 font-body">
+											Total Balance
+										</p>
+										<p className="text-4xl font-bold mb-2 text-purple-primary font-heading">
+											{formatCurrency(walletData.balance)}
+										</p>
+										<p className="text-gray-500 text-sm font-body">
+											Available:{" "}
+											{formatCurrency(
+												walletData.availableForWithdrawal
+											)}
+										</p>
+									</div>
+								</div>
+
+								{/* Quick Stats Grid */}
+								<div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
 									<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
 										<div className="flex items-center space-x-2 mb-2">
+											<ArrowDownIcon className="h-4 w-4 text-blue-tertiary" />
+											<span className="text-xs font-medium text-gray-500 font-body">
+												Deposits
+											</span>
+										</div>
+										<p className="text-lg font-bold text-blue-tertiary font-heading">
+											{formatCurrency(
+												walletData.totalDeposits
+											)}
+										</p>
+									</div>
+									<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
+										<div className="flex items-center space-x-2 mb-2">
+											<CreditCardIcon className="h-4 w-4 text-blue-tertiary" />
+											<span className="text-xs font-medium text-gray-500 font-body">
+												Disbursed
+											</span>
+										</div>
+										<p className="text-lg font-bold text-blue-tertiary font-heading">
+											{formatCurrency(
+												walletData.totalDisbursed
+											)}
+										</p>
+									</div>
+								</div>
+
+								{/* Bank Status */}
+								<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
+									<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+										<div className="flex items-center space-x-3">
+											<div
+												className={`p-2 rounded-xl ${
+													walletData.bankConnected
+														? "bg-purple-primary/10"
+														: "bg-white"
+												} border ${
+													walletData.bankConnected
+														? "border-purple-primary/20"
+														: "border-gray-500/10"
+												}`}
+											>
+												<svg
+													className={`h-5 w-5 ${
+														walletData.bankConnected
+															? "text-purple-primary"
+															: "text-gray-500"
+													}`}
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+													/>
+												</svg>
+											</div>
+											<div>
+												<p className="font-semibold text-sm text-gray-700 font-body">
+													{walletData.bankConnected
+														? "Bank Connected"
+														: "Bank Not Connected"}
+												</p>
+												{walletData.bankConnected &&
+												walletData.bankName ? (
+													<p className="text-xs text-gray-500 font-body">
+														{walletData.bankName}{" "}
+														•••
+														{walletData.accountNumber?.slice(
+															-4
+														)}
+													</p>
+												) : (
+													<p className="text-xs text-gray-500 font-body">
+														Connect to enable
+														transfers
+													</p>
+												)}
+											</div>
+										</div>
+										{walletData.pendingTransactions > 0 && (
+											<div className="flex items-center space-x-1 bg-purple-primary/10 px-2 py-1 rounded-full border border-purple-primary/20">
+												<ClockIcon className="h-3 w-3 text-gray-500" />
+												<span className="text-xs font-medium text-gray-500 font-body">
+													{
+														walletData.pendingTransactions
+													}{" "}
+													pending
+												</span>
+											</div>
+										)}
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Credit Score Card */}
+						<div className="break-inside-avoid bg-white rounded-xl shadow-md border border-purple-primary/10">
+							<div className="p-6">
+								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
+									<div className="flex items-center space-x-3">
+										<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
 											<svg
-												className="h-4 w-4 text-blue-tertiary"
+												className="h-8 w-8 text-purple-primary"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -897,368 +1247,90 @@ export default function DashboardPage() {
 													d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
 												/>
 											</svg>
-											<span className="text-xs font-medium text-gray-500 font-body">
-												Active Loans
-											</span>
-										</div>
-										<p className="text-lg font-bold text-blue-tertiary font-heading">
-											{loans.length}
-										</p>
-										<p className="text-xs text-gray-500 mt-1 font-body">
-											{loans.length === 1
-												? "loan"
-												: "loans"}{" "}
-											active
-										</p>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						{/* Late Fees Alert - Show when there are overdue payments with late fees */}
-						{(() => {
-							const loansWithLateFees = loans.filter(
-								(loan) =>
-									loan.overdueInfo?.hasOverduePayments &&
-									loan.overdueInfo?.totalLateFees > 0
-							);
-
-							if (loansWithLateFees.length === 0) return null;
-
-							const totalLateFees = loansWithLateFees.reduce(
-								(sum, loan) =>
-									sum +
-									(loan.overdueInfo?.totalLateFees || 0),
-								0
-							);
-
-							return (
-								<div className="bg-red-50 rounded-xl p-6 border border-red-200 mb-6">
-									<div className="flex items-start space-x-4">
-										<div className="flex-shrink-0">
-											<div className="p-2 bg-red-100 rounded-xl border border-red-200">
-												<ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
-											</div>
-										</div>
-										<div className="flex-1">
-											<h3 className="text-lg font-heading text-red-800 mb-1">
-												Late Fees Applied
-											</h3>
-											<p className="text-red-700 text-sm mb-2 font-body">
-												You have{" "}
-												{formatCurrency(totalLateFees)}{" "}
-												in late fees across{" "}
-												{loansWithLateFees.length}{" "}
-												{loansWithLateFees.length === 1
-													? "loan"
-													: "loans"}
-												. Pay your overdue amounts to
-												avoid additional charges.
-											</p>
-											<div className="flex flex-wrap gap-2">
-												{loansWithLateFees.map(
-													(loan, index) => (
-														<span
-															key={loan.id}
-															className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200"
-														>
-															{loan.application
-																?.product
-																?.name ||
-																`Loan ${
-																	index + 1
-																}`}
-															:{" "}
-															{formatCurrency(
-																loan.overdueInfo
-																	?.totalLateFees ||
-																	0
-															)}
-														</span>
-													)
-												)}
-											</div>
-										</div>
-										<Link
-											href="/dashboard/loans"
-											className="bg-red-600 text-white font-medium px-4 py-2 rounded-xl shadow hover:bg-red-700 transition text-sm inline-flex items-center"
-										>
-											View Details
-											<ArrowRightIcon className="ml-1 h-4 w-4" />
-										</Link>
-									</div>
-								</div>
-							);
-						})()}
-
-						{/* CTA Section - Show when no loans */}
-						{loans.length === 0 && (
-							<div className="bg-blue-tertiary/5 rounded-xl p-6 text-center border border-blue-tertiary/20">
-								<div className="p-3 bg-purple-primary/20 rounded-xl w-fit mx-auto mb-4 border border-purple-primary/30">
-									<CreditCardIcon className="h-8 w-8 text-purple-primary" />
-								</div>
-								<h3 className="font-heading text-lg mb-2 text-purple-primary">
-									Ready to Get Started?
-								</h3>
-								<p className="text-gray-700 text-sm mb-4 font-body">
-									Apply for your first loan and start building
-									your credit history
-								</p>
-								<Link
-									href="/dashboard/apply"
-									className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition inline-flex items-center"
-								>
-									Apply for a Loan
-									<ArrowRightIcon className="ml-2 h-4 w-4" />
-								</Link>
-							</div>
-						)}
-					</div>
-				</div>
-
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-					{/* Wallet Card */}
-					<div className="break-inside-avoid bg-white rounded-xl shadow-md mb-6 border border-blue-tertiary/10">
-						<div className="p-6">
-							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
-								<div className="flex items-center space-x-3">
-									<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
-										<WalletIcon className="h-8 w-8 text-purple-primary" />
-									</div>
-									<div>
-										<h2 className="text-xl font-heading text-purple-primary">
-											Wallet
-										</h2>
-										<p className="text-gray-700 text-sm font-body">
-											Your financial hub
-										</p>
-									</div>
-								</div>
-								<Link
-									href="/dashboard/wallet"
-									className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
-								>
-									Manage
-									<ArrowRightIcon className="ml-1 h-4 w-4" />
-								</Link>
-							</div>
-
-							{/* Main Balance */}
-							<div className="mb-6">
-								<div className="text-center">
-									<p className="text-gray-500 text-sm mb-1 font-body">
-										Total Balance
-									</p>
-									<p className="text-4xl font-bold mb-2 text-purple-primary font-heading">
-										{formatCurrency(walletData.balance)}
-									</p>
-									<p className="text-gray-500 text-sm font-body">
-										Available:{" "}
-										{formatCurrency(
-											walletData.availableForWithdrawal
-										)}
-									</p>
-								</div>
-							</div>
-
-							{/* Quick Stats Grid */}
-							<div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-								<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-									<div className="flex items-center space-x-2 mb-2">
-										<ArrowDownIcon className="h-4 w-4 text-blue-tertiary" />
-										<span className="text-xs font-medium text-gray-500 font-body">
-											Deposits
-										</span>
-									</div>
-									<p className="text-lg font-bold text-blue-tertiary font-heading">
-										{formatCurrency(
-											walletData.totalDeposits
-										)}
-									</p>
-								</div>
-								<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-									<div className="flex items-center space-x-2 mb-2">
-										<CreditCardIcon className="h-4 w-4 text-blue-tertiary" />
-										<span className="text-xs font-medium text-gray-500 font-body">
-											Disbursed
-										</span>
-									</div>
-									<p className="text-lg font-bold text-blue-tertiary font-heading">
-										{formatCurrency(
-											walletData.totalDisbursed
-										)}
-									</p>
-								</div>
-							</div>
-
-							{/* Bank Status */}
-							<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-									<div className="flex items-center space-x-3">
-										<div
-											className={`p-2 rounded-xl ${
-												walletData.bankConnected
-													? "bg-purple-primary/10"
-													: "bg-white"
-											} border ${
-												walletData.bankConnected
-													? "border-purple-primary/20"
-													: "border-gray-500/10"
-											}`}
-										>
-											<svg
-												className={`h-5 w-5 ${
-													walletData.bankConnected
-														? "text-purple-primary"
-														: "text-gray-500"
-												}`}
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-													d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-												/>
-											</svg>
 										</div>
 										<div>
-											<p className="font-semibold text-sm text-gray-700 font-body">
-												{walletData.bankConnected
-													? "Bank Connected"
-													: "Bank Not Connected"}
+											<h2 className="text-xl font-heading text-purple-primary">
+												Credit Score
+											</h2>
+											<p className="text-gray-700 text-sm font-body">
+												Your creditworthiness
 											</p>
-											{walletData.bankConnected &&
-											walletData.bankName ? (
-												<p className="text-xs text-gray-500 font-body">
-													{walletData.bankName} •••
-													{walletData.accountNumber?.slice(
-														-4
-													)}
-												</p>
-											) : (
-												<p className="text-xs text-gray-500 font-body">
-													Connect to enable transfers
-												</p>
-											)}
 										</div>
 									</div>
-									{walletData.pendingTransactions > 0 && (
-										<div className="flex items-center space-x-1 bg-purple-primary/10 px-2 py-1 rounded-full border border-purple-primary/20">
-											<ClockIcon className="h-3 w-3 text-gray-500" />
-											<span className="text-xs font-medium text-gray-500 font-body">
-												{walletData.pendingTransactions}{" "}
-												pending
-											</span>
-										</div>
-									)}
+									<Link
+										href="/dashboard/credit-score"
+										className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
+									>
+										View Details
+										<ArrowRightIcon className="ml-1 h-4 w-4" />
+									</Link>
 								</div>
-							</div>
-						</div>
-					</div>
 
-					{/* Credit Score Card */}
-					<div className="break-inside-avoid bg-white rounded-xl shadow-md mb-6 border border-purple-primary/10">
-						<div className="p-6">
-							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
-								<div className="flex items-center space-x-3">
-									<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
-										<svg
-											className="h-8 w-8 text-purple-primary"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+								<div className="space-y-6">
+									{/* Gauge Section */}
+									<div className="flex flex-col items-center">
+										<div className="bg-blue-tertiary/5 rounded-2xl p-6 border border-blue-tertiary/20">
+											<CreditScoreGauge
+												score={600}
+												size={240}
 											/>
-										</svg>
+										</div>
 									</div>
-									<div>
-										<h2 className="text-xl font-heading text-purple-primary">
-											Credit Score
-										</h2>
-										<p className="text-gray-700 text-sm font-body">
-											Your creditworthiness
-										</p>
-									</div>
-								</div>
-								<Link
-									href="/dashboard/credit-score"
-									className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
-								>
-									View Details
-									<ArrowRightIcon className="ml-1 h-4 w-4" />
-								</Link>
-							</div>
 
-							<div className="space-y-6">
-								{/* Gauge Section */}
-								<div className="flex flex-col items-center">
-									<div className="bg-blue-tertiary/5 rounded-2xl p-6 border border-blue-tertiary/20">
-										<CreditScoreGauge
-											score={600}
-											size={240}
-										/>
-									</div>
-								</div>
-
-								{/* Score Info Section */}
-								<div className="space-y-4">
-									{(() => {
-										const scoreInfo =
-											getCreditScoreInfo(600);
-										return (
-											<>
-												{/* Current Score Info */}
-												<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-													<div className="flex items-center justify-between mb-3">
-														<div>
-															<h3 className="text-lg font-heading text-purple-primary">
-																{
-																	scoreInfo.category
-																}
-															</h3>
-															<p className="text-sm text-gray-500 font-body">
-																Score Range:{" "}
-																{
-																	scoreInfo.range
-																}
-															</p>
+									{/* Score Info Section */}
+									<div className="space-y-4">
+										{(() => {
+											const scoreInfo =
+												getCreditScoreInfo(600);
+											return (
+												<>
+													{/* Current Score Info */}
+													<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+														<div className="flex items-center justify-between mb-3">
+															<div>
+																<h3 className="text-lg font-heading text-purple-primary">
+																	{
+																		scoreInfo.category
+																	}
+																</h3>
+																<p className="text-sm text-gray-500 font-body">
+																	Score Range:{" "}
+																	{
+																		scoreInfo.range
+																	}
+																</p>
+															</div>
+															<div className="text-right">
+																<p className="text-2xl font-bold text-purple-primary font-heading">
+																	600
+																</p>
+																<p className="text-xs text-gray-500 font-body">
+																	Your Score
+																</p>
+															</div>
 														</div>
-														<div className="text-right">
-															<p className="text-2xl font-bold text-purple-primary font-heading">
-																600
-															</p>
-															<p className="text-xs text-gray-500 font-body">
-																Your Score
-															</p>
+														<p className="text-sm text-gray-700 leading-relaxed font-body">
+															{
+																scoreInfo.description
+															}
+														</p>
+													</div>
+
+													{/* Last Updated & Action */}
+													<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+														<div className="flex items-center justify-between">
+															<span className="text-sm font-medium text-gray-500 font-body">
+																Last Updated
+															</span>
+															<span className="text-sm font-bold text-gray-700 font-body">
+																Never
+															</span>
 														</div>
 													</div>
-													<p className="text-sm text-gray-700 leading-relaxed font-body">
-														{scoreInfo.description}
-													</p>
-												</div>
-
-												{/* Last Updated & Action */}
-												<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-													<div className="flex items-center justify-between">
-														<span className="text-sm font-medium text-gray-500 font-body">
-															Last Updated
-														</span>
-														<span className="text-sm font-bold text-gray-700 font-body">
-															Never
-														</span>
-													</div>
-												</div>
-											</>
-										);
-									})()}
+												</>
+											);
+										})()}
+									</div>
 								</div>
 							</div>
 						</div>

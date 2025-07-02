@@ -345,7 +345,7 @@ export default function SMETermLoan() {
 										src="/apply-screenshot.png"
 										alt="SME Term Loan Application Process"
 										fill
-										className="object-cover rounded-b-xl"
+										className="object-cover object-top rounded-b-xl"
 										sizes="(max-width: 768px) 100vw, 50vw"
 									/>
 								</div>

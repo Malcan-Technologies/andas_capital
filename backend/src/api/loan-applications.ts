@@ -10,6 +10,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { RequestHandler } from "express";
+import { trackApplicationStatusChange } from "./admin";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -1155,5 +1156,455 @@ router.get("/:id/documents/:documentId", (async (
 		return res;
 	}
 }) as RequestHandler);
+
+/**
+ * @swagger
+ * /api/loan-applications/{id}/complete-attestation:
+ *   post:
+ *     summary: Complete attestation for loan application
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               attestationType:
+ *                 type: string
+ *                 enum: [IMMEDIATE, MEETING]
+ *               attestationVideoWatched:
+ *                 type: boolean
+ *               attestationTermsAccepted:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Attestation completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       400:
+ *         description: Invalid request or application not in correct status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied - not your application
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Complete attestation (user endpoint)
+router.post(
+	"/:id/complete-attestation",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const {
+				attestationType,
+				attestationVideoWatched,
+				attestationTermsAccepted,
+			} = req.body;
+			const userId = req.user?.userId;
+
+			console.log(
+				`User ${userId} completing attestation for application ${id}`
+			);
+
+			// Get the application to check ownership and current status
+			const application = await prisma.loanApplication.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					product: true,
+				},
+			});
+
+			if (!application) {
+				return res
+					.status(404)
+					.json({ message: "Application not found" });
+			}
+
+			// Check ownership
+			if (application.userId !== userId) {
+				return res.status(403).json({ message: "Access denied" });
+			}
+
+			// Validate current status
+			if (application.status !== "PENDING_ATTESTATION") {
+				return res.status(400).json({
+					message: `Application must be in PENDING_ATTESTATION status. Current status: ${application.status}`,
+				});
+			}
+
+			// Validate attestation data
+			if (attestationType === "IMMEDIATE") {
+				if (!attestationVideoWatched || !attestationTermsAccepted) {
+					return res.status(400).json({
+						message:
+							"For immediate attestation, video must be watched and terms must be accepted",
+					});
+				}
+			} else {
+				return res.status(400).json({
+					message:
+						"Invalid attestation type. Only IMMEDIATE attestation is available for users.",
+				});
+			}
+
+			// Update the application with attestation completion
+			const updatedApplication = await prisma.loanApplication.update({
+				where: { id },
+				data: {
+					status: "PENDING_SIGNATURE",
+					attestationType: "IMMEDIATE",
+					attestationCompleted: true,
+					attestationDate: new Date(),
+					attestationVideoWatched: true,
+					attestationTermsAccepted: true,
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+			});
+
+			// Track the status change in history
+			await trackApplicationStatusChange(
+				prisma,
+				id,
+				"PENDING_ATTESTATION",
+				"PENDING_SIGNATURE",
+				userId,
+				"Immediate attestation completed by user",
+				"Immediate attestation completed by user",
+				{
+					attestationType: "IMMEDIATE",
+					attestationVideoWatched: true,
+					attestationTermsAccepted: true,
+					completedBy: userId,
+					completedAt: new Date().toISOString(),
+				}
+			);
+
+			console.log(
+				`Attestation completed successfully for application ${id} by user ${userId}`
+			);
+			return res.json(updatedApplication);
+		} catch (error) {
+			console.error("Error completing attestation:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/loan-applications/{id}/history:
+ *   get:
+ *     summary: Get loan application status history for current user
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     responses:
+ *       200:
+ *         description: Application history timeline
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 applicationId:
+ *                   type: string
+ *                 currentStatus:
+ *                   type: string
+ *                 timeline:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       applicationId:
+ *                         type: string
+ *                       previousStatus:
+ *                         type: string
+ *                       newStatus:
+ *                         type: string
+ *                       changedBy:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                       notes:
+ *                         type: string
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Get application history timeline for current user
+router.get("/:id/history", authenticateToken, async (req: AuthRequest, res) => {
+	try {
+		const { id } = req.params;
+		const userId = req.user!.userId;
+		console.log(`Fetching history for user application: ${id}`);
+
+		// First check if the application exists and belongs to the user
+		const application = await prisma.loanApplication.findFirst({
+			where: {
+				OR: [{ id }, { urlLink: id }],
+				userId,
+			},
+			select: {
+				id: true,
+				status: true,
+				createdAt: true,
+				updatedAt: true,
+			},
+		});
+
+		if (!application) {
+			return res.status(404).json({ message: "Application not found" });
+		}
+
+		// Get the application history
+		const history = await prisma.loanApplicationHistory.findMany({
+			where: { applicationId: application.id },
+			orderBy: { createdAt: "desc" },
+		});
+
+		// Include the creation event as the first history entry
+		const timeline = [
+			...history,
+			{
+				id: "initial",
+				applicationId: application.id,
+				previousStatus: null,
+				newStatus: "INCOMPLETE", // Initial status
+				changedBy: "SYSTEM",
+				changeReason: "Application created",
+				notes: null,
+				metadata: null,
+				createdAt: application.createdAt,
+			},
+		];
+
+		// Sort by created date, newest first
+		timeline.sort(
+			(a, b) =>
+				new Date(b.createdAt).getTime() -
+				new Date(a.createdAt).getTime()
+		);
+
+		return res.status(200).json({
+			applicationId: application.id,
+			currentStatus: application.status,
+			timeline,
+		});
+	} catch (error) {
+		console.error(`Error fetching application history: ${error}`);
+		return res.status(500).json({
+			message: "Error fetching application history",
+			error: (error as Error).message,
+		});
+	}
+});
+
+/**
+ * @swagger
+ * /api/loan-applications/{id}/request-live-call:
+ *   post:
+ *     summary: Request live video call attestation for loan application
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               attestationType:
+ *                 type: string
+ *                 enum: [MEETING]
+ *     responses:
+ *       200:
+ *         description: Live call request submitted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       400:
+ *         description: Invalid request or application not in correct status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied - not your application
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Request live video call attestation (user endpoint)
+router.post(
+	"/:id/request-live-call",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { attestationType } = req.body;
+			const userId = req.user?.userId;
+
+			console.log(
+				`User ${userId} requesting live call for application ${id}`
+			);
+
+			// Get the application to check ownership and current status
+			const application = await prisma.loanApplication.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					product: true,
+				},
+			});
+
+			if (!application) {
+				return res
+					.status(404)
+					.json({ message: "Application not found" });
+			}
+
+			// Check ownership
+			if (application.userId !== userId) {
+				return res.status(403).json({ message: "Access denied" });
+			}
+
+			// Validate current status
+			if (application.status !== "PENDING_ATTESTATION") {
+				return res.status(400).json({
+					message: `Application must be in PENDING_ATTESTATION status. Current status: ${application.status}`,
+				});
+			}
+
+			// Validate attestation type
+			if (attestationType !== "MEETING") {
+				return res.status(400).json({
+					message:
+						"Invalid attestation type. Only MEETING is allowed for live calls.",
+				});
+			}
+
+			// Update the application with live call request
+			const updatedApplication = await prisma.loanApplication.update({
+				where: { id },
+				data: {
+					attestationType: "MEETING",
+					attestationCompleted: false,
+					attestationDate: null,
+					attestationNotes: "Live video call requested by user",
+					attestationVideoWatched: false,
+					attestationTermsAccepted: false,
+					meetingCompletedAt: null,
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+			});
+
+			// Track the status change in history
+			await trackApplicationStatusChange(
+				prisma,
+				id,
+				"PENDING_ATTESTATION",
+				"PENDING_ATTESTATION",
+				userId,
+				"Live video call attestation requested by user",
+				"Live video call attestation requested by user",
+				{
+					attestationType: "MEETING",
+					requestedBy: userId,
+					requestedAt: new Date().toISOString(),
+					status: "LIVE_CALL_REQUESTED",
+				}
+			);
+
+			console.log(
+				`Live call request submitted successfully for application ${id} by user ${userId}`
+			);
+			return res.json(updatedApplication);
+		} catch (error) {
+			console.error("Error requesting live call:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
 
 export default router;
