@@ -70,4 +70,4 @@ RUN node scripts/verify-prisma-client.js
 EXPOSE 4001
 
 # Start the application with proper migration handling and cron setup
-CMD ["sh", "-c", "npx prisma generate && ./scripts/setup-cron.sh && node dist/src/index.js"] 
+CMD ["sh", "-c", "npx prisma generate && (./scripts/setup-cron.sh || echo 'Cron setup failed, continuing...') && node dist/src/index.js"] 

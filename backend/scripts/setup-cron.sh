@@ -3,12 +3,17 @@
 # Setup cron job for late fee processing
 # This script should be run during Docker container startup
 
-set -e
-
 echo "Setting up late fee processing cron job..."
 
-# Create log directory
+# Create log directory with proper permissions
 mkdir -p /app/logs/cron
+chmod 755 /app/logs/cron
+
+# Ensure we have the necessary scripts
+if [ ! -f "/app/scripts/process-late-fees.js" ]; then
+    echo "❌ process-late-fees.js not found, skipping cron setup"
+    exit 0
+fi
 
 # Determine the environment and database URL
 if [ "$NODE_ENV" = "production" ]; then
