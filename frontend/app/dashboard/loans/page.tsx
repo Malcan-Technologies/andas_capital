@@ -4522,40 +4522,6 @@ function LoansPageContent() {
 														</button>
 													);
 												})()}
-												{selectedLoan?.overdueInfo
-													?.hasOverduePayments &&
-													lateFeeInfo[
-														selectedLoan.id
-													] && (
-														<button
-															onClick={() => {
-																const totalDue =
-																	(
-																		Math.round(
-																			lateFeeInfo[
-																				selectedLoan
-																					.id
-																			]
-																				.summary
-																				.totalAmountDue *
-																				100
-																		) / 100
-																	).toFixed(
-																		2
-																	);
-																setRepaymentAmount(
-																	totalDue
-																);
-																validateRepaymentAmount(
-																	totalDue,
-																	selectedLoan
-																);
-															}}
-															className="text-sm text-red-600 hover:text-red-700 font-medium font-body"
-														>
-															Pay Overdue + Fees
-														</button>
-													)}
 												{selectedLoan &&
 													selectedLoan.outstandingBalance >
 														0 && (

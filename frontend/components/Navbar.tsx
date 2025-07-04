@@ -58,7 +58,7 @@ export default function Navbar({
 		};
 
 		const handleClickOutside = (event: MouseEvent) => {
-			if (window.innerWidth >= 768) {
+			if (window.innerWidth >= 1024) {
 				if (
 					navRef.current &&
 					!navRef.current.contains(event.target as Node)
@@ -149,7 +149,7 @@ export default function Navbar({
 								linkTo="/"
 							/>
 						</div>
-						<div className="hidden md:flex items-center justify-center flex-1 space-x-8 px-16">
+						<div className="hidden lg:flex items-center justify-center flex-1 space-x-8 px-16">
 							<div className="relative">
 								<button
 									onClick={() => handleMenuClick("solutions")}
@@ -193,7 +193,7 @@ export default function Navbar({
 								</button>
 							</div>
 						</div>
-						<div className="hidden md:flex items-center space-x-6">
+						<div className="hidden lg:flex items-center space-x-6">
 							<div className="relative group">
 								<a
 									href="https://wa.me/60164614919?text=I'm%20interested%20in%20Kapital%20lending%20products"
@@ -250,7 +250,7 @@ export default function Navbar({
 						</div>
 
 						{/* Mobile Menu Button */}
-						<div className="flex md:hidden">
+						<div className="flex lg:hidden">
 							<button
 								onClick={() => setMobileMenuOpen(true)}
 								className={`${
