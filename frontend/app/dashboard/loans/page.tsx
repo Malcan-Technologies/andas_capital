@@ -48,6 +48,8 @@ interface OverdueInfo {
 		totalAmountDue: number;
 		dueDate: string;
 		daysOverdue: number;
+		lateFeeAmount: number;
+		lateFeesPaid: number;
 	}>;
 }
 
@@ -91,6 +93,8 @@ interface Loan {
 		actualAmount?: number | null;
 		paymentType?: string | null;
 		installmentNumber?: number | null;
+		lateFeeAmount?: number | null;
+		lateFeesPaid?: number | null;
 	}>;
 }
 
@@ -1112,15 +1116,14 @@ function LoansPageContent() {
 	// Handle bar click to show details
 	const handleBarClick = (monthData: any) => {
 		const now = new Date();
-		const isPastMonth = monthData.date < now;
 		const isCurrentMonth =
 			monthData.date.getMonth() === now.getMonth() &&
 			monthData.date.getFullYear() === now.getFullYear();
 
-		// Calculate overdue and upcoming amounts
-		const overdue = isPastMonth ? monthData.totalOutstanding : 0;
+		// Use backend overdue data instead of frontend date calculations
+		const overdue = (monthData.unpaidLateFees || 0) > 0 ? monthData.totalOutstanding : 0;
 		const upcoming =
-			!isPastMonth && !isCurrentMonth ? monthData.totalOutstanding : 0;
+			!isCurrentMonth && (monthData.unpaidLateFees || 0) === 0 ? monthData.totalOutstanding : 0;
 
 		const newBarData = {
 			month: monthData.date.toLocaleDateString("en-US", {
@@ -1273,59 +1276,9 @@ function LoansPageContent() {
 															monthKey
 														);
 
-													// Calculate late fees for this specific repayment
-													let repaymentLateFees = 0;
-													const today = new Date();
-													today.setHours(0, 0, 0, 0);
-													const repaymentDueDate =
-														new Date(
-															repayment.dueDate
-														);
-													repaymentDueDate.setHours(
-														0,
-														0,
-														0,
-														0
-													);
-
-													// Check for late fees on this repayment
-													if (
-														loan.overdueInfo
-															?.overdueRepayments
-													) {
-														const overdueRepayment =
-															loan.overdueInfo.overdueRepayments.find(
-																(or) => {
-																	const orDueDate =
-																		new Date(
-																			or.dueDate
-																		);
-																	orDueDate.setHours(
-																		0,
-																		0,
-																		0,
-																		0
-																	);
-																	return (
-																		orDueDate.getTime() ===
-																			repaymentDueDate.getTime() &&
-																		Math.abs(
-																			or.amount -
-																				repayment.amount
-																		) < 0.01
-																	);
-																}
-															);
-
-														if (
-															overdueRepayment &&
-															overdueRepayment.totalLateFees >
-																0
-														) {
-															repaymentLateFees =
-																overdueRepayment.totalLateFees;
-														}
-													}
+													// Get late fee information directly from the repayment data
+													const repaymentLateFees = repayment.lateFeeAmount || 0;
+													const repaymentLateFeesPaid = repayment.lateFeesPaid || 0;
 
 													// Calculate total amount for this repayment (scheduled + late fees)
 													const repaymentTotalAmount =
@@ -1350,40 +1303,16 @@ function LoansPageContent() {
 														monthData.totalPaid +=
 															actualPaid;
 
-														// For completed repayments, calculate late fees paid based on actualAmount vs scheduled amount
-														// This works even if the repayment is no longer in overdueInfo (since it's completed)
-														if (
-															actualPaid >
-															repayment.amount
-														) {
-															// The excess payment went to late fees
-															const lateFeesPaidFromExcess =
-																actualPaid -
-																repayment.amount;
-															monthData.paidLateFees +=
-																lateFeesPaidFromExcess;
-
-															// If we also have current overdue info for this repayment, use it to calculate unpaid late fees
-															if (
-																repaymentLateFees >
-																0
-															) {
-																const remainingLateFees =
-																	Math.max(
-																		0,
-																		repaymentLateFees -
-																			lateFeesPaidFromExcess
-																	);
-																monthData.unpaidLateFees +=
-																	remainingLateFees;
+														// For completed repayments, use the actual database values for late fees
+														if (repaymentLateFees > 0) {
+															// Add the late fees that were actually paid according to the database
+															monthData.paidLateFees += repaymentLateFeesPaid;
+															
+															// The remaining late fees are unpaid (should be 0 for completed payments)
+															const remainingLateFees = repaymentLateFees - repaymentLateFeesPaid;
+															if (remainingLateFees > 0) {
+																monthData.unpaidLateFees += remainingLateFees;
 															}
-														} else if (
-															repaymentLateFees >
-															0
-														) {
-															// No excess payment but there are late fees - all unpaid
-															monthData.unpaidLateFees +=
-																repaymentLateFees;
 														}
 
 														// Any remaining amount is outstanding (shouldn't happen for completed, but safety check)
@@ -1396,14 +1325,13 @@ function LoansPageContent() {
 																actualPaid;
 														}
 													} else if (
-														repayment.status ===
-															"PENDING" &&
-														repayment.paymentType ===
-															"PARTIAL" &&
-														(repayment.actualAmount ??
-															0) > 0
+														repayment.status === "PARTIAL" ||
+														(repayment.status === "PENDING" &&
+														repayment.paymentType === "PARTIAL" &&
+														(repayment.actualAmount ?? 0) > 0)
 													) {
 														// Partially paid - use actualAmount for paid portion
+														// Handle both new PARTIAL status and legacy PENDING+PARTIAL paymentType
 														const actualPaid =
 															repayment.actualAmount ??
 															0;
@@ -1423,6 +1351,10 @@ function LoansPageContent() {
 																	actualPaid,
 																repaymentTotalAmount:
 																	repaymentTotalAmount,
+																repaymentLateFees:
+																	repaymentLateFees,
+																repaymentLateFeesPaid:
+																	repaymentLateFeesPaid,
 																monthKey:
 																	monthKey,
 															}
@@ -1434,41 +1366,32 @@ function LoansPageContent() {
 															repaymentTotalAmount -
 															actualPaid;
 
-														// Calculate how much of the late fees were paid
-														if (
-															repaymentLateFees >
-															0
-														) {
-															// If actualPaid > scheduled amount, the excess went to late fees
-															const excessPaid =
-																Math.max(
-																	0,
-																	actualPaid -
-																		repayment.amount
-																);
-															const lateFeesPaid =
-																Math.min(
-																	excessPaid,
-																	repaymentLateFees
-																);
-															monthData.paidLateFees +=
-																lateFeesPaid;
-															monthData.unpaidLateFees +=
-																repaymentLateFees -
-																lateFeesPaid;
+														// Use actual database values for late fees (this is the key fix!)
+														if (repaymentLateFees > 0) {
+															// Add the late fees that were actually paid according to the database
+															monthData.paidLateFees += repaymentLateFeesPaid;
+															
+															// The remaining late fees are unpaid and will continue to accrue
+															const remainingLateFees = repaymentLateFees - repaymentLateFeesPaid;
+															if (remainingLateFees > 0) {
+																monthData.unpaidLateFees += remainingLateFees;
+															}
 														}
 													} else {
 														// PENDING - nothing paid yet (excluding partial payments which are handled above)
 														monthData.totalOutstanding +=
 															repaymentTotalAmount;
 
-														// All late fees are unpaid
-														if (
-															repaymentLateFees >
-															0
-														) {
-															monthData.unpaidLateFees +=
-																repaymentLateFees;
+														// Use actual database values for late fees
+														if (repaymentLateFees > 0) {
+															// Add the late fees that were actually paid according to the database
+															monthData.paidLateFees += repaymentLateFeesPaid;
+															
+															// The remaining late fees are unpaid
+															const remainingLateFees = repaymentLateFees - repaymentLateFeesPaid;
+															if (remainingLateFees > 0) {
+																monthData.unpaidLateFees += remainingLateFees;
+															}
 														}
 													}
 												}
@@ -1602,9 +1525,8 @@ function LoansPageContent() {
 																				maxAmount) *
 																		  100
 																		: 0;
-																const isPastMonth =
-																	monthData.date <
-																	now;
+																// Use backend overdue data instead of frontend date calculations
+																const hasUnpaidLateFees = (monthData.unpaidLateFees || 0) > 0;
 																const isCurrentMonth =
 																	monthData.date.getMonth() ===
 																		now.getMonth() &&
@@ -1651,7 +1573,7 @@ function LoansPageContent() {
 																				0 && (
 																				<div
 																					className={`${barWidthClass} absolute left-1/2 transform -translate-x-1/2 ${
-																						isPastMonth
+																						hasUnpaidLateFees
 																							? "bg-red-500"
 																							: isCurrentMonth
 																							? "bg-amber-500"
@@ -1946,8 +1868,11 @@ function LoansPageContent() {
 												<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
 													<div className="text-base md:text-lg font-semibold text-green-600 font-heading">
 														{formatCurrency(
-															loanSummary.totalRepaid ||
+															sortedMonths.reduce(
+																(sum, month) =>
+																	sum + month.totalPaid,
 																0
+															)
 														)}
 													</div>
 													<div className="text-xs text-green-600 font-body">
@@ -2211,14 +2136,24 @@ function LoansPageContent() {
 										return (
 											<div className="space-y-6 min-w-0">
 												{activeLoans.map((loan) => {
-													const daysUntilDue =
-														calculateDaysUntilDue(
-															loan.nextPaymentDue
-														);
-													const urgency =
-														getPaymentUrgency(
-															daysUntilDue
-														);
+													// Use backend overdue data for overdue status, frontend calculations for future due dates only
+													const isOverdue = loan.nextPaymentInfo?.isOverdue || false;
+													let urgency;
+													if (isOverdue) {
+														urgency = { color: "text-red-600", text: "Overdue" };
+													} else if (loan.nextPaymentDue) {
+														// Only use frontend calculations for non-overdue future payments
+														const daysUntilDue = calculateDaysUntilDue(loan.nextPaymentDue);
+														if (daysUntilDue <= 5) {
+															urgency = { color: "text-orange-600", text: "Due Soon" };
+														} else if (daysUntilDue <= 10) {
+															urgency = { color: "text-yellow-600", text: "Due This Month" };
+														} else {
+															urgency = { color: "text-green-600", text: "On Track" };
+														}
+													} else {
+														urgency = { color: "text-green-600", text: "On Track" };
+													}
 													const isExpanded =
 														showLoanDetails[
 															loan.id
@@ -2263,7 +2198,7 @@ function LoansPageContent() {
 																	</div>
 																</div>
 
-																{/* Overdue Payment Alert */}
+																{/* Overdue Payment Alert - Only show if backend has processed late fees */}
 																{loan
 																	.overdueInfo
 																	?.hasOverduePayments && (
@@ -2304,112 +2239,13 @@ function LoansPageContent() {
 																						</span>
 																					)}
 																				</p>
-																				{(() => {
-																					// Calculate days overdue from the earliest overdue payment
-																					const today =
-																						new Date();
-																					today.setHours(
-																						0,
-																						0,
-																						0,
-																						0
-																					);
-
-																					// Find the earliest overdue repayment
-																					let earliestOverdueDate =
-																						null;
-																					if (
-																						loan.repayments &&
-																						loan
-																							.repayments
-																							.length >
-																							0
-																					) {
-																						const overdueRepayments =
-																							loan.repayments.filter(
-																								(
-																									repayment
-																								) => {
-																									const dueDate =
-																										new Date(
-																											repayment.dueDate
-																										);
-																									dueDate.setHours(
-																										0,
-																										0,
-																										0,
-																										0
-																									);
-																									return (
-																										(repayment.status ===
-																											"PENDING" ||
-																											repayment.status ===
-																												"PARTIAL") &&
-																										dueDate <
-																											today
-																									);
-																								}
-																							);
-
-																						if (
-																							overdueRepayments.length >
-																							0
-																						) {
-																							earliestOverdueDate =
-																								overdueRepayments.reduce(
-																									(
-																										earliest,
-																										current
-																									) => {
-																										const currentDate =
-																											new Date(
-																												current.dueDate
-																											);
-																										const earliestDate =
-																											new Date(
-																												earliest.dueDate
-																											);
-																										return currentDate <
-																											earliestDate
-																											? current
-																											: earliest;
-																									}
-																								).dueDate;
-																						}
-																					}
-
-																					if (
-																						earliestOverdueDate
-																					) {
-																						const daysOverdue =
-																							Math.floor(
-																								(today.getTime() -
-																									new Date(
-																										earliestOverdueDate
-																									).getTime()) /
-																									(1000 *
-																										60 *
-																										60 *
-																										24)
-																							);
-
-																						return (
-																							<span className="text-xs text-red-600 block mt-1 font-medium">
-																								⏰{" "}
-																								{
-																									daysOverdue
-																								}{" "}
-																								day
-																								{daysOverdue !==
-																								1
-																									? "s"
-																									: ""}{" "}
-																								overdue
-																							</span>
-																						);
-																					}
-																					return null;
-																				})()}
+																				{/* Use backend-calculated days overdue from overdueRepayments */}
+																				{loan.overdueInfo.overdueRepayments && 
+																				 loan.overdueInfo.overdueRepayments.length > 0 && (
+																					<span className="text-xs text-red-600 block mt-1 font-medium">
+																						⏰ {Math.max(...loan.overdueInfo.overdueRepayments.map(rep => rep.daysOverdue))} day{Math.max(...loan.overdueInfo.overdueRepayments.map(rep => rep.daysOverdue)) !== 1 ? "s" : ""} overdue
+																					</span>
+																				)}
 																			</div>
 																		</div>
 																	</div>
@@ -2598,12 +2434,26 @@ function LoansPageContent() {
 																					.totalLateFees;
 																		}
 
-																		const paidAmount =
-																			Math.max(
-																				0,
-																				actualTotalOwed -
-																					currentOutstanding
-																			);
+																		// Calculate total amount actually paid (including late fees)
+																		// Use the same logic as the chart
+																		let totalPaidAmount = 0;
+																		let totalLateFeesPaidAmount = 0;
+																		
+																		if (loan.repayments) {
+																			loan.repayments.forEach(repayment => {
+																				if (repayment.status === "COMPLETED") {
+																					totalPaidAmount += repayment.actualAmount || repayment.amount;
+																				} else if (repayment.status === "PARTIAL" || 
+																					(repayment.status === "PENDING" && repayment.paymentType === "PARTIAL")) {
+																					totalPaidAmount += repayment.actualAmount || 0;
+																				}
+																				
+																				// Add late fees paid
+																				totalLateFeesPaidAmount += repayment.lateFeesPaid || 0;
+																			});
+																		}
+																		
+																		const paidAmount = totalPaidAmount;
 
 																		const progressPercent =
 																			actualTotalOwed >
@@ -4271,63 +4121,7 @@ function LoansPageContent() {
 											</div>
 										)}
 
-										{/* Late Fee Breakdown */}
-										{selectedLoan.overdueInfo
-											?.hasOverduePayments &&
-											lateFeeInfo[selectedLoan.id] && (
-												<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-													<h4 className="text-sm font-semibold text-amber-800 mb-2 font-heading">
-														Payment Breakdown
-													</h4>
-													<div className="space-y-2 text-xs font-body">
-														<div className="flex justify-between">
-															<span className="text-amber-700">
-																Outstanding
-																Principal:
-															</span>
-															<span className="text-amber-800 font-semibold">
-																{formatCurrency(
-																	lateFeeInfo[
-																		selectedLoan
-																			.id
-																	].summary
-																		.totalOverdueAmount
-																)}
-															</span>
-														</div>
-														<div className="flex justify-between">
-															<span className="text-amber-700">
-																Late Fees (8%
-																p.a.):
-															</span>
-															<span className="text-amber-800 font-semibold">
-																{formatCurrency(
-																	lateFeeInfo[
-																		selectedLoan
-																			.id
-																	].summary
-																		.totalLateFees
-																)}
-															</span>
-														</div>
-														<div className="flex justify-between border-t border-amber-200 pt-2">
-															<span className="text-amber-700 font-semibold">
-																Total Amount
-																Due:
-															</span>
-															<span className="text-amber-700 font-semibold">
-																{formatCurrency(
-																	lateFeeInfo[
-																		selectedLoan
-																			.id
-																	].summary
-																		.totalAmountDue
-																)}
-															</span>
-														</div>
-													</div>
-												</div>
-											)}
+										{/* Late Fee Breakdown - Hidden for overdue payments to avoid duplication with overdue alert */}
 
 										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 text-sm font-body">
 											<div>

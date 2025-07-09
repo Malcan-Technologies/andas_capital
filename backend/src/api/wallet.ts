@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { PrismaClient, WalletTransactionStatus } from "@prisma/client";
 import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { TimeUtils } from "../lib/precisionUtils";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -37,134 +38,141 @@ async function updateRepaymentStatusFromTransactions(loanId: string, tx: any) {
 
 	console.log(`Total payments made: ${totalPaymentsMade}`);
 
-	// Apply payments to repayments chronologically to determine status
-	let remainingPayments = totalPaymentsMade;
 	const mostRecentPayment = actualPayments[actualPayments.length - 1];
 	const mostRecentPaymentDate =
 		mostRecentPayment?.processedAt || mostRecentPayment?.createdAt;
 
-	for (const repayment of repayments) {
-		if (remainingPayments <= 0) {
-			// No payments left - mark as PENDING
-			await tx.loanRepayment.update({
-				where: { id: repayment.id },
-				data: {
-					status: "PENDING",
-					actualAmount: null,
-					paidAt: null,
-					paymentType: null,
-					daysEarly: null,
-					daysLate: null,
-				},
-			});
-		} else if (remainingPayments >= repayment.amount) {
-			// Fully covered by payments
-			const dueDate = new Date(repayment.dueDate);
-			const paidDate = new Date(mostRecentPaymentDate || new Date());
-			const daysDiff = Math.ceil(
-				(paidDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+	// Process payment allocation at loan level ONCE to avoid double allocation
+	let paymentAllocated = false;
+	if (totalPaymentsMade > 0) {
+		try {
+			const { LateFeeProcessor } = await import(
+				"../lib/lateFeeProcessor"
 			);
+			console.log(`💰 Processing payment allocation for loan ${loanId}, total payments: ${totalPaymentsMade}`);
+			
+			// Check if payment allocation has already been done for this total amount
+			// by comparing the sum of actualAmount in repayments with totalPaymentsMade
+			const currentAllocatedAmount = repayments.reduce((sum: number, rep: any) => {
+				return sum + (rep.actualAmount || 0);
+			}, 0);
 
-			const daysEarly = daysDiff < 0 ? Math.abs(daysDiff) : 0;
-			const daysLate = daysDiff > 0 ? daysDiff : 0;
+			console.log(`Current allocated amount: ${currentAllocatedAmount}, Total payments: ${totalPaymentsMade}`);
 
-			// Check if repayment status is changing from non-COMPLETED to COMPLETED
-			const wasCompleted = repayment.status === "COMPLETED";
-
-			// Handle late fees first to determine total amount paid
-			let totalAmountPaidForThisRepayment = repayment.amount;
-			let lateFeesPaid = 0;
-
-			if (!wasCompleted) {
-				// New completion - handle late fees and calculate total amount
-				try {
-					const { LateFeeProcessor } = await import(
-						"../lib/lateFeeProcessor"
-					);
-					const lateFeeResult =
-						await LateFeeProcessor.handleRepaymentCleared(
-							repayment.id,
-							remainingPayments, // Amount available for this repayment
-							paidDate,
-							tx
-						);
-
-					lateFeesPaid = lateFeeResult.lateFeesPaid;
-					totalAmountPaidForThisRepayment =
-						repayment.amount + lateFeesPaid;
-
-					console.log(
-						`💰 Late fee handling for repayment ${repayment.id}:`,
-						{
-							lateFeesPaid: lateFeeResult.lateFeesPaid,
-							lateFeesWaived: lateFeeResult.lateFeesWaived,
-							totalLateFees: lateFeeResult.totalLateFees,
-							totalAmountPaidForThisRepayment,
+			// Only re-allocate if there's a significant difference (more than 1 cent)
+			if (Math.abs(totalPaymentsMade - currentAllocatedAmount) > 0.01) {
+				console.log(`Re-allocating payments due to difference: ${Math.abs(totalPaymentsMade - currentAllocatedAmount)}`);
+				
+				// Reset all repayment allocation data before re-allocating
+				for (const repayment of repayments) {
+					await tx.loanRepayment.update({
+						where: { id: repayment.id },
+						data: {
+							actualAmount: null,
+							principalPaid: 0,
+							lateFeesPaid: 0,
+							status: 'PENDING',
+							paidAt: null,
+							paymentType: null,
+							daysEarly: null,
+							daysLate: null
 						}
-					);
-				} catch (error) {
-					console.error(
-						`Error handling late fees for repayment ${repayment.id}:`,
-						error
-					);
-					// Don't fail the payment processing due to late fee errors
+					});
 				}
 
+				const allocationResult = await LateFeeProcessor.handlePaymentAllocation(
+					loanId,
+					totalPaymentsMade,
+					new Date(mostRecentPaymentDate || new Date()),
+					tx
+				);
+
+				console.log(`✅ Payment allocation completed for loan ${loanId}:`, {
+					lateFeesPaid: allocationResult.lateFeesPaid,
+					principalPaid: allocationResult.principalPaid,
+					remainingPayment: allocationResult.remainingPayment
+				});
+
+				paymentAllocated = true;
+			} else {
+				console.log(`Payment allocation already up to date for loan ${loanId}`);
+				paymentAllocated = true; // Skip fallback logic
+			}
+		} catch (error) {
+			console.error(`Error in payment allocation for loan ${loanId}:`, error);
+			// Continue with fallback logic below
+		}
+	}
+
+	// If payment allocation failed, fall back to simple chronological allocation
+	if (!paymentAllocated) {
+		let remainingPayments = totalPaymentsMade;
+
+		for (const repayment of repayments) {
+			if (remainingPayments <= 0) {
+				// No payments left - mark as PENDING
 				await tx.loanRepayment.update({
 					where: { id: repayment.id },
 					data: {
-						status: "COMPLETED",
-						actualAmount: totalAmountPaidForThisRepayment, // Total amount including late fees
-						paidAt: mostRecentPaymentDate,
-						paymentType:
-							daysEarly > 0
-								? "EARLY"
-								: daysLate > 0
-								? "LATE"
-								: "ON_TIME",
-						daysEarly: daysEarly,
-						daysLate: daysLate,
+						status: "PENDING",
+						actualAmount: null,
+						paidAt: null,
+						paymentType: null,
+						daysEarly: null,
+						daysLate: null,
 					},
 				});
-
-				console.log(`✅ Marked repayment ${repayment.id} as COMPLETED`);
 			} else {
-				// Already completed - preserve existing actualAmount (which includes late fees)
-				totalAmountPaidForThisRepayment =
-					repayment.actualAmount || repayment.amount;
-				console.log(
-					`✅ Repayment ${repayment.id} already COMPLETED with actualAmount: ${totalAmountPaidForThisRepayment}`
-				);
+				const dueDate = new Date(repayment.dueDate);
+				const paidDate = new Date(mostRecentPaymentDate || new Date());
+				const paymentTypeInfo = TimeUtils.paymentType(paidDate, dueDate);
+
+				const daysEarly = paymentTypeInfo.daysEarly;
+				const daysLate = paymentTypeInfo.daysLate;
+
+				const wasCompleted = repayment.status === "COMPLETED";
+
+				if (!wasCompleted) {
+					// Simple allocation: apply payment up to repayment amount
+					const paymentForThisRepayment = Math.min(remainingPayments, repayment.amount);
+					
+					let repaymentStatus = "PARTIAL";
+					let paymentType = "PARTIAL";
+
+					if (paymentForThisRepayment >= repayment.amount) {
+						// Check if there are any existing unpaid late fees for this repayment
+						const unpaidLateFees = Math.max(0, Math.round(((repayment.lateFeeAmount || 0) - (repayment.lateFeesPaid || 0)) * 100) / 100);
+
+						if (unpaidLateFees <= 0) {
+							// Principal fully paid and no late fees - can mark as COMPLETED
+							repaymentStatus = "COMPLETED";
+							paymentType = paymentTypeInfo.paymentType;
+						}
+					}
+
+					// Set actualAmount to the payment amount for this repayment (not additive)
+					const updateData: any = {
+						status: repaymentStatus,
+						paidAt: mostRecentPaymentDate,
+						paymentType: paymentType,
+						daysEarly: daysEarly,
+						daysLate: daysLate,
+						actualAmount: paymentForThisRepayment, // Set directly, not additive
+					};
+
+					await tx.loanRepayment.update({
+						where: { id: repayment.id },
+						data: updateData,
+					});
+
+					remainingPayments -= paymentForThisRepayment;
+					console.log(`💰 Fallback allocation for repayment ${repayment.id}: ${paymentForThisRepayment}`);
+				} else {
+					// Already completed - preserve existing actualAmount
+					const existingAmount = repayment.actualAmount || repayment.amount;
+					console.log(`✅ Repayment ${repayment.id} already COMPLETED with actualAmount: ${existingAmount}`);
+				}
 			}
-
-			remainingPayments -= totalAmountPaidForThisRepayment;
-		} else {
-			// Partially covered
-			const dueDate = new Date(repayment.dueDate);
-			const paidDate = new Date(mostRecentPaymentDate || new Date());
-			const daysDiff = Math.ceil(
-				(paidDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
-			);
-
-			const daysEarly = daysDiff < 0 ? Math.abs(daysDiff) : 0;
-			const daysLate = daysDiff > 0 ? daysDiff : 0;
-
-			await tx.loanRepayment.update({
-				where: { id: repayment.id },
-				data: {
-					status: "PENDING", // Still pending since not fully paid
-					actualAmount: remainingPayments, // Amount actually paid towards this repayment
-					paidAt: mostRecentPaymentDate,
-					paymentType: "PARTIAL",
-					daysEarly: daysEarly,
-					daysLate: daysLate,
-				},
-			});
-
-			console.log(
-				`💰 Marked repayment ${repayment.id} as PARTIAL: ${remainingPayments} of ${repayment.amount}`
-			);
-			remainingPayments = 0; // All remaining payments applied to this repayment
 		}
 	}
 }
@@ -220,19 +228,18 @@ export async function calculateOutstandingBalance(loanId: string, tx: any) {
 		},
 	});
 
-	// Get total unpaid late fees for this loan
+	// Get total unpaid late fees for this loan using new schema
 	const unpaidLateFees = await tx.$queryRawUnsafe(
 		`
-		SELECT COALESCE(SUM(lf."feeAmount"), 0) as total_unpaid_late_fees
-		FROM late_fees lf
-		JOIN loan_repayments lr ON lf."loanRepaymentId" = lr.id
-		WHERE lr."loanId" = $1 AND lf.status = 'ACTIVE'
+		SELECT COALESCE(SUM(lr."lateFeeAmount" - COALESCE(lr."lateFeesPaid", 0)), 0) as total_unpaid_late_fees
+		FROM loan_repayments lr
+		WHERE lr."loanId" = $1 AND lr."lateFeeAmount" > 0
 	`,
 		loanId
 	);
-	const totalUnpaidLateFees = Number(
+	const totalUnpaidLateFees = Math.round((Number(
 		unpaidLateFees[0]?.total_unpaid_late_fees || 0
-	);
+	)) * 100) / 100;
 
 	console.log(`Calculating outstanding balance for loan ${loanId}:`);
 	console.log(`Original loan amount: ${loan.totalAmount}`);
@@ -252,7 +259,7 @@ export async function calculateOutstandingBalance(loanId: string, tx: any) {
 	console.log(`Total payments made: ${totalPaymentsMade}`);
 
 	// Outstanding balance = Original loan amount + Unpaid late fees - Total actual payments made
-	const totalAmountOwed = loan.totalAmount + totalUnpaidLateFees;
+	const totalAmountOwed = Math.round((loan.totalAmount + totalUnpaidLateFees) * 100) / 100;
 	const outstandingBalance =
 		Math.round((totalAmountOwed - totalPaymentsMade) * 100) / 100;
 	const finalOutstandingBalance = Math.max(0, outstandingBalance);
@@ -310,17 +317,9 @@ async function calculateNextPaymentDue(loanId: string, tx: any) {
 	let remainingPayments = totalPaymentsMade;
 
 	for (const repayment of repayments) {
-		// Get late fees for this repayment
-		const lateFees = await tx.$queryRawUnsafe(
-			`
-			SELECT COALESCE(SUM("feeAmount"), 0) as total_late_fees
-			FROM late_fees 
-			WHERE "loanRepaymentId" = $1 AND status = 'ACTIVE'
-		`,
-			repayment.id
-		);
-		const totalLateFees = Number(lateFees[0]?.total_late_fees || 0);
-		const totalAmountDue = repayment.amount + totalLateFees;
+		// Calculate total amount due for this repayment using new schema
+		const lateFeeAmount = Math.max(0, (repayment.lateFeeAmount || 0) - (repayment.lateFeesPaid || 0));
+		const totalAmountDue = repayment.amount + lateFeeAmount;
 
 		if (remainingPayments <= 0) {
 			// This repayment hasn't been paid yet

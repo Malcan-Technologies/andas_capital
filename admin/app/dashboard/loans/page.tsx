@@ -49,6 +49,10 @@ interface LoanRepayment {
 		description: string;
 	}>;
 	totalContributingAmount?: number;
+	// Late fee fields
+	lateFeeAmount?: number; // Total late fees assessed for this repayment
+	lateFeesPaid?: number; // Total late fees paid for this repayment
+	principalPaid?: number; // Principal amount paid for this repayment
 }
 
 interface WalletTransaction {
@@ -198,7 +202,7 @@ function ActiveLoansContent() {
 			const response = await fetchWithAdminTokenRefresh<{
 				success: boolean;
 				data: LoanData;
-			}>(`/api/admin/loans/${loanId}/repayments`);
+			}>(`/api/admin/loans/${loanId}/repayments?raw=true`);
 
 			console.log("📊 Repayments API response:", response);
 
@@ -1871,7 +1875,13 @@ function ActiveLoansContent() {
 																		Due Date
 																	</th>
 																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-																		Amount
+																		Principal
+																	</th>
+																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+																		Late Fees
+																	</th>
+																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+																		Total Due
 																	</th>
 																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
 																		Balance
@@ -1939,30 +1949,40 @@ function ActiveLoansContent() {
 																				daysOverdue >
 																					0;
 
-																			// Simplified status logic
-																			let displayStatus =
-																				"PENDING";
-																			let statusColor =
-																				"bg-yellow-500/20 text-yellow-200 border border-yellow-400/20";
+																																		// Simplified status logic
+															let displayStatus =
+																"PENDING";
+															let statusColor =
+																"bg-yellow-500/20 text-yellow-200 border border-yellow-400/20";
 
-																			if (
-																				repayment.status ===
-																				"COMPLETED"
-																			) {
-																				displayStatus =
-																					"PAID";
-																				statusColor =
-																					"bg-green-500/20 text-green-200 border border-green-400/20";
-																			} else if (
-																				repayment.status ===
-																					"OVERDUE" ||
-																				isOverdue
-																			) {
-																				displayStatus =
-																					"LATE";
-																				statusColor =
-																					"bg-red-500/20 text-red-200 border border-red-400/20";
-																			}
+															if (
+																repayment.status ===
+																"COMPLETED"
+															) {
+																displayStatus =
+																	"PAID";
+																statusColor =
+																	"bg-green-500/20 text-green-200 border border-green-400/20";
+															} else if (
+																repayment.status ===
+																"PARTIAL" ||
+																repayment.paymentType ===
+																	"PARTIAL"
+															) {
+																displayStatus =
+																	"PARTIAL";
+																statusColor =
+																	"bg-blue-500/20 text-blue-200 border border-blue-400/20";
+															} else if (
+																repayment.status ===
+																	"OVERDUE" ||
+																isOverdue
+															) {
+																displayStatus =
+																	"LATE";
+																statusColor =
+																	"bg-red-500/20 text-red-200 border border-red-400/20";
+															}
 
 																			return (
 																				<tr
@@ -1989,62 +2009,77 @@ function ActiveLoansContent() {
 																							</div>
 																						)}
 																					</td>
-																					<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
-																						{formatCurrency(
-																							repayment.amount
-																						)}
-																					</td>
-																					<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
+																					{/* Principal Column */}
+																					<td className="px-4 py-3 whitespace-nowrap text-sm text-white">
 																						<div>
 																							{formatCurrency(
-																								// Calculate actual balance: scheduled amount - amount paid
-																								repayment.status ===
-																									"COMPLETED"
-																									? 0 // Completed repayments have 0 balance
-																									: repayment.actualAmount &&
-																									  repayment.actualAmount >
-																											0
-																									? repayment.amount -
-																									  Math.abs(
-																											repayment.actualAmount
-																									  ) // Partial payment: remaining balance (ensure positive actualAmount)
-																									: repayment.amount // No payments made
+																								repayment.amount
 																							)}
-																							{/* Show actual payment info for pending repayments */}
-																							{repayment.status ===
-																								"PENDING" &&
-																								repayment.actualAmount &&
-																								repayment.actualAmount >
-																									0 && (
-																									<div className="text-xs text-blue-400 mt-1">
-																										{formatCurrency(
-																											Math.abs(
-																												repayment.actualAmount
-																											)
-																										)}{" "}
-																										paid
-																									</div>
-																								)}
-																							{/* Show payment info for completed repayments - prioritize actualAmount from database */}
-																							{repayment.status ===
-																								"COMPLETED" &&
-																								((repayment.actualAmount &&
-																									repayment.actualAmount >
-																										0) ||
-																									(repayment.totalContributingAmount &&
-																										repayment.totalContributingAmount >
-																											0)) && (
-																									<div className="text-xs text-green-400 mt-1">
-																										{formatCurrency(
-																											Math.abs(
-																												repayment.actualAmount ||
-																													repayment.totalContributingAmount ||
-																													0
-																											)
-																										)}{" "}
-																										paid
-																									</div>
-																								)}
+																							{/* Show principal paid info */}
+																							{repayment.principalPaid && 
+																								repayment.principalPaid > 0 && (
+																								<div className="text-xs text-green-400 mt-1">
+																									{formatCurrency(
+																										repayment.principalPaid
+																									)}{" "}
+																									paid
+																								</div>
+																							)}
+																						</div>
+																					</td>
+																					{/* Late Fees Column */}
+																					<td className="px-4 py-3 whitespace-nowrap text-sm text-white">
+																						<div>
+																							{repayment.lateFeeAmount && 
+																								repayment.lateFeeAmount > 0 ? (
+																								<>
+																									{formatCurrency(
+																										repayment.lateFeeAmount
+																									)}
+																									{/* Show late fees paid info */}
+																									{repayment.lateFeesPaid && 
+																										repayment.lateFeesPaid > 0 && (
+																										<div className="text-xs text-orange-400 mt-1">
+																											{formatCurrency(
+																												repayment.lateFeesPaid
+																											)}{" "}
+																											paid
+																										</div>
+																									)}
+																								</>
+																							) : (
+																								<span className="text-gray-500">-</span>
+																							)}
+																						</div>
+																					</td>
+																					{/* Total Due Column */}
+																					<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
+																						{formatCurrency(
+																							repayment.amount + (repayment.lateFeeAmount || 0)
+																						)}
+																					</td>
+																					{/* Balance Column */}
+																					<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
+																						<div>
+																							{(() => {
+																								const principalBalance = repayment.status === "COMPLETED" 
+																									? 0 
+																									: repayment.amount - (repayment.principalPaid || 0);
+																								const lateFeeBalance = (repayment.lateFeeAmount || 0) - (repayment.lateFeesPaid || 0);
+																								const totalBalance = principalBalance + lateFeeBalance;
+																								
+																								return formatCurrency(Math.max(0, totalBalance));
+																							})()}
+																							{/* Show payment breakdown for partial payments */}
+																							{(repayment.status === "PARTIAL" ||
+																								repayment.paymentType === "PARTIAL") && (
+																								<div className="text-xs text-blue-400 mt-1">
+																									{(() => {
+																										const totalPaid = (repayment.principalPaid || 0) + (repayment.lateFeesPaid || 0);
+																										return totalPaid > 0 ? `${formatCurrency(totalPaid)} paid` : "";
+																									})()}
+																								</div>
+																							)}
 																						</div>
 																					</td>
 																					<td className="px-4 py-3 whitespace-nowrap">

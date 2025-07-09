@@ -1,22 +1,59 @@
 import { logger } from "./logger";
+import { SafeMath, TimeUtils } from "./precisionUtils";
 import { prisma } from "../../lib/prisma";
 
-interface LateFeeCalculation {
-	loanRepaymentId: string;
+// Lock constants for PostgreSQL advisory locks
+const LATE_FEE_PROCESSING_LOCK_ID = 123456789; // Unique identifier for late fee processing
+
+/**
+ * Acquire a PostgreSQL advisory lock for late fee processing
+ * @returns Promise<boolean> - true if lock acquired, false if already locked
+ */
+async function acquireProcessingLock(): Promise<boolean> {
+	try {
+		const result = await prisma.$queryRaw<[{ pg_try_advisory_lock: boolean }]>`
+			SELECT pg_try_advisory_lock(${LATE_FEE_PROCESSING_LOCK_ID})
+		`;
+		return result[0].pg_try_advisory_lock;
+	} catch (error) {
+		logger.error("Error acquiring processing lock:", error);
+		return false;
+	}
+}
+
+/**
+ * Release the PostgreSQL advisory lock for late fee processing
+ * @returns Promise<boolean> - true if lock released successfully
+ */
+async function releaseProcessingLock(): Promise<boolean> {
+	try {
+		const result = await prisma.$queryRaw<[{ pg_advisory_unlock: boolean }]>`
+			SELECT pg_advisory_unlock(${LATE_FEE_PROCESSING_LOCK_ID})
+		`;
+		return result[0].pg_advisory_unlock;
+	} catch (error) {
+		logger.error("Error releasing processing lock:", error);
+		return false;
+	}
+}
+
+interface RepaymentLateFeeUpdate {
+	repaymentId: string;
+	lateFeeAmount: number;
 	daysOverdue: number;
 	outstandingPrincipal: number;
-	dailyRate: number;
-	feeAmount: number;
-	cumulativeFees: number;
-	feeType: "INTEREST" | "FIXED" | "COMBINED";
-	fixedFeeAmount?: number;
-	frequencyDays?: number;
+}
+
+interface LoanLateFeeCalculation {
+	loanId: string;
+	totalAccruedFees: number;
+	calculationDetails: Record<string, any>;
 }
 
 export class LateFeeProcessor {
 	/**
 	 * Main function to process all overdue payments and calculate late fees
-	 * @param force - If true, bypass the daily calculation limit and recalculate fees
+	 * @param force - If true, bypass processing locks but still respect daily calculation limits
 	 */
 	static async processLateFees(force: boolean = false): Promise<{
 		success: boolean;
@@ -33,6 +70,20 @@ export class LateFeeProcessor {
 		let overdueRepaymentsCount = 0;
 		let errorMessage: string | undefined;
 
+		// Prevent concurrent processing using database-level lock
+		const lockAcquired = await acquireProcessingLock();
+		if (!lockAcquired) {
+			return {
+				success: false,
+				feesCalculated: 0,
+				totalFeeAmount: 0,
+				overdueRepayments: 0,
+				errorMessage: "Late fee processing already in progress. Please wait for it to complete.",
+				processingTimeMs: Date.now() - startTime,
+				isManualRun: force,
+			};
+		}
+
 		try {
 			logger.info(
 				`Starting late fee processing... ${
@@ -40,25 +91,108 @@ export class LateFeeProcessor {
 				}`
 			);
 
+			// Check if processing has already been done today (only for non-force mode)
+			if (!force) {
+				const today = TimeUtils.malaysiaStartOfDay();
+				const existingProcessingToday = await prisma.lateFeeProcessingLog.findFirst({
+					where: {
+						processedAt: {
+							gte: today
+						},
+						status: {
+							in: ['SUCCESS', 'MANUAL_SUCCESS']
+						}
+					},
+					orderBy: {
+						processedAt: 'desc'
+					}
+				});
+
+				if (existingProcessingToday) {
+					logger.info(`Late fee processing already completed today at ${existingProcessingToday.processedAt}. Use force mode to recalculate.`);
+					return {
+						success: true,
+						feesCalculated: 0,
+						totalFeeAmount: 0,
+						overdueRepayments: 0,
+						processingTimeMs: Date.now() - startTime,
+						isManualRun: force,
+					};
+				}
+			}
+
 			// Get all overdue repayments with product configuration
 			const overdueRepayments =
 				await LateFeeProcessor.getOverdueRepaymentsWithProduct();
 			logger.info(`Found ${overdueRepayments.length} overdue repayments`);
 
-			const calculations: LateFeeCalculation[] = [];
+			const repaymentUpdates: RepaymentLateFeeUpdate[] = [];
+			const loanCalculations = new Map<string, LoanLateFeeCalculation>();
 
+			// Group repayments by loan to check for double-charge prevention per loan
+			const repaymentsByLoan = new Map<string, any[]>();
 			for (const repayment of overdueRepayments) {
+				const loanId = repayment.loan_id;
+				if (!repaymentsByLoan.has(loanId)) {
+					repaymentsByLoan.set(loanId, []);
+				}
+				repaymentsByLoan.get(loanId)!.push(repayment);
+			}
+
+			// Process each loan's overdue repayments
+			for (const [loanId, loanRepayments] of repaymentsByLoan) {
 				try {
-					// Calculate combined late fee (interest + fixed in one entry)
-					const combinedCalculation =
-						await LateFeeProcessor.calculateCombinedLateFee(
+					// Check if this loan already had fees calculated today
+					// ALWAYS respect daily calculation limit, even in manual mode
+					let skipLoan = false;
+					const existingEntry = await prisma.lateFee.findUnique({
+						where: { loanId: loanId }
+					});
+
+					if (existingEntry && existingEntry.lastCalculationDate) {
+						const today = TimeUtils.malaysiaStartOfDay();
+						const lastCalcDate = TimeUtils.malaysiaStartOfDay(existingEntry.lastCalculationDate);
+						if (lastCalcDate.getTime() === today.getTime()) {
+							logger.info(`Late fees already calculated today for loan ${loanId}. Skipping to prevent double-charging (${force ? 'manual' : 'automatic'} mode).`);
+							skipLoan = true;
+						}
+					}
+
+					if (skipLoan) {
+						continue; // Skip entire loan if already calculated today
+					}
+
+					// Process all repayments for this loan
+					for (const repayment of loanRepayments) {
+						try {
+							// Calculate late fees for this repayment
+							const repaymentUpdate =
+								await LateFeeProcessor.calculateRepaymentLateFees(
 							repayment,
 							force
 						);
-					if (combinedCalculation) {
-						calculations.push(combinedCalculation);
-						totalFeeAmount += combinedCalculation.feeAmount;
+							
+							if (repaymentUpdate) {
+								repaymentUpdates.push(repaymentUpdate);
+								totalFeeAmount = SafeMath.add(totalFeeAmount, repaymentUpdate.lateFeeAmount);
 						feesCalculated++;
+
+								// Aggregate by loan for the single late_fees entry
+								if (!loanCalculations.has(loanId)) {
+									loanCalculations.set(loanId, {
+										loanId,
+										totalAccruedFees: 0,
+										calculationDetails: {}
+									});
+								}
+								
+								const loanCalc = loanCalculations.get(loanId)!;
+								loanCalc.totalAccruedFees = SafeMath.add(loanCalc.totalAccruedFees, repaymentUpdate.lateFeeAmount);
+								loanCalc.calculationDetails[repayment.id] = {
+									lateFeeAmount: repaymentUpdate.lateFeeAmount,
+									daysOverdue: repaymentUpdate.daysOverdue,
+									outstandingPrincipal: repaymentUpdate.outstandingPrincipal
+								};
 					}
 				} catch (error) {
 					logger.error(
@@ -66,14 +200,22 @@ export class LateFeeProcessor {
 						error
 					);
 					// Continue processing other repayments
+						}
+					}
+				} catch (error) {
+					logger.error(
+						`Error processing loan ${loanId}:`,
+						error
+					);
+					// Continue processing other loans
 				}
 			}
 
 			// Save all calculations in a transaction
-			if (calculations.length > 0) {
-				await LateFeeProcessor.saveLateFees(calculations);
+			if (repaymentUpdates.length > 0) {
+				await LateFeeProcessor.saveLateFees(repaymentUpdates, Array.from(loanCalculations.values()));
 				logger.info(
-					`Successfully saved ${calculations.length} late fee calculations`
+					`Successfully updated ${repaymentUpdates.length} repayments and ${loanCalculations.size} loans`
 				);
 			}
 
@@ -89,15 +231,13 @@ export class LateFeeProcessor {
 			});
 
 			logger.info(
-				`Late fee processing completed successfully. Fees calculated: ${feesCalculated}, Total amount: $${totalFeeAmount.toFixed(
-					2
-				)}${force ? " (Manual run)" : ""}`
+				`Late fee processing completed successfully. Fees calculated: ${feesCalculated}, Total amount: $${SafeMath.round(totalFeeAmount).toFixed(2)}${force ? " (Manual run)" : ""}`
 			);
 
 			return {
 				success: true,
 				feesCalculated,
-				totalFeeAmount,
+				totalFeeAmount: SafeMath.round(totalFeeAmount),
 				overdueRepayments: overdueRepaymentsCount,
 				processingTimeMs: Date.now() - startTime,
 				isManualRun: force,
@@ -120,12 +260,15 @@ export class LateFeeProcessor {
 			return {
 				success: false,
 				feesCalculated,
-				totalFeeAmount,
+				totalFeeAmount: SafeMath.round(totalFeeAmount),
 				overdueRepayments: overdueRepaymentsCount,
 				errorMessage,
 				processingTimeMs: Date.now() - startTime,
 				isManualRun: force,
 			};
+		} finally {
+			// Release the database lock
+			await releaseProcessingLock();
 		}
 	}
 
@@ -133,8 +276,7 @@ export class LateFeeProcessor {
 	 * Get all overdue repayments with their product configuration
 	 */
 	private static async getOverdueRepaymentsWithProduct() {
-		const today = new Date();
-		today.setUTCHours(0, 0, 0, 0); // Start of today
+		const today = TimeUtils.malaysiaStartOfDay();
 
 		// Use raw query to get repayments with product late fee configuration
 		const query = `
@@ -145,253 +287,548 @@ export class LateFeeProcessor {
 				l.status as loan_status,
 				p."lateFeeRate",
 				p."lateFeeFixedAmount",
-				p."lateFeeFrequencyDays",
-				COUNT(lf.id) as fee_count
+				p."lateFeeFrequencyDays"
 			FROM loan_repayments lr
 			JOIN loans l ON lr."loanId" = l.id
 			JOIN loan_applications la ON l."applicationId" = la.id
 			JOIN products p ON la."productId" = p.id
-			LEFT JOIN late_fees lf ON lr.id = lf."loanRepaymentId" 
-				AND lf."calculationDate" >= $1 
 			WHERE lr.status IN ('PENDING', 'PARTIAL')
 			  AND lr."dueDate" < $1
 			  AND l.status = 'ACTIVE'
-			GROUP BY lr.id, l.id, l."outstandingBalance", l.status, 
-					 p."lateFeeRate", p."lateFeeFixedAmount", p."lateFeeFrequencyDays"
+			ORDER BY l.id, lr."dueDate" ASC
 		`;
 
-		const result = await prisma.$queryRawUnsafe(query, today);
-		return result as any[];
+		const result = await prisma.$queryRawUnsafe(query, today) as any[];
+		return result;
 	}
 
 	/**
-	 * Calculate combined late fee (interest + fixed) for a specific repayment
-	 * Creates a single database entry with both calculations
+	 * Calculate late fees for a specific repayment
 	 * @param repayment - The repayment data
-	 * @param force - If true, bypass the daily calculation limit
+	 * @param force - If true, bypass processing locks (daily limits still apply at loan level)
 	 */
-	private static async calculateCombinedLateFee(
+	private static async calculateRepaymentLateFees(
 		repayment: any,
 		force: boolean = false
-	): Promise<LateFeeCalculation | null> {
-		const today = new Date();
-		today.setUTCHours(0, 0, 0, 0);
-
-		// In force mode, we always recalculate
-		// In normal mode, we still calculate to ensure proper upsert behavior
-		// The upsert logic in saveLateFees will handle duplicates
-
-		// Calculate days overdue
+	): Promise<RepaymentLateFeeUpdate | null> {
 		const dueDate = new Date(repayment.dueDate);
-		dueDate.setUTCHours(0, 0, 0, 0);
-		const daysOverdue = Math.floor(
-			(today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
-		);
+		
+		// Calculate days overdue using UTC-consistent calculation
+		const daysOverdue = TimeUtils.daysOverdue(dueDate);
 
 		if (daysOverdue <= 0) {
 			return null; // Not actually overdue
 		}
 
-		// Calculate outstanding principal (amount not yet paid)
-		// For partial payments, we need to calculate based on actual amount paid
-		const outstandingPrincipal = repayment.actualAmount
-			? Math.max(0, repayment.amount - repayment.actualAmount)
-			: repayment.amount;
+		// Convert all amounts to safe numbers with 2 decimal precision
+		const totalPaid = SafeMath.toNumber(repayment.actualAmount || 0);
+		const lateFeesPaid = SafeMath.toNumber(repayment.lateFeesPaid || 0);
+		const principalPaid = SafeMath.toNumber(repayment.principalPaid || 0);
+		const principalAmount = SafeMath.toNumber(repayment.principalAmount);
+		const interestAmount = SafeMath.toNumber(repayment.interestAmount);
+		
+		// Outstanding principal = Original principal + interest - principal paid
+		// This is the REMAINING UNPAID BALANCE, not the full original amount
+		const outstandingPrincipal = SafeMath.max(0, 
+			SafeMath.subtract(SafeMath.add(principalAmount, interestAmount), principalPaid)
+		);
+
+		console.log(`💡 Late fee calculation for repayment ${repayment.id}:`, {
+			originalAmount: SafeMath.toNumber(repayment.amount),
+			principalAmount: principalAmount,
+			interestAmount: interestAmount,
+			totalPaid: totalPaid,
+			lateFeesPaid: lateFeesPaid,
+			principalPaid: principalPaid,
+			outstandingPrincipal: outstandingPrincipal,
+			daysOverdue: daysOverdue,
+			status: repayment.status,
+			currentLateFeeAmount: SafeMath.toNumber(repayment.lateFeeAmount || 0)
+		});
 
 		if (outstandingPrincipal <= 0) {
-			return null; // Nothing outstanding
+			return null; // Nothing outstanding to charge late fees on
 		}
 
-		// Get product configuration
-		const dailyRate = Number(repayment.lateFeeRate) / 100;
-		const fixedFeeAmount = Number(repayment.lateFeeFixedAmount) || 0;
-		const frequencyDays = Number(repayment.lateFeeFrequencyDays) || 7;
+		// Get product configuration - use regular division for rates, safe conversion for amounts
+		const lateFeeRate = SafeMath.toNumber(repayment.lateFeeRate);
+		const dailyRate = lateFeeRate / 100; // Don't round rates - preserve precision
+		const fixedFeeAmount = SafeMath.toNumber(repayment.lateFeeFixedAmount || 0);
+		const frequencyDays = Math.max(1, Math.floor(SafeMath.toNumber(repayment.lateFeeFrequencyDays || 7)));
 
-		// Calculate interest fees for missed days
-		// Exclude current day's entries to avoid double-counting
-		const existingDaysQuery = `
-			SELECT COUNT(*) as days_charged
-			FROM late_fees
-			WHERE "loanRepaymentId" = $1
-			  AND status = 'ACTIVE'
-			  AND "calculationDate" < $2
-		`;
 
-		const existingDaysResult = (await prisma.$queryRawUnsafe(
-			existingDaysQuery,
-			repayment.id,
-			today
-		)) as any[];
-		const daysAlreadyCharged = Number(
-			existingDaysResult[0]?.days_charged || 0
-		);
 
-		// Calculate interest for missed days
-		const missedInterestDays = daysOverdue - daysAlreadyCharged;
-		const interestFeeAmount =
-			missedInterestDays > 0
-				? Math.round(
-						outstandingPrincipal *
-							dailyRate *
-							missedInterestDays *
-							100
-				  ) / 100
+		// Calculate total interest fees for all overdue days
+		// Use the REMAINING UNPAID BALANCE, not the full principal
+		// Preserve precision in rate calculation, only round final amount
+		const totalInterestFeeAmount = daysOverdue > 0
+			? SafeMath.round(outstandingPrincipal * dailyRate * daysOverdue)
 				: 0;
 
-		// Calculate fixed fees for completed periods
+		// Calculate total fixed fees for completed periods
 		const completedPeriods = Math.floor(daysOverdue / frequencyDays);
-		// Exclude current day's entries to avoid double-counting
-		const existingFixedFeesQuery = `
-			SELECT COALESCE(SUM("fixedFeeAmount"), 0) as total_fixed_charged
-			FROM late_fees
-			WHERE "loanRepaymentId" = $1
-			  AND status = 'ACTIVE'
-			  AND "fixedFeeAmount" > 0
-			  AND "calculationDate" < $2
-		`;
+		const totalFixedFeeAmount = SafeMath.multiply(completedPeriods, fixedFeeAmount);
 
-		const existingFixedResult = (await prisma.$queryRawUnsafe(
-			existingFixedFeesQuery,
-			repayment.id,
-			today
-		)) as any[];
-		const totalFixedAlreadyCharged = Number(
-			existingFixedResult[0]?.total_fixed_charged || 0
-		);
-		const expectedTotalFixed = completedPeriods * fixedFeeAmount;
-		const fixedFeeAmountToCharge = Math.max(
-			0,
-			expectedTotalFixed - totalFixedAlreadyCharged
-		);
+		// Combine total fee amount (this is the total amount owed, not incremental)
+		const totalFeeAmount = SafeMath.add(totalInterestFeeAmount, totalFixedFeeAmount);
 
-		// Combine total fee amount
-		const totalFeeAmount =
-			Math.round((interestFeeAmount + fixedFeeAmountToCharge) * 100) /
-			100;
+		console.log(`🧮 Fee calculation details for repayment ${repayment.id}:`, {
+			dailyRate: dailyRate,
+			fixedFeeAmount: fixedFeeAmount,
+			frequencyDays: frequencyDays,
+			completedPeriods: completedPeriods,
+			totalInterestFeeAmount: totalInterestFeeAmount,
+			totalFixedFeeAmount: totalFixedFeeAmount,
+			totalFeeAmount: totalFeeAmount,
+			outstandingPrincipal: outstandingPrincipal,
+			daysOverdue: daysOverdue,
+			willCalculateFees: totalFeeAmount > 0 || force
+		});
 
 		// If no fees to charge, return null (unless in force mode where we want to show 0 fee calculations)
 		if (totalFeeAmount <= 0 && !force) {
 			return null;
 		}
 
-		// Get cumulative fees up to yesterday
-		const previousFeesQuery = `
-			SELECT COALESCE(SUM("feeAmount"), 0) as total_fees
-			FROM late_fees
-			WHERE "loanRepaymentId" = $1
-			  AND status = 'ACTIVE'
-			  AND "calculationDate" < $2
-		`;
-
-		const previousFeesResult = (await prisma.$queryRawUnsafe(
-			previousFeesQuery,
-			repayment.id,
-			today
-		)) as any[];
-		const previousFeesTotal = previousFeesResult[0]?.total_fees || 0;
-		const cumulativeFees =
-			Math.round((Number(previousFeesTotal) + totalFeeAmount) * 100) /
-			100;
-
 		return {
-			loanRepaymentId: repayment.id,
+			repaymentId: repayment.id,
+			lateFeeAmount: totalFeeAmount,
 			daysOverdue,
-			outstandingPrincipal: Math.round(outstandingPrincipal * 100) / 100,
-			dailyRate,
-			feeAmount: totalFeeAmount,
-			cumulativeFees,
-			feeType: "COMBINED" as "INTEREST" | "FIXED",
-			fixedFeeAmount: fixedFeeAmount > 0 ? fixedFeeAmount : undefined,
-			frequencyDays: fixedFeeAmount > 0 ? frequencyDays : undefined,
+			outstandingPrincipal: outstandingPrincipal,
 		};
 	}
 
 	/**
-	 * Save late fee calculations to database using upsert logic
-	 * Updates existing entries instead of creating duplicates
+	 * Save late fee calculations to database
+	 * Updates loan_repayments with late fee amounts and creates/updates single late_fees entry per loan
 	 */
-	private static async saveLateFees(calculations: LateFeeCalculation[]) {
-		const today = new Date();
-		today.setUTCHours(0, 0, 0, 0);
+	private static async saveLateFees(
+		repaymentUpdates: RepaymentLateFeeUpdate[], 
+		loanCalculations: LoanLateFeeCalculation[]
+	) {
+		const today = TimeUtils.malaysiaStartOfDay();
 
 		await prisma.$transaction(async (tx) => {
-			for (const calc of calculations) {
-				// Check if an entry already exists for this repayment today
-				const existingEntry = (await tx.$queryRawUnsafe(
-					`
-					SELECT id FROM late_fees 
-					WHERE "loanRepaymentId" = $1 
-					  AND "calculationDate" = $2 
-					  AND "feeType" = $3
-					  AND status = 'ACTIVE'
-					LIMIT 1
-				`,
-					calc.loanRepaymentId,
-					today,
-					calc.feeType
-				)) as any[];
+			// Update loan_repayments with late fee amounts
+			for (const repaymentUpdate of repaymentUpdates) {
+				// Check if lateFeesPaid needs initialization
+				const currentRepayment = await tx.loanRepayment.findUnique({
+					where: { id: repaymentUpdate.repaymentId },
+					select: { lateFeesPaid: true }
+				});
 
-				if (existingEntry.length > 0) {
-					// Update existing entry
-					const updateQuery = `
-						UPDATE late_fees 
-						SET "daysOverdue" = $1,
-							"outstandingPrincipal" = $2,
-							"dailyRate" = $3,
-							"feeAmount" = $4,
-							"cumulativeFees" = $5,
-							"fixedFeeAmount" = $6,
-							"frequencyDays" = $7,
-							"updatedAt" = NOW()
-						WHERE id = $8
-					`;
+				const updateData: any = {
+					lateFeeAmount: repaymentUpdate.lateFeeAmount,
+					updatedAt: new Date()
+				};
 
-					await tx.$executeRawUnsafe(
-						updateQuery,
-						calc.daysOverdue,
-						calc.outstandingPrincipal,
-						calc.dailyRate,
-						calc.feeAmount,
-						calc.cumulativeFees,
-						calc.fixedFeeAmount || null,
-						calc.frequencyDays || null,
-						existingEntry[0].id
-					);
-				} else {
-					// Insert new entry
-					const insertQuery = `
-						INSERT INTO late_fees (
-							id, "loanRepaymentId", "calculationDate", "daysOverdue",
-							"outstandingPrincipal", "dailyRate", "feeAmount", "cumulativeFees",
-							"feeType", "fixedFeeAmount", "frequencyDays",
-							status, "createdAt", "updatedAt"
-						) VALUES (
-							gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ACTIVE', NOW(), NOW()
-						)
-					`;
-
-					await tx.$executeRawUnsafe(
-						insertQuery,
-						calc.loanRepaymentId,
-						today,
-						calc.daysOverdue,
-						calc.outstandingPrincipal,
-						calc.dailyRate,
-						calc.feeAmount,
-						calc.cumulativeFees,
-						calc.feeType,
-						calc.fixedFeeAmount || null,
-						calc.frequencyDays || null
-					);
+				// Initialize lateFeesPaid if null to prevent issues
+				if (currentRepayment && currentRepayment.lateFeesPaid === null) {
+					updateData.lateFeesPaid = 0;
 				}
+
+				await tx.loanRepayment.update({
+					where: { id: repaymentUpdate.repaymentId },
+					data: updateData
+				});
 			}
+
+			// Create or update single late_fees entry per loan
+			for (const loanCalc of loanCalculations) {
+				// Check if all late fees for this loan are fully paid AND all underlying payments are complete
+				const allRepayments = await tx.loanRepayment.findMany({
+					where: { loanId: loanCalc.loanId },
+					select: { 
+						lateFeeAmount: true,
+						lateFeesPaid: true,
+						principalAmount: true,
+						interestAmount: true,
+						principalPaid: true
+					}
+				});
+
+				// Calculate total outstanding late fees for this loan
+				const totalOutstandingLateFees = allRepayments.reduce((total: number, repayment: any) => {
+					const lateFeeAmount = SafeMath.toNumber(repayment.lateFeeAmount || 0);
+					const lateFeesPaid = SafeMath.toNumber(repayment.lateFeesPaid || 0);
+					return SafeMath.add(total, SafeMath.max(0, SafeMath.subtract(lateFeeAmount, lateFeesPaid)));
+				}, 0);
+
+				// Calculate total outstanding principal/interest for this loan
+				const totalOutstandingPrincipal = allRepayments.reduce((total: number, repayment: any) => {
+					const originalAmount = SafeMath.add(
+						SafeMath.toNumber(repayment.principalAmount || 0),
+						SafeMath.toNumber(repayment.interestAmount || 0)
+					);
+					const principalPaid = SafeMath.toNumber(repayment.principalPaid || 0);
+					return SafeMath.add(total, SafeMath.max(0, SafeMath.subtract(originalAmount, principalPaid)));
+				}, 0);
+
+				// Determine status: PAID only if both late fees AND underlying payments are fully paid
+				const status = (totalOutstandingLateFees <= 0 && totalOutstandingPrincipal <= 0) ? 'PAID' : 'ACTIVE';
+
+				await tx.lateFee.upsert({
+					where: { loanId: loanCalc.loanId },
+					update: {
+						totalAccruedFees: loanCalc.totalAccruedFees,
+						lastCalculationDate: today,
+						calculationDetails: loanCalc.calculationDetails,
+						status: status,
+						updatedAt: new Date()
+					},
+					create: {
+						loanId: loanCalc.loanId,
+						totalAccruedFees: loanCalc.totalAccruedFees,
+						lastCalculationDate: today,
+						calculationDetails: loanCalc.calculationDetails,
+						status: status
+					}
+				});
+			}
+		}, {
+			timeout: 30000, // 30 second timeout
+			isolationLevel: 'Serializable' // Prevent race conditions
 		});
 	}
 
 	/**
-	 * Log processing result using raw query
+	 * Handle payment allocation when a payment is made
+	 * Priority: Late fees first, then principal (oldest repayments first)
+	 * Fixed: No double database updates, proper error handling, precise calculations
 	 */
-	private static async logProcessingResult(result: {
+	static async handlePaymentAllocation(
+		loanId: string,
+		paymentAmount: number,
+		paymentDate: Date,
+		tx?: any
+	): Promise<{
+		success: boolean;
+		lateFeesPaid: number;
+		principalPaid: number;
+		totalLateFees: number;
+		paymentAllocation: any[];
+		remainingPayment: number;
+		errorMessage?: string;
+	}> {
+		const prismaClient = tx || prisma;
+
+		try {
+			logger.info(
+				`Handling payment allocation for loan ${loanId}: $${SafeMath.round(paymentAmount).toFixed(2)}`
+			);
+
+			// Convert payment amount to safe number
+			const safePaymentAmount = SafeMath.toNumber(paymentAmount);
+
+			// Get all repayments for this loan, ordered by due date (oldest first)
+			const repayments = await prismaClient.loanRepayment.findMany({
+				where: { 
+					loanId: loanId,
+					status: { in: ['PENDING', 'PARTIAL'] }
+				},
+				orderBy: { dueDate: 'asc' }
+			});
+
+			if (repayments.length === 0) {
+				return {
+					success: true,
+					lateFeesPaid: 0,
+					principalPaid: 0,
+					totalLateFees: 0,
+					paymentAllocation: [],
+					remainingPayment: safePaymentAmount,
+				};
+			}
+
+			let remainingPayment = safePaymentAmount;
+			let totalLateFeesPaid = 0;
+			let totalPrincipalPaid = 0;
+			const paymentAllocation: any[] = [];
+
+			// Priority: Late fees first, oldest repayments first
+			for (const repayment of repayments) {
+				if (remainingPayment <= 0) break;
+
+				const outstandingLateFees = SafeMath.max(0, 
+					SafeMath.subtract(
+						SafeMath.toNumber(repayment.lateFeeAmount), 
+						SafeMath.toNumber(repayment.lateFeesPaid || 0)
+					)
+				);
+				const outstandingPrincipal = SafeMath.max(0, 
+					SafeMath.subtract(
+						SafeMath.add(
+							SafeMath.toNumber(repayment.principalAmount), 
+							SafeMath.toNumber(repayment.interestAmount)
+						),
+						SafeMath.toNumber(repayment.principalPaid || 0)
+					)
+				);
+
+				let lateFeePayment = 0;
+				let principalPayment = 0;
+				const repaymentUpdates: any = {};
+
+				// 1. Pay late fees first
+				if (outstandingLateFees > 0 && remainingPayment > 0) {
+					lateFeePayment = SafeMath.min(remainingPayment, outstandingLateFees);
+					remainingPayment = SafeMath.subtract(remainingPayment, lateFeePayment);
+					totalLateFeesPaid = SafeMath.add(totalLateFeesPaid, lateFeePayment);
+
+					// Prepare update for late fee payment
+					repaymentUpdates.lateFeesPaid = SafeMath.add(
+						SafeMath.toNumber(repayment.lateFeesPaid || 0), 
+						lateFeePayment
+					);
+					repaymentUpdates.actualAmount = SafeMath.add(
+						SafeMath.toNumber(repayment.actualAmount || 0), 
+						lateFeePayment
+					);
+				}
+
+				// 2. Pay principal with remaining amount
+				if (outstandingPrincipal > 0 && remainingPayment > 0) {
+					principalPayment = SafeMath.min(remainingPayment, outstandingPrincipal);
+					remainingPayment = SafeMath.subtract(remainingPayment, principalPayment);
+					totalPrincipalPaid = SafeMath.add(totalPrincipalPaid, principalPayment);
+
+					// Prepare update for principal payment
+					repaymentUpdates.principalPaid = SafeMath.add(
+						SafeMath.toNumber(repayment.principalPaid || 0), 
+						principalPayment
+					);
+					repaymentUpdates.actualAmount = SafeMath.add(
+						SafeMath.toNumber(repaymentUpdates.actualAmount || repayment.actualAmount || 0), 
+						principalPayment
+					);
+
+					// Determine payment status and type
+					const newOutstandingPrincipal = SafeMath.subtract(outstandingPrincipal, principalPayment);
+					const newOutstandingLateFees = SafeMath.subtract(outstandingLateFees, lateFeePayment);
+					
+					if (newOutstandingPrincipal <= 0 && newOutstandingLateFees <= 0) {
+						// Fully paid - determine payment type based on actual payment vs due dates
+						const paymentTypeInfo = TimeUtils.paymentType(paymentDate, new Date(repayment.dueDate));
+						
+						repaymentUpdates.status = 'COMPLETED';
+						repaymentUpdates.paidAt = paymentDate;
+						repaymentUpdates.paymentType = paymentTypeInfo.paymentType;
+						repaymentUpdates.daysEarly = paymentTypeInfo.daysEarly;
+						repaymentUpdates.daysLate = paymentTypeInfo.daysLate;
+					} else if (SafeMath.toNumber(repaymentUpdates.actualAmount) > 0) {
+						repaymentUpdates.status = 'PARTIAL';
+					}
+				}
+
+				// Single database update per repayment to avoid double updates
+				if (Object.keys(repaymentUpdates).length > 0) {
+					repaymentUpdates.updatedAt = new Date();
+					
+					await prismaClient.loanRepayment.update({
+						where: { id: repayment.id },
+						data: repaymentUpdates
+					});
+				}
+
+				// Record allocation for this repayment
+				if (lateFeePayment > 0 || principalPayment > 0) {
+					paymentAllocation.push({
+						repaymentId: repayment.id,
+						installmentNumber: repayment.installmentNumber,
+						lateFeePayment: SafeMath.round(lateFeePayment),
+						principalPayment: SafeMath.round(principalPayment),
+						totalPayment: SafeMath.round(SafeMath.add(lateFeePayment, principalPayment)),
+						outstandingLateFees: SafeMath.max(0, SafeMath.subtract(outstandingLateFees, lateFeePayment)),
+						outstandingPrincipal: SafeMath.max(0, SafeMath.subtract(outstandingPrincipal, principalPayment))
+					});
+				}
+			}
+
+			// Handle overpayment
+			if (remainingPayment > 0) {
+				logger.info(`Overpayment detected: $${SafeMath.round(remainingPayment).toFixed(2)} remaining after allocation`);
+				// For now, just log the overpayment. In the future, this could be credited to customer account
+			}
+
+			// Update loan-level late fees entry if late fees were paid
+			if (totalLateFeesPaid > 0) {
+				const lateFeeEntry = await prismaClient.lateFee.findUnique({
+					where: { loanId: loanId }
+				});
+
+				if (lateFeeEntry) {
+					const newTotalAccruedFees = SafeMath.max(0, 
+						SafeMath.subtract(
+							SafeMath.toNumber(lateFeeEntry.totalAccruedFees), 
+							totalLateFeesPaid
+						)
+					);
+
+									// Check if all late fees for this loan are fully paid AND all underlying payments are complete
+				const allRepayments = await prismaClient.loanRepayment.findMany({
+					where: { loanId: loanId },
+					select: { 
+						lateFeeAmount: true,
+						lateFeesPaid: true,
+						principalAmount: true,
+						interestAmount: true,
+						principalPaid: true
+					}
+				});
+
+				// Calculate total outstanding late fees for this loan
+				const totalOutstandingLateFees = allRepayments.reduce((total: number, repayment: any) => {
+					const lateFeeAmount = SafeMath.toNumber(repayment.lateFeeAmount || 0);
+					const lateFeesPaid = SafeMath.toNumber(repayment.lateFeesPaid || 0);
+					return SafeMath.add(total, SafeMath.max(0, SafeMath.subtract(lateFeeAmount, lateFeesPaid)));
+				}, 0);
+
+				// Calculate total outstanding principal/interest for this loan
+				const totalOutstandingPrincipal = allRepayments.reduce((total: number, repayment: any) => {
+					const originalAmount = SafeMath.add(
+						SafeMath.toNumber(repayment.principalAmount || 0),
+						SafeMath.toNumber(repayment.interestAmount || 0)
+					);
+					const principalPaid = SafeMath.toNumber(repayment.principalPaid || 0);
+					return SafeMath.add(total, SafeMath.max(0, SafeMath.subtract(originalAmount, principalPaid)));
+				}, 0);
+
+				// Determine status: PAID only if both late fees AND underlying payments are fully paid
+				const status = (totalOutstandingLateFees <= 0 && totalOutstandingPrincipal <= 0) ? 'PAID' : 'ACTIVE';
+					
+					await prismaClient.lateFee.update({
+						where: { loanId: loanId },
+						data: {
+							totalAccruedFees: newTotalAccruedFees,
+							status: status,
+							updatedAt: new Date()
+						}
+					});
+				}
+			}
+
+			// Calculate total late fees for this loan
+			const totalLateFees = await prismaClient.loanRepayment.aggregate({
+				where: { loanId: loanId },
+				_sum: { lateFeeAmount: true }
+			});
+
+			logger.info(
+				`✅ Payment allocation completed: $${SafeMath.round(totalLateFeesPaid).toFixed(2)} to late fees, $${SafeMath.round(totalPrincipalPaid).toFixed(2)} to principal. Remaining: $${SafeMath.round(remainingPayment).toFixed(2)}`
+			);
+
+			return {
+				success: true,
+				lateFeesPaid: SafeMath.round(totalLateFeesPaid),
+				principalPaid: SafeMath.round(totalPrincipalPaid),
+				totalLateFees: SafeMath.toNumber(totalLateFees._sum.lateFeeAmount || 0),
+				paymentAllocation,
+				remainingPayment: SafeMath.round(remainingPayment),
+			};
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : "Unknown error";
+			logger.error(
+				`Error handling payment allocation for loan ${loanId}:`,
+				error
+			);
+
+			return {
+				success: false,
+				lateFeesPaid: 0,
+				principalPaid: 0,
+				totalLateFees: 0,
+				paymentAllocation: [],
+				remainingPayment: SafeMath.toNumber(paymentAmount),
+				errorMessage,
+			};
+		}
+	}
+
+	/**
+	 * Get total amount due for a repayment including late fees
+	 */
+	static async getTotalAmountDue(loanRepaymentId: string): Promise<{
+		originalAmount: number;
+		totalLateFees: number;
+		totalAmountDue: number;
+		lateFeeBreakdown: any[];
+		interestFeesTotal: number;
+		fixedFeesTotal: number;
+	}> {
+		try {
+			// Get repayment details with loan and product info
+			const repayment = await prisma.loanRepayment.findUnique({
+				where: { id: loanRepaymentId },
+				include: {
+					loan: {
+						include: {
+							application: {
+								include: {
+									product: true
+								}
+							},
+							lateFee: true
+						}
+				}
+			}
+		});
+
+			if (!repayment) {
+				throw new Error(`Repayment ${loanRepaymentId} not found`);
+			}
+
+			const originalAmount = SafeMath.toNumber(repayment.amount);
+			const totalLateFees = SafeMath.toNumber(repayment.lateFeeAmount || 0);
+			const totalAmountDue = SafeMath.add(originalAmount, totalLateFees);
+
+			// Calculate breakdown based on the outstanding amount and days overdue
+			const dueDate = new Date(repayment.dueDate);
+			const daysOverdue = TimeUtils.daysOverdue(dueDate);
+			
+			const product = repayment.loan.application.product;
+			const dailyRate = SafeMath.divide(SafeMath.toNumber(product.lateFeeRate), 100);
+			const fixedFeeAmount = SafeMath.toNumber(product.lateFeeFixedAmount || 0);
+			const frequencyDays = Math.max(1, Math.floor(SafeMath.toNumber(product.lateFeeFrequencyDays || 7)));
+
+			// Calculate breakdown using REMAINING UNPAID BALANCE
+			const outstandingPrincipal = SafeMath.max(0, 
+				SafeMath.subtract(
+					SafeMath.add(
+						SafeMath.toNumber(repayment.principalAmount), 
+						SafeMath.toNumber(repayment.interestAmount)
+					),
+					SafeMath.toNumber(repayment.principalPaid || 0)
+				)
+			);
+			
+			const interestFeesTotal = daysOverdue > 0 ? 
+				SafeMath.multiply(
+					SafeMath.multiply(outstandingPrincipal, dailyRate),
+					daysOverdue
+				) : 0;
+			
+			const completedPeriods = Math.floor(daysOverdue / frequencyDays);
+			const fixedFeesTotal = SafeMath.multiply(completedPeriods, fixedFeeAmount);
+
+			return {
+				originalAmount,
+				totalLateFees,
+				totalAmountDue,
+				lateFeeBreakdown: [],
+				interestFeesTotal,
+				fixedFeesTotal,
+			};
+		} catch (error) {
+			logger.error("Error calculating total amount due:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Log processing result for audit trail
+	 */
+	private static async logProcessingResult(data: {
 		feesCalculated: number;
 		totalFeeAmount: number;
 		overdueRepayments: number;
@@ -399,58 +836,56 @@ export class LateFeeProcessor {
 		errorMessage?: string;
 		processingTimeMs: number;
 	}) {
-		const insertQuery = `
-			INSERT INTO late_fee_processing_logs (
-				id, "feesCalculated", "totalFeeAmount", "overdue_repayments",
-				status, "errorMessage", "processingTimeMs", metadata, "createdAt"
-			) VALUES (
-				gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7::jsonb, NOW()
-			)
-		`;
-
-		const metadata = {
+		try {
+			await prisma.lateFeeProcessingLog.create({
+				data: {
+					feesCalculated: data.feesCalculated,
+					totalFeeAmount: SafeMath.round(data.totalFeeAmount),
+					overdue_repayments: data.overdueRepayments,
+					status: data.status,
+					errorMessage: data.errorMessage,
+					processingTimeMs: data.processingTimeMs,
+					metadata: {
 			timestamp: new Date().toISOString(),
-			processingType: "enhanced_late_fee_system",
-			supportsFeeTypes: ["INTEREST", "FIXED"],
-		};
-
-		await prisma.$executeRawUnsafe(
-			insertQuery,
-			result.feesCalculated,
-			result.totalFeeAmount,
-			result.overdueRepayments,
-			result.status,
-			result.errorMessage || null,
-			result.processingTimeMs,
-			metadata
-		);
+						processingType: data.status.includes('MANUAL') ? 'manual' : 'automatic'
+					}
+				}
+			});
+		} catch (error) {
+			logger.error("Failed to log processing result:", error);
+			// Don't throw here to avoid breaking the main process
+		}
 	}
 
 	/**
 	 * Get late fee summary for a specific repayment
 	 */
 	static async getLateFeesSummary(loanRepaymentId: string) {
-		const query = `
-			SELECT 
-				COUNT(*) as fee_entries,
-				COALESCE(SUM("feeAmount"), 0) as total_fees,
-				MAX("cumulativeFees") as latest_cumulative_fees,
-				MAX("calculationDate") as latest_calculation_date
-			FROM late_fees
-			WHERE "loanRepaymentId" = $1 AND status = 'ACTIVE'
-		`;
+		const repayment = await prisma.loanRepayment.findUnique({
+			where: { id: loanRepaymentId },
+			include: {
+				loan: {
+					include: {
+						lateFee: true
+					}
+				}
+			}
+		});
 
-		const result = (await prisma.$queryRawUnsafe(
-			query,
-			loanRepaymentId
-		)) as any[];
-		const summary = result[0];
+		if (!repayment) {
+			return {
+				totalFees: 0,
+				latestCumulativeFees: 0,
+				feeEntries: 0,
+				latestCalculationDate: null,
+			};
+		}
 
 		return {
-			totalFees: Number(summary.total_fees),
-			latestCumulativeFees: Number(summary.latest_cumulative_fees),
-			feeEntries: Number(summary.fee_entries),
-			latestCalculationDate: summary.latest_calculation_date,
+			totalFees: repayment.lateFeeAmount || 0,
+			latestCumulativeFees: repayment.lateFeeAmount || 0,
+			feeEntries: repayment.lateFeeAmount > 0 ? 1 : 0,
+			latestCalculationDate: repayment.loan.lateFee?.lastCalculationDate || null,
 		};
 	}
 
@@ -464,8 +899,7 @@ export class LateFeeProcessor {
 			LIMIT 1
 		`;
 
-		const todayStart = new Date();
-		todayStart.setHours(0, 0, 0, 0);
+		const todayStart = TimeUtils.malaysiaStartOfDay();
 
 		const todayProcessedQuery = `
 			SELECT COUNT(*) as count
@@ -490,375 +924,5 @@ export class LateFeeProcessor {
 			processedToday: todayProcessed > 0,
 			todayProcessingCount: todayProcessed,
 		};
-	}
-
-	/**
-	 * Handle late fee payment when a repayment is cleared
-	 * This should be called whenever a repayment status changes to COMPLETED
-	 */
-	static async handleRepaymentCleared(
-		loanRepaymentId: string,
-		paymentAmount: number,
-		paymentDate: Date,
-		tx?: any
-	): Promise<{
-		success: boolean;
-		lateFeesPaid: number;
-		lateFeesWaived: number;
-		totalLateFees: number;
-		remainingPayment: number;
-		errorMessage?: string;
-	}> {
-		const prismaClient = tx || prisma;
-
-		try {
-			logger.info(
-				`Handling late fee payment for repayment ${loanRepaymentId}`
-			);
-
-			// Get all active late fees for this repayment
-			const activeLateFees = (await prismaClient.$queryRawUnsafe(
-				`
-				SELECT * FROM late_fees 
-				WHERE "loanRepaymentId" = $1 AND status = 'ACTIVE'
-				ORDER BY "calculationDate" ASC, "feeType" ASC
-			`,
-				loanRepaymentId
-			)) as any[];
-
-			if (activeLateFees.length === 0) {
-				return {
-					success: true,
-					lateFeesPaid: 0,
-					lateFeesWaived: 0,
-					totalLateFees: 0,
-					remainingPayment: paymentAmount,
-				};
-			}
-
-			// Calculate total late fees owed with proper rounding
-			const totalLateFees =
-				Math.round(
-					activeLateFees.reduce(
-						(sum, fee) => sum + fee.feeAmount,
-						0
-					) * 100
-				) / 100;
-
-			// Get the original repayment amount
-			const repayment = await prismaClient.loanRepayment.findUnique({
-				where: { id: loanRepaymentId },
-			});
-
-			if (!repayment) {
-				throw new Error(`Repayment ${loanRepaymentId} not found`);
-			}
-
-			const originalAmount = Math.round(repayment.amount * 100) / 100;
-			const totalAmountDue =
-				Math.round((originalAmount + totalLateFees) * 100) / 100;
-
-			let lateFeesPaid = 0;
-			let lateFeesWaived = 0;
-			let remainingPayment = paymentAmount;
-
-			// Determine how to handle late fees based on payment amount
-			if (paymentAmount >= totalAmountDue) {
-				// Payment covers original amount + all late fees
-				lateFeesPaid = totalLateFees;
-				remainingPayment = paymentAmount - totalAmountDue;
-
-				// Mark all late fees as PAID
-				const updateResult = await prismaClient.$executeRawUnsafe(
-					`
-					UPDATE late_fees 
-					SET status = 'PAID', "updatedAt" = NOW()
-					WHERE "loanRepaymentId" = $1 AND status = 'ACTIVE'
-				`,
-					loanRepaymentId
-				);
-
-				console.log(
-					`🔍 DEBUG: Updated ${updateResult} late fee records to PAID for repayment ${loanRepaymentId}`
-				);
-
-				// Verify the update worked
-				const remainingActiveFees = await prismaClient.$queryRawUnsafe(
-					`SELECT COUNT(*) as count FROM late_fees WHERE "loanRepaymentId" = $1 AND status = 'ACTIVE'`,
-					loanRepaymentId
-				);
-				console.log(
-					`🔍 DEBUG: Remaining ACTIVE late fees for repayment ${loanRepaymentId}:`,
-					remainingActiveFees[0]
-				);
-
-				logger.info(
-					`Marked ${totalLateFees.toFixed(
-						2
-					)} in late fees as PAID for repayment ${loanRepaymentId}`
-				);
-			} else if (paymentAmount > originalAmount) {
-				// Payment covers original amount + partial late fees
-				const lateFeePayment =
-					Math.round((paymentAmount - originalAmount) * 100) / 100;
-				lateFeesPaid = lateFeePayment;
-				lateFeesWaived =
-					Math.round((totalLateFees - lateFeePayment) * 100) / 100;
-				remainingPayment = 0;
-
-				// Mark fees as paid proportionally (oldest first)
-				let remainingLateFeePayment = lateFeePayment;
-
-				for (const fee of activeLateFees) {
-					if (remainingLateFeePayment <= 0) {
-						// Leave remaining fees as ACTIVE - they are still owed
-						// Do not automatically waive fees
-						break;
-					} else if (remainingLateFeePayment >= fee.feeAmount) {
-						// Fully pay this fee
-						await prismaClient.$executeRawUnsafe(
-							`
-							UPDATE late_fees 
-							SET status = 'PAID', "updatedAt" = NOW()
-							WHERE id = $1
-						`,
-							fee.id
-						);
-						remainingLateFeePayment -= fee.feeAmount;
-					} else {
-						// Partially pay this fee (split it)
-						const paidAmount =
-							Math.round(remainingLateFeePayment * 100) / 100;
-						const unpaidAmount =
-							Math.round((fee.feeAmount - paidAmount) * 100) /
-							100;
-
-						// Mark original as paid for the paid portion
-						await prismaClient.$executeRawUnsafe(
-							`
-							UPDATE late_fees 
-							SET status = 'PAID', "feeAmount" = $2, "updatedAt" = NOW()
-							WHERE id = $1
-						`,
-							fee.id,
-							paidAmount
-						);
-
-						// Create a new record for the unpaid portion (remains ACTIVE)
-						await prismaClient.$executeRawUnsafe(
-							`
-							INSERT INTO late_fees (
-								id, "loanRepaymentId", "calculationDate", "daysOverdue",
-								"outstandingPrincipal", "dailyRate", "feeAmount", "cumulativeFees",
-								status, "createdAt", "updatedAt"
-							) VALUES (
-								gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'ACTIVE', NOW(), NOW()
-							)
-						`,
-							fee.loanRepaymentId,
-							fee.calculationDate,
-							fee.daysOverdue,
-							fee.outstandingPrincipal,
-							fee.dailyRate,
-							unpaidAmount,
-							fee.cumulativeFees
-						);
-
-						remainingLateFeePayment = 0;
-					}
-				}
-
-				// Recalculate waived amount (should be 0 since we don't auto-waive)
-				lateFeesWaived = 0;
-
-				logger.info(
-					`Paid ${lateFeesPaid.toFixed(
-						2
-					)} in late fees for repayment ${loanRepaymentId}. Remaining unpaid late fees will continue to be owed.`
-				);
-			} else {
-				// Payment is less than original amount - partial payment
-				// Late fees continue to compound on remaining balance
-				// We don't mark late fees as paid or waived
-				remainingPayment = 0;
-
-				logger.info(
-					`Partial payment ${paymentAmount.toFixed(
-						2
-					)} < original amount ${originalAmount.toFixed(
-						2
-					)} for repayment ${loanRepaymentId}. Late fees (${totalLateFees.toFixed(
-						2
-					)}) will continue to compound on remaining balance.`
-				);
-			}
-
-			// Log the late fee payment handling
-			await LateFeeProcessor.logLateFeePayment(
-				{
-					loanRepaymentId,
-					paymentAmount,
-					originalAmount,
-					totalLateFees,
-					lateFeesPaid,
-					lateFeesWaived,
-					paymentDate,
-				},
-				prismaClient
-			);
-
-			return {
-				success: true,
-				lateFeesPaid,
-				lateFeesWaived,
-				totalLateFees,
-				remainingPayment,
-			};
-		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : "Unknown error";
-			logger.error(
-				`Error handling late fee payment for repayment ${loanRepaymentId}:`,
-				error
-			);
-
-			return {
-				success: false,
-				lateFeesPaid: 0,
-				lateFeesWaived: 0,
-				totalLateFees: 0,
-				remainingPayment: paymentAmount,
-				errorMessage,
-			};
-		}
-	}
-
-	/**
-	 * Get total amount due for a repayment including late fees
-	 */
-	static async getTotalAmountDue(loanRepaymentId: string): Promise<{
-		originalAmount: number;
-		totalLateFees: number;
-		totalAmountDue: number;
-		lateFeeBreakdown: any[];
-		interestFeesTotal: number;
-		fixedFeesTotal: number;
-	}> {
-		try {
-			// Get repayment details
-			const repayment = await prisma.loanRepayment.findUnique({
-				where: { id: loanRepaymentId },
-			});
-
-			if (!repayment) {
-				throw new Error(`Repayment ${loanRepaymentId} not found`);
-			}
-
-			// Get active late fees
-			const activeLateFees = (await prisma.$queryRawUnsafe(
-				`
-				SELECT * FROM late_fees 
-				WHERE "loanRepaymentId" = $1 AND status = 'ACTIVE'
-				ORDER BY "calculationDate" ASC, "feeType" ASC
-			`,
-				loanRepaymentId
-			)) as any[];
-
-			const totalLateFees =
-				Math.round(
-					activeLateFees.reduce(
-						(sum, fee) => sum + fee.feeAmount,
-						0
-					) * 100
-				) / 100;
-			const originalAmount = Math.round(repayment.amount * 100) / 100;
-			const totalAmountDue =
-				Math.round((originalAmount + totalLateFees) * 100) / 100;
-
-			// Separate fees by type for breakdown
-			const interestFees = activeLateFees.filter(
-				(fee) => fee.feeType === "INTEREST"
-			);
-			const fixedFees = activeLateFees.filter(
-				(fee) => fee.feeType === "FIXED"
-			);
-
-			return {
-				originalAmount,
-				totalLateFees,
-				totalAmountDue,
-				lateFeeBreakdown: activeLateFees.map((fee) => ({
-					date: fee.calculationDate,
-					daysOverdue: fee.daysOverdue,
-					amount: Math.round(fee.feeAmount * 100) / 100,
-					status: fee.status,
-					feeType: fee.feeType,
-					fixedFeeAmount: fee.fixedFeeAmount
-						? Math.round(fee.fixedFeeAmount * 100) / 100
-						: null,
-					frequencyDays: fee.frequencyDays,
-				})),
-				interestFeesTotal:
-					Math.round(
-						interestFees.reduce(
-							(sum, fee) => sum + fee.feeAmount,
-							0
-						) * 100
-					) / 100,
-				fixedFeesTotal:
-					Math.round(
-						fixedFees.reduce((sum, fee) => sum + fee.feeAmount, 0) *
-							100
-					) / 100,
-			};
-		} catch (error) {
-			logger.error(
-				`Error getting total amount due for repayment ${loanRepaymentId}:`,
-				error
-			);
-			throw error;
-		}
-	}
-
-	/**
-	 * Log late fee payment handling
-	 */
-	private static async logLateFeePayment(
-		data: {
-			loanRepaymentId: string;
-			paymentAmount: number;
-			originalAmount: number;
-			totalLateFees: number;
-			lateFeesPaid: number;
-			lateFeesWaived: number;
-			paymentDate: Date;
-		},
-		prismaClient: any
-	) {
-		const insertQuery = `
-			INSERT INTO late_fee_processing_logs (
-				id, "processedAt", "feesCalculated", "totalFeeAmount", 
-				"overdue_repayments", status, "processingTimeMs", metadata, "createdAt"
-			) VALUES (
-				gen_random_uuid(), NOW(), 0, $1, 1, 'PAYMENT_PROCESSED', 0, $2::jsonb, NOW()
-			)
-		`;
-
-		const metadata = {
-			type: "late_fee_payment",
-			loanRepaymentId: data.loanRepaymentId,
-			paymentAmount: data.paymentAmount,
-			originalAmount: data.originalAmount,
-			totalLateFees: data.totalLateFees,
-			lateFeesPaid: data.lateFeesPaid,
-			lateFeesWaived: data.lateFeesWaived,
-			paymentDate: data.paymentDate.toISOString(),
-		};
-
-		await prismaClient.$executeRawUnsafe(
-			insertQuery,
-			data.lateFeesPaid,
-			JSON.stringify(metadata)
-		);
 	}
 }

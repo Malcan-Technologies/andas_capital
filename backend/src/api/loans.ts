@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { TimeUtils } from "../lib/precisionUtils";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -100,6 +101,19 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 						dueDate: "asc",
 					},
 					// Include all repayments for chart calculation
+					select: {
+						id: true,
+						amount: true,
+						status: true,
+						dueDate: true,
+						paidAt: true,
+						createdAt: true,
+						actualAmount: true,
+						paymentType: true,
+						installmentNumber: true,
+						lateFeeAmount: true,
+						lateFeesPaid: true,
+					},
 				},
 			},
 			orderBy: {
@@ -155,19 +169,16 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 
 				try {
 					// Get all pending/partial repayments that are overdue using raw query
-					const today = new Date();
-					today.setHours(0, 0, 0, 0);
+					const today = TimeUtils.malaysiaStartOfDay();
 
 					const overdueRepaymentsQuery = `
 						SELECT 
 							lr.*,
-							COALESCE(SUM(lf."feeAmount"), 0) as total_late_fees
+							COALESCE(lr."lateFeeAmount" - lr."lateFeesPaid", 0) as total_late_fees
 						FROM loan_repayments lr
-						LEFT JOIN late_fees lf ON lr.id = lf."loanRepaymentId" AND lf.status = 'ACTIVE'
 						WHERE lr."loanId" = $1
 						  AND lr.status IN ('PENDING', 'PARTIAL')
 						  AND lr."dueDate" < $2
-						GROUP BY lr.id
 						ORDER BY lr."dueDate" ASC
 					`;
 
@@ -190,7 +201,12 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 							}))
 						);
 
-						overdueInfo.hasOverduePayments = true;
+						// Only set hasOverduePayments = true if late fees have been processed
+						// Check if any repayment has lateFeeAmount > 0 (late fees have been calculated)
+						const hasProcessedLateFees = overdueRepayments.some(r => 
+							(r.lateFeeAmount || 0) > 0
+						);
+						overdueInfo.hasOverduePayments = hasProcessedLateFees;
 
 						// Calculate total overdue amount and late fees
 						for (const repayment of overdueRepayments) {
@@ -216,11 +232,10 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 								totalAmountDue:
 									outstandingAmount + totalLateFees,
 								dueDate: repayment.dueDate,
-								daysOverdue: Math.floor(
-									(today.getTime() -
-										new Date(repayment.dueDate).getTime()) /
-										(1000 * 60 * 60 * 24)
-								),
+								daysOverdue: TimeUtils.daysOverdue(new Date(repayment.dueDate)),
+								// Add breakdown of late fees for better frontend tracking
+								lateFeeAmount: Number(repayment.lateFeeAmount) || 0,
+								lateFeesPaid: Number(repayment.lateFeesPaid) || 0,
 							});
 						}
 					}
@@ -274,17 +289,9 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 								: nextRepayment.amount;
 
 							// Check for late fees on this specific repayment
-							const nextRepaymentLateFees =
-								await prisma.lateFee.aggregate({
-									where: {
-										loanRepaymentId: nextRepayment.id,
-										status: "ACTIVE",
-									},
-									_sum: { feeAmount: true },
-								});
-
-							const lateFeeAmount =
-								nextRepaymentLateFees._sum.feeAmount || 0;
+							const lateFeeAmount = Math.max(0, 
+								nextRepayment.lateFeeAmount - nextRepayment.lateFeesPaid
+							);
 
 							nextPaymentInfo = {
 								amount: remainingBalance + lateFeeAmount,
@@ -644,8 +651,7 @@ router.get(
 			}
 
 			// Get all overdue repayments with late fees
-			const today = new Date();
-			today.setHours(0, 0, 0, 0);
+			const today = TimeUtils.malaysiaStartOfDay();
 
 			const overdueRepaymentsQuery = `
 				SELECT 
@@ -655,15 +661,13 @@ router.get(
 					lr."dueDate",
 					lr.status,
 					lr."installmentNumber",
-					COALESCE(SUM(lf."feeAmount"), 0) as total_late_fees,
-					COUNT(lf.id) as late_fee_entries,
-					MAX(lf."calculationDate") as latest_calculation_date
+					COALESCE(lr."lateFeeAmount" - lr."lateFeesPaid", 0) as total_late_fees,
+					CASE WHEN lr."lateFeeAmount" > 0 THEN 1 ELSE 0 END as late_fee_entries,
+					lr."updatedAt" as latest_calculation_date
 				FROM loan_repayments lr
-				LEFT JOIN late_fees lf ON lr.id = lf."loanRepaymentId" AND lf.status = 'ACTIVE'
 				WHERE lr."loanId" = $1
 				  AND lr.status IN ('PENDING', 'PARTIAL')
 				  AND lr."dueDate" < $2
-				GROUP BY lr.id, lr.amount, lr."actualAmount", lr."dueDate", lr.status, lr."installmentNumber"
 				ORDER BY lr."dueDate" ASC
 			`;
 
@@ -682,10 +686,7 @@ router.get(
 				const totalLateFees = Number(repayment.total_late_fees) || 0;
 				const totalAmountDue = outstandingAmount + totalLateFees;
 
-				const daysOverdue = Math.floor(
-					(today.getTime() - new Date(repayment.dueDate).getTime()) /
-						(1000 * 60 * 60 * 24)
-				);
+				const daysOverdue = TimeUtils.daysOverdue(new Date(repayment.dueDate));
 
 				return {
 					repaymentId: repayment.id,

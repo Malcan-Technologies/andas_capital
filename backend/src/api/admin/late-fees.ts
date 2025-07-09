@@ -8,6 +8,7 @@ import {
 import { LateFeeProcessor } from "../../lib/lateFeeProcessor";
 import { authenticateToken, AuthRequest } from "../../middleware/auth";
 import { PrismaClient } from "@prisma/client";
+import { TimeUtils } from "../../lib/precisionUtils";
 import fs from "fs";
 import path from "path";
 
@@ -36,7 +37,7 @@ const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
 };
 
 /**
- * Get all late fees with related data
+ * Get all repayments with late fees and related data
  */
 router.get(
 	"/",
@@ -44,43 +45,129 @@ router.get(
 	isAdmin as unknown as RequestHandler,
 	async (_req: AuthRequest, res: Response) => {
 		try {
-			const lateFees = await prisma.lateFee.findMany({
+			// Get all repayments that have late fees
+			const overdueRepayments = await prisma.loanRepayment.findMany({
+				where: {
+					lateFeeAmount: { gt: 0 }
+				},
 				include: {
-					loanRepayment: {
+					loan: {
 						include: {
-							loan: {
+							user: {
+								select: {
+									id: true,
+									fullName: true,
+									email: true,
+									phoneNumber: true,
+								},
+							},
+							application: {
 								include: {
-									user: {
+									product: {
 										select: {
-											id: true,
-											fullName: true,
-											email: true,
-											phoneNumber: true,
-										},
-									},
-									application: {
-										include: {
-											product: {
-												select: {
-													name: true,
-													code: true,
-												},
-											},
+											name: true,
+											code: true,
+											lateFeeRate: true,
+											lateFeeFixedAmount: true,
+											lateFeeFrequencyDays: true,
 										},
 									},
 								},
 							},
+							lateFee: true, // Include loan-level late fee summary
 						},
 					},
 				},
-				orderBy: {
-					calculationDate: "desc",
-				},
+				orderBy: [
+					{ loan: { id: 'asc' } },
+					{ dueDate: 'asc' }
+				],
+			});
+
+			// Transform data to match the expected format for the frontend
+			const transformedData = overdueRepayments.map(repayment => {
+				const dueDate = new Date(repayment.dueDate);
+				const daysOverdue = TimeUtils.daysOverdue(dueDate);
+				
+				const totalLateFees = repayment.lateFeeAmount; // Total late fees assessed (matches loans page)
+				const outstandingLateFees = Math.max(0, repayment.lateFeeAmount - repayment.lateFeesPaid);
+				const outstandingPrincipal = Math.max(0, 
+					(repayment.principalAmount + repayment.interestAmount) - repayment.principalPaid
+				);
+
+				// Debug: Log the values to see what's actually in the database
+				console.log(`🔍 Late Fee Debug for repayment ${repayment.id}:`, {
+					lateFeeAmount: repayment.lateFeeAmount,
+					lateFeesPaid: repayment.lateFeesPaid,
+					totalLateFees: totalLateFees,
+					outstandingLateFees: outstandingLateFees,
+					principalPaid: repayment.principalPaid,
+					actualAmount: repayment.actualAmount,
+					status: repayment.status
+				});
+
+				// Determine status based on outstanding amounts
+				// Status should be PAID only if both late fees AND underlying payments are fully paid
+				let status = 'ACTIVE';
+				if (outstandingLateFees <= 0 && outstandingPrincipal <= 0) {
+					status = 'PAID';
+				}
+
+				// Get actual product configuration
+				const product = repayment.loan.application.product;
+				const dailyRate = Number(product.lateFeeRate) / 100; // Convert percentage to decimal
+				const fixedFeeAmount = Number(product.lateFeeFixedAmount) || 0;
+				const frequencyDays = Number(product.lateFeeFrequencyDays) || 7;
+
+				// Calculate component breakdown from database values (for display purposes only)
+				const interestFeesTotal = daysOverdue > 0 && outstandingPrincipal > 0 ? 
+					Math.round(outstandingPrincipal * dailyRate * daysOverdue * 100) / 100 : 0;
+				
+				const completedPeriods = Math.floor(daysOverdue / frequencyDays);
+				const fixedFeesTotal = Math.round(completedPeriods * fixedFeeAmount * 100) / 100;
+
+				return {
+					id: `${repayment.id}_late_fee`, // Create a unique ID for frontend compatibility
+					loanRepaymentId: repayment.id,
+					calculationDate: repayment.loan.lateFee?.lastCalculationDate || repayment.updatedAt,
+					daysOverdue: daysOverdue,
+					outstandingPrincipal: outstandingPrincipal,
+					dailyRate: dailyRate, // Use actual product configuration
+									feeAmount: totalLateFees, // Total late fees assessed (matches loans page display)
+				outstandingFeeAmount: outstandingLateFees, // Outstanding late fees still owed
+				cumulativeFees: repayment.lateFeeAmount, // Use database value
+				feeType: "COMBINED",
+					fixedFeeAmount: fixedFeeAmount,
+					frequencyDays: frequencyDays,
+					// Add breakdown for display (these are calculated from database values)
+					interestFeesTotal: interestFeesTotal,
+					fixedFeesTotal: fixedFeesTotal,
+					status: status,
+					createdAt: repayment.createdAt,
+					updatedAt: repayment.updatedAt,
+					loanRepayment: {
+						id: repayment.id,
+						amount: repayment.amount,
+						principalAmount: repayment.principalAmount,
+						interestAmount: repayment.interestAmount,
+						dueDate: repayment.dueDate,
+						status: repayment.status,
+						installmentNumber: repayment.installmentNumber,
+						actualAmount: repayment.actualAmount,
+						paidAt: repayment.paidAt,
+						paymentType: repayment.paymentType,
+						// Add new fields for payment allocation
+						lateFeeAmount: repayment.lateFeeAmount,
+						lateFeesPaid: repayment.lateFeesPaid,
+						principalPaid: repayment.principalPaid,
+						loan: repayment.loan
+					}
+				};
 			});
 
 			res.json({
 				success: true,
-				data: lateFees,
+				data: transformedData,
 			});
 		} catch (error) {
 			console.error("Error fetching late fees:", error);
@@ -310,8 +397,21 @@ router.post(
 				});
 			}
 
-			const result = await LateFeeProcessor.handleRepaymentCleared(
-				repaymentId,
+			// Get the repayment to find the loanId
+			const repayment = await prisma.loanRepayment.findUnique({
+				where: { id: repaymentId },
+				select: { loanId: true }
+			});
+
+			if (!repayment) {
+				return res.status(404).json({
+					success: false,
+					error: "Repayment not found",
+				});
+			}
+
+			const result = await LateFeeProcessor.handlePaymentAllocation(
+				repayment.loanId,
 				paymentAmount,
 				paymentDate ? new Date(paymentDate) : new Date()
 			);
@@ -331,7 +431,7 @@ router.post(
 );
 
 /**
- * Manually waive late fees for a repayment
+ * Manually waive late fees for a specific repayment
  */
 router.post(
 	"/repayment/:repaymentId/waive",
@@ -349,36 +449,64 @@ router.post(
 				});
 			}
 
-			// Get active late fees for this repayment
-			const activeLateFees = await prisma.lateFee.findMany({
-				where: {
-					loanRepaymentId: repaymentId,
-					status: "ACTIVE",
+			// Get the specific repayment with its late fee data
+			const repayment = await prisma.loanRepayment.findUnique({
+				where: { id: repaymentId },
+				include: {
+					loan: {
+						include: {
+							lateFee: true,
+						},
+					},
 				},
 			});
 
-			if (activeLateFees.length === 0) {
+			if (!repayment) {
 				return res.status(404).json({
 					success: false,
-					error: "No active late fees found for this repayment",
+					error: "Repayment not found",
 				});
 			}
 
-			const totalWaivedAmount = activeLateFees.reduce(
-				(sum: number, fee: any) => sum + fee.feeAmount,
-				0
-			);
+			// Check if this repayment has any outstanding late fees
+			const outstandingLateFees = Math.max(0, repayment.lateFeeAmount - repayment.lateFeesPaid);
+			
+			if (outstandingLateFees <= 0) {
+				return res.status(400).json({
+					success: false,
+					error: "No outstanding late fees found for this repayment",
+				});
+			}
 
-			// Update all active late fees to WAIVED status
-			await prisma.lateFee.updateMany({
-				where: {
-					loanRepaymentId: repaymentId,
-					status: "ACTIVE",
-				},
-				data: {
-					status: "WAIVED",
-					updatedAt: new Date(),
-				},
+			// Use a transaction to ensure data consistency
+			const result = await prisma.$transaction(async (tx) => {
+				// Update the repayment to mark late fees as paid (waived)
+				await tx.loanRepayment.update({
+					where: { id: repaymentId },
+					data: {
+						lateFeesPaid: repayment.lateFeeAmount, // Mark all late fees as paid
+						updatedAt: new Date(),
+					},
+				});
+
+				// Update the loan-level late fee record to reflect the waived amount
+				if (repayment.loan.lateFee) {
+					const newTotalAccruedFees = Math.max(0, repayment.loan.lateFee.totalAccruedFees - outstandingLateFees);
+					await tx.lateFee.update({
+						where: { id: repayment.loan.lateFee.id },
+						data: {
+							totalAccruedFees: newTotalAccruedFees,
+							status: newTotalAccruedFees <= 0 ? "WAIVED" : "ACTIVE",
+							updatedAt: new Date(),
+						},
+					});
+				}
+
+				return {
+					waivedAmount: outstandingLateFees,
+					repaymentId: repaymentId,
+					loanId: repayment.loanId,
+				};
 			});
 
 			// Log the manual waive action for audit trail
@@ -387,35 +515,30 @@ router.post(
 					id, "processedAt", "feesCalculated", "totalFeeAmount", 
 					"overdue_repayments", status, "processingTimeMs", metadata, "createdAt"
 				) VALUES (
-					gen_random_uuid(), NOW(), 0, ${totalWaivedAmount}, 1, 'MANUAL_WAIVED', 0, 
+					gen_random_uuid(), NOW(), 0, ${result.waivedAmount}, 1, 'MANUAL_WAIVED', 0, 
 					${JSON.stringify({
 						type: "manual_waive",
-						loanRepaymentId: repaymentId,
-						totalWaivedAmount: totalWaivedAmount,
+						scope: "repayment",
+						repaymentId: repaymentId,
+						loanId: result.loanId,
+						waivedAmount: result.waivedAmount,
 						reason: reason,
 						adminUserId: adminUserId || "unknown",
 						waivedAt: new Date().toISOString(),
-						waivedFees: activeLateFees.map((fee: any) => ({
-							id: fee.id,
-							amount: fee.feeAmount,
-							calculationDate: fee.calculationDate,
-						})),
+						originalLateFeeAmount: repayment.lateFeeAmount,
+						originalLateFeesPaid: repayment.lateFeesPaid,
 					})}::jsonb, NOW()
 				)
 			`;
 
-			await prisma.$disconnect();
-
 			return res.json({
 				success: true,
 				data: {
-					waivedFees: activeLateFees.length,
-					totalWaivedAmount: totalWaivedAmount,
+					repaymentId: repaymentId,
+					waivedAmount: result.waivedAmount,
 					reason: reason,
 				},
-				message: `Successfully waived ${
-					activeLateFees.length
-				} late fees totaling $${totalWaivedAmount.toFixed(2)}`,
+				message: `Successfully waived $${result.waivedAmount.toFixed(2)} in late fees for repayment ${repaymentId}`,
 			});
 		} catch (error) {
 			console.error("Error waiving late fees:", error);

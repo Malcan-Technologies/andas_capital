@@ -29,44 +29,50 @@ interface LateFeeData {
 	outstandingPrincipal: number;
 	dailyRate: number;
 	feeAmount: number;
+	outstandingFeeAmount?: number; // Outstanding late fees still owed
 	cumulativeFees: number;
 	feeType: "INTEREST" | "FIXED" | "COMBINED";
 	fixedFeeAmount?: number;
 	frequencyDays?: number;
+	interestFeesTotal?: number;
+	fixedFeesTotal?: number;
 	status: "ACTIVE" | "PAID" | "WAIVED";
 	createdAt: string;
 	updatedAt: string;
-	loanRepayment: {
-		id: string;
-		amount: number;
-		principalAmount: number;
-		interestAmount: number;
-		dueDate: string;
-		status: string;
-		installmentNumber: number;
-		actualAmount?: number | null;
-		paidAt?: string | null;
-		paymentType?: string | null;
-		loan: {
+			loanRepayment: {
 			id: string;
+			amount: number;
 			principalAmount: number;
-			outstandingBalance: number;
-			monthlyPayment: number;
-			user: {
+			interestAmount: number;
+			dueDate: string;
+			status: string;
+			installmentNumber: number;
+			actualAmount?: number | null;
+			paidAt?: string | null;
+			paymentType?: string | null;
+			lateFeeAmount: number;
+			lateFeesPaid: number;
+			principalPaid: number;
+			loan: {
 				id: string;
-				fullName: string | null;
-				email: string | null;
-				phoneNumber: string;
-			};
-			application: {
-				id: string;
-				product: {
-					name: string;
-					code: string;
+				principalAmount: number;
+				outstandingBalance: number;
+				monthlyPayment: number;
+				user: {
+					id: string;
+					fullName: string | null;
+					email: string | null;
+					phoneNumber: string;
+				};
+				application: {
+					id: string;
+					product: {
+						name: string;
+						code: string;
+					};
 				};
 			};
 		};
-	};
 }
 
 interface ProcessingStatus {
@@ -106,7 +112,7 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 		null
 	);
 	const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
-	const [statusFilter, setStatusFilter] = useState("all");
+	const [statusFilter, setStatusFilter] = useState("ACTIVE");
 	const [refreshing, setRefreshing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [processingStatus, setProcessingStatus] =
@@ -515,8 +521,12 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 	);
 
 	const totalActiveFees = filteredLateFees
-		.filter((fee) => fee.status === "ACTIVE")
-		.reduce((sum, fee) => sum + fee.feeAmount, 0);
+		.reduce((sum, fee) => {
+			const lateFeeAmount = fee.loanRepayment.lateFeeAmount || 0;
+			const lateFeesPaid = fee.loanRepayment.lateFeesPaid || 0;
+			const outstandingFees = Math.max(0, lateFeeAmount - lateFeesPaid);
+			return sum + outstandingFees;
+		}, 0);
 
 	return (
 		<AdminLayout
@@ -592,8 +602,8 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 					<p className="text-gray-400">
 						{filteredLateFees.length} overdue payment record
 						{filteredLateFees.length !== 1 ? "s" : ""} • Total
-						overdue: {formatCurrency(totalOverdueAmount)} • Late
-						fees only: {formatCurrency(totalActiveFees)}
+						overdue: {formatCurrency(totalOverdueAmount)} • Outstanding
+						fees: {formatCurrency(totalActiveFees)}
 					</p>
 				</div>
 				<div className="mt-4 md:mt-0 flex flex-col items-end">
@@ -742,24 +752,38 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 																	.installmentNumber
 															}
 														</p>
-														<div className="mt-2 flex items-center text-sm text-gray-300">
+														<div className="mt-2 flex items-center text-sm">
 															<BanknotesIcon className="mr-1 h-4 w-4 text-red-400" />
-															{formatCurrency(
-																(fee
-																	.loanRepayment
-																	.principalAmount ||
-																	0) +
-																	(fee
-																		.loanRepayment
-																		.interestAmount ||
-																		0) +
-																	fee.feeAmount
-															)}
+															{(() => {
+																const lateFeeAmount = fee.loanRepayment.lateFeeAmount || 0;
+																const lateFeesPaid = fee.loanRepayment.lateFeesPaid || 0;
+																const outstandingFees = Math.max(0, lateFeeAmount - lateFeesPaid);
+																const colorClass = outstandingFees === 0 ? "text-green-400" : "text-gray-300";
+																return (
+																	<span className={colorClass}>
+																		{formatCurrency(outstandingFees)}
+																	</span>
+																);
+															})()}
 														</div>
 														<p className="text-xs text-gray-400 mt-1">
-															Total due (incl.
-															late fee)
+															Outstanding fees
 														</p>
+														{(() => {
+															const lateFeeAmount = fee.loanRepayment.lateFeeAmount || 0;
+															const lateFeesPaid = fee.loanRepayment.lateFeesPaid || 0;
+															
+															if (lateFeesPaid > 0) {
+																return (
+																	<div className="mt-1">
+																		<p className="text-xs text-green-400">
+																			{formatCurrency(lateFeesPaid)} paid
+																		</p>
+																	</div>
+																);
+															}
+															return null;
+														})()}
 														{fee.loanRepayment
 															.actualAmount && (
 															<>
@@ -776,6 +800,36 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 															</>
 														)}
 														<div className="mt-2">
+															{(() => {
+																const originalAmount = (fee.loanRepayment.principalAmount || 0) + 
+																	(fee.loanRepayment.interestAmount || 0);
+																const actualAmountPaid = fee.loanRepayment.actualAmount || 0;
+																const lateFeeAmount = fee.loanRepayment.lateFeeAmount || 0;
+																const lateFeesPaid = fee.loanRepayment.lateFeesPaid || 0;
+																const outstandingLateFees = Math.max(0, lateFeeAmount - lateFeesPaid);
+																const remainingScheduledAmount = Math.max(0, originalAmount - actualAmountPaid);
+																const totalDue = remainingScheduledAmount + outstandingLateFees;
+																
+																if (totalDue === 0) {
+																	return (
+																		<div className="mb-2 px-2 py-1 bg-green-900/20 border border-green-600/30 rounded text-xs">
+																			<p className="text-green-300 font-medium">✅ Fully Paid</p>
+																		</div>
+																	);
+																} else if (remainingScheduledAmount === 0) {
+																	return (
+																		<div className="mb-2 px-2 py-1 bg-yellow-900/20 border border-yellow-600/30 rounded text-xs">
+																			<p className="text-yellow-300 font-medium">⚠️ Late fees only: {formatCurrency(outstandingLateFees)}</p>
+																		</div>
+																	);
+																} else {
+																	return (
+																		<div className="mb-2 px-2 py-1 bg-red-900/20 border border-red-600/30 rounded text-xs">
+																			<p className="text-red-300 font-medium">💰 Total due: {formatCurrency(totalDue)}</p>
+																		</div>
+																	);
+																}
+															})()}
 															<p className="text-xs text-gray-400">
 																{
 																	fee.daysOverdue
@@ -847,65 +901,46 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
 										<p className="text-gray-400 text-sm mb-1">
-											Interest Fees
+											Total Late Fees
 										</p>
-										<p className="text-2xl font-bold text-yellow-400">
-											{formatCurrency(
-												selectedLateFee.feeType ===
-													"COMBINED" &&
-													selectedLateFee.dailyRate >
-														0
-													? selectedLateFee.outstandingPrincipal *
-															selectedLateFee.dailyRate *
-															selectedLateFee.daysOverdue
-													: filteredLateFees
-															.filter(
-																(fee) =>
-																	fee.loanRepaymentId ===
-																		selectedLateFee.loanRepaymentId &&
-																	fee.feeType ===
-																		"INTEREST"
-															)
-															.reduce(
-																(sum, fee) =>
-																	sum +
-																	fee.feeAmount,
-																0
-															)
-											)}
-										</p>
+										{(() => {
+											const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
+											return (
+												<p className="text-2xl font-bold text-red-400">
+													{formatCurrency(lateFeeAmount)}
+												</p>
+											);
+										})()}
+										{(() => {
+											const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
+											const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
+											if (lateFeesPaid > 0) {
+												return (
+													<p className="text-xs text-green-400 mt-1">
+														{formatCurrency(lateFeesPaid)} paid
+													</p>
+												);
+											}
+											return null;
+										})()}
 									</div>
+									{/* Show Outstanding Fees for all statuses */}
 									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
 										<p className="text-gray-400 text-sm mb-1">
-											Fixed Fees
+											Outstanding Fees
 										</p>
-										<p className="text-2xl font-bold text-orange-400">
-											{formatCurrency(
-												selectedLateFee.feeType ===
-													"COMBINED" &&
-													selectedLateFee.fixedFeeAmount
-													? selectedLateFee.fixedFeeAmount *
-															Math.floor(
-																selectedLateFee.daysOverdue /
-																	(selectedLateFee.frequencyDays ||
-																		7)
-															)
-													: filteredLateFees
-															.filter(
-																(fee) =>
-																	fee.loanRepaymentId ===
-																		selectedLateFee.loanRepaymentId &&
-																	fee.feeType ===
-																		"FIXED"
-															)
-															.reduce(
-																(sum, fee) =>
-																	sum +
-																	fee.feeAmount,
-																0
-															)
-											)}
-										</p>
+										{(() => {
+											const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
+											const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
+											const outstandingFees = Math.max(0, lateFeeAmount - lateFeesPaid);
+											const colorClass = outstandingFees === 0 ? "text-green-400" : "text-orange-400";
+											
+											return (
+												<p className={`text-2xl font-bold ${colorClass}`}>
+													{formatCurrency(outstandingFees)}
+												</p>
+											);
+										})()}
 									</div>
 									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
 										<p className="text-gray-400 text-sm mb-1">
@@ -923,179 +958,123 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 										<ExclamationTriangleIcon className="h-5 w-5 mr-2 text-red-400" />
 										Total Amount Due
 									</h4>
-									<div className="space-y-3">
-										<div className="flex justify-between text-sm">
-											<span className="text-gray-300">
-												Original Amount (Principal +
-												Interest):
-											</span>
-											<span className="text-white font-medium">
-												{formatCurrency(
-													(selectedLateFee
-														.loanRepayment
-														.principalAmount || 0) +
-														(selectedLateFee
-															.loanRepayment
-															.interestAmount ||
-															0)
-												)}
-											</span>
-										</div>
-										{selectedLateFee.loanRepayment
-											.actualAmount &&
-											selectedLateFee.loanRepayment
-												.actualAmount > 0 && (
+									{(() => {
+										const originalAmount = (selectedLateFee.loanRepayment.principalAmount || 0) + 
+											(selectedLateFee.loanRepayment.interestAmount || 0);
+										const actualAmountPaid = selectedLateFee.loanRepayment.actualAmount || 0;
+										const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
+										const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
+										const outstandingLateFees = Math.max(0, lateFeeAmount - lateFeesPaid);
+										
+										// Calculate breakdown
+										const scheduledPaymentPaid = Math.min(actualAmountPaid, originalAmount);
+										const remainingScheduledAmount = Math.max(0, originalAmount - actualAmountPaid);
+										const totalDue = remainingScheduledAmount + outstandingLateFees;
+										
+										return (
+											<div className="space-y-3">
 												<div className="flex justify-between text-sm">
 													<span className="text-gray-300">
-														Amount Already Paid:
+														Original Amount (Principal + Interest):
 													</span>
-													<span className="text-green-300 font-medium">
-														-
-														{formatCurrency(
-															selectedLateFee
-																.loanRepayment
-																.actualAmount
-														)}
+													<span className="text-white font-medium">
+														{formatCurrency(originalAmount)}
 													</span>
 												</div>
-											)}
-										<div className="flex justify-between text-sm">
-											<span className="text-gray-300">
-												Interest Late Fees:
-											</span>
-											<span className="text-yellow-300 font-medium">
-												{formatCurrency(
-													selectedLateFee.feeType ===
-														"COMBINED" &&
-														selectedLateFee.dailyRate >
-															0
-														? selectedLateFee.outstandingPrincipal *
-																selectedLateFee.dailyRate *
-																selectedLateFee.daysOverdue
-														: filteredLateFees
-																.filter(
-																	(fee) =>
-																		fee.loanRepaymentId ===
-																			selectedLateFee.loanRepaymentId &&
-																		fee.feeType ===
-																			"INTEREST"
-																)
-																.reduce(
-																	(
-																		sum,
-																		fee
-																	) =>
-																		sum +
-																		fee.feeAmount,
-																	0
-																)
-												)}
-											</span>
-										</div>
-										<div className="flex justify-between text-sm">
-											<span className="text-gray-300">
-												Fixed Late Fees:
-											</span>
-											<span className="text-orange-300 font-medium">
-												{formatCurrency(
-													selectedLateFee.feeType ===
-														"COMBINED" &&
-														selectedLateFee.fixedFeeAmount
-														? selectedLateFee.fixedFeeAmount *
-																Math.floor(
-																	selectedLateFee.daysOverdue /
-																		(selectedLateFee.frequencyDays ||
-																			7)
-																)
-														: filteredLateFees
-																.filter(
-																	(fee) =>
-																		fee.loanRepaymentId ===
-																			selectedLateFee.loanRepaymentId &&
-																		fee.feeType ===
-																			"FIXED"
-																)
-																.reduce(
-																	(
-																		sum,
-																		fee
-																	) =>
-																		sum +
-																		fee.feeAmount,
-																	0
-																)
-												)}
-											</span>
-										</div>
-										<div className="border-t border-red-600/30 pt-3">
-											<div className="flex justify-between">
-												<span className="text-white font-semibold text-lg">
-													Total Due:
-												</span>
-												<span className="text-red-300 font-bold text-xl">
-													{formatCurrency(
-														(selectedLateFee
-															.loanRepayment
-															.principalAmount ||
-															0) +
-															(selectedLateFee
-																.loanRepayment
-																.interestAmount ||
-																0) -
-															(selectedLateFee
-																.loanRepayment
-																.actualAmount ||
-																0) +
-															(selectedLateFee.feeType ===
-															"COMBINED"
-																? selectedLateFee.feeAmount
-																: filteredLateFees
-																		.filter(
-																			(
-																				fee
-																			) =>
-																				fee.loanRepaymentId ===
-																				selectedLateFee.loanRepaymentId
-																		)
-																		.reduce(
-																			(
-																				sum,
-																				fee
-																			) =>
-																				sum +
-																				fee.feeAmount,
-																			0
-																		))
-													)}
-												</span>
-											</div>
-											{selectedLateFee.loanRepayment
-												.actualAmount &&
-												selectedLateFee.loanRepayment
-													.actualAmount > 0 && (
-													<div className="mt-2 text-xs text-gray-400">
-														Remaining Balance:{" "}
-														{formatCurrency(
-															Math.max(
-																0,
-																(selectedLateFee
-																	.loanRepayment
-																	.principalAmount ||
-																	0) +
-																	(selectedLateFee
-																		.loanRepayment
-																		.interestAmount ||
-																		0) -
-																	selectedLateFee
-																		.loanRepayment
-																		.actualAmount
-															)
-														)}{" "}
-														+ Late Fees
+												
+												{scheduledPaymentPaid > 0 && (
+													<div className="flex justify-between text-sm">
+														<span className="text-gray-300">
+															Scheduled Payment Paid:
+														</span>
+														<span className="text-green-300 font-medium">
+															-{formatCurrency(scheduledPaymentPaid)}
+														</span>
 													</div>
 												)}
-										</div>
-									</div>
+												
+												{remainingScheduledAmount > 0 && (
+													<div className="flex justify-between text-sm">
+														<span className="text-gray-300">
+															Remaining Scheduled Amount:
+														</span>
+														<span className="text-red-300 font-medium">
+															{formatCurrency(remainingScheduledAmount)}
+														</span>
+													</div>
+												)}
+												
+												<div className="flex justify-between text-sm">
+													<span className="text-gray-300">
+														Total Late Fees Assessed:
+													</span>
+													<span className="text-red-300 font-medium">
+														{formatCurrency(lateFeeAmount)}
+													</span>
+												</div>
+												
+												{lateFeesPaid > 0 && (
+													<div className="flex justify-between text-sm">
+														<span className="text-gray-300">
+															Late Fees Paid:
+														</span>
+														<span className="text-green-300 font-medium">
+															-{formatCurrency(lateFeesPaid)}
+														</span>
+													</div>
+												)}
+												
+												{/* Show Outstanding Late Fees for all statuses when there are outstanding fees */}
+												{outstandingLateFees > 0 && (
+													<div className="flex justify-between text-sm">
+														<span className="text-gray-300">
+															Outstanding Late Fees:
+														</span>
+														<span className="text-orange-300 font-medium">
+															{formatCurrency(outstandingLateFees)}
+														</span>
+													</div>
+												)}
+												
+												<div className="border-t border-red-600/30 pt-3">
+													<div className="flex justify-between">
+														<span className="text-white font-semibold text-lg">
+															Total Due:
+														</span>
+														{(() => {
+															// Determine color based on payment status
+															let colorClass = "text-red-300"; // Default: red for outstanding balance
+															if (totalDue === 0) {
+																colorClass = "text-green-300"; // Green for fully paid
+															} else if (remainingScheduledAmount === 0) {
+																colorClass = "text-yellow-300"; // Yellow for only late fees remaining
+															}
+															
+															return (
+																<span className={`font-bold text-xl ${colorClass}`}>
+																	{formatCurrency(totalDue)}
+																</span>
+															);
+														})()}
+													</div>
+													
+													{actualAmountPaid > 0 && (
+														<div className="mt-2 text-xs text-gray-400">
+															{(() => {
+																if (totalDue === 0) {
+																	return "✅ Fully Paid";
+																} else if (remainingScheduledAmount === 0) {
+																	return `Outstanding Late Fees: ${formatCurrency(outstandingLateFees)}`;
+																} else {
+																	return `Remaining: ${formatCurrency(remainingScheduledAmount)} + Late Fees: ${formatCurrency(outstandingLateFees)}`;
+																}
+															})()}
+														</div>
+													)}
+												</div>
+											</div>
+										);
+									})()}
 								</div>
 
 								{/* Details */}
@@ -1388,7 +1367,13 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 
 								{/* Action Buttons */}
 								<div className="flex flex-wrap gap-3">
-									{selectedLateFee.status === "ACTIVE" && (
+									{selectedLateFee.status === "ACTIVE" && 
+										(() => {
+											const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
+											const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
+											const outstandingFees = Math.max(0, lateFeeAmount - lateFeesPaid);
+											return outstandingFees > 0;
+										})() && (
 										<button
 											onClick={() =>
 												setWaiveModalOpen(true)
@@ -1476,9 +1461,12 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 											}
 										</p>
 										<p className="text-yellow-400 font-medium">
-											{formatCurrency(
-												selectedLateFee.feeAmount
-											)}
+											{(() => {
+												const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
+												const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
+												const outstandingFees = Math.max(0, lateFeeAmount - lateFeesPaid);
+												return formatCurrency(outstandingFees);
+											})()}
 										</p>
 									</div>
 								</div>

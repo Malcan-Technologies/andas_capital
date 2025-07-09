@@ -2,12 +2,35 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
+// Malaysia timezone utility function
+function getMalaysiaStartOfDay(date) {
+    const targetDate = date || new Date();
+    
+    // Convert to Malaysia timezone (UTC+8)
+    const malaysiaTime = new Date(targetDate.getTime() + (8 * 60 * 60 * 1000));
+    
+    // Get start of day in Malaysia timezone
+    const malaysiaStartOfDay = new Date(malaysiaTime);
+    malaysiaStartOfDay.setUTCHours(0, 0, 0, 0);
+    
+    // Convert back to UTC for database storage
+    return new Date(malaysiaStartOfDay.getTime() - (8 * 60 * 60 * 1000));
+}
+
+// Calculate days overdue using Malaysia timezone
+function calculateDaysOverdueMalaysia(dueDate) {
+    const today = getMalaysiaStartOfDay();
+    const due = getMalaysiaStartOfDay(dueDate);
+    const diffMs = today.getTime() - due.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return Math.max(0, diffDays);
+}
+
 async function debugFixedFeeLogic() {
 	console.log("🔍 Debugging Fixed Fee Logic...");
 
 	// Get the overdue repayment data
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const today = getMalaysiaStartOfDay();
 
 	const query = `
     SELECT 
@@ -42,11 +65,7 @@ async function debugFixedFeeLogic() {
 		);
 
 		// Calculate days overdue
-		const dueDate = new Date(repayment.dueDate);
-		dueDate.setHours(0, 0, 0, 0);
-		const daysOverdue = Math.floor(
-			(today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
-		);
+		const daysOverdue = calculateDaysOverdueMalaysia(new Date(repayment.dueDate));
 
 		console.log(`   Days Overdue: ${daysOverdue}`);
 		console.log(`   Fixed Fee Amount: RM ${repayment.lateFeeFixedAmount}`);

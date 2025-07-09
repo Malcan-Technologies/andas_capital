@@ -29,8 +29,8 @@ EXPOSE 4001
 # Make scripts executable
 RUN chmod +x scripts/*.sh scripts/*.js
 
-# Generate Prisma client after volume mount, run migrations and start the server (cron is now built-in)
-CMD /bin/bash -c "sleep 5 && npx prisma generate && npx prisma migrate deploy && npm run build && npm run dev" 
+# Generate Prisma client after volume mount, push schema and start the server (cron is now built-in)
+CMD /bin/bash -c "sleep 5 && npm install && npx prisma generate && npx prisma db push --accept-data-loss && npm run build && npm run dev" 
 # Add migration validation
 COPY scripts/validate-migration.sh /app/scripts/
 COPY scripts/safe-migrate.sh /app/scripts/

@@ -130,6 +130,7 @@ model Loan {
   application        LoanApplication     @relation(fields: [applicationId], references: [id])
   user               User                @relation(fields: [userId], references: [id])
   walletTransactions WalletTransaction[]
+  lateFee            LateFee? // One-to-one relation with late fees
 
   @@map("loans")
 }
@@ -150,16 +151,20 @@ model LoanRepayment {
   daysEarly         Int?            @default(0)
   daysLate          Int?            @default(0)
   parentRepaymentId String?
+  // New payment allocation fields
+  lateFeeAmount     Float           @default(0) // Total late fees owed for this repayment
+  lateFeesPaid      Float           @default(0) // Amount of late fees paid for this repayment
+  principalPaid     Float           @default(0) // Amount of principal paid for this repayment
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   loan              Loan            @relation(fields: [loanId], references: [id])
   parentRepayment   LoanRepayment?  @relation("PartialPayments", fields: [parentRepaymentId], references: [id])
   partialPayments   LoanRepayment[] @relation("PartialPayments")
-  lateFees          LateFee[]
 
   @@index([installmentNumber])
   @@index([paymentType])
   @@index([status, dueDate])
+  @@index([loanId, dueDate]) // For payment allocation ordering
   @@map("loan_repayments")
 }
 
@@ -297,27 +302,19 @@ model LoanApplicationHistory {
 }
 
 model LateFee {
-  id                   String   @id @default(cuid())
-  loanRepaymentId      String
-  calculationDate      DateTime @default(now())
-  daysOverdue          Int
-  outstandingPrincipal Float
-  dailyRate            Float // Product-specific daily rate (e.g., 8.0 = 8% per day)
-  feeAmount            Float // Fee amount for this calculation
-  cumulativeFees       Float // Total accumulated fees up to this date
-  feeType              String   @default("INTEREST") // INTEREST, FIXED
-  fixedFeeAmount       Float? // Fixed fee amount (for FIXED type)
-  frequencyDays        Int? // Frequency in days (for FIXED type)
-  status               String   @default("ACTIVE") // ACTIVE, PAID, WAIVED
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  loanId              String   @unique // One entry per loan
+  totalAccruedFees    Float    @default(0) // Sum of all late fees across all overdue repayments
+  lastCalculationDate DateTime @default(now()) // When fees were last calculated
+  calculationDetails  Json? // Store breakdown by repayment if needed for debugging
+  status              String   @default("ACTIVE") // ACTIVE, CALCULATED
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  loanRepayment LoanRepayment @relation(fields: [loanRepaymentId], references: [id])
+  loan Loan @relation(fields: [loanId], references: [id])
 
-  @@unique([loanRepaymentId, calculationDate, feeType])
-  @@index([calculationDate])
+  @@index([lastCalculationDate])
   @@index([status])
-  @@index([feeType])
   @@map("late_fees")
 }
 
