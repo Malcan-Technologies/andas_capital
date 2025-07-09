@@ -105,69 +105,77 @@ main() {
     
     if echo "$migration_status" | grep -q "Database schema is up to date"; then
         echo "✅ Database schema is already up to date"
-        return 0
-    fi
-    
-    # Step 4: Handle specific migration errors
-    if echo "$migration_status" | grep -q "P3009"; then
-        echo "❌ P3009 error detected - resolving failed migrations..."
+    else
+        # Step 4: Handle specific migration errors
+        if echo "$migration_status" | grep -q "P3009"; then
+            echo "❌ P3009 error detected - resolving failed migrations..."
+            
+            # Extract failed migration names
+            local failed_migrations=$(echo "$migration_status" | grep -oE '[0-9]{14}_[a-zA-Z_]+' || echo "")
+            
+            for migration in $failed_migrations; do
+                if [ -n "$migration" ]; then
+                    handle_failed_migration "$migration"
+                fi
+            done
+            
+        elif echo "$migration_status" | grep -q "P3018"; then
+            echo "❌ P3018 error detected - handling data conflicts..."
+            
+            # Run data migration fixes if they exist
+            if [ -f "scripts/fix-totalAmount-migration.js" ]; then
+                echo "Running totalAmount fix..."
+                $DOCKER_CMD node scripts/fix-totalAmount-migration.js || true
+            fi
+            
+            # Try to resolve the specific migration that's causing issues
+            local failed_migration=$(echo "$migration_status" | grep -oE '[0-9]{14}_[a-zA-Z_]+' | head -1)
+            if [ -n "$failed_migration" ]; then
+                handle_failed_migration "$failed_migration"
+            fi
+        fi
         
-        # Extract failed migration names
-        local failed_migrations=$(echo "$migration_status" | grep -oE '[0-9]{14}_[a-zA-Z_]+' || echo "")
+        # Step 5: Apply migrations
+        echo "🚀 Applying migrations..."
+        local max_retries=3
+        local retry_count=0
         
-        for migration in $failed_migrations; do
-            if [ -n "$migration" ]; then
-                handle_failed_migration "$migration"
+        while [ $retry_count -lt $max_retries ]; do
+            if $DOCKER_CMD npx prisma migrate deploy; then
+                echo "✅ Migrations applied successfully"
+                break
+            else
+                retry_count=$((retry_count + 1))
+                echo "⚠️  Migration attempt $retry_count failed"
+                
+                if [ $retry_count -lt $max_retries ]; then
+                    echo "🔄 Retrying in 5 seconds..."
+                    sleep 5
+                    
+                    # Regenerate client before retry
+                    $DOCKER_CMD npx prisma generate
+                else
+                    echo "❌ All migration attempts failed"
+                    return 1
+                fi
             fi
         done
-        
-    elif echo "$migration_status" | grep -q "P3018"; then
-        echo "❌ P3018 error detected - handling data conflicts..."
-        
-        # Run data migration fixes if they exist
-        if [ -f "scripts/fix-totalAmount-migration.js" ]; then
-            echo "Running totalAmount fix..."
-            $DOCKER_CMD node scripts/fix-totalAmount-migration.js || true
-        fi
-        
-        # Try to resolve the specific migration that's causing issues
-        local failed_migration=$(echo "$migration_status" | grep -oE '[0-9]{14}_[a-zA-Z_]+' | head -1)
-        if [ -n "$failed_migration" ]; then
-            handle_failed_migration "$failed_migration"
-        fi
     fi
     
-    # Step 5: Apply migrations
-    echo "🚀 Applying migrations..."
-    local max_retries=3
-    local retry_count=0
+    # Step 6: Verify schema types
+    echo "🔍 Verifying schema types..."
+    if $DOCKER_CMD node scripts/verify-schema-types.js; then
+        echo "✅ Schema verification passed"
+    else
+        echo "⚠️  Schema verification failed - check column types"
+        # Don't fail deployment, but warn
+    fi
     
-    while [ $retry_count -lt $max_retries ]; do
-        if $DOCKER_CMD npx prisma migrate deploy; then
-            echo "✅ Migrations applied successfully"
-            break
-        else
-            retry_count=$((retry_count + 1))
-            echo "⚠️  Migration attempt $retry_count failed"
-            
-            if [ $retry_count -lt $max_retries ]; then
-                echo "🔄 Retrying in 5 seconds..."
-                sleep 5
-                
-                # Regenerate client before retry
-                $DOCKER_CMD npx prisma generate
-            else
-                echo "❌ All migration attempts failed"
-                return 1
-            fi
-        fi
-    done
-    
-    # Step 6: Verify final state
+    # Step 7: Verify final state
     echo "🔍 Verifying final migration state..."
     $DOCKER_CMD npx prisma migrate status
     
-    # Step 7: Test database connectivity
+    # Step 8: Test database connectivity
     echo "🧪 Testing database connectivity..."
     $DOCKER_CMD node -e "
         const { PrismaClient } = require('@prisma/client');

@@ -825,8 +825,9 @@ function LoansPageContent() {
 		return { color: "text-green-600", text: "On Track" };
 	};
 
-	const validateRepaymentAmount = (amount: string, loan: Loan) => {
+	const validateRepaymentAmount = (amount: string, loan: Loan, currentPaymentMethod?: "WALLET_BALANCE" | "FRESH_FUNDS") => {
 		const numAmount = parseFloat(amount);
+		const methodToCheck = currentPaymentMethod || paymentMethod;
 
 		if (!amount || amount.trim() === "") {
 			setRepaymentError("");
@@ -847,7 +848,7 @@ function LoansPageContent() {
 			return;
 		}
 
-		if (paymentMethod === "WALLET_BALANCE" && numAmount > walletBalance) {
+		if (methodToCheck === "WALLET_BALANCE" && numAmount > walletBalance) {
 			setRepaymentError(
 				`Insufficient wallet balance. Available: ${formatCurrency(
 					walletBalance
@@ -4246,7 +4247,8 @@ function LoansPageContent() {
 														) {
 															validateRepaymentAmount(
 																repaymentAmount,
-																selectedLoan
+																selectedLoan,
+																newMethod
 															);
 														}
 													}}
@@ -4308,7 +4310,8 @@ function LoansPageContent() {
 														) {
 															validateRepaymentAmount(
 																repaymentAmount,
-																selectedLoan
+																selectedLoan,
+																newMethod
 															);
 														}
 													}}
@@ -4432,64 +4435,23 @@ function LoansPageContent() {
 														"Monthly Payment",
 												};
 
-											if (
-												selectedLoan.overdueInfo
-													?.hasOverduePayments &&
-												lateFeeInfo[selectedLoan.id]
-											) {
-												return (
-													<div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
-														<div className="flex items-center mb-2">
-															<ExclamationTriangleIcon className="h-4 w-4 text-amber-600 mr-2" />
-															<span className="text-sm font-semibold text-amber-800 font-heading">
-																Recommended
-																Payment
-															</span>
-														</div>
-														<div className="flex justify-between text-sm font-body">
-															<span className="text-amber-700">
-																Total Amount Due
-																(incl. late
-																fees):
-															</span>
-															<span className="font-semibold text-amber-800">
-																{formatCurrency(
-																	lateFeeInfo[
-																		selectedLoan
-																			.id
-																	].summary
-																		.totalAmountDue
-																)}
-															</span>
-														</div>
-														<p className="text-xs text-amber-700 mt-2 font-body">
-															Pay this amount to
-															clear all overdue
-															payments and avoid
-															additional late
-															fees.
-														</p>
-													</div>
-												);
-											} else {
-												return (
-													<div className="flex justify-between text-sm text-gray-500 mt-2 font-body">
-														<span>
-															{
-																nextPayment.description
-															}
-														</span>
-														<span className="font-medium text-gray-700">
-															{nextPayment.amount >
-															0
-																? formatCurrency(
-																		nextPayment.amount
-																  )
-																: "Fully Paid"}
-														</span>
-													</div>
-												);
-											}
+											return (
+												<div className="flex justify-between text-sm text-gray-500 mt-2 font-body">
+													<span>
+														{
+															nextPayment.description
+														}
+													</span>
+													<span className="font-medium text-gray-700">
+														{nextPayment.amount >
+														0
+															? formatCurrency(
+																	nextPayment.amount
+															  )
+															: "Fully Paid"}
+													</span>
+												</div>
+											);
 										})()}
 										<div className="flex justify-between text-sm text-gray-500 mt-2 font-body">
 											<span>Outstanding Balance</span>
