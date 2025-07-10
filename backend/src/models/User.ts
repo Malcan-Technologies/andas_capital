@@ -40,9 +40,29 @@ export class User implements IUser {
 	}
 
 	static async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
-		const user = await prisma.user.findUnique({
+		// Try to find user by the provided phone number first
+		let user = await prisma.user.findUnique({
 			where: { phoneNumber },
 		});
+		
+		// If not found and phoneNumber starts with +, try without + prefix
+		// This handles cases where phone numbers might be stored without + in database
+		if (!user && phoneNumber.startsWith('+')) {
+			const phoneWithoutPlus = phoneNumber.substring(1);
+			user = await prisma.user.findUnique({
+				where: { phoneNumber: phoneWithoutPlus },
+			});
+		}
+		
+		// If still not found and phoneNumber doesn't start with +, try with + prefix
+		// This handles cases where phone numbers might be stored with + in database
+		if (!user && !phoneNumber.startsWith('+')) {
+			const phoneWithPlus = '+' + phoneNumber;
+			user = await prisma.user.findUnique({
+				where: { phoneNumber: phoneWithPlus },
+			});
+		}
+
 		return user ? new User(user) : null;
 	}
 

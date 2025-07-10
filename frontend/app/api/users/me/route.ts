@@ -95,8 +95,19 @@ export async function PUT(request: Request) {
 
 		if (!response.ok) {
 			console.log("Users/me PUT - Error response from backend");
+			
+			// Try to extract the specific error message from backend
+			let errorMessage = "Failed to update user data";
+			try {
+				const errorData = await response.json();
+				console.log("Users/me PUT - Backend error data:", errorData);
+				errorMessage = errorData.message || errorData.error || errorMessage;
+			} catch (parseError) {
+				console.log("Users/me PUT - Failed to parse backend error:", parseError);
+			}
+			
 			return NextResponse.json(
-				{ error: "Failed to update user data" },
+				{ error: errorMessage },
 				{ status: response.status }
 			);
 		}

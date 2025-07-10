@@ -93,7 +93,13 @@ export default function SignupPage() {
 			const data = await response.json();
 
 			if (!response.ok) {
-				throw new Error(data.error || "Failed to create account");
+				// Handle specific error cases
+				if (response.status === 400 && data.message?.includes("already registered")) {
+					setError("This phone number is already registered. Please use a different number or try logging in instead.");
+				} else {
+					throw new Error(data.message || data.error || "Failed to create account");
+				}
+				return;
 			}
 
 			// Store tokens using our utility functions

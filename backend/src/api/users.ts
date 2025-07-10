@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { authenticateToken } from "../middleware/auth";
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth";
+import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
 
 const router = Router();
 
@@ -200,6 +201,45 @@ router.put(
 				updateData.dateOfBirth = new Date(updateData.dateOfBirth);
 			}
 
+			// Validate and normalize phone number if provided
+			if (updateData.phoneNumber) {
+				console.log("Validating phone number:", updateData.phoneNumber);
+				
+				const phoneValidation = validatePhoneNumber(updateData.phoneNumber, {
+					requireMobile: false, // Allow both mobile and landline for profile update
+					allowLandline: true
+				});
+
+				if (!phoneValidation.isValid) {
+					console.log("Phone validation failed:", phoneValidation.error);
+					return res.status(400).json({ 
+						message: phoneValidation.error || "Invalid phone number format" 
+					});
+				}
+
+				// Normalize phone number to E.164 format (with + prefix) for database storage
+				const normalizedPhone = normalizePhoneNumber(updateData.phoneNumber);
+				console.log("Normalized phone number:", normalizedPhone);
+				updateData.phoneNumber = normalizedPhone;
+
+				// Check if another user already has this phone number
+				const existingUser = await prisma.user.findFirst({
+					where: { 
+						phoneNumber: normalizedPhone,
+						NOT: { id: userId } // Exclude current user
+					}
+				});
+
+				console.log("Existing user check result:", existingUser ? "Found duplicate" : "No duplicate found");
+
+				if (existingUser) {
+					console.log("Returning duplicate phone number error");
+					return res.status(400).json({ 
+						message: "This phone number is already registered to another account" 
+					});
+				}
+			}
+
 			// Ensure kycStatus is a boolean if provided
 			if (updateData.kycStatus !== undefined) {
 				updateData.kycStatus = Boolean(updateData.kycStatus);
@@ -237,7 +277,13 @@ router.put(
 			return res.json(updatedUser);
 		} catch (error) {
 			console.error("Error updating user data:", error);
-			return res.status(500).json({ message: "Internal server error" });
+			console.error("Error details:", {
+				message: error instanceof Error ? error.message : "Unknown error",
+				stack: error instanceof Error ? error.stack : "No stack trace",
+				code: (error as any)?.code,
+				meta: (error as any)?.meta
+			});
+			return res.status(500).json({ message: "Failed to update user data" });
 		}
 	}
 );

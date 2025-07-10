@@ -136,4 +136,38 @@ export function normalizePhoneNumber(phone: string): string {
 	} catch (error) {
 		return phone;
 	}
+}
+
+/**
+ * Finds a user by phone number, trying both with and without + prefix
+ * This handles cases where phone numbers might be stored inconsistently in the database
+ * @param phoneNumber - The phone number to search for
+ * @param prismaInstance - The Prisma instance to use for database queries
+ * @returns User object or null if not found
+ */
+export async function findUserByPhoneNumber(phoneNumber: string, prismaInstance: any): Promise<any | null> {
+	// Try to find user by the provided phone number first
+	let user = await prismaInstance.user.findUnique({
+		where: { phoneNumber },
+	});
+	
+	// If not found and phoneNumber starts with +, try without + prefix
+	// This handles cases where phone numbers might be stored without + in database
+	if (!user && phoneNumber.startsWith('+')) {
+		const phoneWithoutPlus = phoneNumber.substring(1);
+		user = await prismaInstance.user.findUnique({
+			where: { phoneNumber: phoneWithoutPlus },
+		});
+	}
+	
+	// If still not found and phoneNumber doesn't start with +, try with + prefix
+	// This handles cases where phone numbers might be stored with + in database
+	if (!user && !phoneNumber.startsWith('+')) {
+		const phoneWithPlus = '+' + phoneNumber;
+		user = await prismaInstance.user.findUnique({
+			where: { phoneNumber: phoneWithPlus },
+		});
+	}
+
+	return user;
 } 

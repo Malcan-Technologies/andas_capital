@@ -184,8 +184,11 @@ export const fetchWithTokenRefresh = async <T>(
 		
 		try {
 			const errorData = await response.json();
+			console.log("fetchWithTokenRefresh - Error data received:", errorData);
 			errorMessage = errorData.error || errorData.message || errorMessage;
+			console.log("fetchWithTokenRefresh - Final error message:", errorMessage);
 		} catch (parseError) {
+			console.log("fetchWithTokenRefresh - Failed to parse error response:", parseError);
 			// If we can't parse the error response, use the generic message
 			// Keep the default errorMessage
 		}

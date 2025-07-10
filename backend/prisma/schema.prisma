@@ -17,9 +17,6 @@ model Product {
   repaymentTerms       Json
   interestRate         Float
   eligibility          Json[]
-  lateFeeRate          Float             @default(8.0) // Daily late fee rate as percentage (e.g., 8 = 8% per day)
-  lateFeeFixedAmount   Float             @default(0) // Fixed fee amount charged periodically
-  lateFeeFrequencyDays Int               @default(7) // How often the fixed fee is charged (in days)
   originationFee       Float
   legalFee             Float
   applicationFee       Float
@@ -29,6 +26,9 @@ model Product {
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
   loanTypes            Json[]
+  lateFeeFixedAmount   Float             @default(0)
+  lateFeeFrequencyDays Int               @default(7)
+  lateFeeRate          Float             @default(8.0)
   applications         LoanApplication[]
 
   @@map("products")
@@ -115,22 +115,22 @@ model Loan {
   userId             String
   applicationId      String              @unique
   principalAmount    Float
-  totalAmount        Float // Total amount to be repaid (principal + interest)
-  outstandingBalance Float // Outstanding principal balance
+  outstandingBalance Float
   interestRate       Float
   term               Int
   monthlyPayment     Float
   nextPaymentDue     DateTime?
   status             String              @default("ACTIVE")
   disbursedAt        DateTime?
-  dischargedAt       DateTime? // When the loan was discharged
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  dischargedAt       DateTime?
+  totalAmount        Float
+  lateFee            LateFee?
   repayments         LoanRepayment[]
   application        LoanApplication     @relation(fields: [applicationId], references: [id])
   user               User                @relation(fields: [userId], references: [id])
   walletTransactions WalletTransaction[]
-  lateFee            LateFee? // One-to-one relation with late fees
 
   @@map("loans")
 }
@@ -144,19 +144,18 @@ model LoanRepayment {
   status            String          @default("PENDING")
   dueDate           DateTime
   paidAt            DateTime?
-  installmentNumber Int?
-  scheduledAmount   Float?
-  actualAmount      Float?
-  paymentType       String? // EARLY, ON_TIME, LATE, PARTIAL
-  daysEarly         Int?            @default(0)
-  daysLate          Int?            @default(0)
-  parentRepaymentId String?
-  // New payment allocation fields
-  lateFeeAmount     Float           @default(0) // Total late fees owed for this repayment
-  lateFeesPaid      Float           @default(0) // Amount of late fees paid for this repayment
-  principalPaid     Float           @default(0) // Amount of principal paid for this repayment
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+  actualAmount      Float?
+  daysEarly         Int?            @default(0)
+  daysLate          Int?            @default(0)
+  installmentNumber Int?
+  parentRepaymentId String?
+  paymentType       String?
+  scheduledAmount   Float?
+  lateFeeAmount     Float           @default(0)
+  lateFeesPaid      Float           @default(0)
+  principalPaid     Float           @default(0)
   loan              Loan            @relation(fields: [loanId], references: [id])
   parentRepayment   LoanRepayment?  @relation("PartialPayments", fields: [parentRepaymentId], references: [id])
   partialPayments   LoanRepayment[] @relation("PartialPayments")
@@ -164,7 +163,7 @@ model LoanRepayment {
   @@index([installmentNumber])
   @@index([paymentType])
   @@index([status, dueDate])
-  @@index([loanId, dueDate]) // For payment allocation ordering
+  @@index([loanId, dueDate])
   @@map("loan_repayments")
 }
 
@@ -189,21 +188,20 @@ model LoanApplication {
   paidAppFee               Boolean                  @default(false)
   purpose                  String?
   urlLink                  String?                  @unique
-  // Attestation fields
-  attestationType          String? // "IMMEDIATE" or "MEETING"
   attestationCompleted     Boolean                  @default(false)
   attestationDate          DateTime?
   attestationNotes         String?
-  attestationVideoWatched  Boolean                  @default(false)
   attestationTermsAccepted Boolean                  @default(false)
-  meetingScheduledAt       DateTime?
+  attestationType          String?
+  attestationVideoWatched  Boolean                  @default(false)
   meetingCompletedAt       DateTime?
+  meetingScheduledAt       DateTime?
+  history                  LoanApplicationHistory[]
   product                  Product                  @relation(fields: [productId], references: [id])
   user                     User                     @relation(fields: [userId], references: [id])
+  disbursement             LoanDisbursement?
   loan                     Loan?
   documents                UserDocument[]
-  disbursement             LoanDisbursement?
-  history                  LoanApplicationHistory[]
 
   @@map("loan_applications")
 }
@@ -216,7 +214,7 @@ model LoanDisbursement {
   bankName          String?
   bankAccountNumber String?
   disbursedAt       DateTime        @default(now())
-  disbursedBy       String // Admin user ID who processed the disbursement
+  disbursedBy       String
   notes             String?
   status            String          @default("COMPLETED")
   createdAt         DateTime        @default(now())
@@ -286,32 +284,30 @@ model NotificationGroup {
 }
 
 model LoanApplicationHistory {
-  id             String   @id @default(cuid())
+  id             String          @id @default(cuid())
   applicationId  String
   previousStatus String?
   newStatus      String
-  changedBy      String // User ID who made the change
-  changeReason   String? // Optional reason for the change
-  notes          String? // Optional notes about the change
-  metadata       Json? // Additional data related to the change
-  createdAt      DateTime @default(now())
-
-  application LoanApplication @relation(fields: [applicationId], references: [id])
+  changedBy      String
+  changeReason   String?
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime        @default(now())
+  application    LoanApplication @relation(fields: [applicationId], references: [id])
 
   @@map("loan_application_history")
 }
 
 model LateFee {
   id                  String   @id @default(cuid())
-  loanId              String   @unique // One entry per loan
-  totalAccruedFees    Float    @default(0) // Sum of all late fees across all overdue repayments
-  lastCalculationDate DateTime @default(now()) // When fees were last calculated
-  calculationDetails  Json? // Store breakdown by repayment if needed for debugging
-  status              String   @default("ACTIVE") // ACTIVE, CALCULATED
+  status              String   @default("ACTIVE")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-
-  loan Loan @relation(fields: [loanId], references: [id])
+  calculationDetails  Json?
+  lastCalculationDate DateTime @default(now())
+  loanId              String   @unique
+  totalAccruedFees    Float    @default(0)
+  loan                Loan     @relation(fields: [loanId], references: [id])
 
   @@index([lastCalculationDate])
   @@index([status])
@@ -324,7 +320,7 @@ model LateFeeProcessingLog {
   feesCalculated     Int      @default(0)
   totalFeeAmount     Float    @default(0)
   overdue_repayments Int      @default(0)
-  status             String // SUCCESS, FAILED, PARTIAL
+  status             String
   errorMessage       String?
   processingTimeMs   Int?
   metadata           Json?

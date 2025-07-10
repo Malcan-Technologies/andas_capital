@@ -208,13 +208,33 @@ router.post("/login", async (req: Request, res: Response) => {
 		const normalizedPhone = normalizePhoneNumber(phoneNumber);
 		console.log("Normalized phone number:", normalizedPhone);
 
-		// Find user by normalized phone number
-		const user = await prisma.user.findUnique({
+		// Try to find user by normalized phone number first (E.164 format with +)
+		let user = await prisma.user.findUnique({
 			where: { phoneNumber: normalizedPhone },
 		});
+		
+		// If not found and normalized phone starts with +, try without + prefix
+		// This handles cases where phone numbers might be stored without + in database
+		if (!user && normalizedPhone.startsWith('+')) {
+			const phoneWithoutPlus = normalizedPhone.substring(1);
+			console.log("Trying without + prefix:", phoneWithoutPlus);
+			user = await prisma.user.findUnique({
+				where: { phoneNumber: phoneWithoutPlus },
+			});
+		}
+		
+		// If still not found and input didn't start with +, try with + prefix
+		// This handles cases where phone numbers might be stored with + in database
+		if (!user && !phoneNumber.startsWith('+')) {
+			const phoneWithPlus = '+' + phoneNumber;
+			console.log("Trying with + prefix:", phoneWithPlus);
+			user = await prisma.user.findUnique({
+				where: { phoneNumber: phoneWithPlus },
+			});
+		}
 
 		if (!user) {
-			console.log("User not found:", normalizedPhone);
+			console.log("User not found after trying all formats");
 			return res.status(401).json({ error: "Invalid credentials" });
 		}
 
@@ -1024,6 +1044,40 @@ router.put(
 
 			if (!existingUser) {
 				return res.status(404).json({ error: "User not found" });
+			}
+
+			// Validate and normalize phone number if provided
+			if (updateData.phoneNumber) {
+				const { validatePhoneNumber, normalizePhoneNumber } = require("../lib/phoneUtils");
+				
+				const phoneValidation = validatePhoneNumber(updateData.phoneNumber, {
+					requireMobile: false, // Allow both mobile and landline for admin user update
+					allowLandline: true
+				});
+
+				if (!phoneValidation.isValid) {
+					return res.status(400).json({ 
+						error: phoneValidation.error || "Invalid phone number format" 
+					});
+				}
+
+				// Normalize phone number to E.164 format (with + prefix) for database storage
+				const normalizedPhone = normalizePhoneNumber(updateData.phoneNumber);
+				updateData.phoneNumber = normalizedPhone;
+
+				// Check if another user already has this phone number
+				const existingUserWithPhone = await prisma.user.findFirst({
+					where: { 
+						phoneNumber: normalizedPhone,
+						NOT: { id } // Exclude current user
+					}
+				});
+
+				if (existingUserWithPhone) {
+					return res.status(400).json({ 
+						error: "This phone number is already registered to another account" 
+					});
+				}
 			}
 
 			// Update user

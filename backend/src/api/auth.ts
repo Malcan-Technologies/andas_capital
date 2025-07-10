@@ -85,8 +85,23 @@ router.post("/login", async (req, res) => {
 		// Normalize phone number for database lookup
 		const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-		// Find user by normalized phone number
-		const user = await User.findByPhoneNumber(normalizedPhone);
+		// Try to find user by normalized phone number first (E.164 format with +)
+		let user = await User.findByPhoneNumber(normalizedPhone);
+		
+		// If not found and normalized phone starts with +, try without + prefix
+		// This handles cases where phone numbers might be stored without + in database
+		if (!user && normalizedPhone.startsWith('+')) {
+			const phoneWithoutPlus = normalizedPhone.substring(1);
+			user = await User.findByPhoneNumber(phoneWithoutPlus);
+		}
+		
+		// If still not found and input didn't start with +, try with + prefix
+		// This handles cases where phone numbers might be stored with + in database
+		if (!user && !phoneNumber.startsWith('+')) {
+			const phoneWithPlus = '+' + phoneNumber;
+			user = await User.findByPhoneNumber(phoneWithPlus);
+		}
+
 		if (!user) {
 			return res.status(401).json({ message: "Invalid credentials" });
 		}
@@ -271,7 +286,9 @@ router.post("/signup", async (req, res) => {
 		// Check if user already exists
 		const existingUser = await User.findByPhoneNumber(normalizedPhone);
 		if (existingUser) {
-			return res.status(400).json({ message: "User already exists" });
+			return res.status(400).json({ 
+				message: "This phone number is already registered. Please use a different number or try logging in instead." 
+			});
 		}
 
 		// Create new user with normalized phone number
