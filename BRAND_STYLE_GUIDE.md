@@ -100,6 +100,239 @@ Each product/solution has its own distinctive color theme for consistency across
 
 ---
 
+## 📊 Chart & Data Visualization Colors
+
+For charts, graphs, and data visualizations in dashboard pages, use these subtle color versions that match the homepage product card overlay style for better visual harmony and reduced eye strain:
+
+### Subtle Chart Color Palette
+| Purpose | Tailwind Class | HEX | Usage |
+|---------|---------------|-----|-------|
+| **Outstanding/Upcoming** | `bg-blue-400` | `#60A5FA` | Bar charts, progress indicators, upcoming payments |
+| **Paid/Completed** | `bg-green-400` | `#4ADE80` | Success states, completed payments, progress bars |
+| **Current Month/Warning** | `bg-orange-400` | `#FB923C` | Due this month, warnings, attention items |
+| **Overdue/Errors** | `bg-red-400` | `#F87171` | Overdue payments, errors, critical alerts |
+
+### Implementation Guidelines
+- Use these 400-level colors instead of harsh primary colors (600-700 levels)
+- Apply consistently across bar charts, donut charts, progress indicators
+- Maintain visual hierarchy while providing better readability
+- Colors should match the soft overlay style used in homepage product cards
+
+```jsx
+// Example bar chart implementation
+<Bar dataKey="outstanding" fill="#60A5FA" />
+<Bar dataKey="paid" fill="#4ADE80" />
+<Bar dataKey="currentMonth" fill="#FB923C" />
+<Bar dataKey="overdue" fill="#F87171" />
+```
+
+---
+
+## 🏠 Dashboard Page Design Standards
+
+### Dashboard Layout Structure
+All dashboard pages should follow this consistent responsive structure:
+
+```jsx
+// Standard dashboard page structure
+<div className="min-h-screen bg-offwhite w-full">
+  <div className="px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+    <div className="space-y-6">
+      {/* Page content */}
+    </div>
+  </div>
+</div>
+```
+
+**Responsive Padding Scale:**
+- **Mobile:** 16px (`px-4`)
+- **Small:** 24px (`sm:px-6`) 
+- **Large:** 32px (`lg:px-8`)
+- **XL:** 48px (`xl:px-12`)
+- **2XL:** 64px (`2xl:px-16`)
+- **Vertical:** 32px (`py-8`)
+
+### Dashboard Card Standards
+
+#### Card Structure
+```jsx
+// Standard dashboard card (white background, clean design, fully responsive)
+<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+  <div className="p-4 sm:p-6 lg:p-8">
+    {/* Header - Mobile: Stack, Desktop: Side by side */}
+    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
+      <div className="flex items-center">
+        <div className="w-12 h-12 lg:w-14 lg:h-14 bg-[product-color]/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+          <Icon className="h-6 w-6 lg:h-7 lg:w-7 text-[product-color]" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+            Card Title
+          </h3>
+          <p className="text-sm lg:text-base text-[product-color] font-semibold">
+            Subtitle or Status
+          </p>
+        </div>
+      </div>
+      {/* Desktop Action Button */}
+      <Link
+        href="/dashboard/[page]"
+        className="hidden lg:inline-flex bg-[product-color] hover:bg-[product-color-700] text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
+      >
+        Action Text
+        <ArrowRightIcon className="ml-1 h-4 w-4" />
+      </Link>
+    </div>
+
+    {/* Main Content */}
+    <div className="text-center lg:text-left mb-6">
+      <p className="text-gray-500 text-sm mb-2 font-body">
+        Content Label
+      </p>
+      <p className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold text-gray-700 mb-3">
+        Main Value/Number
+      </p>
+      <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+        Supporting description
+      </p>
+    </div>
+
+    {/* Subtle separator line */}
+    <div className="border-t border-gray-100 mb-6"></div>
+
+    {/* Stats Grid - Responsive: 2x2 mobile, centered tablet, left-aligned desktop */}
+    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 justify-items-center lg:justify-items-start mb-6">
+      <div className="space-y-2 text-center lg:text-left w-full">
+        <div className="flex items-center space-x-2 justify-center lg:justify-start">
+          <Icon className="h-4 w-4 text-[product-color]" />
+          <span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
+            Stat Label
+          </span>
+        </div>
+        <p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-[product-color]">
+          Stat Value
+        </p>
+      </div>
+      {/* Repeat for additional stats */}
+    </div>
+
+    {/* Mobile Action Button */}
+    <div className="border-t border-gray-100 pt-4 lg:hidden">
+      <Link
+        href="/dashboard/[page]"
+        className="w-full bg-[product-color] hover:bg-[product-color-700] text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
+      >
+        Action Text
+        <ArrowRightIcon className="ml-1 h-4 w-4" />
+      </Link>
+    </div>
+  </div>
+</div>
+```
+
+#### Dashboard Text Sizing Guidelines
+
+| Element | Mobile Size | Desktop Size | Classes | Usage |
+|---------|-------------|--------------|---------|-------|
+| **Page Titles** | `text-2xl` | `text-3xl` | `text-2xl lg:text-3xl font-heading font-bold text-gray-700` | Main page headings |
+| **Card Titles** | `text-lg` | `text-xl` | `text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1` | Primary card titles |
+| **Card Subtitles** | `text-sm` | `text-base` | `text-sm lg:text-base text-[product-color] font-semibold` | Card descriptions/status |
+| **Stat Numbers** | `text-xl` | `text-2xl` | `text-xl xl:text-2xl font-heading font-bold` | Key metrics, amounts |
+| **Stat Labels** | `text-sm` | `text-sm` | `text-sm text-gray-500 font-body` | Metric descriptions |
+| **Body Text** | `text-sm` | `text-base` | `text-sm lg:text-base text-gray-600 font-body` | General content |
+| **Small Text** | `text-xs` | `text-sm` | `text-xs lg:text-sm text-gray-500 font-body` | Helper text, metadata |
+
+#### Icon Sizing Standards
+- **Dashboard Card Icons:** `w-12 h-12 lg:w-14 lg:h-14` (main card icons in header)
+- **Large Card Icons:** `w-16 h-16 lg:w-20 lg:h-20` (special emphasis cards only)
+- **Inline Icons:** `h-6 w-6 lg:h-7 lg:w-7` (icons within card headers)
+- **Small Icons:** `h-5 w-5 lg:h-6 lg:w-6` (text inline icons)
+- **Action Icons:** `h-4 w-4` (buttons, small actions)
+
+#### Card Spacing Standards
+- **Card Padding:** `p-4 sm:p-6 lg:p-8` (responsive padding)
+- **Content Spacing:** `space-y-4 lg:space-y-6`
+- **Grid Gaps:** `gap-4 lg:gap-6`
+- **Icon Margins:** `mr-3` (icon to text spacing)
+- **Mobile Button Spacing:** `pt-4` (top padding for mobile buttons)
+- **Header Spacing:** `mb-6 space-y-4 lg:space-y-0` (responsive header spacing)
+
+#### Implementation Example
+```jsx
+// Example dashboard overview card with full responsive design
+<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+  <div className="p-4 sm:p-6 lg:p-8">
+    {/* Header - Mobile: Stack, Desktop: Side by side */}
+    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
+      <div className="flex items-center">
+        <div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+          <CreditCardIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+            Active Loans
+          </h3>
+          <p className="text-sm lg:text-base text-blue-600 font-semibold">
+            2 loans • RM 50,000 outstanding
+          </p>
+        </div>
+      </div>
+      {/* Desktop Action Button */}
+      <Link
+        href="/dashboard/loans"
+        className="hidden lg:inline-flex bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
+      >
+        View All
+        <ArrowRightIcon className="ml-1 h-4 w-4" />
+      </Link>
+    </div>
+
+    {/* Main Content */}
+    <div className="text-center lg:text-left mb-6">
+      <p className="text-gray-500 text-sm mb-2 font-body">
+        Total Outstanding
+      </p>
+      <p className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold text-gray-700 mb-3">
+        RM 50,000
+      </p>
+      <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+        Next payment due in 5 days
+      </p>
+    </div>
+
+    {/* Subtle separator line */}
+    <div className="border-t border-gray-100 mb-6"></div>
+
+    {/* Stats Grid */}
+    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 justify-items-center lg:justify-items-start mb-6">
+      <div className="space-y-2 text-center lg:text-left w-full">
+        <div className="flex items-center space-x-2 justify-center lg:justify-start">
+          <span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
+            Next Payment
+          </span>
+        </div>
+        <p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-600">
+          RM 2,500
+        </p>
+      </div>
+    </div>
+
+    {/* Mobile Action Button */}
+    <div className="border-t border-gray-100 pt-4 lg:hidden">
+      <Link
+        href="/dashboard/loans"
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
+      >
+        View All
+        <ArrowRightIcon className="ml-1 h-4 w-4" />
+      </Link>
+    </div>
+  </div>
+</div>
+```
+
+---
+
 ## 🧹 Component Design Patterns
 
 ### General Styling

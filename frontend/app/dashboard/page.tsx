@@ -6,6 +6,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import Link from "next/link";
 import PieChart from "@/components/PieChart";
 import CreditScoreGauge from "@/components/CreditScoreGauge";
+import ActionNotificationBar from "@/components/ActionNotificationBar";
 import {
 	ArrowRightIcon,
 	ChevronDownIcon,
@@ -61,8 +62,6 @@ export default function DashboardPage() {
 	});
 	const [transactions, setTransactions] = useState<any[]>([]);
 	const [loading, setLoading] = useState<boolean>(true);
-	const [currentNotificationIndex, setCurrentNotificationIndex] =
-		useState<number>(0);
 
 	useEffect(() => {
 		const checkAuthAndLoadData = async () => {
@@ -378,27 +377,80 @@ export default function DashboardPage() {
 				includesLateFees: false,
 				description: "No payments due",
 				dueDate: null,
+				totalLateFees: 0,
 			};
 		}
 
 		// Find the loan with the most urgent next payment
 		let nextPayment = null;
 		let earliestDueDate = null;
+		let totalLateFees = 0;
 
-		for (const loan of loans) {
+		// Filter to only active loans
+		const activeLoans = loans.filter(loan => 
+			loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+		);
+
+		// First, calculate total late fees across active loans only
+		for (const loan of activeLoans) {
+			if (loan.overdueInfo?.hasOverduePayments && loan.overdueInfo?.totalLateFees > 0) {
+				totalLateFees += loan.overdueInfo.totalLateFees;
+			}
+		}
+
+		// Find the most urgent payment from active loans only
+		for (const loan of activeLoans) {
 			if (loan.nextPaymentInfo && loan.nextPaymentInfo.amount > 0) {
-				const dueDate = loan.nextPaymentInfo.dueDate
-					? new Date(loan.nextPaymentInfo.dueDate)
-					: null;
+				// Use the same logic as loans page: prioritize loan.nextPaymentDue, fallback to overdue dates
+				let actualDueDate = null;
+				
+				if (loan.overdueInfo?.hasOverduePayments && loan.overdueInfo?.overdueRepayments && loan.overdueInfo.overdueRepayments.length > 0) {
+					// Find the earliest overdue repayment due date
+					const earliestOverdueDate = loan.overdueInfo.overdueRepayments
+						.map((rep: any) => new Date(rep.dueDate))
+						.sort((a: Date, b: Date) => a.getTime() - b.getTime())[0];
+					actualDueDate = earliestOverdueDate;
+				} else if (loan.nextPaymentDue) {
+					// Use the loan's next payment due date
+					actualDueDate = new Date(loan.nextPaymentDue);
+				}
 
 				if (
 					!nextPayment ||
-					(dueDate && (!earliestDueDate || dueDate < earliestDueDate))
+					(actualDueDate && (!earliestDueDate || actualDueDate < earliestDueDate))
 				) {
-					nextPayment = loan.nextPaymentInfo;
-					earliestDueDate = dueDate;
+					nextPayment = {
+						...loan.nextPaymentInfo,
+						dueDate: actualDueDate ? actualDueDate.toISOString() : null
+					};
+					earliestDueDate = actualDueDate;
 				}
 			}
+		}
+
+		// If we have a next payment, include late fees in the total
+		if (nextPayment && totalLateFees > 0) {
+			return {
+				...nextPayment,
+				amount: nextPayment.amount + totalLateFees,
+				includesLateFees: true,
+				totalLateFees,
+				description: totalLateFees > 0 
+					? `Includes ${formatCurrency(totalLateFees)} late fees`
+					: nextPayment.description,
+			};
+		}
+
+		// If no next payment but we have late fees, show just the late fees
+		if (totalLateFees > 0) {
+			return {
+				amount: totalLateFees,
+				isOverdue: true,
+				includesLateFees: true,
+				totalLateFees,
+				description: "Outstanding late fees",
+				dueDate: null,
+			};
 		}
 
 		return (
@@ -408,6 +460,7 @@ export default function DashboardPage() {
 				includesLateFees: false,
 				description: "No payments due",
 				dueDate: null,
+				totalLateFees: 0,
 			}
 		);
 	};
@@ -485,317 +538,143 @@ export default function DashboardPage() {
 		}
 	};
 
+	// Convert applications to action notifications
+	const getActionNotifications = () => {
+		const actionableApps = incompleteApplications.filter((app: any) =>
+			[
+				"INCOMPLETE",
+				"PENDING_APP_FEE", 
+				"APPROVED",
+				"PENDING_ATTESTATION"
+			].includes(app.status)
+		);
+
+		return actionableApps.map((app: any) => {
+			const getNotificationData = (status: string) => {
+				switch (status) {
+					case "INCOMPLETE":
+						return {
+							type: 'INCOMPLETE_APPLICATION' as const,
+							title: "Complete Your Loan Application",
+							description: `You have an incomplete application for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							}`,
+							buttonText: "Resume Application",
+							buttonHref: `/dashboard/apply?applicationId=${app.id}&step=${app.appStep}&productCode=${app.product?.code || ""}`,
+							priority: 'HIGH' as const,
+						};
+					case "PENDING_APP_FEE":
+						return {
+							type: 'PENDING_APP_FEE' as const,
+							title: "Application Fee Payment Required",
+							description: `Your loan application is pending fee payment for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							}`,
+							buttonText: "Pay Fee",
+							buttonHref: `/dashboard/applications/${app.id}`,
+							priority: 'HIGH' as const,
+						};
+					case "APPROVED":
+						return {
+							type: 'APPROVED' as const,
+							title: "🎉 Loan Application Approved!",
+							description: `Congratulations! Your application for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							} has been approved`,
+							buttonText: "View Details",
+							buttonHref: `/dashboard/applications/${app.id}`,
+							priority: 'MEDIUM' as const,
+						};
+					case "PENDING_ATTESTATION":
+						return {
+							type: 'PENDING_ATTESTATION' as const,
+							title: "Attestation Required",
+							description: `Your approved loan for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							} requires attestation to proceed`,
+							buttonText: "Complete Attestation",
+							buttonHref: `/dashboard/loans?tab=applications`,
+							priority: 'HIGH' as const,
+						};
+					default:
+						return {
+							type: 'INCOMPLETE_APPLICATION' as const,
+							title: "Application Update",
+							description: "Your loan application requires attention",
+							buttonText: "View Application",
+							buttonHref: `/dashboard/applications/${app.id}`,
+							priority: 'MEDIUM' as const,
+						};
+				}
+			};
+
+			const notificationData = getNotificationData(app.status);
+			
+			return {
+				id: app.id,
+				...notificationData,
+				metadata: {
+					productName: app.product?.name,
+					amount: app.amount ? formatCurrency(parseFloat(app.amount)) : undefined,
+					date: app.status === "APPROVED" 
+						? `Approved on ${formatDate(app.approvedAt || app.updatedAt)}`
+						: app.status === "PENDING_ATTESTATION"
+						? `Requires attestation since ${formatDate(app.approvedAt || app.updatedAt)}`
+						: `Started on ${formatDate(app.createdAt)}`,
+					applicationId: app.id,
+				},
+			};
+		});
+	};
+
+
+
 	return (
 		<DashboardLayout userName={userName}>
 			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				<div className="space-y-6">
-					{/* Incomplete Application Notification Card */}
-					{incompleteApplications.length > 0 &&
-						(() => {
-							const filteredApps = incompleteApplications.filter(
-								(app) =>
-									[
-										"INCOMPLETE",
-										"PENDING_APP_FEE",
-										"APPROVED",
-										"PENDING_ATTESTATION",
-									].includes(app.status)
-							);
-
-							if (filteredApps.length === 0) return null;
-
-							const currentApp =
-								filteredApps[currentNotificationIndex] ||
-								filteredApps[0];
-
-							const getAnnouncementContent = (status: string) => {
-								switch (status) {
-									case "INCOMPLETE":
-										return {
-											title: "Complete Your Loan Application",
-											description: `You have an incomplete application for ${
-												currentApp.product?.name ||
-												"loan"
-											}${
-												currentApp.amount
-													? ` of ${formatCurrency(
-															parseFloat(
-																currentApp.amount
-															)
-													  )}`
-													: ""
-											}`,
-											buttonText: "Resume",
-											buttonHref: `/dashboard/apply?applicationId=${
-												currentApp.id
-											}&step=${
-												currentApp.appStep
-											}&productCode=${
-												currentApp.product?.code || ""
-											}`,
-											icon: (
-												<ClockIcon className="h-6 w-6 text-amber-600" />
-											),
-										};
-									case "PENDING_APP_FEE":
-										return {
-											title: "Application Fee Payment Required",
-											description: `Your loan application is pending fee payment for ${
-												currentApp.product?.name ||
-												"loan"
-											}${
-												currentApp.amount
-													? ` of ${formatCurrency(
-															parseFloat(
-																currentApp.amount
-															)
-													  )}`
-													: ""
-											}`,
-											buttonText: "Pay",
-											buttonHref: `/dashboard/applications/${currentApp.id}`,
-											icon: (
-												<CreditCardIcon className="h-6 w-6 text-amber-600" />
-											),
-										};
-									case "APPROVED":
-										return {
-											title: "🎉 Loan Application Approved!",
-											description: `Congratulations! Your application for ${
-												currentApp.product?.name ||
-												"loan"
-											}${
-												currentApp.amount
-													? ` of ${formatCurrency(
-															parseFloat(
-																currentApp.amount
-															)
-													  )}`
-													: ""
-											} has been approved`,
-											buttonText: "View Details",
-											buttonHref: `/dashboard/applications/${currentApp.id}`,
-											icon: (
-												<CheckCircleIcon className="h-6 w-6 text-green-600" />
-											),
-										};
-									case "PENDING_ATTESTATION":
-										return {
-											title: "Attestation Required",
-											description: `Your approved loan for ${
-												currentApp.product?.name ||
-												"loan"
-											}${
-												currentApp.amount
-													? ` of ${formatCurrency(
-															parseFloat(
-																currentApp.amount
-															)
-													  )}`
-													: ""
-											} requires attestation to proceed`,
-											buttonText: "Complete Attestation",
-											buttonHref: `/dashboard/loans?tab=applications`,
-											icon: (
-												<svg
-													className="h-6 w-6 text-cyan-600"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-													/>
-												</svg>
-											),
-										};
-									default:
-										return {
-											title: "Application Update",
-											description: `Your loan application requires attention`,
-											buttonText: "View Application",
-											buttonHref: `/dashboard/applications/${currentApp.id}`,
-											icon: (
-												<ClockIcon className="h-6 w-6 text-amber-600" />
-											),
-										};
-								}
-							};
-
-							const content = getAnnouncementContent(
-								currentApp.status
-							);
-
-							return (
-								<div>
-									<div className="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-6">
-										{/* Subtle navigation dots for multiple notifications */}
-										{filteredApps.length > 1 && (
-											<div className="flex items-center justify-center mb-4">
-												<div className="flex items-center space-x-2">
-													{filteredApps.map(
-														(_, index) => (
-															<button
-																key={index}
-																onClick={() =>
-																	setCurrentNotificationIndex(
-																		index
-																	)
-																}
-																className={`w-2 h-2 rounded-full transition-all duration-200 ${
-																	index ===
-																	currentNotificationIndex
-																		? "bg-amber-500 w-6"
-																		: "bg-amber-300 hover:bg-amber-400"
-																}`}
-																title={`View notification ${
-																	index + 1
-																}`}
-															/>
-														)
-													)}
-												</div>
-											</div>
-										)}
-
-										<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-											<div className="flex items-start space-x-4">
-												<div className="flex-shrink-0">
-													<div className="p-2 bg-amber-100 rounded-xl border border-amber-200">
-														{content.icon}
-													</div>
-												</div>
-												<div className="flex-1">
-													<h3 className="text-lg font-heading text-gray-700">
-														{content.title}
-													</h3>
-													<p className="text-gray-600 text-sm mt-1 font-body">
-														{content.description}
-													</p>
-													<p className="text-gray-500 text-xs mt-1 font-body">
-														{currentApp.status ===
-														"APPROVED"
-															? "Approved on"
-															: currentApp.status ===
-															  "PENDING_ATTESTATION"
-															? "Requires attestation since"
-															: "Started on"}{" "}
-														{formatDate(
-															currentApp.status ===
-																"APPROVED"
-																? currentApp.approvedAt ||
-																		currentApp.updatedAt
-																: currentApp.status ===
-																  "PENDING_ATTESTATION"
-																? currentApp.approvedAt ||
-																  currentApp.updatedAt
-																: currentApp.createdAt
-														)}
-													</p>
-												</div>
-											</div>
-											<div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-												<Link
-													href={content.buttonHref}
-													className={`font-medium px-6 py-3 rounded-xl shadow transition inline-flex items-center justify-center text-sm text-white ${
-														currentApp.status ===
-														"PENDING_ATTESTATION"
-															? "bg-cyan-500 hover:bg-cyan-600"
-															: "bg-amber-500 hover:bg-amber-600"
-													}`}
-												>
-													<svg
-														className="h-4 w-4 mr-2"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth={2}
-															d={
-																currentApp.status ===
-																"PENDING_APP_FEE"
-																	? "M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-																	: currentApp.status ===
-																	  "PENDING_ATTESTATION"
-																	? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-																	: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-															}
-														/>
-													</svg>
-													{content.buttonText}
-												</Link>
-												<button
-													onClick={() => {
-														const newApps =
-															incompleteApplications.filter(
-																(a) =>
-																	a.id !==
-																	currentApp.id
-															);
-														setIncompleteApplications(
-															newApps
-														);
-														// Adjust current index if needed
-														if (
-															currentNotificationIndex >=
-															filteredApps.length -
-																1
-														) {
-															setCurrentNotificationIndex(
-																0
-															);
-														}
-													}}
-													className="inline-flex items-center justify-center px-3 py-2 text-gray-500 hover:text-gray-700 text-sm transition-colors"
-													title="Dismiss"
-												>
-													<svg
-														className="h-4 w-4"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth={2}
-															d="M6 18L18 6M6 6l12 12"
-														/>
-													</svg>
-												</button>
-											</div>
-										</div>
-									</div>
-								</div>
-							);
-						})()}
-
+					{/* Action Notification Bar */}
+					<ActionNotificationBar 
+						notifications={getActionNotifications()}
+					/>
 					{/* Loans & Applications Card - Spans 2 columns */}
-					<div className="break-inside-avoid bg-white rounded-xl shadow-md border border-purple-primary/10">
-						<div className="p-6">
-							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
-								<div className="flex items-center space-x-3">
-									<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
-										<CreditCardIcon className="h-8 w-8 text-purple-primary" />
+					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+						<div className="p-4 sm:p-6 lg:p-8">
+							{/* Header - Mobile: Stack, Desktop: Side by side */}
+							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
+								<div className="flex items-center">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+										<CreditCardIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
 									</div>
-									<div>
-										<h2 className="text-xl font-heading text-purple-primary">
+									<div className="min-w-0">
+										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
 											Loans
-										</h2>
-										<p className="text-gray-700 text-sm font-body">
+										</h3>
+										<p className="text-sm lg:text-base text-blue-600 font-semibold">
 											Your borrowing overview
 										</p>
 									</div>
 								</div>
+								{/* Desktop View All Button */}
 								<Link
 									href="/dashboard/loans"
-									className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
+									className="hidden lg:inline-flex bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
 								>
 									View All
 									<ArrowRightIcon className="ml-1 h-4 w-4" />
@@ -805,45 +684,95 @@ export default function DashboardPage() {
 							{/* Main Content Grid - Chart and Stats */}
 							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 								{/* Donut Chart Section */}
-								<div className="flex flex-col items-center justify-center">
+								<div className="flex flex-col items-center justify-center order-2 lg:order-1">
 									<PieChart
 										borrowed={
-											loanSummary.totalBorrowed || 0
+											(() => {
+												// Calculate total borrowed from active loans only
+												const activeLoans = loans.filter(loan => 
+													loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+												);
+												return activeLoans.reduce((sum, loan) => 
+													sum + (loan.totalAmount || 0), 0
+												);
+											})()
 										}
-										repaid={loanSummary.totalRepaid || 0}
+										repaid={
+											(() => {
+												// Calculate total principal paid from active loans only
+												const activeLoans = loans.filter(loan => 
+													loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+												);
+												return activeLoans.reduce((sum, loan) => {
+													if (!loan.repayments) return sum;
+													
+													// Sum up principal paid from all repayments
+													const loanPrincipalPaid = loan.repayments.reduce((loanSum: number, repayment: any) => {
+														if (repayment.status === "COMPLETED") {
+															// For completed payments, use principalPaid or fall back to amount
+															return loanSum + (Number(repayment.principalPaid) || Number(repayment.amount) || 0);
+														} else if (repayment.status === "PARTIAL") {
+															// For partial payments, use principalPaid or actualAmount
+															return loanSum + (Number(repayment.principalPaid) || Number(repayment.actualAmount) || 0);
+														}
+														return loanSum;
+													}, 0);
+													
+													return sum + loanPrincipalPaid;
+												}, 0);
+											})()
+										}
 										size={240}
 										theme="light"
 									/>
 								</div>
 
 								{/* Stats Section */}
-								<div className="lg:col-span-2 space-y-4">
+								<div className="lg:col-span-2 space-y-4 lg:space-y-6 order-1 lg:order-2">
 									{/* Main Balance */}
 									<div className="text-center lg:text-left">
-										<p className="text-gray-500 text-sm mb-1 font-body">
+										<p className="text-gray-500 text-sm mb-2 font-body">
 											Total Outstanding
 										</p>
-										<p className="text-4xl font-bold mb-2 text-purple-primary font-heading">
+										<p className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold text-gray-700 mb-3">
 											{formatCurrency(
-												loanSummary.totalOutstanding ||
-													0
+												(() => {
+													// Calculate outstanding from active loans only
+													const activeLoans = loans.filter(loan => 
+														loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+													);
+													return activeLoans.reduce((sum, loan) => 
+														sum + (loan.outstandingBalance || 0), 0
+													);
+												})()
 											)}
 										</p>
-										<p className="text-gray-500 text-sm font-body">
+										<p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
 											of{" "}
 											{formatCurrency(
-												loanSummary.totalBorrowed || 0
+												(() => {
+													// Calculate total borrowed from active loans only
+													const activeLoans = loans.filter(loan => 
+														loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+													);
+													return activeLoans.reduce((sum, loan) => 
+														sum + (loan.totalAmount || 0), 0
+													);
+												})()
 											)}{" "}
 											borrowed
 										</p>
 									</div>
 
+									{/* Subtle separator line */}
+									<div className="border-t border-gray-100"></div>
+
 									{/* Quick Stats Grid */}
-									<div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-										<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-											<div className="flex items-center space-x-2 mb-2">
+									<div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 lg:gap-6 justify-items-center md:justify-items-start">
+										<div className="space-y-2 text-center md:text-left w-full">
+											<div className="flex items-center space-x-2 justify-center md:justify-start">
 												<svg
-													className="h-4 w-4 text-blue-tertiary"
+													className="h-4 w-4 text-blue-600"
 													fill="none"
 													stroke="currentColor"
 													viewBox="0 0 24 24"
@@ -855,15 +784,38 @@ export default function DashboardPage() {
 														d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
 													/>
 												</svg>
-												<span className="text-xs font-medium text-gray-500 font-body">
+												<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
 													Total Paid
 												</span>
 											</div>
-											<p className="text-lg font-bold text-blue-tertiary font-heading">
+											<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-600">
 												{formatCurrency(
-													loanSummary.totalRepaid || 0
+													(() => {
+														// Calculate total principal paid from active loans only
+														const activeLoans = loans.filter(loan => 
+															loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+														);
+														return activeLoans.reduce((sum, loan) => {
+															if (!loan.repayments) return sum;
+															
+															// Sum up principal paid from all repayments
+															const loanPrincipalPaid = loan.repayments.reduce((loanSum: number, repayment: any) => {
+																if (repayment.status === "COMPLETED") {
+																	// For completed payments, use principalPaid or fall back to amount
+																	return loanSum + (Number(repayment.principalPaid) || Number(repayment.amount) || 0);
+																} else if (repayment.status === "PARTIAL") {
+																	// For partial payments, use principalPaid or actualAmount
+																	return loanSum + (Number(repayment.principalPaid) || Number(repayment.actualAmount) || 0);
+																}
+																return loanSum;
+															}, 0);
+															
+															return sum + loanPrincipalPaid;
+														}, 0);
+													})()
 												)}
 											</p>
+											<p className="text-xs text-gray-500 font-body mt-1">Excluding late fees</p>
 										</div>
 										{(() => {
 											const nextPaymentInfo =
@@ -872,19 +824,13 @@ export default function DashboardPage() {
 												nextPaymentInfo.isOverdue;
 
 											return (
-												<div
-													className={`rounded-xl p-6 border ${
-														isOverdue
-															? "bg-red-50 border-red-200"
-															: "bg-blue-tertiary/5 border-blue-tertiary/20"
-													}`}
-												>
-													<div className="flex items-center space-x-2 mb-2">
+												<div className="space-y-2 text-center md:text-left w-full">
+													<div className="flex items-center space-x-2 justify-center md:justify-start">
 														<svg
 															className={`h-4 w-4 ${
 																isOverdue
 																	? "text-red-500"
-																	: "text-blue-tertiary"
+																	: "text-blue-600"
 															}`}
 															fill="none"
 															stroke="currentColor"
@@ -898,7 +844,7 @@ export default function DashboardPage() {
 															/>
 														</svg>
 														<span
-															className={`text-xs font-medium font-body ${
+															className={`text-xs sm:text-sm font-medium font-body ${
 																isOverdue
 																	? "text-red-600"
 																	: "text-gray-500"
@@ -910,10 +856,10 @@ export default function DashboardPage() {
 														</span>
 													</div>
 													<p
-														className={`text-lg font-bold font-heading ${
+														className={`text-xl sm:text-2xl lg:text-3xl font-heading font-bold ${
 															isOverdue
 																? "text-red-600"
-																: "text-blue-tertiary"
+																: "text-blue-600"
 														}`}
 													>
 														{nextPaymentInfo.amount >
@@ -958,10 +904,10 @@ export default function DashboardPage() {
 												</div>
 											);
 										})()}
-										<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-											<div className="flex items-center space-x-2 mb-2">
+										<div className="space-y-2 text-center md:text-left w-full col-span-2 sm:col-span-1">
+											<div className="flex items-center space-x-2 justify-center md:justify-start">
 												<svg
-													className="h-4 w-4 text-blue-tertiary"
+													className="h-4 w-4 text-blue-600"
 													fill="none"
 													stroke="currentColor"
 													viewBox="0 0 24 24"
@@ -973,17 +919,26 @@ export default function DashboardPage() {
 														d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
 													/>
 												</svg>
-												<span className="text-xs font-medium text-gray-500 font-body">
+												<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
 													Active Loans
 												</span>
 											</div>
-											<p className="text-lg font-bold text-blue-tertiary font-heading">
-												{loans.length}
+											<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-600">
+												{(() => {
+													// Count only active loans
+													const activeLoans = loans.filter(loan => 
+														loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+													);
+													return activeLoans.length;
+												})()}
 											</p>
 											<p className="text-xs text-gray-500 mt-1 font-body">
-												{loans.length === 1
-													? "loan"
-													: "loans"}{" "}
+												{(() => {
+													const activeLoansCount = loans.filter(loan => 
+														loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+													).length;
+													return activeLoansCount === 1 ? "loan" : "loans";
+												})()}{" "}
 												active
 											</p>
 										</div>
@@ -991,134 +946,72 @@ export default function DashboardPage() {
 								</div>
 							</div>
 
-							{/* Late Fees Alert - Show when there are overdue payments with late fees */}
+
+
+							{/* CTA Section - Show when no active loans */}
 							{(() => {
-								const loansWithLateFees = loans.filter(
-									(loan) =>
-										loan.overdueInfo?.hasOverduePayments &&
-										loan.overdueInfo?.totalLateFees > 0
+								const activeLoans = loans.filter(loan => 
+									loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
 								);
-
-								if (loansWithLateFees.length === 0) return null;
-
-								const totalLateFees = loansWithLateFees.reduce(
-									(sum, loan) =>
-										sum +
-										(loan.overdueInfo?.totalLateFees || 0),
-									0
-								);
-
-								return (
-									<div className="bg-red-50 rounded-xl p-6 border border-red-200">
-										<div className="flex items-start space-x-4">
-											<div className="flex-shrink-0">
-												<div className="p-2 bg-red-100 rounded-xl border border-red-200">
-													<ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
-												</div>
-											</div>
-											<div className="flex-1">
-												<h3 className="text-lg font-heading text-red-800 mb-1">
-													Late Fees Applied
-												</h3>
-												<p className="text-red-700 text-sm mb-2 font-body">
-													You have{" "}
-													{formatCurrency(
-														totalLateFees
-													)}{" "}
-													in late fees across{" "}
-													{loansWithLateFees.length}{" "}
-													{loansWithLateFees.length ===
-													1
-														? "loan"
-														: "loans"}
-													. Pay your overdue amounts
-													to avoid additional charges.
-												</p>
-												<div className="flex flex-wrap gap-2">
-													{loansWithLateFees.map(
-														(loan, index) => (
-															<span
-																key={loan.id}
-																className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200"
-															>
-																{loan
-																	.application
-																	?.product
-																	?.name ||
-																	`Loan ${
-																		index +
-																		1
-																	}`}
-																:{" "}
-																{formatCurrency(
-																	loan
-																		.overdueInfo
-																		?.totalLateFees ||
-																		0
-																)}
-															</span>
-														)
-													)}
-												</div>
-											</div>
-											<Link
-												href="/dashboard/loans"
-												className="bg-red-600 text-white font-medium px-4 py-2 rounded-xl shadow hover:bg-red-700 transition text-sm inline-flex items-center"
-											>
-												View Details
-												<ArrowRightIcon className="ml-1 h-4 w-4" />
-											</Link>
-										</div>
+								return activeLoans.length === 0;
+							})() && (
+								<div className="bg-blue-600/5 rounded-xl p-6 text-center border border-blue-600/20">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+										<CreditCardIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
 									</div>
-								);
-							})()}
-
-							{/* CTA Section - Show when no loans */}
-							{loans.length === 0 && (
-								<div className="bg-blue-tertiary/5 rounded-xl p-6 text-center border border-blue-tertiary/20">
-									<div className="p-3 bg-purple-primary/20 rounded-xl w-fit mx-auto mb-4 border border-purple-primary/30">
-										<CreditCardIcon className="h-8 w-8 text-purple-primary" />
-									</div>
-									<h3 className="font-heading text-lg mb-2 text-purple-primary">
+									<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-2">
 										Ready to Get Started?
 									</h3>
-									<p className="text-gray-700 text-sm mb-4 font-body">
+									<p className="text-base lg:text-lg text-gray-600 font-body leading-relaxed mb-4">
 										Apply for your first loan and start
 										building your credit history
 									</p>
 									<Link
 										href="/dashboard/apply"
-										className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition inline-flex items-center"
+										className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center"
 									>
 										Apply for a Loan
 										<ArrowRightIcon className="ml-2 h-4 w-4" />
 									</Link>
 								</div>
 							)}
+
+							{/* Mobile View All Button */}
+							<div className="lg:hidden pt-4 border-t border-gray-100">
+								<Link
+									href="/dashboard/loans"
+									className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
+								>
+									View All Loans
+									<ArrowRightIcon className="ml-2 h-4 w-4" />
+								</Link>
+							</div>
 						</div>
 					</div>
 
 					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 						{/* Wallet Card */}
-						<div className="break-inside-avoid bg-white rounded-xl shadow-md border border-blue-tertiary/10">
-							<div className="p-6">
-								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
-									<div className="flex items-center space-x-3">
-										<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
-											<WalletIcon className="h-8 w-8 text-purple-primary" />
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-4 sm:p-6 lg:p-8">
+								{/* Header - Mobile: Stack, Desktop: Side by side */}
+								<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+											<WalletIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
 										</div>
-										<div>
-											<h2 className="text-xl font-heading text-purple-primary">
+										<div className="min-w-0">
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
 												Wallet
-											</h2>
-											<p className="text-gray-700 text-sm font-body">
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
 												Your financial hub
 											</p>
 										</div>
 									</div>
+									{/* Desktop Manage Button */}
 									<Link
 										href="/dashboard/wallet"
-										className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
+										className="hidden lg:inline-flex bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
 									>
 										Manage
 										<ArrowRightIcon className="ml-1 h-4 w-4" />
@@ -1126,46 +1019,47 @@ export default function DashboardPage() {
 								</div>
 
 								{/* Main Balance */}
-								<div className="mb-6">
-									<div className="text-center">
-										<p className="text-gray-500 text-sm mb-1 font-body">
-											Total Balance
-										</p>
-										<p className="text-4xl font-bold mb-2 text-purple-primary font-heading">
-											{formatCurrency(walletData.balance)}
-										</p>
-										<p className="text-gray-500 text-sm font-body">
-											Available:{" "}
-											{formatCurrency(
-												walletData.availableForWithdrawal
-											)}
-										</p>
-									</div>
+								<div className="text-center lg:text-left mb-6">
+									<p className="text-gray-500 text-sm mb-2 font-body">
+										Total Balance
+									</p>
+									<p className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold text-gray-700 mb-3">
+										{formatCurrency(walletData.balance)}
+									</p>
+									<p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+										Available:{" "}
+										{formatCurrency(
+											walletData.availableForWithdrawal
+										)}
+									</p>
 								</div>
 
+								{/* Subtle separator line */}
+								<div className="border-t border-gray-100 mb-6"></div>
+
 								{/* Quick Stats Grid */}
-								<div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-									<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-										<div className="flex items-center space-x-2 mb-2">
-											<ArrowDownIcon className="h-4 w-4 text-blue-tertiary" />
-											<span className="text-xs font-medium text-gray-500 font-body">
+								<div className="grid grid-cols-2 md:grid-cols-2 gap-4 lg:gap-6 justify-items-center lg:justify-items-start mb-6">
+									<div className="space-y-2 text-center lg:text-left w-full">
+										<div className="flex items-center space-x-2 justify-center lg:justify-start">
+											<ArrowDownIcon className="h-4 w-4 text-purple-primary" />
+											<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
 												Deposits
 											</span>
 										</div>
-										<p className="text-lg font-bold text-blue-tertiary font-heading">
+										<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
 											{formatCurrency(
 												walletData.totalDeposits
 											)}
 										</p>
 									</div>
-									<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-										<div className="flex items-center space-x-2 mb-2">
-											<CreditCardIcon className="h-4 w-4 text-blue-tertiary" />
-											<span className="text-xs font-medium text-gray-500 font-body">
+									<div className="space-y-2 text-center lg:text-left w-full">
+										<div className="flex items-center space-x-2 justify-center lg:justify-start">
+											<CreditCardIcon className="h-4 w-4 text-purple-primary" />
+											<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
 												Disbursed
 											</span>
 										</div>
-										<p className="text-lg font-bold text-blue-tertiary font-heading">
+										<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
 											{formatCurrency(
 												walletData.totalDisbursed
 											)}
@@ -1242,17 +1136,29 @@ export default function DashboardPage() {
 										)}
 									</div>
 								</div>
+
+								{/* Mobile Manage Button */}
+								<div className="border-t border-gray-100 pt-4 lg:hidden">
+									<Link
+										href="/dashboard/wallet"
+										className="w-full bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
+									>
+										Manage
+										<ArrowRightIcon className="ml-1 h-4 w-4" />
+									</Link>
+								</div>
 							</div>
 						</div>
 
 						{/* Credit Score Card */}
-						<div className="break-inside-avoid bg-white rounded-xl shadow-md border border-purple-primary/10">
-							<div className="p-6">
-								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
-									<div className="flex items-center space-x-3">
-										<div className="p-3 bg-purple-primary/20 rounded-xl border border-purple-primary/30">
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-4 sm:p-6 lg:p-8">
+								{/* Header - Mobile: Stack, Desktop: Side by side */}
+								<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
 											<svg
-												className="h-8 w-8 text-purple-primary"
+												className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -1265,18 +1171,19 @@ export default function DashboardPage() {
 												/>
 											</svg>
 										</div>
-										<div>
-											<h2 className="text-xl font-heading text-purple-primary">
+										<div className="min-w-0">
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
 												Credit Score
-											</h2>
-											<p className="text-gray-700 text-sm font-body">
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
 												Your creditworthiness
 											</p>
 										</div>
 									</div>
+									{/* Desktop View Details Button */}
 									<Link
 										href="/dashboard/credit-score"
-										className="bg-purple-primary text-white font-medium px-6 py-3 rounded-xl shadow hover:bg-purple-700 transition text-sm w-fit inline-flex items-center"
+										className="hidden lg:inline-flex bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
 									>
 										View Details
 										<ArrowRightIcon className="ml-1 h-4 w-4" />
@@ -1286,68 +1193,70 @@ export default function DashboardPage() {
 								<div className="space-y-6">
 									{/* Gauge Section */}
 									<div className="flex flex-col items-center">
-										<div className="bg-blue-tertiary/5 rounded-2xl p-6 border border-blue-tertiary/20">
-											<CreditScoreGauge
-												score={600}
-												size={240}
-											/>
-										</div>
+										<CreditScoreGauge
+											score={600}
+											size={300}
+										/>
 									</div>
 
+									{/* Subtle separator line */}
+									<div className="border-t border-gray-100"></div>
+
 									{/* Score Info Section */}
-									<div className="space-y-4">
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 justify-items-center lg:justify-items-start">
 										{(() => {
 											const scoreInfo =
 												getCreditScoreInfo(600);
 											return (
 												<>
 													{/* Current Score Info */}
-													<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-														<div className="flex items-center justify-between mb-3">
-															<div>
-																<h3 className="text-lg font-heading text-purple-primary">
-																	{
-																		scoreInfo.category
-																	}
-																</h3>
-																<p className="text-sm text-gray-500 font-body">
-																	Score Range:{" "}
-																	{
-																		scoreInfo.range
-																	}
-																</p>
-															</div>
-															<div className="text-right">
-																<p className="text-2xl font-bold text-purple-primary font-heading">
-																	600
-																</p>
-																<p className="text-xs text-gray-500 font-body">
-																	Your Score
-																</p>
-															</div>
+													<div className="space-y-2 text-center lg:text-left w-full">
+														<div className="flex items-center space-x-2 justify-center lg:justify-start">
+															<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
+																{scoreInfo.category}
+															</span>
 														</div>
-														<p className="text-sm text-gray-700 leading-relaxed font-body">
-															{
-																scoreInfo.description
-															}
+														<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
+															600
+														</p>
+														<p className="text-xs text-gray-500 font-body">
+															Range: {scoreInfo.range}
 														</p>
 													</div>
 
-													{/* Last Updated & Action */}
-													<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-														<div className="flex items-center justify-between">
-															<span className="text-sm font-medium text-gray-500 font-body">
+													{/* Last Updated */}
+													<div className="space-y-2 text-center lg:text-left w-full">
+														<div className="flex items-center space-x-2 justify-center lg:justify-start">
+															<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
 																Last Updated
 															</span>
-															<span className="text-sm font-bold text-gray-700 font-body">
-																Never
-															</span>
 														</div>
+														<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
+															Never
+														</p>
 													</div>
 												</>
 											);
 										})()}
 									</div>
+
+									{/* Description */}
+									<div className="text-center lg:text-left">
+										<p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+											{getCreditScoreInfo(600).description}
+										</p>
+									</div>
+								</div>
+
+								{/* Mobile View Details Button */}
+								<div className="border-t border-gray-100 pt-4 lg:hidden">
+									<Link
+										href="/dashboard/credit-score"
+										className="w-full bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
+									>
+										View Details
+										<ArrowRightIcon className="ml-1 h-4 w-4" />
+									</Link>
 								</div>
 							</div>
 						</div>

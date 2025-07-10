@@ -68,12 +68,12 @@ export default function CreditScoreGauge({
 				maxValue={850}
 				style={{ width: size }}
 			/>
-			{score && (
+			{/* {score && (
 				<div className="space-y-1 text-center">
-					<div className="text-2xl font-bold text-white">{score}</div>
-					<div className="text-sm text-gray-200">Powered by CTOS</div>
+					<div className="text-2xl font-bold text-gray-900">{score}</div>
+					<div className="text-sm text-gray-900">Powered by CTOS</div>
 				</div>
-			)}
+			)} */}
 		</div>
 	);
 }

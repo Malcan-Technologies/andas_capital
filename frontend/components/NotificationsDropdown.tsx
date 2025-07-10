@@ -58,12 +58,18 @@ export function NotificationsDropdown() {
 			// Use fetchWithTokenRefresh for automatic token handling
 			const data = await fetchWithTokenRefresh<{
 				notifications: Notification[];
-			}>("/api/notifications?limit=10");
+			}>("/api/notifications?limit=5");
 
 			console.log("Raw notifications response:", data);
-			setNotifications(data.notifications || []);
+			
+			// Sort notifications by createdAt date (latest first)
+			const sortedNotifications = (data.notifications || []).sort((a, b) => 
+				new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+			);
+			
+			setNotifications(sortedNotifications);
 			setUnreadCount(
-				(data.notifications || []).filter(
+				sortedNotifications.filter(
 					(n: Notification) => !n.isRead
 				).length
 			);
@@ -193,15 +199,8 @@ export function NotificationsDropdown() {
 		}
 	};
 
-	const getPriorityColor = (priority: string) => {
-		switch (priority) {
-			case "HIGH":
-				return "bg-red-500/80";
-			case "MEDIUM":
-				return "bg-yellow-500/80";
-			default:
-				return "bg-blue-500/80";
-		}
+	const getReadStatusColor = (isRead: boolean) => {
+		return isRead ? "bg-gray-300" : "bg-blue-500";
 	};
 
 	return (
@@ -288,12 +287,12 @@ export function NotificationsDropdown() {
 							>
 								<div className="flex items-start gap-2">
 									<div
-										className={`w-2 h-2 rounded-full mt-2 ${getPriorityColor(
-											notification.priority
+										className={`w-2 h-2 rounded-full mt-2 ${getReadStatusColor(
+											notification.isRead
 										)}`}
 									/>
 									<div className="flex-1 min-w-0">
-										<div className="font-medium text-gray-700 flex items-center gap-2 font-heading">
+										<div className="font-bold text-gray-700 flex items-center gap-2 font-heading">
 											{notification.title}
 											{notification.link && (
 												<ExternalLink className="h-3 w-3 text-gray-500" />

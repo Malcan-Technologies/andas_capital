@@ -40,7 +40,7 @@ export default function PieChart({
 					cy={radius}
 					r={innerRadius}
 					className={`fill-none ${
-						isDark ? "stroke-brand-primary" : "stroke-brand-primary"
+						isDark ? "stroke-blue-600" : "stroke-blue-600"
 					}`}
 					strokeWidth={strokeWidth}
 					strokeDasharray={strokeDasharray}

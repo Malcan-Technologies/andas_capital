@@ -454,7 +454,7 @@ function ReviewAndSubmitFormContent({
 
 			// Use Next.js router for navigation instead of window.location
 			// This prevents context issues with React
-			router.push("/dashboard");
+			router.push("/dashboard/loans");
 		} catch (err) {
 			console.error("Error submitting application:", err);
 			setError(

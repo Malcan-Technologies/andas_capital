@@ -84,10 +84,10 @@ export default function DashboardLayout({
 			{/* Main content */}
 			<div className="flex flex-col flex-1">
 				{/* Top bar - Desktop only */}
-				<div className="hidden lg:flex sticky top-0 z-10 flex-shrink-0 h-24 bg-white/95 backdrop-blur-md border-b border-gray-200">
+				<div className="hidden lg:flex sticky top-0 z-10 flex-shrink-0 h-24 bg-gray-50/95 backdrop-blur-md border-b border-gray-200">
 					<div className="flex-1 px-4 flex items-center">
 						<div>
-							<h1 className="text-2xl font-heading text-purple-primary">
+							<h1 className="text-2xl font-heading text-gray-700">
 								{title}
 							</h1>
 							<p className="text-sm text-gray-500 font-body">

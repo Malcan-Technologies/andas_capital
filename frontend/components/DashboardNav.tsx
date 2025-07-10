@@ -37,7 +37,7 @@ const navigation = [
 		icon: <StarIcon className="h-5 w-5" />,
 	},
 	{
-		name: "Loans & Applications",
+		name: "Loans",
 		href: "/dashboard/loans",
 		icon: <BanknotesIcon className="h-5 w-5" />,
 	},
@@ -82,7 +82,7 @@ export default function DashboardNav() {
 	return (
 		<>
 			{/* Desktop Sidebar */}
-			<div className="hidden lg:flex lg:fixed lg:inset-y-0 lg:w-64 flex-col h-full bg-white border-r border-purple-primary/20 z-30">
+			<div className="hidden lg:flex lg:fixed lg:inset-y-0 lg:w-64 flex-col h-full bg-gray-50 border-r border-purple-primary/20 z-30">
 				<div className="p-4 flex justify-center">
 					<Logo size="lg" variant="white" linkTo="/dashboard" />
 				</div>
@@ -96,7 +96,7 @@ export default function DashboardNav() {
 								href={item.href}
 								className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 font-body ${
 									isActive
-										? "bg-purple-primary/20 text-purple-primary border border-purple-primary/30 shadow-lg shadow-purple-primary/10"
+										? "bg-purple-primary/20 text-purple-primary border border-purple-primary/30 "
 										: "text-gray-700 hover:bg-purple-primary/5 hover:text-purple-primary hover:border-purple-primary/20 border border-transparent"
 								}`}
 							>
@@ -116,7 +116,7 @@ export default function DashboardNav() {
 				</nav>
 
 				{/* Featured Apply Button - Moved to bottom for better visual hierarchy */}
-				<div className="px-4 pb-4">
+				{/* <div className="px-4 pb-4">
 					<Link
 						href="/dashboard/apply"
 						className="group relative flex items-center w-full px-4 py-3 text-sm font-medium text-purple-primary bg-purple-primary/5 hover:bg-purple-primary/10 rounded-xl transition-all duration-200 border border-purple-primary/20 hover:border-purple-primary/30 font-body"
@@ -124,7 +124,7 @@ export default function DashboardNav() {
 						<PlusIcon className="w-5 h-5 mr-3 text-purple-primary group-hover:rotate-90 transition-transform duration-200" />
 						<span className="font-semibold">Apply for a Loan</span>
 					</Link>
-				</div>
+				</div> */}
 
 				<div className="p-4 border-t border-purple-primary/20 space-y-1">
 					<Link

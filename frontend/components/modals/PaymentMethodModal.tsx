@@ -48,7 +48,7 @@ export default function PaymentMethodModal({
 							<p className="text-sm text-gray-500 font-body">
 								Amount to Pay
 							</p>
-							<p className="text-xl font-semibold text-purple-primary font-heading">
+							<p className="text-xl font-semibold text-blue-600 font-heading">
 								MYR {amount}
 							</p>
 						</div>
@@ -59,7 +59,7 @@ export default function PaymentMethodModal({
 						{onFPXSelect && (
 							<button
 								onClick={onFPXSelect}
-								className="w-full border border-gray-200 rounded-xl p-4 hover:border-purple-primary/50 hover:bg-purple-primary/5 transition-colors bg-white text-left shadow-sm"
+								className="w-full border border-gray-200 rounded-xl p-4 hover:border-blue-600/50 hover:bg-blue-600/5 transition-colors bg-white text-left shadow-sm"
 							>
 								<div className="flex items-center justify-between mb-3">
 									<div className="flex items-center space-x-3">
@@ -123,7 +123,7 @@ export default function PaymentMethodModal({
 						{/* Bank Transfer */}
 						<button
 							onClick={onBankTransferSelect}
-							className="w-full border border-gray-200 rounded-xl p-4 hover:border-purple-primary/50 hover:bg-purple-primary/5 transition-colors text-left bg-white shadow-sm"
+							className="w-full border border-gray-200 rounded-xl p-4 hover:border-blue-600/50 hover:bg-blue-600/5 transition-colors text-left bg-white shadow-sm"
 						>
 							<div className="flex items-center justify-between mb-3">
 								<h3 className="font-semibold text-gray-700 font-heading">

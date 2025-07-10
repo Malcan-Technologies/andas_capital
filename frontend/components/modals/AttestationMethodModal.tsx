@@ -126,7 +126,7 @@ export default function AttestationMethodModal({
 							</div>
 
 							{/* Benefits */}
-							<div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+							{/* <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
 								<div className="flex items-center space-x-2 mb-2">
 									<div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
 										<svg
@@ -150,7 +150,7 @@ export default function AttestationMethodModal({
 									<li>• Available anytime, anywhere</li>
 									<li>• Proceed to next step immediately</li>
 								</ul>
-							</div>
+							</div> */}
 						</button>
 
 						{/* Live Video Call */}

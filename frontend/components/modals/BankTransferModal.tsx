@@ -50,7 +50,7 @@ export default function BankTransferModal({
 						<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
 							Transfer Amount (MYR)
 						</label>
-						<div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-blue-tertiary/5 text-lg font-semibold text-purple-primary font-heading">
+						<div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-blue-tertiary/5 text-lg font-semibold text-blue-600 font-heading">
 							{amount}
 						</div>
 					</div>
@@ -69,7 +69,7 @@ export default function BankTransferModal({
 									onClick={() =>
 										copyToClipboard("001866001878013")
 									}
-									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
+									className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
@@ -92,7 +92,7 @@ export default function BankTransferModal({
 									onClick={() =>
 										copyToClipboard("GROWKAPITAL187813")
 									}
-									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
+									className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
@@ -113,7 +113,7 @@ export default function BankTransferModal({
 											"HSBC Bank Malaysia Berhad"
 										)
 									}
-									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
+									className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
@@ -121,16 +121,16 @@ export default function BankTransferModal({
 						</div>
 
 						<div>
-							<p className="text-sm text-gray-500 mb-1 font-body">
+							<p className="text-sm text-gray-500 mb-1 font-heading">
 								Reference (Required)
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-mono text-lg font-semibold text-blue-tertiary">
+								<p className="font-mono text-lg font-semibold text-blue-600">
 									{reference}
 								</p>
 								<button
 									onClick={() => copyToClipboard(reference)}
-									className="text-purple-primary hover:text-purple-600 text-sm font-medium font-body transition-colors"
+									className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
 								>
 									Copy
 								</button>
@@ -146,14 +146,14 @@ export default function BankTransferModal({
 					{/* Instructions */}
 					<div className="mb-6 space-y-3 text-sm text-gray-500 font-body">
 						<div className="flex items-start space-x-2">
-							<div className="w-2 h-2 bg-purple-primary rounded-full mt-2 flex-shrink-0"></div>
+							<div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
 							<p>
 								Please transfer the exact amount to complete
 								your transaction.
 							</p>
 						</div>
 						<div className="flex items-start space-x-2">
-							<div className="w-2 h-2 bg-purple-primary rounded-full mt-2 flex-shrink-0"></div>
+							<div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
 							<p>
 								Include the reference number to ensure proper
 								processing.
@@ -164,7 +164,7 @@ export default function BankTransferModal({
 					{/* Submit Button */}
 					<button
 						onClick={onConfirm}
-						className="w-full bg-purple-primary text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-purple-600 transition-colors shadow-sm"
+						className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-semibold font-body hover:bg-blue-700 transition-colors shadow-sm"
 					>
 						I've Completed the Transfer
 					</button>
