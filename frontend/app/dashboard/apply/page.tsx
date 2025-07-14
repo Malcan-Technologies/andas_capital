@@ -10,18 +10,46 @@ import PersonalInfoVerificationForm from "@/components/application/PersonalInfoV
 import DocumentUploadForm from "@/components/application/DocumentUploadForm";
 import ReviewAndSubmitForm from "@/components/application/ReviewAndSubmitForm";
 
-import ArrowBack from "@mui/icons-material/ArrowBack";
-import CheckCircle from "@mui/icons-material/CheckCircle";
-import Info from "@mui/icons-material/Info";
+import { 
+	ArrowLeftIcon,
+	CheckCircleIcon,
+	InformationCircleIcon,
+	ShoppingBagIcon,
+	DocumentTextIcon,
+	UserIcon,
+	FolderIcon,
+	ClipboardDocumentCheckIcon,
+	XMarkIcon
+} from "@heroicons/react/24/outline";
 import { ProductType } from "@/types/product";
 import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 
 const steps = [
-	"Select Product",
-	"Application Details",
-	"Personal Information",
-	"Supporting Documents",
-	"Review & Submit",
+	{
+		title: "Select Product",
+		description: "Choose your loan product",
+		icon: ShoppingBagIcon,
+	},
+	{
+		title: "Application Details",
+		description: "Loan amount and terms",
+		icon: DocumentTextIcon,
+	},
+	{
+		title: "Personal Information",
+		description: "Verify your details",
+		icon: UserIcon,
+	},
+	{
+		title: "Supporting Documents",
+		description: "Upload required documents",
+		icon: FolderIcon,
+	},
+	{
+		title: "Review & Submit",
+		description: "Final review and submission",
+		icon: ClipboardDocumentCheckIcon,
+	},
 ];
 
 interface PersonalInfo {
@@ -700,72 +728,131 @@ function ApplyPageContent() {
 	return (
 		<div className="min-h-screen bg-offwhite">
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-				<div className="flex items-center justify-between mb-8">
-					<div>
-						<h1 className="text-2xl font-semibold text-gray-700 font-heading">
-							Apply for a Loan
-						</h1>
-						<p className="mt-1 text-sm text-gray-500 font-body">
-							Complete the steps below to submit your loan
-							application
-						</p>
-					</div>
+
+				{/* Header with Close Button */}
+				<div className="relative text-center mb-8">
 					<button
-						onClick={() => router.push("/dashboard")}
-						className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors shadow-sm font-body"
+						onClick={() => router.push('/dashboard')}
+						className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2"
+						title="Close application"
 					>
-						<ArrowBack className="h-4 w-4 mr-2" />
-						Back to Dashboard
+						<XMarkIcon className="w-5 h-5" />
 					</button>
+					<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700 mb-2">
+						Apply for a Loan
+					</h1>
+					<p className="text-sm lg:text-base text-gray-500 font-body">
+						Complete the steps below to submit your loan application
+					</p>
 				</div>
 
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 					<div className="lg:col-span-2">
-						{/* Custom Stepper */}
-						<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-							<div className="flex items-center justify-between">
-								{steps.map((label, index) => (
-									<div
-										key={label}
-										className="flex items-center"
-									>
-										<div className="flex flex-col items-center">
-											<div
-												className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors font-body ${
-													index < activeStep
-														? "bg-purple-primary border-purple-primary text-white"
-														: index === activeStep
-														? "bg-purple-primary/10 border-purple-primary text-purple-primary"
-														: "bg-gray-100 border-gray-300 text-gray-500"
-												}`}
-											>
-												{index < activeStep ? (
-													<CheckCircle className="h-5 w-5" />
-												) : (
-													index + 1
-												)}
-											</div>
-											<span
-												className={`mt-2 text-xs font-medium text-center max-w-[80px] font-body ${
-													index <= activeStep
-														? "text-purple-primary"
-														: "text-gray-500"
-												}`}
-											>
-												{label}
-											</span>
+						{/* Progress Steps */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+							<div className="p-4 sm:p-6 lg:p-8">
+
+								{/* Mobile Progress - Simplified */}
+								<div className="block sm:hidden">
+									<div className="flex items-center justify-center mb-4">
+										<div className="flex space-x-2">
+											{steps.map((_, index) => (
+												<div
+													key={index}
+													className={`w-2 h-2 rounded-full transition-all duration-200 ${
+														index === activeStep 
+															? 'bg-purple-primary w-6' 
+															: index < activeStep 
+															? 'bg-purple-300' 
+															: 'bg-gray-200'
+													}`}
+												/>
+											))}
 										</div>
-										{index < steps.length - 1 && (
-											<div
-												className={`w-16 h-0.5 mx-4 ${
-													index < activeStep
-														? "bg-purple-primary"
-														: "bg-gray-300"
-												}`}
-											/>
-										)}
 									</div>
-								))}
+									<div className="text-center">
+										<div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-all duration-200 ${
+											activeStep < steps.length 
+												? 'bg-purple-primary text-white' 
+												: 'bg-purple-300 text-white'
+										}`}>
+											{activeStep < steps.length ? (
+												(() => {
+													const Icon = steps[activeStep].icon;
+													return <Icon className="w-5 h-5" />;
+												})()
+											) : (
+												<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+												</svg>
+											)}
+										</div>
+										<p className="text-base font-medium font-body text-purple-primary mb-1">
+											{steps[activeStep]?.title || 'Complete'}
+										</p>
+										<p className="text-sm text-gray-400 font-body">
+											{steps[activeStep]?.description || 'All steps completed'}
+										</p>
+									</div>
+								</div>
+
+								{/* Desktop Progress - Full Layout */}
+								<div className="hidden sm:block">
+									<div className="relative">
+										{/* Connection Lines Background */}
+										<div className="absolute top-5 lg:top-6 left-0 right-0 flex items-center justify-between px-5 lg:px-6">
+											{steps.slice(0, -1).map((_, index) => (
+												<div
+													key={index}
+													className={`flex-1 h-0.5 transition-all duration-200 ${
+														index < activeStep ? 'bg-purple-300' : 'bg-gray-200'
+													}`}
+												/>
+											))}
+										</div>
+										
+										{/* Step Icons and Content */}
+										<div className="relative grid grid-cols-5 gap-2 lg:gap-4">
+											{steps.map((step, index) => {
+												const Icon = step.icon;
+												const isActive = index === activeStep;
+												const isCompleted = index < activeStep;
+												
+												return (
+													<div key={index} className="relative">
+														<div className="flex flex-col items-center text-center">
+															<div className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 mb-3 border-2 ${
+																isActive 
+																	? 'border-purple-primary bg-purple-primary text-white shadow-lg' 
+																	: isCompleted 
+																	? 'border-purple-300 bg-purple-300 text-white shadow-md' 
+																	: 'border-gray-200 bg-white text-gray-400'
+															}`}>
+																{isCompleted ? (
+																	<svg className="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+																	</svg>
+																) : (
+																	<Icon className="w-4 h-4 lg:w-5 lg:h-5" />
+																)}
+															</div>
+															<div className="space-y-1">
+																<p className={`text-sm font-medium font-body ${
+																	isActive ? 'text-purple-primary' : isCompleted ? 'text-purple-600' : 'text-gray-500'
+																}`}>
+																	{step.title}
+																</p>
+																<p className="text-xs text-gray-400 font-body">
+																	{step.description}
+																</p>
+															</div>
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									</div>
+								</div>
 							</div>
 						</div>
 
@@ -817,7 +904,7 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+														<CheckCircleIcon className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
 														<p className="text-gray-700 font-body">
 															{feature}
 														</p>
@@ -834,7 +921,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.originationFee >
 												0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														{
 															selectedProductDetails.originationFee
@@ -846,7 +933,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.legalFee >
 												0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														{
 															selectedProductDetails.legalFee
@@ -858,7 +945,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.applicationFee >
 												0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														RM{" "}
 														{
@@ -872,7 +959,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.applicationFee >
 												0 && (
 												<div className="flex items-start">
-													<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+													<CheckCircleIcon className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														Includes 1 free CTOS
 														credit report
@@ -890,7 +977,7 @@ function ApplyPageContent() {
 												selectedProductDetails.lateFeeRate >
 													0 && (
 													<div className="flex items-start">
-														<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+														<InformationCircleIcon className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
 														<p className="text-gray-700 font-body">
 															{Math.floor(
 																selectedProductDetails.lateFeeRate *
@@ -904,7 +991,7 @@ function ApplyPageContent() {
 											{(selectedProductDetails.lateFeeFixedAmount ||
 												0) > 0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														RM{" "}
 														{
@@ -930,7 +1017,7 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+														<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 														<p className="text-gray-700 font-body">
 															{req}
 														</p>
@@ -986,7 +1073,7 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+														<CheckCircleIcon className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
 														<p className="text-gray-700 font-body">
 															{feature}
 														</p>
@@ -1003,7 +1090,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.originationFee >
 												0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														{
 															selectedProductDetails.originationFee
@@ -1015,7 +1102,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.legalFee >
 												0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														{
 															selectedProductDetails.legalFee
@@ -1027,7 +1114,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.applicationFee >
 												0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														RM{" "}
 														{
@@ -1041,7 +1128,7 @@ function ApplyPageContent() {
 											{selectedProductDetails.applicationFee >
 												0 && (
 												<div className="flex items-start">
-													<CheckCircle className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+													<CheckCircleIcon className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														Includes 1 free CTOS
 														credit report
@@ -1059,7 +1146,7 @@ function ApplyPageContent() {
 												selectedProductDetails.lateFeeRate >
 													0 && (
 													<div className="flex items-start">
-														<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+														<InformationCircleIcon className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
 														<p className="text-gray-700 font-body">
 															{Math.floor(
 																selectedProductDetails.lateFeeRate *
@@ -1073,7 +1160,7 @@ function ApplyPageContent() {
 											{(selectedProductDetails.lateFeeFixedAmount ||
 												0) > 0 && (
 												<div className="flex items-start">
-													<Info className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+													<InformationCircleIcon className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
 														RM{" "}
 														{
@@ -1099,7 +1186,7 @@ function ApplyPageContent() {
 														key={index}
 														className="flex items-start"
 													>
-														<Info className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+														<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 														<p className="text-gray-700 font-body">
 															{req}
 														</p>

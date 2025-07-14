@@ -2,27 +2,41 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-	Stepper,
-	Step,
-	StepLabel,
-	Box,
-	Paper,
-	Typography,
-} from "@mui/material";
 import PersonalInfoForm from "../../components/onboarding/PersonalInfoForm";
 import AddressForm from "../../components/onboarding/AddressForm";
 import EmploymentForm from "../../components/onboarding/EmploymentForm";
 import BankAccountForm from "../../components/onboarding/BankAccountForm";
 import { OnboardingFormData } from "@/types/onboarding";
-import Cookies from "js-cookie";
 import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
+import { 
+	UserIcon, 
+	HomeIcon, 
+	BriefcaseIcon, 
+	BanknotesIcon,
+	XMarkIcon 
+} from "@heroicons/react/24/outline";
 
 const steps = [
-	"Personal Information",
-	"Residential Address",
-	"Employment Details",
-	"Bank Account (optional)",
+	{
+		title: "Personal Information",
+		description: "Tell us about yourself",
+		icon: UserIcon,
+	},
+	{
+		title: "Residential Address",
+		description: "Where do you live?",
+		icon: HomeIcon,
+	},
+	{
+		title: "Employment Details",
+		description: "Your work information",
+		icon: BriefcaseIcon,
+	},
+	{
+		title: "Bank Account",
+		description: "Optional banking details",
+		icon: BanknotesIcon,
+	},
 ];
 
 // Create a client component for handling searchParams
@@ -31,6 +45,7 @@ function OnboardingPageContent() {
 	const searchParams = useSearchParams();
 	const [activeStep, setActiveStep] = useState(0);
 	const [formData, setFormData] = useState<Partial<OnboardingFormData>>({});
+	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
 		const fetchUserData = async () => {
@@ -48,146 +63,180 @@ function OnboardingPageContent() {
 
 				// Fetch user data using our fetchWithTokenRefresh utility
 				const userData = await fetchWithTokenRefresh<{
-					isOnboardingComplete?: boolean;
-					onboardingStep?: number;
-				}>("/api/users/me");
+					id: string;
+					phoneNumber: string;
+					fullName: string | null;
+					email: string | null;
+					dateOfBirth: string | null;
+					address1: string | null;
+					address2: string | null;
+					city: string | null;
+					state: string | null;
+					postalCode: string | null;
+					employmentStatus: string | null;
+					employerName: string | null;
+					monthlyIncome: string | null;
+					bankName: string | null;
+					accountNumber: string | null;
+					onboardingStep: number;
+					isOnboardingComplete: boolean;
+					icNumber: string | null;
+					icType: string | null;
+				}>("/api/onboarding");
 
-				console.log("Onboarding - Auth check data:", userData);
+				console.log("Onboarding - User data fetched:", userData);
 
-				if (userData?.isOnboardingComplete) {
-					console.log(
-						"Onboarding - User completed onboarding, redirecting to dashboard"
-					);
-					router.push("/dashboard");
-					return;
-				}
+				// Set form data with fetched user data
+				setFormData({
+					fullName: userData.fullName || "",
+					dateOfBirth: userData.dateOfBirth
+						? new Date(userData.dateOfBirth)
+						: null,
+					email: userData.email || "",
+					phoneNumber: userData.phoneNumber || "",
+					icNumber: userData.icNumber || "",
+					icType: userData.icType as 'IC' | 'PASSPORT' | null,
+					address1: userData.address1 || "",
+					address2: userData.address2 || "",
+					city: userData.city || "",
+					state: userData.state || "",
+					postalCode: userData.postalCode || "",
+					employmentStatus: userData.employmentStatus || "",
+					employerName: userData.employerName || "",
+					monthlyIncome: userData.monthlyIncome || "",
+					bankName: userData.bankName || "",
+					accountNumber: userData.accountNumber || "",
+					onboardingStep: userData.onboardingStep || 0,
+					isOnboardingComplete: userData.isOnboardingComplete || false,
+				});
 
-				// Only fetch onboarding data if auth check passes
-				try {
-					const onboardingData = await fetchWithTokenRefresh<
-						Partial<OnboardingFormData>
-					>("/api/onboarding");
-					setFormData(onboardingData);
-					if (onboardingData.onboardingStep) {
-						setActiveStep(onboardingData.onboardingStep);
-					}
-				} catch (error) {
-					console.error("Error fetching onboarding data:", error);
+				// Check if step is specified in URL query parameter
+				const stepParam = searchParams.get('step');
+				const urlStep = stepParam ? parseInt(stepParam, 10) : null;
+				
+				// Set active step based on URL parameter or onboarding progress
+				if (urlStep !== null && urlStep >= 0 && urlStep < steps.length) {
+					setActiveStep(urlStep);
+				} else {
+					setActiveStep(userData.onboardingStep || 0);
 				}
 			} catch (error) {
-				console.error("Error fetching user data:", error);
+				console.error("Onboarding - Error fetching user data:", error);
 				router.push("/login");
+			} finally {
+				setLoading(false);
 			}
 		};
 
 		fetchUserData();
-	}, [router]);
-
-	useEffect(() => {
-		const step = searchParams.get("step");
-		if (step) {
-			setActiveStep(parseInt(step) - 1);
-		}
-	}, [searchParams]);
+	}, [router, searchParams]);
 
 	const handleNext = async (values: Partial<OnboardingFormData>) => {
-		const newFormData = { ...formData, ...values };
-		setFormData(newFormData);
-
 		try {
-			// Get token from localStorage or cookies
-			let token = localStorage.getItem("token");
-			if (!token) {
-				const cookieToken = Cookies.get("token");
-				if (cookieToken) {
-					token = cookieToken;
-				}
-			}
+			console.log("Onboarding - Submitting values:", values);
 
-			if (!token) {
-				console.error("No token found");
-				return;
-			}
+			// Merge current form data with new values
+			const updatedFormData = { ...formData, ...values };
 
-			// Calculate the next step
+			// Update onboarding step
 			const nextStep = activeStep + 1;
-			const isLastStep = nextStep === steps.length;
-			const isEmploymentStep = activeStep === 3; // Index 3 is Employment Details
+			updatedFormData.onboardingStep = nextStep;
 
-			// Update the onboarding step and completion status
-			const response = await fetch(`/api/onboarding`, {
+			// Submit to backend
+			const response = await fetchWithTokenRefresh<{
+				id: string;
+				phoneNumber: string;
+				fullName: string | null;
+				email: string | null;
+				dateOfBirth: string | null;
+				address1: string | null;
+				address2: string | null;
+				city: string | null;
+				state: string | null;
+				postalCode: string | null;
+				employmentStatus: string | null;
+				employerName: string | null;
+				monthlyIncome: string | null;
+				bankName: string | null;
+				accountNumber: string | null;
+				onboardingStep: number;
+				isOnboardingComplete: boolean;
+				icNumber: string | null;
+				icType: string | null;
+			}>("/api/onboarding", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${token}`,
 				},
-				body: JSON.stringify({
-					...newFormData,
-					onboardingStep: nextStep,
-					isOnboardingComplete: isEmploymentStep || isLastStep,
-				}),
+				body: JSON.stringify(updatedFormData),
 			});
 
-			if (!response.ok) throw new Error("Failed to save user data");
+			console.log("Onboarding - Backend response:", response);
 
-			// If we've completed employment details or it's the last step, redirect to dashboard
-			if (isEmploymentStep || isLastStep) {
-				console.log("Onboarding completed, redirecting to dashboard");
-				router.push("/dashboard");
+			// Update local state
+			setFormData(updatedFormData);
+
+			// Check if onboarding is complete
+			if (response.isOnboardingComplete) {
+				console.log("Onboarding - Complete, redirecting to profile");
+				router.push("/dashboard/profile");
 			} else {
-				// Otherwise, go to the next step
+				// Move to next step
 				setActiveStep(nextStep);
-				const params = new URLSearchParams(searchParams.toString());
-				params.set("step", (nextStep + 1).toString());
-				router.push(`/onboarding?${params.toString()}`);
 			}
 		} catch (error) {
-			console.error("Error saving user data:", error);
+			console.error("Onboarding - Error submitting form:", error);
+			// Handle error appropriately
 		}
 	};
 
 	const handleSkip = async () => {
 		try {
-			// Get token from localStorage or cookies
-			let token = localStorage.getItem("token");
-			if (!token) {
-				const cookieToken = Cookies.get("token");
-				if (cookieToken) {
-					token = cookieToken;
-				}
+			// For bank account step (step 3), allow skipping
+			if (activeStep === 3) {
+				const updatedFormData = { ...formData };
+				updatedFormData.onboardingStep = 4; // Mark as complete
+				
+				const response = await fetchWithTokenRefresh<{
+					id: string;
+					phoneNumber: string;
+					fullName: string | null;
+					email: string | null;
+					dateOfBirth: string | null;
+					address1: string | null;
+					address2: string | null;
+					city: string | null;
+					state: string | null;
+					postalCode: string | null;
+					employmentStatus: string | null;
+					employerName: string | null;
+					monthlyIncome: string | null;
+					bankName: string | null;
+					accountNumber: string | null;
+					onboardingStep: number;
+					isOnboardingComplete: boolean;
+					icNumber: string | null;
+					icType: string | null;
+				}>("/api/onboarding", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(updatedFormData),
+				});
+
+				console.log("Onboarding - Skip response:", response);
+				router.push("/dashboard/profile");
 			}
-
-			if (!token) {
-				console.error("No token found");
-				return;
-			}
-
-			const response = await fetch(`/api/onboarding`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${token}`,
-				},
-				body: JSON.stringify({
-					isOnboardingComplete: true,
-					onboardingStep: steps.length - 1,
-				}),
-			});
-
-			if (!response.ok) throw new Error("Failed to skip onboarding");
-			console.log("Onboarding skipped, redirecting to dashboard");
-			router.push("/dashboard");
 		} catch (error) {
-			console.error("Error skipping onboarding:", error);
+			console.error("Onboarding - Error skipping step:", error);
 		}
 	};
 
 	const handleBack = () => {
-		const prevStep = activeStep - 1;
-		setActiveStep(prevStep);
-		const params = new URLSearchParams(searchParams.toString());
-		params.set("step", (prevStep + 1).toString());
-		router.push(`/onboarding?${params.toString()}`);
+		if (activeStep > 0) {
+			setActiveStep(activeStep - 1);
+		}
 	};
 
 	const renderStepContent = (step: number) => {
@@ -238,33 +287,150 @@ function OnboardingPageContent() {
 		}
 	};
 
-	return (
-		<div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-			<div className="max-w-2xl w-full">
-				<Paper className="p-8">
-					<Box className="mb-12">
-						<Typography
-							variant="h4"
-							component="h1"
-							className="text-center mb-8 text-indigo-900"
-						>
-							Complete Your Profile
-						</Typography>
-						<Stepper
-							activeStep={activeStep}
-							alternativeLabel
-							className="[&_.MuiStepLabel-root]:text-indigo-600 [&_.MuiStepIcon-root]:text-indigo-200 [&_.MuiStepIcon-root.Mui-active]:text-indigo-600 [&_.MuiStepIcon-root.Mui-completed]:text-indigo-600"
-						>
-							{steps.map((label) => (
-								<Step key={label}>
-									<StepLabel>{label}</StepLabel>
-								</Step>
-							))}
-						</Stepper>
-					</Box>
+	if (loading) {
+		return (
+			<div className="min-h-screen bg-offwhite w-full flex items-center justify-center">
+				<div className="text-center">
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-primary mx-auto mb-4"></div>
+					<p className="text-gray-600 font-body">Loading...</p>
+				</div>
+			</div>
+		);
+	}
 
-					<Box className="mt-8">{renderStepContent(activeStep)}</Box>
-				</Paper>
+	return (
+		<div className="min-h-screen bg-offwhite w-full">
+			<div className="px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+				<div className="max-w-4xl mx-auto">
+					{/* Header with Close Button */}
+					<div className="relative text-center mb-8">
+						<button
+							onClick={() => router.push('/dashboard/profile')}
+							className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2"
+							title="Close onboarding"
+						>
+							<XMarkIcon className="w-5 h-5" />
+						</button>
+						<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700 mb-2">
+							Complete Your Profile
+						</h1>
+						<p className="text-sm lg:text-base text-gray-500 font-body">
+							Help us get to know you better to provide personalized financial solutions
+						</p>
+					</div>
+
+					{/* Progress Steps */}
+					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+						<div className="p-4 sm:p-6 lg:p-8">
+							{/* Mobile Progress - Simplified */}
+							<div className="block sm:hidden">
+																	<div className="flex items-center justify-center mb-4">
+										<div className="flex space-x-2">
+											{steps.map((_, index) => (
+												<div
+													key={index}
+													className={`w-2 h-2 rounded-full transition-all duration-200 ${
+														index === activeStep 
+															? 'bg-purple-primary w-6' 
+															: index < activeStep 
+															? 'bg-purple-300' 
+															: 'bg-gray-200'
+													}`}
+												/>
+											))}
+										</div>
+									</div>
+																	<div className="text-center">
+										<div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-all duration-200 ${
+											activeStep < steps.length 
+												? 'bg-purple-primary text-white' 
+												: 'bg-purple-300 text-white'
+										}`}>
+										{activeStep < steps.length ? (
+											(() => {
+												const Icon = steps[activeStep].icon;
+												return <Icon className="w-5 h-5" />;
+											})()
+										) : (
+											<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+											</svg>
+										)}
+									</div>
+									<p className="text-base font-medium font-body text-purple-primary mb-1">
+										{steps[activeStep]?.title || 'Complete'}
+									</p>
+									<p className="text-sm text-gray-400 font-body">
+										{steps[activeStep]?.description || 'All steps completed'}
+									</p>
+								</div>
+							</div>
+
+							{/* Desktop Progress - Full Layout */}
+							<div className="hidden sm:block">
+								<div className="relative">
+									{/* Connection Lines Background */}
+																			<div className="absolute top-5 lg:top-6 left-0 right-0 flex items-center justify-between px-5 lg:px-6">
+											{steps.slice(0, -1).map((_, index) => (
+												<div
+													key={index}
+													className={`flex-1 h-0.5 transition-all duration-200 ${
+														index < activeStep ? 'bg-purple-300' : 'bg-gray-200'
+													}`}
+												/>
+											))}
+										</div>
+									
+									{/* Step Icons and Content */}
+									<div className="relative grid grid-cols-4 gap-2 lg:gap-4">
+										{steps.map((step, index) => {
+											const Icon = step.icon;
+											const isActive = index === activeStep;
+											const isCompleted = index < activeStep;
+											
+											return (
+												<div key={index} className="relative">
+													<div className="flex flex-col items-center text-center">
+																													<div className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 mb-3 border-2 ${
+																isActive 
+																	? 'border-purple-primary bg-purple-primary text-white shadow-lg' 
+																	: isCompleted 
+																	? 'border-purple-300 bg-purple-300 text-white shadow-md' 
+																	: 'border-gray-200 bg-white text-gray-400'
+															}`}>
+															{isCompleted ? (
+																<svg className="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+																</svg>
+															) : (
+																<Icon className="w-4 h-4 lg:w-5 lg:h-5" />
+															)}
+														</div>
+														<div className="space-y-1">
+															<p className={`text-sm font-medium font-body ${
+																isActive ? 'text-purple-primary' : isCompleted ? 'text-purple-600' : 'text-gray-500'
+															}`}>
+																{step.title}
+															</p>
+															<p className="text-xs text-gray-400 font-body">
+																{step.description}
+															</p>
+														</div>
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Step Content */}
+					<div>
+						{renderStepContent(activeStep)}
+					</div>
+				</div>
 			</div>
 		</div>
 	);
@@ -272,7 +438,14 @@ function OnboardingPageContent() {
 
 export default function OnboardingPage() {
 	return (
-		<Suspense fallback={<div>Loading...</div>}>
+		<Suspense fallback={
+			<div className="min-h-screen bg-offwhite w-full flex items-center justify-center">
+				<div className="text-center">
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-primary mx-auto mb-4"></div>
+					<p className="text-gray-600 font-body">Loading...</p>
+				</div>
+			</div>
+		}>
 			<OnboardingPageContent />
 		</Suspense>
 	);

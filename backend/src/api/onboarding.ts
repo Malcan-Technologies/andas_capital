@@ -23,6 +23,8 @@ interface UserResponse {
 	monthlyIncome: string | null;
 	bankName: string | null;
 	accountNumber: string | null;
+	icNumber: string | null;
+	icType: string | null;
 }
 
 router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -52,6 +54,8 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 				monthlyIncome: true,
 				bankName: true,
 				accountNumber: true,
+				icNumber: true,
+				icType: true,
 			},
 		});
 
@@ -64,6 +68,8 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			...user,
 			postalCode: user.zipCode,
 			zipCode: undefined,
+			icNumber: user.icNumber,
+			icType: user.icType,
 		};
 
 		return res.json(response);
@@ -98,6 +104,8 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			bankName,
 			accountNumber,
 			onboardingStep,
+			icNumber,
+			icType,
 		} = req.body;
 
 		// Prepare the data for update
@@ -115,7 +123,9 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			bankName,
 			accountNumber,
 			onboardingStep,
-			isOnboardingComplete: onboardingStep >= 3,
+			isOnboardingComplete: onboardingStep >= 4,
+			icNumber,
+			icType,
 		};
 
 		// Convert date string to Date object if present
@@ -152,6 +162,8 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 				monthlyIncome: true,
 				bankName: true,
 				accountNumber: true,
+				icNumber: true,
+				icType: true,
 			},
 		});
 
@@ -160,6 +172,8 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			...updatedUser,
 			postalCode: updatedUser.zipCode,
 			zipCode: undefined,
+			icNumber: updatedUser.icNumber,
+			icType: updatedUser.icType,
 		};
 
 		console.log("Onboarding POST - Updated user:", response);

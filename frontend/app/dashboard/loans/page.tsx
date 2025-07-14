@@ -1198,17 +1198,16 @@ function LoansPageContent() {
 
 	return (
 		<DashboardLayout userName={userName} title="Loans & Applications">
-			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
-				<div className="space-y-6">
+			<div className="w-full space-y-6">
 					{/* Quick Actions Bar - Top */}
 					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
 						<div className="p-6 lg:p-8">
 							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-								<div className="flex items-center">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3">
+								<div className="flex items-center min-w-0">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
 										<CreditCardIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
 									</div>
-									<div>
+									<div className="min-w-0">
 										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
 											Quick Actions
 									</h3>
@@ -1218,7 +1217,7 @@ function LoansPageContent() {
 										</p>
 									</div>
 								</div>
-								<div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+								<div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 flex-shrink-0">
 									<button
 										onClick={handleLoanRepayClick}
 										className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md"
@@ -1242,10 +1241,10 @@ function LoansPageContent() {
 						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
 							<div className="p-6 lg:p-8">
 								<div className="flex items-center mb-4">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
 										<CalendarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
 									</div>
-									<div>
+									<div className="min-w-0">
 										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
 											Due This Month
 										</h3>
@@ -1478,55 +1477,57 @@ function LoansPageContent() {
 								
 
 										{/* Recharts Version - Repayment Timeline */}
-					<div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full overflow-hidden p-6 lg:p-8">
-						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-4 sm:space-y-0">
-							<div className="flex items-center">
-								<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3">
-									<ChartBarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
-								</div>
-								<div>
-									<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-										Repayment Timeline
-									</h3>
-									<p className="text-sm lg:text-base text-blue-600 font-semibold">
-										Track your payment progress over time
-									</p>
-								</div>
+					<div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full min-w-0 overflow-hidden">
+						<div className="p-6 lg:p-8 min-w-0">
+							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-4 sm:space-y-0">
+								<div className="flex items-center min-w-0">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+										<ChartBarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
+									</div>
+									<div className="min-w-0">
+										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+											Repayment Timeline
+										</h3>
+										<p className="text-sm lg:text-base text-blue-600 font-semibold">
+											Track your payment progress over time
+										</p>
+									</div>
 								</div>
 
 								{/* Time Filter Buttons */}
-							<div className="flex bg-gray-100 rounded-xl p-1 border border-gray-200 w-full sm:w-auto max-w-xs sm:max-w-none">
+								<div className="flex bg-gray-100 rounded-xl p-1 border border-gray-200 w-full sm:w-auto flex-shrink-0 min-w-0">
 									<button
-									onClick={() => setChartTimeFilter("year")}
-									className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg transition-colors font-body font-medium ${
+										onClick={() => setChartTimeFilter("year")}
+										className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors font-body font-medium ${
 											chartTimeFilter === "year"
 											? "bg-blue-600 text-white shadow-sm"
 											: "text-gray-600 hover:text-blue-600 hover:bg-white"
 										}`}
 									>
-									<span className="hidden sm:inline">This Year</span>
+										<span className="hidden sm:inline">This Year</span>
 										<span className="sm:hidden">Year</span>
 									</button>
 									<button
-									onClick={() => setChartTimeFilter("all")}
-									className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg transition-colors font-body font-medium ${
+										onClick={() => setChartTimeFilter("all")}
+										className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors font-body font-medium ${
 											chartTimeFilter === "all"
 											? "bg-blue-600 text-white shadow-sm"
 											: "text-gray-600 hover:text-blue-600 hover:bg-white"
 										}`}
 									>
-									<span className="hidden sm:inline">All Time</span>
+										<span className="hidden sm:inline">All Time</span>
 										<span className="sm:hidden">All</span>
 									</button>
 								</div>
 							</div>
 
-						{/* Recharts Bar Chart */}
-							<div className="mb-6 min-w-0 overflow-hidden">
-								{(() => {
-									// Generate monthly data for all loans using proper payment allocation
-									const monthlyData = new Map();
-									const now = new Date();
+											{/* Recharts Bar Chart */}
+			<div className="mb-6 min-w-0 overflow-x-auto">
+				<div className="min-w-[320px] w-full">
+					{(() => {
+						// Generate monthly data for all loans using proper payment allocation
+						const monthlyData = new Map();
+						const now = new Date();
 
 									// Process each loan individually
 									loans
@@ -1640,16 +1641,34 @@ function LoansPageContent() {
 									(a, b) => a.date.getTime() - b.date.getTime()
 									);
 
-									// Apply time filter
-									if (chartTimeFilter === "year") {
-									const currentYear = new Date().getFullYear();
-										sortedMonths = sortedMonths.filter(
-										(month) => month.date.getFullYear() === currentYear
-									);
-								}
+																	// Apply time filter
+								if (chartTimeFilter === "year") {
+								const currentYear = new Date().getFullYear();
+									sortedMonths = sortedMonths.filter(
+									(month) => month.date.getFullYear() === currentYear
+								);
+							}
 
-								// Transform data for Recharts with color categorization
-								const chartData = sortedMonths.map((month) => {
+							// Store original count before limiting
+							const totalMonths = sortedMonths.length;
+							
+							// For mobile optimization, prioritize current and future months
+							const currentDate = new Date();
+							const currentMonthIndex = sortedMonths.findIndex(month => 
+								month.date.getMonth() === currentDate.getMonth() && 
+								month.date.getFullYear() === currentDate.getFullYear()
+							);
+							
+							// If current month exists, start from there and take 12 months
+							if (currentMonthIndex !== -1 && totalMonths > 12) {
+								sortedMonths = sortedMonths.slice(currentMonthIndex, currentMonthIndex + 12);
+							} else {
+								// Otherwise, limit to maximum 12 bars to prevent horizontal scrolling
+								sortedMonths = sortedMonths.slice(0, 12);
+							}
+
+							// Transform data for Recharts with color categorization
+							const chartData = sortedMonths.map((month) => {
 									const hasUnpaidLateFees = (month.unpaidLateFees || 0) > 0;
 									const isCurrentMonth = month.date.getMonth() === now.getMonth() && 
 														   month.date.getFullYear() === now.getFullYear();
@@ -1699,9 +1718,14 @@ function LoansPageContent() {
 
 									return (
 										<div className="space-y-4 min-w-0">
+										{/* Show truncation indicator if needed */}
+										{totalMonths > 12 && (
+											<div className="text-xs text-gray-500 text-center mb-2">
+												Showing 12 of {totalMonths} months
+											</div>
+										)}
 										{/* Recharts Bar Chart - styled like original */}
-											<div className="relative h-64 sm:h-80 w-full min-w-0">
-												<div className="absolute inset-0">
+											<div className="h-64 sm:h-72 lg:h-80 w-full">
 												<ResponsiveContainer width="100%" height="100%">
 													<BarChart
 														data={chartData}
@@ -1709,10 +1733,10 @@ function LoansPageContent() {
 															top: 4,
 															right: 8,
 															left: 8,
-															bottom: 20,
+															bottom: 10,
 														}}
-														barCategoryGap="30%"
-														maxBarSize={40}
+														barCategoryGap="3%"
+														maxBarSize={chartData.length <= 3 ? 50 : chartData.length <= 6 ? 35 : chartData.length <= 9 ? 25 : 20}
 													>
 
 														{/* Simple bottom border like original */}
@@ -1720,12 +1744,33 @@ function LoansPageContent() {
 															dataKey="month" 
 															axisLine={{ stroke: '#E5E7EB', strokeWidth: 1 }}
 															tickLine={false}
-															tick={{ 
-																fontSize: 12, 
-																fill: '#6B7280',
-																fontFamily: 'Inter, sans-serif'
+															tick={({ x, y, payload }) => {
+																// Responsive font size based on screen width
+																const getResponsiveFontSize = () => {
+																	if (typeof window !== 'undefined') {
+																		if (window.innerWidth >= 1024) return 14; // lg screens
+																		if (window.innerWidth >= 768) return 12;  // md screens
+																		return 10; // sm screens
+																	}
+																	return 10; // default for SSR
+																};
+																
+																return (
+																	<text
+																		x={x}
+																		y={y + 8}
+																		fill="#6B7280"
+																		fontFamily="Inter, sans-serif"
+																		fontSize={getResponsiveFontSize()}
+																		textAnchor="end"
+																		transform={`rotate(-45 ${x} ${y + 8})`}
+																	>
+																		{payload.value}
+																	</text>
+																);
 															}}
-															height={40}
+															height={typeof window !== 'undefined' && window.innerWidth >= 1024 ? 65 : typeof window !== 'undefined' && window.innerWidth >= 768 ? 60 : 55}
+															interval={0}
 														/>
 														<YAxis hide />
 																												<Tooltip 
@@ -1811,30 +1856,29 @@ function LoansPageContent() {
 														/>
 													</BarChart>
 												</ResponsiveContainer>
-												</div>
 											</div>
 
 																														{/* Legend - matching all color categories */}
-											<div className="flex flex-wrap justify-center gap-4 md:gap-6 text-xs">
-												<div className="flex items-center gap-2">
+											<div className="flex flex-wrap justify-center gap-2 sm:gap-4 md:gap-6 text-xs">
+												<div className="flex items-center gap-1 sm:gap-2">
 												<div className="w-3 h-3 bg-blue-600 rounded"></div>
 													<span className="text-gray-600 font-body">
 														Paid
 													</span>
 												</div>
-												<div className="flex items-center gap-2">
+												<div className="flex items-center gap-1 sm:gap-2">
 												<div className="w-3 h-3 bg-gray-200 rounded"></div>
 													<span className="text-gray-600 font-body">
 														Upcoming
 													</span>
 												</div>
-												<div className="flex items-center gap-2">
+												<div className="flex items-center gap-1 sm:gap-2">
 												<div className="w-3 h-3 bg-amber-200 rounded"></div>
 													<span className="text-gray-600 font-body">
 														Due This Month
 													</span>
 												</div>
-												<div className="flex items-center gap-2">
+												<div className="flex items-center gap-1 sm:gap-2">
 												<div className="w-3 h-3 bg-red-200 rounded"></div>
 													<span className="text-gray-600 font-body">
 														Overdue
@@ -1844,11 +1888,13 @@ function LoansPageContent() {
 										</div>
 									);
 								})()}
+							</div>
 						</div>
+					</div>
 					</div>
 
 					{/* Loans and Applications Tabs */}
-					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 w-full overflow-hidden">
+					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 w-full min-w-0 overflow-hidden">
 						{/* Card Header */}
 						<div className="p-6 lg:p-8 pb-0">
 							<div className="flex items-center mb-4">
@@ -1866,26 +1912,26 @@ function LoansPageContent() {
 							</div>
 						</div>
 
-						{/* Tab Navigation - Responsive */}
-						<div className="border-b border-gray-100 overflow-x-auto bg-gray-50/50">
+						{/* Tab Navigation - Mobile Friendly */}
+						<div className="border-b border-gray-100 bg-gray-50/50">
 							<nav
-								className="flex space-x-6 md:space-x-8 px-6 lg:px-8 min-w-max"
+								className="grid grid-cols-4 px-2 sm:flex sm:space-x-4 sm:px-6 lg:px-8"
 								aria-label="Tabs"
 							>
 								<button
 									onClick={() => setActiveTab("loans")}
-									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap transition-colors ${
+									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "loans"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex items-center space-x-2">
-										<CreditCardIcon className="h-4 w-4 md:h-5 md:w-5" />
+									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
+										<CreditCardIcon className="h-4 w-4" />
 										<span className="hidden sm:inline">
 											Active Loans
 										</span>
-										<span className="sm:hidden">
+										<span className="sm:hidden text-xs">
 											Active
 										</span>
 										{loans.filter((loan) =>
@@ -1896,7 +1942,7 @@ function LoansPageContent() {
 												loan.status.toUpperCase()
 											)
 										).length > 0 && (
-											<span className="bg-blue-600/10 text-blue-600 py-0.5 px-2 rounded-full text-xs font-medium border border-blue-600/20 font-body">
+											<span className="bg-blue-600/10 text-blue-600 py-0.5 px-1.5 rounded-full text-xs font-medium border border-blue-600/20 font-body sm:px-2">
 												{
 													loans.filter((loan) =>
 														[
@@ -1913,21 +1959,21 @@ function LoansPageContent() {
 								</button>
 								<button
 									onClick={() => setActiveTab("discharged")}
-									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap transition-colors ${
+									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "discharged"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex items-center space-x-2">
-										<CheckCircleIcon className="h-4 w-4 md:h-5 md:w-5" />
-										<span>Discharged</span>
+									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
+										<CheckCircleIcon className="h-4 w-4" />
+										<span className="text-xs">Discharged</span>
 										{loans.filter(
 											(loan) =>
 												loan.status.toUpperCase() ===
 												"DISCHARGED"
 										).length > 0 && (
-											<span className="bg-green-600/10 text-green-600 py-0.5 px-2 rounded-full text-xs font-medium border border-green-600/20 font-body">
+											<span className="bg-green-600/10 text-green-600 py-0.5 px-1.5 rounded-full text-xs font-medium border border-green-600/20 font-body sm:px-2">
 												{
 													loans.filter(
 														(loan) =>
@@ -1941,15 +1987,15 @@ function LoansPageContent() {
 								</button>
 								<button
 									onClick={() => setActiveTab("applications")}
-									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap transition-colors ${
+									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "applications"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex items-center space-x-2">
-										<DocumentTextIcon className="h-4 w-4 md:h-5 md:w-5" />
-										<span>Applications</span>
+									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
+										<DocumentTextIcon className="h-4 w-4" />
+										<span className="text-xs">Apps</span>
 										{applications.filter(
 											(app) =>
 												![
@@ -1959,7 +2005,7 @@ function LoansPageContent() {
 													app.status.toUpperCase()
 												)
 										).length > 0 && (
-											<span className="bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full text-xs font-medium border border-gray-300 font-body">
+											<span className="bg-gray-200 text-gray-600 py-0.5 px-1.5 rounded-full text-xs font-medium border border-gray-300 font-body sm:px-2">
 												{
 													applications.filter(
 														(app) =>
@@ -1977,21 +2023,21 @@ function LoansPageContent() {
 								</button>
 								<button
 									onClick={() => setActiveTab("incomplete")}
-									className={`py-4 px-1 border-b-2 font-medium text-sm font-body whitespace-nowrap transition-colors ${
+									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "incomplete"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex items-center space-x-2">
-										<ClockIcon className="h-4 w-4 md:h-5 md:w-5" />
-										<span>Incomplete</span>
+									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
+										<ClockIcon className="h-4 w-4" />
+										<span className="text-xs">Pending</span>
 										{applications.filter(
 											(app) =>
 												app.status.toUpperCase() ===
 												"INCOMPLETE"
 										).length > 0 && (
-											<span className="bg-yellow-100 text-yellow-700 py-0.5 px-2 rounded-full text-xs font-medium border border-yellow-200 font-body">
+											<span className="bg-yellow-100 text-yellow-700 py-0.5 px-1.5 rounded-full text-xs font-medium border border-yellow-200 font-body sm:px-2">
 												{
 													applications.filter(
 														(app) =>
@@ -2007,7 +2053,7 @@ function LoansPageContent() {
 						</div>
 
 						{/* Tab Content */}
-						<div className="p-6 lg:p-8 min-w-0">
+						<div className="p-6 lg:p-8 min-w-0 w-full">
 							{(() => {
 								if (activeTab === "loans") {
 									// Active Loans Content
@@ -3731,7 +3777,6 @@ function LoansPageContent() {
 						</div>
 					</div>
 				</div>
-			</div>
 
 			{/* Loan Repayment Modal */}
 			{showLoanRepayModal && (

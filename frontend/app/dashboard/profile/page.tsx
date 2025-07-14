@@ -23,6 +23,13 @@ import {
 } from "@heroicons/react/24/outline";
 import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 import { validatePhoneNumber } from "@/lib/phoneUtils";
+import { 
+	validateICOrPassport, 
+	extractDOBFromMalaysianIC, 
+	formatMalaysianIC,
+	getRelationshipOptions,
+	validateEmergencyContactPhone 
+} from "@/lib/icUtils";
 
 interface UserProfile {
 	id: string;
@@ -46,6 +53,13 @@ interface UserProfile {
 	updatedAt: string;
 	lastLoginAt: string | null;
 	kycStatus: boolean;
+	// IC/Passport Information
+	icNumber?: string | null;
+	icType?: string | null;
+	// Emergency Contact Information
+	emergencyContactName?: string | null;
+	emergencyContactPhone?: string | null;
+	emergencyContactRelationship?: string | null;
 }
 
 interface CountryData {
@@ -62,16 +76,28 @@ const employmentStatuses = [
 	"Unemployed",
 ] as const;
 
-const incomeRanges = [
-	"Below RM2,000",
-	"RM2,000 - RM4,000",
-	"RM4,001 - RM6,000",
-	"RM6,001 - RM8,000",
-	"RM8,001 - RM10,000",
-	"Above RM10,000",
+
+
+const malaysianStates = [
+	"Johor",
+	"Kedah",
+	"Kelantan",
+	"Kuala Lumpur",
+	"Labuan",
+	"Malacca",
+	"Negeri Sembilan",
+	"Pahang",
+	"Penang",
+	"Perak",
+	"Perlis",
+	"Putrajaya",
+	"Sabah",
+	"Sarawak",
+	"Selangor",
+	"Terengganu",
 ] as const;
 
-type EditingSections = "personal" | "address" | "employment" | "banking" | "password" | null;
+type EditingSections = "personal" | "address" | "employment" | "banking" | "ic" | "emergency" | "password" | null;
 
 export default function ProfilePage() {
 	const router = useRouter();
@@ -88,6 +114,8 @@ export default function ProfilePage() {
 		confirmPassword: "",
 	});
 	const [passwordError, setPasswordError] = useState("");
+	const [icError, setIcError] = useState("");
+	const [emergencyError, setEmergencyError] = useState("");
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
@@ -99,7 +127,6 @@ export default function ProfilePage() {
 
 	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
 
-	useEffect(() => {
 		const fetchProfile = async () => {
 			try {
 				// Check authentication using our utility
@@ -110,10 +137,18 @@ export default function ProfilePage() {
 					return;
 				}
 
-				// Fetch profile data using our token refresh utility
-				const data = await fetchWithTokenRefresh<UserProfile>(
-					"/api/users/me"
-				);
+							// Fetch profile data using our token refresh utility
+			// Add cache-busting parameter and headers to ensure fresh data
+			const data = await fetchWithTokenRefresh<UserProfile>(
+				`/api/users/me?t=${Date.now()}`,
+				{
+					headers: {
+						'Cache-Control': 'no-cache, no-store, must-revalidate',
+						'Pragma': 'no-cache',
+						'Expires': '0'
+					}
+				}
+			);
 
 				if (data.dateOfBirth) {
 					data.dateOfBirth = new Date(data.dateOfBirth)
@@ -132,8 +167,46 @@ export default function ProfilePage() {
 			}
 		};
 
+	useEffect(() => {
 		fetchProfile();
 	}, [router]);
+
+	// Refetch profile data when the page becomes visible (e.g., after navigating back)
+	useEffect(() => {
+		const handleVisibilityChange = () => {
+			if (!document.hidden && profile) {
+				// Only refetch if we already have profile data (not on initial load)
+				fetchProfile();
+			}
+		};
+
+		const handleFocus = () => {
+			if (profile) {
+				// Only refetch if we already have profile data (not on initial load)
+				fetchProfile();
+			}
+		};
+
+		// Add storage event listener for cross-tab updates
+		const handleStorageChange = (e: StorageEvent) => {
+			if (e.key === 'profile_updated' && e.newValue) {
+				// Profile was updated in another tab/window, refetch
+				fetchProfile();
+				// Clear the flag
+				localStorage.removeItem('profile_updated');
+			}
+		};
+
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+		window.addEventListener('focus', handleFocus);
+		window.addEventListener('storage', handleStorageChange);
+
+		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			window.removeEventListener('focus', handleFocus);
+			window.removeEventListener('storage', handleStorageChange);
+		};
+	}, [profile]);
 
 	const handlePhoneChange = (value: string, data: CountryData) => {
 		setPhoneNumber(value);
@@ -172,6 +245,8 @@ export default function ProfilePage() {
 			confirmPassword: "",
 		});
 		setPasswordError("");
+		setIcError("");
+		setEmergencyError("");
 	};
 
 	const handleInputChange = (
@@ -182,6 +257,57 @@ export default function ProfilePage() {
 			...prev,
 			[name]: value,
 		}));
+		
+		// Clear errors when user starts typing
+		if (name === "icNumber" && icError) {
+			setIcError("");
+		}
+		if (name.startsWith("emergencyContact") && emergencyError) {
+			setEmergencyError("");
+		}
+	};
+
+	const handleIcNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const { value } = e.target;
+		
+		// Update IC number
+		setFormData((prev) => ({
+			...prev,
+			icNumber: value,
+		}));
+		
+		// Clear error when user starts typing
+		if (icError) {
+			setIcError("");
+		}
+		
+		// Validate IC/Passport and extract DOB if it's a Malaysian IC
+		if (value.trim()) {
+			const validation = validateICOrPassport(value);
+			
+			if (validation.isValid) {
+				// Update IC type
+				setFormData((prev) => ({
+					...prev,
+					icType: validation.type,
+				}));
+				
+				// Extract DOB if it's a Malaysian IC
+				if (validation.type === 'IC' && validation.extractedDOB) {
+					const dobString = validation.extractedDOB.toISOString().split('T')[0];
+					setFormData((prev) => ({
+						...prev,
+						dateOfBirth: dobString,
+					}));
+				}
+			}
+		} else {
+			// Clear IC type if IC number is empty
+			setFormData((prev) => ({
+				...prev,
+				icType: null,
+			}));
+		}
 	};
 
 	const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -253,6 +379,32 @@ export default function ProfilePage() {
 
 			if (!phoneValidation.isValid) {
 				setPhoneError(phoneValidation.error || "Please enter a valid phone number");
+				return;
+			}
+		}
+
+		// Validate IC number if editing IC section
+		if (editingSection === "ic") {
+			if (formData.icNumber && formData.icNumber.trim()) {
+				const icValidation = validateICOrPassport(formData.icNumber);
+				if (!icValidation.isValid) {
+					setIcError(icValidation.error || "Please enter a valid IC/Passport number");
+					return;
+				}
+			}
+		}
+
+		// Validate emergency contact if editing emergency section
+		if (editingSection === "emergency") {
+			if (formData.emergencyContactName && formData.emergencyContactPhone && formData.emergencyContactRelationship) {
+				// Validate emergency contact phone
+				if (!validateEmergencyContactPhone(formData.emergencyContactPhone)) {
+					setEmergencyError("Please enter a valid emergency contact phone number");
+					return;
+				}
+			} else if (formData.emergencyContactName || formData.emergencyContactPhone || formData.emergencyContactRelationship) {
+				// If any emergency contact field is filled, all must be filled
+				setEmergencyError("All emergency contact fields are required");
 				return;
 			}
 		}
@@ -423,6 +575,38 @@ export default function ProfilePage() {
 		type: string = "text",
 		options?: readonly string[]
 	) => {
+		// Special handling for IC number
+		if (name === "icNumber") {
+			return (
+				<div>
+					<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+						{label}
+					</label>
+					<input
+						type="text"
+						name="icNumber"
+						value={String(formData.icNumber || "")}
+						onChange={handleIcNumberChange}
+						placeholder="Enter IC number (e.g., 820720073808) or Passport number"
+						className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
+					/>
+					{formData.icType && (
+						<p className="mt-1 text-sm text-blue-600 font-body">
+							{formData.icType === 'IC' ? 'Malaysian IC detected' : 'Passport number detected'}
+							{formData.icType === 'IC' && formData.dateOfBirth && (
+								<span> - Date of birth extracted automatically</span>
+							)}
+						</p>
+					)}
+					{icError && (
+						<p className="mt-1 text-sm text-red-600 font-body">
+							{icError}
+						</p>
+					)}
+				</div>
+			);
+		}
+		
 		// Special handling for phone number
 		if (name === "phoneNumber") {
 			return (
@@ -599,9 +783,18 @@ export default function ProfilePage() {
 											</p>
 										</div>
 									</div>
-									<div className="flex items-center space-x-4">
+									<div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+										<div className="flex items-center space-x-3">
 										{renderBadge(profile.kycStatus, profile.kycStatus ? "KYC Verified" : "KYC Pending")}
 										{renderBadge(profile.isOnboardingComplete, profile.isOnboardingComplete ? "Profile Complete" : "Profile Incomplete")}
+										</div>
+										<button
+											onClick={() => router.push('/onboarding?step=0')}
+											className="flex items-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+										>
+											<UserCircleIcon className="w-4 h-4 mr-2" />
+											Update Profile
+										</button>
 									</div>
 								</div>
 							</div>
@@ -727,7 +920,7 @@ export default function ProfilePage() {
 												{renderInput("address2", "Address Line 2")}
 												<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 													{renderInput("city", "City")}
-													{renderInput("state", "State")}
+													{renderInput("state", "State", "text", malaysianStates)}
 													{renderInput("zipCode", "Postal Code")}
 												</div>
 											</div>
@@ -775,7 +968,151 @@ export default function ProfilePage() {
 
 						{/* Second Row */}
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+							{/* IC/Passport Information Card */}
+							<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+								<div className="p-6 lg:p-8">
+									<div className="flex items-center justify-between mb-6">
+										<div className="flex items-center">
+											<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+												<IdentificationIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+											</div>
+											<div>
+												<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+													IC/Passport Information
+												</h3>
+												<p className="text-sm lg:text-base text-purple-primary font-semibold">
+													Identity verification
+												</p>
+											</div>
+										</div>
+										{editingSection !== "ic" && renderEditButton("ic")}
+									</div>
 
+									{editingSection === "ic" ? (
+										<div className="space-y-6">
+											<div className="grid grid-cols-1 gap-4">
+												{renderInput("icNumber", "IC/Passport Number")}
+											</div>
+											{renderSaveButtons()}
+										</div>
+									) : (
+										<div className="space-y-4">
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0 flex-1">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															IC/Passport Number
+														</label>
+														<div className="mt-1 space-y-1">
+															{profile.icNumber ? (
+																<>
+																	<p className="text-base text-gray-700 font-body">
+																		{profile.icType === 'IC' ? formatMalaysianIC(profile.icNumber) : profile.icNumber}
+																	</p>
+																	<p className="text-sm text-blue-600 font-body">
+																		{profile.icType === 'IC' ? 'Malaysian IC' : 'Passport'}
+																	</p>
+																</>
+															) : (
+																<p className="text-base text-gray-500 font-body italic">
+																	Not provided
+																</p>
+															)}
+														</div>
+													</div>
+												</div>
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+
+							{/* Emergency Contact Card */}
+							<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+								<div className="p-6 lg:p-8">
+									<div className="flex items-center justify-between mb-6">
+										<div className="flex items-center">
+											<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+												<PhoneIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+											</div>
+											<div>
+												<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+													Emergency Contact
+												</h3>
+												<p className="text-sm lg:text-base text-purple-primary font-semibold">
+													Emergency contact details
+												</p>
+											</div>
+										</div>
+										{editingSection !== "emergency" && renderEditButton("emergency")}
+									</div>
+
+									{editingSection === "emergency" ? (
+										<div className="space-y-6">
+											{emergencyError && (
+												<div className="bg-red-50 border border-red-200 rounded-lg p-4">
+													<p className="text-sm text-red-700 font-body">{emergencyError}</p>
+												</div>
+											)}
+											<div className="grid grid-cols-1 gap-4">
+												{renderInput("emergencyContactName", "Full Name")}
+												{renderInput("emergencyContactPhone", "Phone Number", "tel")}
+												{renderInput("emergencyContactRelationship", "Relationship", "text", getRelationshipOptions())}
+											</div>
+											{renderSaveButtons()}
+										</div>
+									) : (
+										<div className="space-y-4">
+											<div className="grid grid-cols-1 gap-4">
+												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+													<div className="flex items-center space-x-3">
+														<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+														<div className="min-w-0">
+															<label className="block text-sm font-medium text-gray-500 font-body">
+																Name
+															</label>
+															<p className="mt-1 text-base text-gray-700 font-body truncate">
+																{profile.emergencyContactName || "Not provided"}
+															</p>
+														</div>
+													</div>
+												</div>
+												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+													<div className="flex items-center space-x-3">
+														<PhoneIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+														<div className="min-w-0">
+															<label className="block text-sm font-medium text-gray-500 font-body">
+																Phone Number
+															</label>
+															<p className="mt-1 text-base text-gray-700 font-body truncate">
+																{profile.emergencyContactPhone || "Not provided"}
+															</p>
+														</div>
+													</div>
+												</div>
+												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+													<div className="flex items-center space-x-3">
+														<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+														<div className="min-w-0">
+															<label className="block text-sm font-medium text-gray-500 font-body">
+																Relationship
+															</label>
+															<p className="mt-1 text-base text-gray-700 font-body truncate">
+																{profile.emergencyContactRelationship || "Not provided"}
+															</p>
+														</div>
+													</div>
+												</div>
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+						</div>
+
+						{/* Third Row */}
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 							{/* Employment Information Card */}
 							<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
 								<div className="p-6 lg:p-8">
@@ -805,7 +1142,7 @@ export default function ProfilePage() {
 													formData.employmentStatus !== "Unemployed" && (
 													renderInput("employerName", "Employer Name")
 												)}
-												{renderInput("monthlyIncome", "Monthly Income", "text", incomeRanges)}
+												{renderInput("monthlyIncome", "Monthly Income (RM)", "number")}
 											</div>
 											{renderSaveButtons()}
 										</div>

@@ -87,7 +87,14 @@ export default function Footer() {
 									About Us
 								</Link>
 							</li>
-
+							<li>
+								<Link
+									href="/partners"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
+								>
+									Partners
+								</Link>
+							</li>
 							<li>
 								<Link
 									href="/careers"

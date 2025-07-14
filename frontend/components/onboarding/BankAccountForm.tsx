@@ -1,7 +1,11 @@
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { TextField, Button, Box, Typography, MenuItem } from "@mui/material";
 import { BankInfo } from "@/types/onboarding";
+import { 
+	BanknotesIcon,
+	CreditCardIcon,
+	InformationCircleIcon
+} from "@heroicons/react/24/outline";
 
 interface BankAccountFormProps {
 	initialValues: Partial<BankInfo>;
@@ -59,99 +63,155 @@ export default function BankAccountForm({
 		},
 	});
 
-	// Check if bank account details are empty
-	const isBankDetailsEmpty =
-		!formik.values.bankName || !formik.values.accountNumber;
+	// Check if form is valid (if user provides bank info, both fields are required)
+	const isFormValid = 
+		// Either both fields are empty (skip case) or both fields are filled and valid
+		(!formik.values.bankName && !formik.values.accountNumber) ||
+		(formik.values.bankName && 
+		 formik.values.accountNumber && 
+		 !formik.errors.bankName && 
+		 !formik.errors.accountNumber);
 
 	return (
-		<form onSubmit={formik.handleSubmit}>
-			<Box className="space-y-6">
-				<Typography variant="body1" color="text.secondary" mb={4}>
-					Link your bank account for loan disbursements. This step is
-					optional and can be completed later.
-				</Typography>
-
-				<TextField
-					fullWidth
-					select
-					id="bankName"
-					name="bankName"
-					label="Select Bank"
-					value={formik.values.bankName}
-					onChange={formik.handleChange}
-					error={
-						formik.touched.bankName &&
-						Boolean(formik.errors.bankName)
-					}
-					helperText={
-						formik.touched.bankName && formik.errors.bankName
-					}
-					className="[&_.MuiOutlinedInput-root]:focus-within:ring-indigo-600 [&_.MuiOutlinedInput-root]:focus-within:border-indigo-600"
-				>
-					<MenuItem value="">
-						<em>None</em>
-					</MenuItem>
-					{banks.map((bank) => (
-						<MenuItem key={bank} value={bank}>
-							{bank}
-						</MenuItem>
-					))}
-				</TextField>
-
-				{formik.values.bankName && (
-					<TextField
-						fullWidth
-						id="accountNumber"
-						name="accountNumber"
-						label="Account Number"
-						value={formik.values.accountNumber}
-						onChange={formik.handleChange}
-						error={
-							formik.touched.accountNumber &&
-							Boolean(formik.errors.accountNumber)
-						}
-						helperText={
-							formik.touched.accountNumber &&
-							formik.errors.accountNumber
-						}
-						className="[&_.MuiOutlinedInput-root]:focus-within:ring-indigo-600 [&_.MuiOutlinedInput-root]:focus-within:border-indigo-600"
-					/>
-				)}
-
-				{/* Navigation buttons */}
-				<Box className="flex justify-between items-center space-x-4 mt-6">
-					{showBackButton && (
-						<Button
-							onClick={onBack}
-							variant="outlined"
-							className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
-						>
-							Back
-						</Button>
-					)}
-					<div className="flex-1 flex justify-end items-center space-x-4">
-						<Button
-							onClick={onSkip}
-							variant="text"
-							className="text-gray-600 hover:text-gray-900"
-						>
-							Skip for now
-						</Button>
-						<Button
-							type="submit"
-							variant="contained"
-							disabled={isBankDetailsEmpty}
-							className={`${
-								isBankDetailsEmpty
-									? "bg-gray-300 text-gray-500"
-									: "bg-purple-600 hover:bg-purple-700 text-white"
-							}`}
-						>
-							{isLastStep ? "Complete" : "Next"}
-						</Button>
+		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+			<div className="p-4 sm:p-6 lg:p-8">
+				{/* Header */}
+				<div className="flex items-center mb-6 lg:mb-8">
+					<div className="bg-blue-600/10 rounded-xl p-3 mr-4">
+						<BanknotesIcon className="w-6 h-6 lg:w-7 lg:h-7 text-blue-600" />
 					</div>
-				</Box>
-			</Box>
-		</form>
+					<div>
+						<h2 className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-1">
+							Bank Account Details
+						</h2>
+						<p className="text-sm lg:text-base text-blue-600 font-semibold">
+							Link your account for loan disbursements
+						</p>
+					</div>
+				</div>
+
+				{/* Info Notice */}
+				<div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 lg:mb-8">
+					<div className="flex items-start">
+						<InformationCircleIcon className="w-5 h-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
+						<div>
+							<p className="text-sm lg:text-base text-amber-800 font-medium mb-1">
+								Optional Step
+							</p>
+							<p className="text-sm text-amber-700">
+								Link your bank account for loan disbursements. This step is optional and can be completed later in your dashboard.
+							</p>
+						</div>
+					</div>
+				</div>
+
+				<form onSubmit={formik.handleSubmit} className="space-y-6">
+					{/* Bank Selection */}
+					<div>
+						<label htmlFor="bankName" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
+							Select Bank *
+						</label>
+						<div className="relative">
+							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+								<BanknotesIcon className="h-5 w-5 text-gray-400" />
+							</div>
+							<select
+								id="bankName"
+								name="bankName"
+								value={formik.values.bankName}
+								onChange={formik.handleChange}
+								onBlur={formik.handleBlur}
+								className={`block w-full pl-10 pr-8 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
+									formik.touched.bankName && formik.errors.bankName
+										? "border-red-300 focus:ring-red-500"
+										: "border-gray-300 hover:border-gray-400"
+								}`}
+							>
+								<option value="">Choose your bank</option>
+								{banks.map((bank) => (
+									<option key={bank} value={bank}>
+										{bank}
+									</option>
+								))}
+							</select>
+						</div>
+						{formik.touched.bankName && formik.errors.bankName && (
+							<p className="mt-2 text-sm text-red-600 font-medium">
+								{formik.errors.bankName}
+							</p>
+						)}
+					</div>
+
+										{/* Account Number */}
+					<div>
+						<label htmlFor="accountNumber" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
+							Account Number *
+						</label>
+						<div className="relative">
+							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+								<CreditCardIcon className="h-5 w-5 text-gray-400" />
+							</div>
+							<input
+								id="accountNumber"
+								name="accountNumber"
+								type="text"
+								value={formik.values.accountNumber}
+								onChange={formik.handleChange}
+								onBlur={formik.handleBlur}
+								placeholder="Enter your account number"
+								className={`block w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
+									formik.touched.accountNumber && formik.errors.accountNumber
+										? "border-red-300 focus:ring-red-500"
+										: "border-gray-300 hover:border-gray-400"
+								}`}
+							/>
+						</div>
+						{formik.touched.accountNumber && formik.errors.accountNumber && (
+							<p className="mt-2 text-sm text-red-600 font-medium">
+								{formik.errors.accountNumber}
+							</p>
+						)}
+						<p className="mt-2 text-sm text-gray-500">
+							Must be between 10 and 16 digits
+						</p>
+					</div>
+
+					{/* Navigation buttons */}
+					<div className="border-t border-gray-100 pt-6 lg:pt-8">
+						<div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+							{showBackButton && (
+								<button
+									type="button"
+									onClick={onBack}
+									className="w-full sm:w-auto px-6 py-3 lg:py-4 border border-gray-300 rounded-xl lg:rounded-2xl text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base"
+								>
+									Back
+								</button>
+							)}
+							<div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+								<button
+									type="button"
+									onClick={onSkip}
+									className="w-full sm:w-auto px-6 py-3 lg:py-4 text-gray-600 font-medium hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base"
+								>
+									Skip for now
+								</button>
+								<button
+									type="submit"
+									disabled={!isFormValid}
+									className={`w-full sm:w-auto px-8 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-medium focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base ${
+										!isFormValid
+											? "bg-gray-300 text-gray-500 cursor-not-allowed"
+											: "bg-purple-primary text-white hover:bg-purple-700 shadow-lg hover:shadow-xl"
+									}`}
+								>
+									{isLastStep ? "Complete Profile" : "Continue"}
+								</button>
+							</div>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
 	);
 }

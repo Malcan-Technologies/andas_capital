@@ -1,17 +1,11 @@
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import {
-	TextField,
-	Button,
-	Box,
-	FormControl,
-	FormLabel,
-	RadioGroup,
-	FormControlLabel,
-	Radio,
-	InputAdornment,
-} from "@mui/material";
 import { EmploymentInfo } from "@/types/onboarding";
+import { 
+	BriefcaseIcon,
+	BuildingOfficeIcon,
+	CurrencyDollarIcon
+} from "@heroicons/react/24/outline";
 
 interface EmploymentFormProps {
 	initialValues: Partial<EmploymentInfo>;
@@ -90,111 +84,172 @@ export default function EmploymentForm({
 	const isFormValid = formik.values.employmentStatus !== "";
 
 	return (
-		<form onSubmit={formik.handleSubmit}>
-			<Box className="space-y-6">
-				<FormControl component="fieldset" className="w-full">
-					<FormLabel component="legend" className="text-gray-700">
-						Employment Status
-					</FormLabel>
-					<RadioGroup
-						name="employmentStatus"
-						value={formik.values.employmentStatus}
-						onChange={formik.handleChange}
-						className="[&_.MuiRadio-root]:text-indigo-600"
-					>
-						{employmentStatuses.map((status) => (
-							<FormControlLabel
-								key={status}
-								value={status}
-								control={<Radio />}
-								label={status}
-								sx={{ color: "text.secondary" }}
-							/>
-						))}
-					</RadioGroup>
-					{formik.touched.employmentStatus &&
-						formik.errors.employmentStatus && (
-							<div className="text-red-500 text-sm mt-1">
-								{formik.errors.employmentStatus}
-							</div>
-						)}
-				</FormControl>
-
-				{showEmployerField && (
-					<TextField
-						fullWidth
-						id="employerName"
-						name="employerName"
-						label="Employer Name"
-						value={formik.values.employerName}
-						onChange={formik.handleChange}
-						error={
-							formik.touched.employerName &&
-							Boolean(formik.errors.employerName)
-						}
-						helperText={
-							formik.touched.employerName &&
-							formik.errors.employerName
-								? formik.errors.employerName
-								: "Optional"
-						}
-						className="[&_.MuiOutlinedInput-root]:focus-within:ring-indigo-600 [&_.MuiOutlinedInput-root]:focus-within:border-indigo-600"
-					/>
-				)}
-
-				<TextField
-					fullWidth
-					id="monthlyIncome"
-					name="monthlyIncome"
-					label="Monthly Income"
-					type="number"
-					value={formik.values.monthlyIncome}
-					onChange={formik.handleChange}
-					error={
-						formik.touched.monthlyIncome &&
-						Boolean(formik.errors.monthlyIncome)
-					}
-					helperText={
-						formik.touched.monthlyIncome &&
-						formik.errors.monthlyIncome
-							? formik.errors.monthlyIncome
-							: "Optional"
-					}
-					InputProps={{
-						startAdornment: (
-							<InputAdornment position="start">RM</InputAdornment>
-						),
-					}}
-					className="[&_.MuiOutlinedInput-root]:focus-within:ring-indigo-600 [&_.MuiOutlinedInput-root]:focus-within:border-indigo-600"
-				/>
-
-				{/* Navigation buttons */}
-				<Box className="flex justify-between items-center space-x-4 mt-6">
-					{showBackButton && (
-						<Button
-							onClick={onBack}
-							variant="outlined"
-							className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
-						>
-							Back
-						</Button>
-					)}
-					<div className="flex-1 flex justify-end">
-						<Button
-							type="submit"
-							variant="contained"
-							disabled={!isFormValid}
-							className={`${
-								!isFormValid
-									? "bg-gray-300 text-gray-500"
-									: "bg-purple-600 hover:bg-purple-700 text-white"
-							}`}
-						>
-							{isLastStep ? "Complete" : "Next"}
-						</Button>
+		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+			<div className="p-4 sm:p-6 lg:p-8">
+				{/* Header */}
+				<div className="flex items-center mb-6 lg:mb-8">
+					<div className="bg-blue-600/10 rounded-xl p-3 mr-4">
+						<BriefcaseIcon className="w-6 h-6 lg:w-7 lg:h-7 text-blue-600" />
 					</div>
-				</Box>
-			</Box>
-		</form>
+					<div>
+						<h2 className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-1">
+							Employment Details
+						</h2>
+						<p className="text-sm lg:text-base text-blue-600 font-semibold">
+							Tell us about your work situation
+						</p>
+					</div>
+				</div>
+
+				<form onSubmit={formik.handleSubmit} className="space-y-6">
+					{/* Employment Status */}
+					<div>
+						<label className="block text-sm lg:text-base font-medium text-gray-700 mb-4">
+							Employment Status *
+						</label>
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							{employmentStatuses.map((status) => (
+								<label
+									key={status}
+									className={`relative flex items-center p-4 border rounded-xl lg:rounded-2xl cursor-pointer transition-all duration-200 ${
+										formik.values.employmentStatus === status
+											? "border-purple-primary bg-purple-primary/5 shadow-md"
+											: "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+									}`}
+								>
+									<input
+										type="radio"
+										name="employmentStatus"
+										value={status}
+										checked={formik.values.employmentStatus === status}
+										onChange={formik.handleChange}
+										className="sr-only"
+									/>
+									<div className={`w-4 h-4 rounded-full border-2 mr-3 flex items-center justify-center transition-all duration-200 ${
+										formik.values.employmentStatus === status
+											? "border-purple-primary bg-purple-primary"
+											: "border-gray-300"
+									}`}>
+										{formik.values.employmentStatus === status && (
+											<div className="w-2 h-2 rounded-full bg-white"></div>
+										)}
+									</div>
+									<span className={`font-medium text-sm lg:text-base ${
+										formik.values.employmentStatus === status
+											? "text-purple-primary"
+											: "text-gray-700"
+									}`}>
+										{status}
+									</span>
+								</label>
+							))}
+						</div>
+						{formik.touched.employmentStatus && formik.errors.employmentStatus && (
+							<p className="mt-2 text-sm text-red-600 font-medium">
+								{formik.errors.employmentStatus}
+							</p>
+						)}
+					</div>
+
+					{/* Employer Name - Show only for Employed/Self-Employed */}
+					{showEmployerField && (
+						<div>
+							<label htmlFor="employerName" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
+								Employer Name <span className="text-gray-400 font-normal">(Optional)</span>
+							</label>
+							<div className="relative">
+								<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+									<BuildingOfficeIcon className="h-5 w-5 text-gray-400" />
+								</div>
+								<input
+									id="employerName"
+									name="employerName"
+									type="text"
+									value={formik.values.employerName}
+									onChange={formik.handleChange}
+									onBlur={formik.handleBlur}
+									placeholder="Enter your employer or company name"
+									className={`block w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
+										formik.touched.employerName && formik.errors.employerName
+											? "border-red-300 focus:ring-red-500"
+											: "border-gray-300 hover:border-gray-400"
+									}`}
+								/>
+							</div>
+							{formik.touched.employerName && formik.errors.employerName && (
+								<p className="mt-2 text-sm text-red-600 font-medium">
+									{formik.errors.employerName}
+								</p>
+							)}
+						</div>
+					)}
+
+					{/* Monthly Income */}
+					<div>
+						<label htmlFor="monthlyIncome" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
+							Monthly Income <span className="text-gray-400 font-normal">(Optional)</span>
+						</label>
+						<div className="relative">
+							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+								<CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
+							</div>
+							<div className="absolute inset-y-0 left-10 flex items-center pointer-events-none">
+								<span className="text-gray-500 text-sm lg:text-base">RM</span>
+							</div>
+							<input
+								id="monthlyIncome"
+								name="monthlyIncome"
+								type="number"
+								min="0"
+								step="0.01"
+								value={formik.values.monthlyIncome}
+								onChange={formik.handleChange}
+								onBlur={formik.handleBlur}
+								placeholder="0.00"
+								className={`block w-full pl-16 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
+									formik.touched.monthlyIncome && formik.errors.monthlyIncome
+										? "border-red-300 focus:ring-red-500"
+										: "border-gray-300 hover:border-gray-400"
+								}`}
+							/>
+						</div>
+						{formik.touched.monthlyIncome && formik.errors.monthlyIncome && (
+							<p className="mt-2 text-sm text-red-600 font-medium">
+								{formik.errors.monthlyIncome}
+							</p>
+						)}
+						<p className="mt-2 text-sm text-gray-500">
+							This information helps us provide better loan options for you
+						</p>
+					</div>
+
+					{/* Navigation buttons */}
+					<div className="border-t border-gray-100 pt-6 lg:pt-8">
+						<div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+							{showBackButton && (
+								<button
+									type="button"
+									onClick={onBack}
+									className="w-full sm:w-auto px-6 py-3 lg:py-4 border border-gray-300 rounded-xl lg:rounded-2xl text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base"
+								>
+									Back
+								</button>
+							)}
+							<button
+								type="submit"
+								disabled={!isFormValid}
+								className={`w-full sm:w-auto px-8 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-medium focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base ${
+									!isFormValid
+										? "bg-gray-300 text-gray-500 cursor-not-allowed"
+										: "bg-purple-primary text-white hover:bg-purple-700 shadow-lg hover:shadow-xl"
+								}`}
+							>
+								{isLastStep ? "Complete Profile" : "Continue"}
+							</button>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
 	);
 }

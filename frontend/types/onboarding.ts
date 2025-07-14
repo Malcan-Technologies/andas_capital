@@ -2,6 +2,9 @@ export interface PersonalInfo {
 	fullName: string;
 	dateOfBirth: Date | null;
 	email: string;
+	phoneNumber: string; // Display only, cannot be changed
+	icNumber: string;
+	icType: 'IC' | 'PASSPORT' | null;
 }
 
 export interface AddressInfo {

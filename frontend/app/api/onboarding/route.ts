@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
@@ -39,7 +40,11 @@ export async function GET(request: Request) {
 
 		const data = await response.json();
 		console.log("Onboarding GET - Success response");
-		return NextResponse.json(data);
+		const nextResponse = NextResponse.json(data);
+		nextResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+		nextResponse.headers.set('Pragma', 'no-cache');
+		nextResponse.headers.set('Expires', '0');
+		return nextResponse;
 	} catch (error) {
 		console.error("Onboarding GET error:", error);
 		return NextResponse.json(
@@ -88,7 +93,11 @@ export async function POST(request: Request) {
 
 		const data = await response.json();
 		console.log("Onboarding POST - Success response");
-		return NextResponse.json(data);
+		const nextResponse = NextResponse.json(data);
+		nextResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+		nextResponse.headers.set('Pragma', 'no-cache');
+		nextResponse.headers.set('Expires', '0');
+		return nextResponse;
 	} catch (error) {
 		console.error("Onboarding POST error:", error);
 		return NextResponse.json(

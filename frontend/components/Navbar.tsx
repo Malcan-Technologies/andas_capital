@@ -192,6 +192,16 @@ export default function Navbar({
 									</div>
 								</button>
 							</div>
+							<Link
+								href="/partners"
+								className={`${
+									isScrolled
+										? "text-gray-700 hover:text-purple-primary"
+										: "text-gray-200 hover:text-white"
+								} transition-colors font-body`}
+							>
+								Partners
+							</Link>
 						</div>
 						<div className="hidden lg:flex items-center space-x-6">
 							<div className="relative group">
@@ -1125,6 +1135,17 @@ export default function Navbar({
 											</div>
 										</div>
 									</div>
+								</div>
+
+								{/* Partners Section */}
+								<div onClick={(e) => e.stopPropagation()}>
+									<Link
+										href="/partners"
+										className="flex items-center justify-between w-full text-left text-xl font-semibold text-gray-900 py-4 border-b border-gray-100"
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										<span>Partners</span>
+									</Link>
 								</div>
 
 								{/* Contact Section */}

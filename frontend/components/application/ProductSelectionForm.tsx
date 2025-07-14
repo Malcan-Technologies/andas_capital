@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { useSearchParams } from "next/navigation";
 import Cookies from "js-cookie";
 import { ProductType } from "@/types";
@@ -118,54 +118,62 @@ export default function ProductSelectionForm({
 	};
 
 	return (
-		<form onSubmit={handleSubmit} className="w-full">
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-				{activeProducts.map((product) => (
-					<div
-						key={product.id}
-						className={`bg-white border rounded-xl p-6 cursor-pointer transition-all hover:border-purple-primary hover:shadow-md ${
-							selected === product.id
-								? "border-purple-primary bg-purple-primary/5 shadow-md"
-								: "border-gray-200"
-						}`}
-						onClick={() => handleSelect(product.id)}
-					>
-						<div className="flex justify-between items-center mb-4">
-							<h3 className="text-lg font-semibold text-gray-700 font-heading">
-								{product.name}
-							</h3>
-							{selected === product.id && (
-								<CheckCircleIcon className="text-purple-primary" />
-							)}
+		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+			<div className="p-4 sm:p-6 lg:p-8">
+				<form onSubmit={handleSubmit} className="w-full">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-6 lg:mb-8">
+						{activeProducts.map((product) => (
+							<div
+								key={product.id}
+								className={`bg-white border rounded-xl lg:rounded-2xl p-4 sm:p-6 cursor-pointer transition-all hover:border-purple-primary hover:shadow-md ${
+									selected === product.id
+										? "border-purple-primary bg-purple-primary/5 shadow-md"
+										: "border-gray-200"
+								}`}
+								onClick={() => handleSelect(product.id)}
+							>
+								<div className="flex justify-between items-center mb-4">
+									<h3 className="text-lg lg:text-xl font-semibold text-gray-700 font-heading">
+										{product.name}
+									</h3>
+									{selected === product.id && (
+										<CheckCircleIcon className="h-6 w-6 text-purple-primary" />
+									)}
+								</div>
+								<p className="text-gray-600 text-sm lg:text-base mb-4 font-body">
+									{product.description}
+								</p>
+								<div className="space-y-2">
+									<p className="text-sm lg:text-base text-gray-500 font-body">
+										Loan Amount: RM
+										{product.minAmount.toLocaleString()} - RM
+										{product.maxAmount.toLocaleString()}
+									</p>
+									<p className="text-sm lg:text-base text-gray-500 font-body">
+										Interest Rate: {product.interestRate}% per month
+									</p>
+								</div>
+							</div>
+						))}
+					</div>
+					{error && (
+						<div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+							<p className="text-red-600 text-sm lg:text-base font-body">{error}</p>
 						</div>
-						<p className="text-gray-600 text-sm mb-4 font-body">
-							{product.description}
-						</p>
-						<div className="space-y-2">
-							<p className="text-sm text-gray-500 font-body">
-								Loan Amount: RM
-								{product.minAmount.toLocaleString()} - RM
-								{product.maxAmount.toLocaleString()}
-							</p>
-							<p className="text-sm text-gray-500 font-body">
-								Interest Rate: {product.interestRate}% per month
-							</p>
+					)}
+					<div className="border-t border-gray-100 pt-6 lg:pt-8">
+						<div className="flex justify-end">
+							<button
+								type="submit"
+								disabled={!selected || loading}
+								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl text-sm lg:text-base"
+							>
+								{loading ? "Processing..." : "Continue"}
+							</button>
 						</div>
 					</div>
-				))}
+				</form>
 			</div>
-			{error && (
-				<p className="text-red-600 text-sm mb-4 font-body">{error}</p>
-			)}
-			<div className="flex justify-end">
-				<button
-					type="submit"
-					disabled={!selected || loading}
-					className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium font-body"
-				>
-					{loading ? "Processing..." : "Continue"}
-				</button>
-			</div>
-		</form>
+		</div>
 	);
 }

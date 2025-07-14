@@ -4580,6 +4580,21 @@
                     "accountNumber": {
                       "type": "string"
                     },
+                    "icNumber": {
+                      "type": "string"
+                    },
+                    "icType": {
+                      "type": "string"
+                    },
+                    "emergencyContactName": {
+                      "type": "string"
+                    },
+                    "emergencyContactPhone": {
+                      "type": "string"
+                    },
+                    "emergencyContactRelationship": {
+                      "type": "string"
+                    },
                     "isOnboardingComplete": {
                       "type": "boolean"
                     },
@@ -4675,6 +4690,21 @@
                     "type": "string"
                   },
                   "accountNumber": {
+                    "type": "string"
+                  },
+                  "icNumber": {
+                    "type": "string"
+                  },
+                  "icType": {
+                    "type": "string"
+                  },
+                  "emergencyContactName": {
+                    "type": "string"
+                  },
+                  "emergencyContactPhone": {
+                    "type": "string"
+                  },
+                  "emergencyContactRelationship": {
                     "type": "string"
                   }
                 }

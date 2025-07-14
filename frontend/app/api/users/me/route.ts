@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
@@ -23,31 +24,35 @@ export async function GET(request: Request) {
 			"Users/me - Forwarding request to backend:",
 			`${BACKEND_URL}/api/users/me`
 		);
-		const response = await fetch(`${BACKEND_URL}/api/users/me`, {
+		const backendResponse = await fetch(`${BACKEND_URL}/api/users/me`, {
 			headers: {
 				Authorization: authHeader,
 			},
 		});
 
 		console.log("Users/me - Backend response:", {
-			status: response.status,
-			ok: response.ok,
+			status: backendResponse.status,
+			ok: backendResponse.ok,
 		});
 
-		if (!response.ok) {
+		if (!backendResponse.ok) {
 			console.log("Users/me - Error response from backend");
 			return NextResponse.json(
 				{ error: "Authentication failed" },
-				{ status: response.status }
+				{ status: backendResponse.status }
 			);
 		}
 
-		const data = await response.json();
+		const data = await backendResponse.json();
 		console.log("Users/me - Backend data:", data);
 
-		// Return the user data
+		// Return the user data with no-cache headers
 		console.log("Users/me - Successful response");
-		return NextResponse.json(data);
+		const response = NextResponse.json(data);
+		response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+		response.headers.set('Pragma', 'no-cache');
+		response.headers.set('Expires', '0');
+		return response;
 	} catch (error) {
 		console.error("Users/me error:", error);
 		return NextResponse.json(
@@ -79,7 +84,7 @@ export async function PUT(request: Request) {
 			"Users/me PUT - Forwarding request to backend:",
 			`${BACKEND_URL}/api/users/me`
 		);
-		const response = await fetch(`${BACKEND_URL}/api/users/me`, {
+		const backendResponse = await fetch(`${BACKEND_URL}/api/users/me`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
@@ -89,17 +94,17 @@ export async function PUT(request: Request) {
 		});
 
 		console.log("Users/me PUT - Backend response:", {
-			status: response.status,
-			ok: response.ok,
+			status: backendResponse.status,
+			ok: backendResponse.ok,
 		});
 
-		if (!response.ok) {
+		if (!backendResponse.ok) {
 			console.log("Users/me PUT - Error response from backend");
 			
 			// Try to extract the specific error message from backend
 			let errorMessage = "Failed to update user data";
 			try {
-				const errorData = await response.json();
+				const errorData = await backendResponse.json();
 				console.log("Users/me PUT - Backend error data:", errorData);
 				errorMessage = errorData.message || errorData.error || errorMessage;
 			} catch (parseError) {
@@ -108,16 +113,20 @@ export async function PUT(request: Request) {
 			
 			return NextResponse.json(
 				{ error: errorMessage },
-				{ status: response.status }
+				{ status: backendResponse.status }
 			);
 		}
 
-		const data = await response.json();
+		const data = await backendResponse.json();
 		console.log("Users/me PUT - Backend data:", data);
 
-		// Return the updated user data
+		// Return the updated user data with no-cache headers
 		console.log("Users/me PUT - Successful response");
-		return NextResponse.json(data);
+		const response = NextResponse.json(data);
+		response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+		response.headers.set('Pragma', 'no-cache');
+		response.headers.set('Expires', '0');
+		return response;
 	} catch (error) {
 		console.error("Users/me PUT error:", error);
 		return NextResponse.json(

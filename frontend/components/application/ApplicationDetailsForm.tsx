@@ -277,32 +277,33 @@ function ApplicationDetailsFormContent({
 	}
 
 	return (
-		<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-			<form onSubmit={handleSubmit} className="space-y-6">
-				<div className="flex items-center space-x-2 mb-6">
-					<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-						<svg
-							className="h-5 w-5 text-purple-primary"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-							/>
-						</svg>
+		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+			<div className="p-4 sm:p-6 lg:p-8">
+				<form onSubmit={handleSubmit} className="space-y-6">
+					<div className="flex items-center space-x-2 mb-6 lg:mb-8">
+						<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
+							<svg
+								className="h-5 w-5 text-purple-primary"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+								/>
+							</svg>
+						</div>
+						<h2 className="text-lg lg:text-xl font-heading text-purple-primary font-semibold">
+							Loan Details for {selectedProduct.name}
+						</h2>
 					</div>
-					<h2 className="text-lg font-heading text-purple-primary font-semibold">
-						Loan Details for {selectedProduct.name}
-					</h2>
-				</div>
 
 				<div className="space-y-6">
 					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+						<label className="block text-sm lg:text-base font-medium text-gray-700 mb-2 font-body">
 							Loan Amount
 						</label>
 						<input
@@ -313,7 +314,7 @@ function ApplicationDetailsFormContent({
 							min={selectedProduct.minAmount}
 							max={selectedProduct.maxAmount}
 							step={100}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+							className="w-full px-4 py-3 lg:py-4 bg-white border border-gray-300 rounded-xl lg:rounded-2xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body text-sm lg:text-base"
 							placeholder="Enter loan amount"
 						/>
 						{errors.loanAmount ? (
@@ -400,22 +401,25 @@ function ApplicationDetailsFormContent({
 					)}
 				</div>
 
-				<div className="flex justify-between pt-6">
-					<button
-						type="button"
-						onClick={handleBack}
-						className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body"
-					>
-						Back
-					</button>
-					<button
-						type="submit"
-						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body"
-					>
-						Continue
-					</button>
-				</div>
-			</form>
+					<div className="border-t border-gray-100 pt-6 lg:pt-8">
+						<div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+							<button
+								type="button"
+								onClick={handleBack}
+								className="w-full sm:w-auto px-6 py-3 lg:py-4 bg-white border border-gray-300 text-gray-700 rounded-xl lg:rounded-2xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body text-sm lg:text-base"
+							>
+								Back
+							</button>
+							<button
+								type="submit"
+								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl hover:bg-purple-700 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl text-sm lg:text-base"
+							>
+								Continue
+							</button>
+						</div>
+					</div>
+				</form>
+			</div>
 		</div>
 	);
 }

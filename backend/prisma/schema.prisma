@@ -35,41 +35,46 @@ model Product {
 }
 
 model User {
-  id                   String              @id @default(cuid())
-  phoneNumber          String              @unique
-  password             String
-  refreshToken         String?
-  fullName             String?
-  dateOfBirth          DateTime?
-  email                String?             @unique
-  address1             String?
-  address2             String?
-  city                 String?
-  state                String?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  country              String?
-  idExpiry             DateTime?
-  idNumber             String?
-  idType               String?
-  nationality          String?
-  role                 String              @default("USER")
-  zipCode              String?
-  lastLoginAt          DateTime?           @updatedAt
-  accountNumber        String?
-  bankName             String?
-  employerName         String?
-  employmentStatus     String?
-  monthlyIncome        String?
-  isOnboardingComplete Boolean             @default(false)
-  kycStatus            Boolean             @default(false)
-  onboardingStep       Int                 @default(0)
-  applications         LoanApplication[]
-  loans                Loan[]
-  notifications        Notification[]
-  documents            UserDocument[]
-  walletTransactions   WalletTransaction[]
-  wallet               Wallet?
+  id                           String              @id @default(cuid())
+  phoneNumber                  String              @unique
+  password                     String
+  refreshToken                 String?
+  fullName                     String?
+  dateOfBirth                  DateTime?
+  email                        String?             @unique
+  address1                     String?
+  address2                     String?
+  city                         String?
+  state                        String?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
+  country                      String?
+  idExpiry                     DateTime?
+  idNumber                     String?
+  idType                       String?
+  nationality                  String?
+  role                         String              @default("USER")
+  zipCode                      String?
+  lastLoginAt                  DateTime?           @updatedAt
+  accountNumber                String?
+  bankName                     String?
+  employerName                 String?
+  employmentStatus             String?
+  monthlyIncome                String?
+  isOnboardingComplete         Boolean             @default(false)
+  kycStatus                    Boolean             @default(false)
+  onboardingStep               Int                 @default(0)
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
+  icNumber                     String?
+  icType                       String?
+  applications                 LoanApplication[]
+  loans                        Loan[]
+  notifications                Notification[]
+  documents                    UserDocument[]
+  walletTransactions           WalletTransaction[]
+  wallet                       Wallet?
 
   @@map("users")
 }

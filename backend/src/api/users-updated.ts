@@ -61,6 +61,16 @@ const router = Router();
  *                   type: string
  *                 accountNumber:
  *                   type: string
+ *                 icNumber:
+ *                   type: string
+ *                 icType:
+ *                   type: string
+ *                 emergencyContactName:
+ *                   type: string
+ *                 emergencyContactPhone:
+ *                   type: string
+ *                 emergencyContactRelationship:
+ *                   type: string
  *                 isOnboardingComplete:
  *                   type: boolean
  *                 onboardingStep:
@@ -83,7 +93,7 @@ const router = Router();
  *       404:
  *         description: User not found
  *       500:
- *         description: Server error
+ * 
  */
 router.get(
 	"/me",
@@ -184,6 +194,16 @@ router.get(
  *                 type: string
  *               accountNumber:
  *                 type: string
+ *               icNumber:
+ *                 type: string
+ *               icType:
+ *                 type: string
+ *               emergencyContactName:
+ *                 type: string
+ *               emergencyContactPhone:
+ *                 type: string
+ *               emergencyContactRelationship:
+ *                 type: string
  *     responses:
  *       200:
  *         description: User information updated successfully
@@ -247,7 +267,31 @@ router.put(
 				}
 			}
 
-			// Ensure kycStatus is a boolean if provided
+			// Validate IC number if provided
+			if (updateData.icNumber) {
+				// Basic validation - you can enhance this with the IC utility functions
+				const icNumber = updateData.icNumber.trim();
+				if (icNumber.length < 6) {
+					return res.status(400).json({ 
+						message: "IC/Passport number is too short" 
+					});
+				}
+			}
+
+			// Validate emergency contact - if any field is provided, all must be provided
+			const emergencyFields = [
+				updateData.emergencyContactName,
+				updateData.emergencyContactPhone,
+				updateData.emergencyContactRelationship
+			];
+			const providedEmergencyFields = emergencyFields.filter(field => field && field.trim());
+			
+			if (providedEmergencyFields.length > 0 && providedEmergencyFields.length < 3) {
+				return res.status(400).json({ 
+					message: "All emergency contact fields (name, phone, relationship) are required" 
+				});
+			}
+
 			if (updateData.kycStatus !== undefined) {
 				updateData.kycStatus = Boolean(updateData.kycStatus);
 			}
@@ -325,21 +369,14 @@ router.put(
  *                 description: Current password for verification
  *               newPassword:
  *                 type: string
- *                 description: New password to set
+ *                 description: New password (minimum 8 characters)
  *     responses:
  *       200:
  *         description: Password changed successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
  *       400:
- *         description: Invalid input or password requirements not met
+ *         description: Invalid request or password requirements not met
  *       401:
- *         description: Unauthorized or current password incorrect
+ *         description: Unauthorized or current password is incorrect
  *       500:
  *         description: Server error
  */
@@ -355,21 +392,20 @@ router.put(
 
 			const { currentPassword, newPassword } = req.body;
 
-			// Validate required fields
+			// Validate input
 			if (!currentPassword || !newPassword) {
 				return res.status(400).json({ 
 					message: "Current password and new password are required" 
 				});
 			}
 
-			// Validate new password strength (minimum 8 characters)
 			if (newPassword.length < 8) {
 				return res.status(400).json({ 
 					message: "New password must be at least 8 characters long" 
 				});
 			}
 
-			// Get current user with password
+			// Get user with password
 			const user = await prisma.user.findUnique({
 				where: { id: userId },
 				select: {
@@ -382,19 +418,19 @@ router.put(
 				return res.status(404).json({ message: "User not found" });
 			}
 
-			// Import bcrypt for password operations
-			const bcrypt = require("bcryptjs");
-
 			// Verify current password
-			const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
-			if (!isCurrentPasswordValid) {
+			const bcrypt = require('bcryptjs');
+			const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+
+			if (!isValidPassword) {
 				return res.status(401).json({ message: "Current password is incorrect" });
 			}
 
-			// Hash new password using the same method as in User.create()
-			const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+			// Hash new password
+			const saltRounds = 10;
+			const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
-			// Update password in database
+			// Update password
 			await prisma.user.update({
 				where: { id: userId },
 				data: {
@@ -402,76 +438,12 @@ router.put(
 				},
 			});
 
-			return res.json({
-				message: "Password changed successfully",
-			});
+			return res.json({ message: "Password changed successfully" });
 		} catch (error) {
 			console.error("Error changing password:", error);
-			return res.status(500).json({ message: "Internal server error" });
+			return res.status(500).json({ message: "Failed to change password" });
 		}
 	}
 );
 
-// Get or create wallet for a user
-router.get(
-	"/me/wallet",
-	authenticateToken,
-	async (req: AuthRequest, res: Response) => {
-		try {
-			const userId = req.user?.userId;
-
-			if (!userId) {
-				return res.status(401).json({ message: "Unauthorized" });
-			}
-
-			console.log("Getting or creating wallet for user:", userId);
-
-			// First, try to find existing wallet
-			let wallet = await prisma.wallet.findUnique({
-				where: { userId },
-			});
-
-			// If wallet doesn't exist, create it
-			if (!wallet) {
-				console.log("Wallet not found, creating new wallet");
-				wallet = await prisma.wallet.create({
-					data: {
-						userId,
-						balance: 0,
-						availableForWithdrawal: 0,
-						totalDeposits: 0,
-						totalWithdrawals: 0,
-					},
-				});
-				console.log("New wallet created:", wallet.id);
-			} else {
-				console.log("Existing wallet found:", wallet.id);
-			}
-
-			// Get wallet transactions
-			const transactions = await prisma.walletTransaction.findMany({
-				where: { userId },
-				orderBy: { createdAt: "desc" },
-				take: 10,
-			});
-
-			return res.status(200).json({
-				message: "Wallet retrieved successfully",
-				data: {
-					wallet,
-					transactions,
-				},
-			});
-		} catch (error) {
-			console.error("Error getting wallet:", error);
-			return res
-				.status(500)
-				.json({
-					message: "Internal server error",
-					error: error.message,
-				});
-		}
-	}
-);
-
-export default router;
+export default router; 
