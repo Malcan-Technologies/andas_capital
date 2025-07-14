@@ -1183,6 +1183,261 @@ export default function Home() {
 				</div>
 			</section>
 
+			{/* Reviews Section */}
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					{/* Section Header */}
+					<div className="text-center mb-8 lg:mb-16">
+						<div className="inline-flex items-center px-4 py-2 bg-purple-primary/10 rounded-full mb-4 sm:mb-6 border border-purple-primary/20">
+							<MdStar size={16} className="text-purple-primary mr-2" />
+							<span className="text-xs sm:text-sm font-semibold text-purple-primary">
+								Customer Reviews
+							</span>
+						</div>
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
+							What Our Customers
+							<br />
+							<span className="text-purple-primary">Say About Us</span>
+						</h2>
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-4xl">
+							Real stories from Malaysian businesses and individuals who have experienced the kredit.my difference
+						</p>
+					</div>
+
+					{/* Reviews Grid */}
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
+						{/* Review 1 - Business Loan */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							{/* Star Rating */}
+							<div className="flex items-center mb-4">
+								{[...Array(5)].map((_, i) => (
+									<MdStar key={i} size={20} className="text-yellow-400" />
+								))}
+							</div>
+							
+							{/* Review Text */}
+							<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
+								"The loan approval process was incredibly fast. Within 24 hours, I had the funds to expand my restaurant. The team was professional and transparent throughout."
+							</p>
+							
+							{/* Customer Info */}
+							<div className="flex items-center">
+								<div className="w-12 h-12 bg-blue-600/10 rounded-full flex items-center justify-center mr-4">
+									<MdBusinessCenter size={20} className="text-blue-600" />
+								</div>
+								<div>
+									<h4 className="text-lg font-heading font-semibold text-gray-700">
+										Ahmad Rahman
+									</h4>
+									<p className="text-sm text-gray-500 font-body">
+										Restaurant Owner, Kuala Lumpur
+									</p>
+									<div className="flex items-center mt-1">
+										<span className="text-xs bg-blue-600/10 text-blue-600 px-2 py-1 rounded-full font-medium">
+											Business Loan
+										</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Review 2 - Personal Loan */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							{/* Star Rating */}
+							<div className="flex items-center mb-4">
+								{[...Array(5)].map((_, i) => (
+									<MdStar key={i} size={20} className="text-yellow-400" />
+								))}
+							</div>
+							
+							{/* Review Text */}
+							<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
+								"Needed funds for my daughter's university fees. The application was completely online and stress-free. No hidden charges, exactly as promised."
+							</p>
+							
+							{/* Customer Info */}
+							<div className="flex items-center">
+								<div className="w-12 h-12 bg-blue-600/10 rounded-full flex items-center justify-center mr-4">
+									<MdPeople size={20} className="text-blue-600" />
+								</div>
+								<div>
+									<h4 className="text-lg font-heading font-semibold text-gray-700">
+										Siti Nurhaliza
+									</h4>
+									<p className="text-sm text-gray-500 font-body">
+										Teacher, Selangor
+									</p>
+									<div className="flex items-center mt-1">
+										<span className="text-xs bg-blue-600/10 text-blue-600 px-2 py-1 rounded-full font-medium">
+											Personal Loan
+										</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Review 3 - Earned Wage Access */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							{/* Star Rating */}
+							<div className="flex items-center mb-4">
+								{[...Array(5)].map((_, i) => (
+									<MdStar key={i} size={20} className="text-yellow-400" />
+								))}
+							</div>
+							
+							{/* Review Text */}
+							<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
+								"PayAdvance helped me during an emergency without waiting for payday. The fees are fair and transparent. Great employee benefit!"
+							</p>
+							
+							{/* Customer Info */}
+							<div className="flex items-center">
+								<div className="w-12 h-12 bg-emerald-600/10 rounded-full flex items-center justify-center mr-4">
+									<MdCreditCard size={20} className="text-emerald-600" />
+								</div>
+								<div>
+									<h4 className="text-lg font-heading font-semibold text-gray-700">
+										Raj Kumar
+									</h4>
+									<p className="text-sm text-gray-500 font-body">
+										Software Engineer, Penang
+									</p>
+									<div className="flex items-center mt-1">
+										<span className="text-xs bg-emerald-600/10 text-emerald-600 px-2 py-1 rounded-full font-medium">
+											Earned Wage Access
+										</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Review 4 - Investment */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							{/* Star Rating */}
+							<div className="flex items-center mb-4">
+								{[...Array(5)].map((_, i) => (
+									<MdStar key={i} size={20} className="text-yellow-400" />
+								))}
+							</div>
+							
+							{/* Review Text */}
+							<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
+								"Consistent monthly returns from my private credit investments. The platform is secure and the team provides excellent support."
+							</p>
+							
+							{/* Customer Info */}
+							<div className="flex items-center">
+								<div className="w-12 h-12 bg-gray-800/10 rounded-full flex items-center justify-center mr-4">
+									<MdTrendingUp size={20} className="text-gray-800" />
+								</div>
+								<div>
+									<h4 className="text-lg font-heading font-semibold text-gray-700">
+										Lim Wei Ming
+									</h4>
+									<p className="text-sm text-gray-500 font-body">
+										Investor, Johor Bahru
+									</p>
+									<div className="flex items-center mt-1">
+										<span className="text-xs bg-gray-800/10 text-gray-800 px-2 py-1 rounded-full font-medium">
+											Private Credit Investment
+										</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Review 5 - Credit Analytics */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							{/* Star Rating */}
+							<div className="flex items-center mb-4">
+								{[...Array(5)].map((_, i) => (
+									<MdStar key={i} size={20} className="text-yellow-400" />
+								))}
+							</div>
+							
+							{/* Review Text */}
+							<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
+								"The CTOS credit report was instant and comprehensive. Helped me understand my credit position before applying for a business loan."
+							</p>
+							
+							{/* Customer Info */}
+							<div className="flex items-center">
+								<div className="w-12 h-12 bg-purple-primary/10 rounded-full flex items-center justify-center mr-4">
+									<MdAssessment size={20} className="text-purple-primary" />
+								</div>
+								<div>
+									<h4 className="text-lg font-heading font-semibold text-gray-700">
+										Fatimah Abdullah
+									</h4>
+									<p className="text-sm text-gray-500 font-body">
+										Business Owner, Sabah
+									</p>
+									<div className="flex items-center mt-1">
+										<span className="text-xs bg-purple-primary/10 text-purple-primary px-2 py-1 rounded-full font-medium">
+											Credit Analytics
+										</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Review 6 - Credit Builder */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							{/* Star Rating */}
+							<div className="flex items-center mb-4">
+								{[...Array(5)].map((_, i) => (
+									<MdStar key={i} size={20} className="text-yellow-400" />
+								))}
+							</div>
+							
+							{/* Review Text */}
+							<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
+								"My credit score improved significantly after 6 months with the Credit Builder program. The monthly tracking kept me motivated."
+							</p>
+							
+							{/* Customer Info */}
+							<div className="flex items-center">
+								<div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center mr-4">
+									<MdTrendingUp size={20} className="text-yellow-500" />
+								</div>
+								<div>
+									<h4 className="text-lg font-heading font-semibold text-gray-700">
+										David Tan
+									</h4>
+									<p className="text-sm text-gray-500 font-body">
+										Fresh Graduate, Kuala Lumpur
+									</p>
+									<div className="flex items-center mt-1">
+										<span className="text-xs bg-yellow-500/10 text-yellow-600 px-2 py-1 rounded-full font-medium">
+											Credit Builder
+										</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Overall Rating Summary */}
+					{/* <div className="mt-12 lg:mt-16 text-center">
+						<div className="inline-flex items-center space-x-4 bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm border border-gray-100">
+							<div className="flex items-center">
+								{[...Array(5)].map((_, i) => (
+									<MdStar key={i} size={24} className="text-yellow-400" />
+								))}
+							</div>
+							<div className="text-left">
+								<p className="text-2xl lg:text-3xl font-heading font-bold text-gray-700">
+									4.9/5.0
+								</p>
+								<p className="text-sm lg:text-base text-gray-500 font-body">
+									Based on 1,200+ reviews
+								</p>
+							</div>
+						</div>
+					</div> */}
+				</div>
+			</section>
+
 			{/* Call to Action Section */}
 			<CTASection
 				title="Ready to get started?"

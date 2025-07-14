@@ -214,8 +214,14 @@ export default function Footer() {
 								Recognised Markets.
 							</p>
 							<p>
-								Lending products offered by OPG Capital Holdings
-								Sdn. Bhd. (KPKT License: WL3337/07/01-9/020223).
+								Registered in Malaysia as OPG Capital Holdings
+								Sdn. Bhd.
+								<br />
+								<i>KPKT License: WL3337/07/01-9/020223</i>
+								<br />
+								<i>
+									Business license number: 202101043135 (1443435-P)
+								</i>
 							</p>
 							<p>
 								Disclaimer: All third party trademarks, product
