@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
-import { authenticateToken } from "../middleware/auth";
+import { authenticateAndVerifyPhone } from "../middleware/auth";
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth";
 import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
@@ -89,7 +89,7 @@ const router = Router();
  */
 router.get(
 	"/me",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;
@@ -199,7 +199,7 @@ router.get(
  */
 router.put(
 	"/me",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;
@@ -351,7 +351,7 @@ router.put(
  */
 router.put(
 	"/me/password",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;
@@ -471,7 +471,7 @@ router.put(
  */
 router.get(
 	"/me/documents",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;
@@ -507,7 +507,7 @@ router.get(
 // Get or create wallet for a user
 router.get(
 	"/me/wallet",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;

@@ -29,6 +29,18 @@ export default function SignupPage() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [phoneError, setPhoneError] = useState<string | null>(null);
+	
+	// OTP verification states
+	const [showOTPVerification, setShowOTPVerification] = useState(false);
+	const [otpCode, setOtpCode] = useState("");
+	const [otpError, setOtpError] = useState<string | null>(null);
+	const [otpLoading, setOtpLoading] = useState(false);
+	const [resendLoading, setResendLoading] = useState(false);
+	const [signupData, setSignupData] = useState<{
+		userId: string;
+		phoneNumber: string;
+		expiresAt: string;
+	} | null>(null);
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
@@ -53,6 +65,90 @@ export default function SignupPage() {
 	// Check if user has entered actual digits beyond the country code
 	// Show helper text when field is empty or only has country code
 	const shouldShowHelper = !phoneNumber || phoneNumber.length <= 2;
+
+	const handleOTPVerification = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		setOtpError(null);
+
+		if (!otpCode || otpCode.length !== 6) {
+			setOtpError("Please enter a valid 6-digit OTP");
+			return;
+		}
+
+		if (!signupData) {
+			setOtpError("Session expired. Please try signing up again.");
+			return;
+		}
+
+		setOtpLoading(true);
+
+		try {
+			const response = await fetch("/api/auth/verify-otp", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ 
+					phoneNumber: signupData.phoneNumber, 
+					otp: otpCode 
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to verify OTP");
+			}
+
+			// Store tokens using our utility functions
+			TokenStorage.setAccessToken(data.accessToken);
+			TokenStorage.setRefreshToken(data.refreshToken);
+
+			// Redirect to dashboard
+			router.push("/dashboard");
+		} catch (error) {
+			setOtpError(
+				error instanceof Error ? error.message : "An error occurred"
+			);
+		} finally {
+			setOtpLoading(false);
+		}
+	};
+
+	const handleResendOTP = async () => {
+		if (!signupData) {
+			setOtpError("Session expired. Please try signing up again.");
+			return;
+		}
+
+		setResendLoading(true);
+		setOtpError(null);
+
+		try {
+			const response = await fetch("/api/auth/resend-otp", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ phoneNumber: signupData.phoneNumber }),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to resend OTP");
+			}
+
+			// Update expiry time if provided
+			if (data.expiresAt) {
+				setSignupData(prev => prev ? { ...prev, expiresAt: data.expiresAt } : null);
+			}
+
+			setOtpError("New verification code sent to your WhatsApp!");
+		} catch (error) {
+			setOtpError(
+				error instanceof Error ? error.message : "Failed to resend OTP"
+			);
+		} finally {
+			setResendLoading(false);
+		}
+	};
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -106,12 +202,13 @@ export default function SignupPage() {
 				return;
 			}
 
-			// Store tokens using our utility functions
-			TokenStorage.setAccessToken(data.accessToken);
-			TokenStorage.setRefreshToken(data.refreshToken);
-
-			// Redirect directly to dashboard instead of onboarding
-			router.push("/dashboard");
+			// Account created successfully, now show OTP verification
+			setSignupData({
+				userId: data.userId,
+				phoneNumber: data.phoneNumber,
+				expiresAt: data.expiresAt,
+			});
+			setShowOTPVerification(true);
 		} catch (error) {
 			setError(
 				error instanceof Error ? error.message : "An error occurred"
@@ -224,10 +321,11 @@ export default function SignupPage() {
 							</p>
 						</div>
 
-						<form
-							className="mt-8 space-y-6"
-							onSubmit={handleSubmit}
-						>
+						{!showOTPVerification ? (
+							<form
+								className="mt-8 space-y-6"
+								onSubmit={handleSubmit}
+							>
 							<div className="space-y-4">
 								<div>
 									<label
@@ -484,6 +582,124 @@ export default function SignupPage() {
 								</button>
 							</div>
 						</form>
+					) : (
+						// OTP Verification Form
+						<form
+							className="mt-8 space-y-6"
+							onSubmit={handleOTPVerification}
+						>
+							<div className="text-center mb-6">
+								<h3 className="text-xl font-semibold text-gray-900 font-heading mb-2">
+									Verify Your Phone Number
+								</h3>
+								<p className="text-sm text-gray-600 font-body">
+									We've sent a 6-digit verification code to your WhatsApp:{" "}
+									<span className="font-semibold">{signupData?.phoneNumber}</span>
+								</p>
+							</div>
+
+							<div className="space-y-4">
+								<div>
+									<label
+										htmlFor="otpCode"
+										className="block text-sm font-medium text-gray-700 mb-1 font-body"
+									>
+										Verification Code
+									</label>
+									<input
+										id="otpCode"
+										name="otpCode"
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]*"
+										maxLength={6}
+										required
+										value={otpCode}
+										onChange={(e) => {
+											const value = e.target.value.replace(/\D/g, '');
+											setOtpCode(value);
+											if (otpError) setOtpError(null);
+										}}
+										className="block w-full h-12 px-4 py-3 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary hover:border-gray-400 transition-colors text-center tracking-widest"
+										placeholder="000000"
+										autoComplete="one-time-code"
+									/>
+									{otpError && (
+										<p className={`mt-1 text-sm font-body ${
+											otpError.includes("sent") ? "text-green-600" : "text-red-600"
+										}`}>
+											{otpError}
+										</p>
+									)}
+								</div>
+							</div>
+
+							<div className="flex flex-col space-y-4">
+								<button
+									type="submit"
+									disabled={otpLoading || otpCode.length !== 6}
+									className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-purple-primary hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
+								>
+									{otpLoading ? (
+										<>
+											<svg
+												className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+											>
+												<circle
+													className="opacity-25"
+													cx="12"
+													cy="12"
+													r="10"
+													stroke="currentColor"
+													strokeWidth="4"
+												></circle>
+												<path
+													className="opacity-75"
+													fill="currentColor"
+													d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+												></path>
+											</svg>
+											Verifying...
+										</>
+									) : (
+										"Verify Code"
+									)}
+								</button>
+
+								<div className="text-center">
+									<p className="text-sm text-gray-600 font-body">
+										Didn't receive the code?{" "}
+										<button
+											type="button"
+											onClick={handleResendOTP}
+											disabled={resendLoading}
+											className="font-medium text-purple-primary hover:text-purple-700 transition-colors disabled:opacity-50"
+										>
+											{resendLoading ? "Sending..." : "Resend Code"}
+										</button>
+									</p>
+								</div>
+
+								<div className="text-center">
+									<button
+										type="button"
+										onClick={() => {
+											setShowOTPVerification(false);
+											setOtpCode("");
+											setOtpError(null);
+											setSignupData(null);
+										}}
+										className="text-sm text-gray-500 hover:text-gray-700 transition-colors font-body"
+									>
+										← Back to Sign Up
+									</button>
+								</div>
+							</div>
+						</form>
+					)}
 					</div>
 				</div>
 			</div>

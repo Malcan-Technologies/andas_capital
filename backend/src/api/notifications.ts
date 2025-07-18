@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { NotificationService } from "../lib/notifications";
 import { prisma } from "../lib/prisma";
 
@@ -32,7 +32,7 @@ const router = Router();
  *       500:
  *         description: Server error
  */
-router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const userId = req.user?.userId;
 		if (!userId) {
@@ -85,7 +85,7 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
  */
 router.patch(
 	"/",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;
@@ -138,7 +138,7 @@ router.patch(
  */
 router.delete(
 	"/:id",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;

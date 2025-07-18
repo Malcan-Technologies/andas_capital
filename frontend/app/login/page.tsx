@@ -10,6 +10,7 @@ import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import { TokenStorage } from "@/lib/authUtils";
 import { validatePhoneNumber } from "@/lib/phoneUtils";
+import OTPVerification from "@/components/OTPVerification";
 
 interface CountryData {
 	countryCode: string;
@@ -30,6 +31,13 @@ function LoginPageContent() {
 	const [phoneNumber, setPhoneNumber] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 	const [phoneError, setPhoneError] = useState<string | null>(null);
+	
+	// OTP verification states
+	const [showOTPVerification, setShowOTPVerification] = useState(false);
+	const [userDataForOTP, setUserDataForOTP] = useState<{
+		phoneNumber: string;
+		userId: string;
+	} | null>(null);
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
@@ -61,6 +69,36 @@ function LoginPageContent() {
 	// Check if user has entered actual digits beyond the country code
 	// Show helper text when field is empty or only has country code
 	const shouldShowHelper = !phoneNumber || phoneNumber.length <= 2;
+
+	const handleOTPSuccess = (data: {
+		accessToken: string;
+		refreshToken: string;
+		userId: string;
+		phoneNumber: string;
+		isOnboardingComplete: boolean;
+		onboardingStep: number;
+	}) => {
+		// Store tokens using our utility functions
+		TokenStorage.setAccessToken(data.accessToken);
+		TokenStorage.setRefreshToken(data.refreshToken);
+
+		console.log("Login OTP - Verification successful, redirecting");
+
+		// Check for redirect parameter
+		const redirect = searchParams.get("redirect");
+		if (redirect) {
+			const decodedRedirect = decodeURIComponent(redirect);
+			window.location.href = decodedRedirect;
+		} else {
+			window.location.href = "/dashboard";
+		}
+	};
+
+	const handleBackToLogin = () => {
+		setShowOTPVerification(false);
+		setUserDataForOTP(null);
+		setError(null);
+	};
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -95,7 +133,20 @@ function LoginPageContent() {
 			const data = await response.json();
 
 			if (!response.ok) {
-				throw new Error(data.error || "Invalid credentials");
+				// Check if this is a phone verification required error
+				if (response.status === 403 && data.requiresPhoneVerification) {
+					console.log("Login - Phone verification required, showing OTP verification");
+					
+					// Show OTP verification screen
+					setUserDataForOTP({
+						phoneNumber: data.phoneNumber || phoneNumber,
+						userId: data.userId
+					});
+					setShowOTPVerification(true);
+					return;
+				}
+				
+				throw new Error(data.error || data.message || "Invalid credentials");
 			}
 
 			// Store tokens using our utility functions
@@ -154,6 +205,39 @@ function LoginPageContent() {
 			setLoading(false);
 		}
 	};
+
+	// Show OTP verification if needed
+	if (showOTPVerification && userDataForOTP) {
+		return (
+			<div className="min-h-screen flex flex-col items-center justify-center bg-offwhite py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+				{/* Background decorative elements */}
+				<div className="absolute inset-0 overflow-hidden">
+					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-purple-primary/10 to-blue-tertiary/10 blur-3xl"></div>
+					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-blue-tertiary/10 to-purple-primary/10 blur-3xl"></div>
+				</div>
+
+				<div className="max-w-md w-full relative z-10">
+					<div className="mb-4 flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors font-body">
+						<div className="mb-6">
+							<Logo
+								size="lg"
+								variant="white"
+								linkTo={undefined}
+							/>
+						</div>
+					</div>
+
+					<OTPVerification
+						phoneNumber={userDataForOTP.phoneNumber}
+						onVerificationSuccess={handleOTPSuccess}
+						onBack={handleBackToLogin}
+						title="Verify Your Phone Number"
+						description="Please verify your phone number to complete login. We've sent a verification code to your WhatsApp"
+					/>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<>

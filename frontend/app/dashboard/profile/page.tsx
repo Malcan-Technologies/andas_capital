@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
-import PhoneInput from "react-phone-input-2";
-import "react-phone-input-2/lib/style.css";
+
 import {
 	PencilIcon,
 	UserCircleIcon,
@@ -25,7 +24,6 @@ import {
 	ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
-import { validatePhoneNumber } from "@/lib/phoneUtils";
 import { 
 	validateICOrPassport, 
 	extractDOBFromMalaysianIC, 
@@ -84,12 +82,7 @@ interface UserDocument {
 	} | null;
 }
 
-interface CountryData {
-	countryCode: string;
-	dialCode: string;
-	format: string;
-	name: string;
-}
+
 
 const employmentStatuses = [
 	"Employed",
@@ -128,8 +121,6 @@ export default function ProfilePage() {
 	const [saving, setSaving] = useState(false);
 	const [editingSection, setEditingSection] = useState<EditingSections>(null);
 	const [formData, setFormData] = useState<Partial<UserProfile>>({});
-	const [phoneNumber, setPhoneNumber] = useState("");
-	const [phoneError, setPhoneError] = useState<string | null>(null);
 	const [passwordData, setPasswordData] = useState({
 		currentPassword: "",
 		newPassword: "",
@@ -141,15 +132,7 @@ export default function ProfilePage() {
 	const [documents, setDocuments] = useState<UserDocument[]>([]);
 	const [documentsLoading, setDocumentsLoading] = useState(true);
 
-	// Example placeholders for different countries
-	const placeholders: { [key: string]: string } = {
-		my: "1234 5678", // Malaysia
-		sg: "8123 4567", // Singapore
-		id: "812 345 678", // Indonesia
-		th: "81 234 5678", // Thailand
-	};
 
-	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
 
 	const fetchDocuments = async () => {
 		try {
@@ -212,8 +195,6 @@ export default function ProfilePage() {
 				}
 				setProfile(data);
 				setFormData(data);
-				// Initialize phone number state
-				setPhoneNumber(data.phoneNumber || "");
 				
 				// Load documents
 				fetchDocuments();
@@ -269,36 +250,15 @@ export default function ProfilePage() {
 		};
 	}, [profile]);
 
-	const handlePhoneChange = (value: string, data: CountryData) => {
-		setPhoneNumber(value);
-		setPlaceholder(placeholders[data.countryCode] || "1234 5678");
-		
-		// Update form data with the new phone number
-		setFormData((prev) => ({
-			...prev,
-			phoneNumber: value,
-		}));
-		
-		// Clear phone error when user starts typing
-		if (phoneError) {
-			setPhoneError(null);
-		}
-	};
+
 
 	const handleEdit = (section: EditingSections) => {
 		setEditingSection(section);
-		// Initialize phone number when editing personal section
-		if (section === "personal" && profile) {
-			setPhoneNumber(profile.phoneNumber || "");
-		}
 	};
 
 	const handleCancel = () => {
 		setEditingSection(null);
 		setFormData(profile || {});
-		// Reset phone number to original profile value
-		setPhoneNumber(profile?.phoneNumber || "");
-		setPhoneError(null);
 		// Reset password form when canceling
 		setPasswordData({
 			currentPassword: "",
@@ -450,19 +410,6 @@ export default function ProfilePage() {
 	const handleSave = async () => {
 		if (!profile) return;
 
-		// Validate phone number if editing personal section
-		if (editingSection === "personal") {
-			const phoneValidation = validatePhoneNumber(phoneNumber, {
-				requireMobile: false, // Allow both mobile and landline for profile update
-				allowLandline: true
-			});
-
-			if (!phoneValidation.isValid) {
-				setPhoneError(phoneValidation.error || "Please enter a valid phone number");
-				return;
-			}
-		}
-
 		// Validate IC number if editing IC section
 		if (editingSection === "ic") {
 			if (formData.icNumber && formData.icNumber.trim()) {
@@ -493,11 +440,6 @@ export default function ProfilePage() {
 		try {
 			const dataToSend = { ...formData };
 
-			// Use the phoneNumber state for personal section
-			if (editingSection === "personal") {
-				dataToSend.phoneNumber = phoneNumber;
-			}
-
 			if (dataToSend.dateOfBirth) {
 				// Keep the date as is since it's already in YYYY-MM-DD format
 				// The API will handle the conversion to UTC
@@ -515,13 +457,8 @@ export default function ProfilePage() {
 				// This is an error response
 				const errorData = response as { message: string };
 				
-				// Handle specific error cases
-				if (errorData.message?.includes("already registered")) {
-					setPhoneError("This phone number is already registered to another account. Please use a different number.");
-					return;
-				} else {
-					throw new Error(errorData.message || "Failed to update profile");
-				}
+				// Handle error response
+				throw new Error(errorData.message || "Failed to update profile");
 			}
 
 			// If we get here, the response is the updated user data
@@ -535,19 +472,10 @@ export default function ProfilePage() {
 			
 			setProfile(updatedUser);
 			setEditingSection(null);
-			// Reset phone number to updated profile value
-			setPhoneNumber(updatedUser.phoneNumber || "");
-			setPhoneError(null);
 		} catch (error) {
 			console.error("Error updating profile:", error);
-			
-			// Check if this is a phone number duplicate error
-			if (error instanceof Error && error.message.includes("already registered")) {
-				setPhoneError("This phone number is already registered to another account. Please use a different number.");
-			} else {
-				// For other errors, just log them - the user will see the form didn't save
-				console.error("Profile update failed:", error instanceof Error ? error.message : "Unknown error");
-			}
+			// For errors, just log them - the user will see the form didn't save
+			console.error("Profile update failed:", error instanceof Error ? error.message : "Unknown error");
 		} finally {
 			setSaving(false);
 		}
@@ -743,44 +671,7 @@ export default function ProfilePage() {
 			);
 		}
 		
-		// Special handling for phone number
-		if (name === "phoneNumber") {
-			return (
-				<div>
-					<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-						{label}
-					</label>
-					<div className="phone-input-wrapper">
-						<PhoneInput
-							country="my"
-							value={phoneNumber}
-							onChange={(value, data: CountryData) => {
-								handlePhoneChange(value, data);
-							}}
-							inputProps={{
-								id: "phoneNumber",
-								name: "phoneNumber",
-								required: true,
-								placeholder: placeholder,
-							}}
-							containerClass="!w-full"
-							inputClass="!w-full !h-12 !pl-20 !pr-4 !py-3 !text-base !font-body !bg-white !border !border-gray-200 !text-gray-700 !placeholder-gray-400 hover:!border-gray-400 focus:!ring-2 focus:!ring-purple-primary/20 focus:!border-purple-primary !transition-colors !rounded-lg"
-							buttonClass="!h-12 !w-16 !border !border-gray-200 !bg-white hover:!bg-gray-50 !text-gray-700 !transition-colors !border-r-0 !rounded-l-lg"
-							dropdownClass="!bg-white !border-gray-200 !text-gray-700 !shadow-xl !rounded-lg !mt-1 !max-h-60 !overflow-y-auto !min-w-72"
-							searchClass="!bg-white !border-gray-200 !text-gray-700 !placeholder-gray-400"
-							enableSearch
-							disableSearchIcon
-							searchPlaceholder="Search country..."
-						/>
-						{phoneError && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{phoneError}
-							</p>
-						)}
-					</div>
-				</div>
-			);
-		}
+
 
 		return (
 			<div>
@@ -815,87 +706,6 @@ export default function ProfilePage() {
 	};
 
 	return (
-		<>
-			<style jsx global>{`
-				/* Remove all shadows and focus styles from phone input */
-				.react-tel-input *,
-				.react-tel-input *:before,
-				.react-tel-input *:after,
-				.react-tel-input .flag-dropdown,
-				.react-tel-input .form-control,
-				.react-tel-input .selected-flag {
-					outline: none !important;
-					box-shadow: none !important;
-					-webkit-box-shadow: none !important;
-					-moz-box-shadow: none !important;
-				}
-				.react-tel-input .flag-dropdown:focus,
-				.react-tel-input .form-control:focus,
-				.react-tel-input .selected-flag:focus,
-				.react-tel-input .flag-dropdown:hover,
-				.react-tel-input .form-control:hover,
-				.react-tel-input .selected-flag:hover,
-				.react-tel-input .flag-dropdown:active,
-				.react-tel-input .form-control:active,
-				.react-tel-input .selected-flag:active {
-					outline: none !important;
-					box-shadow: none !important;
-					-webkit-box-shadow: none !important;
-					-moz-box-shadow: none !important;
-				}
-
-				/* Style the container wrapper */
-				.phone-input-wrapper {
-					position: relative;
-				}
-				.phone-input-wrapper:focus-within {
-					box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
-					border-radius: 0.5rem;
-				}
-				.phone-input-wrapper:focus-within
-					.react-tel-input
-					.flag-dropdown,
-				.phone-input-wrapper:focus-within
-					.react-tel-input
-					.form-control {
-					border-color: #7c3aed !important;
-				}
-
-				/* Remove all border radius from phone input */
-				.react-tel-input,
-				.react-tel-input > div {
-					border-radius: 0.5rem !important;
-				}
-
-				.react-tel-input .flag-dropdown {
-					background-color: white !important;
-					border-color: rgb(229, 231, 235) !important;
-				}
-				.react-tel-input .flag-dropdown:hover {
-					background-color: rgb(249, 250, 251) !important;
-				}
-				.react-tel-input .selected-flag {
-					background-color: transparent !important;
-					width: 100% !important;
-					height: 100% !important;
-					display: flex !important;
-					align-items: center !important;
-					justify-content: center !important;
-					padding: 0 !important;
-					border: none !important;
-				}
-				.react-tel-input .selected-flag:hover {
-					background-color: transparent !important;
-				}
-				.react-tel-input .country-list .country:hover {
-					background-color: rgba(124, 58, 237, 0.1) !important;
-					color: #7c3aed !important;
-				}
-				.react-tel-input .country-list .country.highlight {
-					background-color: rgba(124, 58, 237, 0.2) !important;
-					color: #7c3aed !important;
-				}
-			`}</style>
 			<DashboardLayout
 				userName={profile.fullName?.split(" ")[0] || "User"}
 				title="Profile"
@@ -975,7 +785,6 @@ export default function ProfilePage() {
 											<div className="grid grid-cols-1 gap-4">
 												{renderInput("fullName", "Full Name")}
 												{renderInput("email", "Email", "email")}
-												{renderInput("phoneNumber", "Phone Number", "tel")}
 												{renderInput("dateOfBirth", "Date of Birth", "date")}
 											</div>
 											{renderSaveButtons()}
@@ -1005,19 +814,6 @@ export default function ProfilePage() {
 															</label>
 															<p className="mt-1 text-base text-gray-700 font-body truncate">
 																{profile.email || "Not provided"}
-															</p>
-														</div>
-													</div>
-												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<PhoneIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Phone Number
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.phoneNumber}
 															</p>
 														</div>
 													</div>
@@ -1708,6 +1504,5 @@ export default function ProfilePage() {
 					</div>
 				</div>
 			</DashboardLayout>
-		</>
 	);
 }

@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils } from "../lib/precisionUtils";
 
 const router = Router();
@@ -69,7 +69,7 @@ const prisma = new PrismaClient();
  *       500:
  *         description: Server error
  */
-router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const userId = req.user!.userId;
 
@@ -359,7 +359,7 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
  */
 router.get(
 	"/:id",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
@@ -478,7 +478,7 @@ router.get(
  */
 router.get(
 	"/:id/repayments",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
@@ -567,7 +567,7 @@ router.get(
  */
 router.get(
 	"/:id/transactions",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
@@ -632,7 +632,7 @@ router.get(
  */
 router.get(
 	"/:id/late-fees",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;

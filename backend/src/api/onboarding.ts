@@ -1,4 +1,4 @@
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 
@@ -31,7 +31,7 @@ interface UserResponse {
 	emergencyContactRelationship: string | null;
 }
 
-router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const userId = req.user?.userId;
 		if (!userId) {
@@ -91,7 +91,7 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 	}
 });
 
-router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const userId = req.user?.userId;
 		if (!userId) {

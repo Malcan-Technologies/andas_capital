@@ -8,56 +8,43 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 export async function POST(request: Request) {
 	try {
 		console.log(
-			`[Login Route] Starting login process with backend URL: ${BACKEND_URL}`
+			`[Verify OTP Route] Starting verify OTP process with backend URL: ${BACKEND_URL}`
 		);
 
 		const body = await request.json();
-		const { phoneNumber, password } = body;
+		const { phoneNumber, otp } = body;
 
 		console.log(
-			`[Login Route] Forwarding login request for phone: ${phoneNumber}`
+			`[Verify OTP Route] Forwarding verify OTP request for phone: ${phoneNumber}`
 		);
 
 		// Forward the request to the backend API
-		const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+		const response = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({ phoneNumber, password }),
+			body: JSON.stringify({ phoneNumber, otp }),
 			cache: "no-store",
 			next: { revalidate: 0 },
 		});
 
 		console.log(
-			`[Login Route] Received response with status: ${response.status}`
+			`[Verify OTP Route] Received response with status: ${response.status}`
 		);
 
 		// Get the response body
 		const data = await response.json();
 		console.log(
-			`[Login Route] Response data:`,
+			`[Verify OTP Route] Response data:`,
 			data.message
 				? { message: data.message }
 				: { error: data.error || "Unknown error" }
 		);
 
 		if (!response.ok) {
-			// For phone verification errors, pass through all necessary fields
-			if (response.status === 403 && data.requiresPhoneVerification) {
-				return NextResponse.json(
-					{ 
-						message: data.message,
-						requiresPhoneVerification: data.requiresPhoneVerification,
-						phoneNumber: data.phoneNumber,
-						userId: data.userId
-					},
-					{ status: response.status }
-				);
-			}
-			
 			return NextResponse.json(
-				{ error: data.message || "Invalid credentials" },
+				{ message: data.message || "Failed to verify OTP" },
 				{ status: response.status }
 			);
 		}
@@ -67,6 +54,8 @@ export async function POST(request: Request) {
 			message: data.message,
 			accessToken: data.accessToken,
 			refreshToken: data.refreshToken,
+			userId: data.userId,
+			phoneNumber: data.phoneNumber,
 			isOnboardingComplete: data.isOnboardingComplete,
 			onboardingStep: data.onboardingStep,
 		});
@@ -88,14 +77,14 @@ export async function POST(request: Request) {
 
 		return jsonResponse;
 	} catch (error) {
-		console.error("[Login Route] Error details:", error);
+		console.error("[Verify OTP Route] Error details:", error);
 
 		// Try to provide more specific error information
-		let errorMessage = "Failed to authenticate";
+		let errorMessage = "Failed to verify OTP";
 		if (error instanceof Error) {
-			errorMessage = `Authentication error: ${error.message}`;
+			errorMessage = `Verify OTP error: ${error.message}`;
 		}
 
-		return NextResponse.json({ error: errorMessage }, { status: 500 });
+		return NextResponse.json({ message: errorMessage }, { status: 500 });
 	}
-}
+} 

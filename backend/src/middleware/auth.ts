@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as jwt from "jsonwebtoken";
+import { prisma } from "../lib/prisma";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const JWT_REFRESH_SECRET =
@@ -72,3 +73,61 @@ export const verifyRefreshToken = (
 		return null;
 	}
 };
+
+/**
+ * Middleware that requires phone verification
+ * Use this for protected routes that require verified phone numbers
+ */
+export const requirePhoneVerification = async (
+	req: AuthRequest,
+	res: Response,
+	next: NextFunction
+) => {
+	try {
+		if (!req.user?.userId) {
+			return res.status(401).json({ 
+				message: "Unauthorized",
+				requiresLogin: true 
+			});
+		}
+
+		// Check if user's phone is verified
+		const user = await prisma.user.findUnique({
+			where: { id: req.user.userId },
+			select: { 
+				phoneVerified: true, 
+				phoneNumber: true 
+			}
+		});
+
+		if (!user) {
+			return res.status(401).json({ 
+				message: "User not found" 
+			});
+		}
+
+		if (!user.phoneVerified) {
+			return res.status(403).json({ 
+				message: "Phone number verification required. Please verify your phone number to access this feature.",
+				requiresPhoneVerification: true,
+				phoneNumber: user.phoneNumber
+			});
+		}
+
+		return next();
+	} catch (error) {
+		console.error("Phone verification check error:", error);
+		return res.status(500).json({ 
+			message: "Internal server error" 
+		});
+	}
+};
+
+/**
+ * Combined middleware that authenticates token AND requires phone verification
+ * Use this for most protected routes
+ */
+export const authenticateAndVerifyPhone = [
+	authenticateToken,
+	requirePhoneVerification
+];

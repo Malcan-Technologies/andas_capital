@@ -10,8 +10,34 @@ import jwt from "jsonwebtoken";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import lateFeeRoutes from "./admin/late-fees";
+import whatsappService from "../lib/whatsappService";
 
 import { CronScheduler } from "../lib/cronScheduler";
+
+// Helper function to format date for WhatsApp notification
+function formatDateForWhatsApp(date: Date): string {
+	return date.toLocaleDateString('en-US', {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric',
+		timeZone: 'Asia/Kuala_Lumpur'
+	});
+}
+
+// Helper function to get first repayment date for a loan
+async function getFirstRepaymentDate(loanId: string, prismaTransaction: any): Promise<Date | null> {
+	try {
+		const firstRepayment = await prismaTransaction.loanRepayment.findFirst({
+			where: { loanId },
+			orderBy: { dueDate: 'asc' }
+		});
+		return firstRepayment?.dueDate || null;
+	} catch (error) {
+		console.error('Error getting first repayment date:', error);
+		return null;
+	}
+}
+
 /**
  * @swagger
  * tags:
@@ -2087,6 +2113,7 @@ router.patch(
 					include: {
 						user: true,
 						loan: true,
+						product: true,
 					},
 				});
 
@@ -2417,6 +2444,39 @@ router.patch(
 							console.log(
 								"Disbursement transaction completed successfully"
 							);
+
+							// Send WhatsApp notification for loan disbursement (Status Update Endpoint)
+							try {
+								console.log("Sending WhatsApp disbursement notification (status update)");
+								
+								// Get first repayment date
+								const firstRepaymentDate = await getFirstRepaymentDate(updatedLoan.id, prismaTransaction);
+								
+								if (firstRepaymentDate && application.user.phoneNumber && application.user.fullName) {
+									const whatsappResult = await whatsappService.sendLoanDisbursementNotification({
+										to: application.user.phoneNumber,
+										fullName: application.user.fullName,
+										amount: `${disbursementAmount.toFixed(2)}`,
+										productName: application.product.name,
+										firstRepaymentDate: formatDateForWhatsApp(firstRepaymentDate)
+									});
+									
+									if (whatsappResult.success) {
+										console.log("WhatsApp disbursement notification sent successfully:", whatsappResult.messageId);
+									} else {
+										console.error("WhatsApp disbursement notification failed:", whatsappResult.error);
+									}
+								} else {
+									console.log("Skipping WhatsApp notification - missing required data:", {
+										hasFirstRepaymentDate: !!firstRepaymentDate,
+										hasPhoneNumber: !!application.user.phoneNumber,
+										hasFullName: !!application.user.fullName
+									});
+								}
+							} catch (whatsappError) {
+								console.error("Error sending WhatsApp disbursement notification:", whatsappError);
+								// Continue without failing the disbursement
+							}
 							return {
 								application: updatedApplication,
 								loan: updatedLoan,
@@ -2525,6 +2585,47 @@ router.patch(
 						finalStatus: finalStatus,
 					}
 				);
+
+				// Send WhatsApp notification for loan approval (PENDING_ATTESTATION status)
+				if (finalStatus === "PENDING_ATTESTATION" && application.user.phoneNumber) {
+					try {
+						console.log("Sending WhatsApp loan approval notification");
+						const whatsappResult = await whatsappService.sendLoanApprovalNotification({
+							to: application.user.phoneNumber,
+							fullName: application.user.fullName || 'Valued Customer',
+							productName: application.product.name,
+							amount: application.amount ? application.amount.toFixed(2) : '0.00'
+						});
+						
+						if (whatsappResult.success) {
+							console.log(`WhatsApp loan approval notification sent successfully to ${application.user.phoneNumber}. Message ID: ${whatsappResult.messageId}`);
+						} else {
+							console.error(`Failed to send WhatsApp loan approval notification: ${whatsappResult.error}`);
+						}
+					} catch (whatsappError) {
+						console.error("Error sending WhatsApp loan approval notification:", whatsappError);
+					}
+				}
+
+				// Send WhatsApp notification for loan rejection (REJECTED status)
+				if (finalStatus === "REJECTED" && application.user.phoneNumber) {
+					try {
+						console.log("Sending WhatsApp loan rejection notification");
+						const whatsappResult = await whatsappService.sendLoanRejectionNotification({
+							to: application.user.phoneNumber,
+							fullName: application.user.fullName || 'Valued Customer',
+							productName: application.product.name
+						});
+						
+						if (whatsappResult.success) {
+							console.log(`WhatsApp loan rejection notification sent successfully to ${application.user.phoneNumber}. Message ID: ${whatsappResult.messageId}`);
+						} else {
+							console.error(`Failed to send WhatsApp loan rejection notification: ${whatsappResult.error}`);
+						}
+					} catch (whatsappError) {
+						console.error("Error sending WhatsApp loan rejection notification:", whatsappError);
+					}
+				}
 
 				// Create notification for the user about status change
 				try {
@@ -3172,6 +3273,39 @@ router.post(
 							console.log(
 								"Disbursement transaction completed successfully"
 							);
+
+							// Send WhatsApp notification for loan disbursement (Dedicated Disbursement Endpoint)
+							try {
+								console.log("Sending WhatsApp disbursement notification (disbursement endpoint)");
+								
+								// Get first repayment date
+								const firstRepaymentDate = await getFirstRepaymentDate(updatedLoan.id, prismaTransaction);
+								
+								if (firstRepaymentDate && application.user.phoneNumber && application.user.fullName) {
+									const whatsappResult = await whatsappService.sendLoanDisbursementNotification({
+										to: application.user.phoneNumber,
+										fullName: application.user.fullName,
+										amount: `${disbursementAmount.toFixed(2)}`,
+										productName: application.product.name,
+										firstRepaymentDate: formatDateForWhatsApp(firstRepaymentDate)
+									});
+									
+									if (whatsappResult.success) {
+										console.log("WhatsApp disbursement notification sent successfully:", whatsappResult.messageId);
+									} else {
+										console.error("WhatsApp disbursement notification failed:", whatsappResult.error);
+									}
+								} else {
+									console.log("Skipping WhatsApp notification - missing required data:", {
+										hasFirstRepaymentDate: !!firstRepaymentDate,
+										hasPhoneNumber: !!application.user.phoneNumber,
+										hasFullName: !!application.user.fullName
+									});
+								}
+							} catch (whatsappError) {
+								console.error("Error sending WhatsApp disbursement notification:", whatsappError);
+								// Continue without failing the disbursement
+							}
 							return {
 								application: updatedApplication,
 								loan: updatedLoan,

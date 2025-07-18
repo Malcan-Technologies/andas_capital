@@ -33,6 +33,9 @@ services:
             - JWT_REFRESH_SECRET=kapital_nextauth_secret_key_2024_03_secure_789!@#
             - PORT=4001
             - NODE_ENV=development
+            - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+            - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+            - WHATSAPP_USE_OTP_TEMPLATE=true
         depends_on:
             postgres:
                 condition: service_healthy

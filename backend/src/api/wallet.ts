@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { PrismaClient, WalletTransactionStatus } from "@prisma/client";
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils } from "../lib/precisionUtils";
 
 const router = Router();
@@ -334,7 +334,7 @@ async function calculateNextPaymentDue(loanId: string, tx: any) {
 }
 
 // Get user's wallet data
-router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const userId = req.user!.userId;
 
@@ -530,7 +530,7 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 // Get wallet transactions
 router.get(
 	"/transactions",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
@@ -581,7 +581,7 @@ router.get(
 // Create deposit transaction
 router.post(
 	"/deposit",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
@@ -634,7 +634,7 @@ router.post(
 // Create withdrawal transaction
 router.post(
 	"/withdraw",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
@@ -693,7 +693,7 @@ router.post(
 // Create loan repayment transaction
 router.post(
 	"/repay-loan",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
@@ -888,7 +888,7 @@ router.post(
 // Process pending transaction (admin/system use)
 router.patch(
 	"/transactions/:id/process",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;

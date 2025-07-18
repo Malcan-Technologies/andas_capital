@@ -70,12 +70,14 @@ model User {
   emergencyContactRelationship String?
   icNumber                     String?
   icType                       String?
+  phoneVerified                Boolean             @default(false)
   applications                 LoanApplication[]
   loans                        Loan[]
   notifications                Notification[]
   documents                    UserDocument[]
   walletTransactions           WalletTransaction[]
   wallet                       Wallet?
+  phoneVerifications           PhoneVerification[]
 
   @@map("users")
 }
@@ -334,6 +336,24 @@ model LateFeeProcessingLog {
 
   @@index([processedAt])
   @@map("late_fee_processing_logs")
+}
+
+model PhoneVerification {
+  id          String   @id @default(cuid())
+  userId      String
+  phoneNumber String
+  otp         String
+  expiresAt   DateTime
+  verified    Boolean  @default(false)
+  attempts    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phoneNumber])
+  @@index([expiresAt])
+  @@index([userId, verified])
+  @@map("phone_verifications")
 }
 
 enum WalletTransactionStatus {

@@ -2965,7 +2965,7 @@
     },
     "/api/auth/signup": {
       "post": {
-        "summary": "Register a new user",
+        "summary": "Register a new user and send OTP verification",
         "tags": [
           "Auth"
         ],
@@ -2995,7 +2995,75 @@
         },
         "responses": {
           "201": {
-            "description": "User created successfully",
+            "description": "User created successfully, OTP sent for verification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "phoneNumber": {
+                      "type": "string"
+                    },
+                    "otpSent": {
+                      "type": "boolean"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User already exists or invalid phone number"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/auth/verify-otp": {
+      "post": {
+        "summary": "Verify OTP and complete phone number verification",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phoneNumber",
+                  "otp"
+                ],
+                "properties": {
+                  "phoneNumber": {
+                    "type": "string",
+                    "example": "+1234567890"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Phone number verified successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -3010,6 +3078,12 @@
                     "refreshToken": {
                       "type": "string"
                     },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "phoneNumber": {
+                      "type": "string"
+                    },
                     "isOnboardingComplete": {
                       "type": "boolean"
                     },
@@ -3022,7 +3096,67 @@
             }
           },
           "400": {
-            "description": "User already exists or invalid phone number"
+            "description": "Invalid or expired OTP"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/auth/resend-otp": {
+      "post": {
+        "summary": "Resend OTP verification code",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phoneNumber"
+                ],
+                "properties": {
+                  "phoneNumber": {
+                    "type": "string",
+                    "example": "+1234567890"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP resent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "otpSent": {
+                      "type": "boolean"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid phone number or rate limit exceeded"
+          },
+          "404": {
+            "description": "User not found"
           },
           "500": {
             "description": "Server error"

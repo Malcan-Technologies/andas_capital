@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import {
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	AuthRequest,
 	FileAuthRequest,
 } from "../middleware/auth";
@@ -94,7 +94,7 @@ const upload = multer({
  *         description: Server error
  */
 // Create a new loan application
-router.post("/", authenticateToken, async (req: AuthRequest, res) => {
+router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const { productId, amount, term, purpose, appStep, product } = req.body;
 		const userId = req.user!.userId;
@@ -178,7 +178,7 @@ router.post("/", authenticateToken, async (req: AuthRequest, res) => {
  *         description: Server error
  */
 // Get a loan application by ID or URL link
-router.get("/:id", authenticateToken, async (req: AuthRequest, res) => {
+router.get("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const { id } = req.params;
 		const userId = req.user!.userId;
@@ -231,7 +231,7 @@ router.get("/:id", authenticateToken, async (req: AuthRequest, res) => {
  *         description: Server error
  */
 // Get all loan applications for the current user
-router.get("/", authenticateToken, async (req: AuthRequest, res) => {
+router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const userId = req.user!.userId;
 
@@ -302,7 +302,7 @@ router.get("/", authenticateToken, async (req: AuthRequest, res) => {
  *         description: Server error
  */
 // Update a loan application
-router.patch("/:id", authenticateToken, async (req: AuthRequest, res) => {
+router.patch("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const { id } = req.params;
 		const userId = req.user!.userId;
@@ -377,7 +377,7 @@ router.patch("/:id", authenticateToken, async (req: AuthRequest, res) => {
  *         description: Server error
  */
 // Update application step
-router.patch("/:id/step", authenticateToken, async (req: AuthRequest, res) => {
+router.patch("/:id/step", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const { id } = req.params;
 		const { step } = req.body;
@@ -455,8 +455,8 @@ router.patch("/:id/step", authenticateToken, async (req: AuthRequest, res) => {
 // Update application status
 router.patch(
 	"/:id/status",
-	authenticateToken,
-	async (req: AuthRequest, res) => {
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
 			const { status } = req.body;
@@ -530,9 +530,9 @@ router.patch(
 // Document upload endpoint
 router.post(
 	"/:id/documents",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	upload.array("documents"),
-	async (req: FileAuthRequest, res) => {
+	async (req: FileAuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
 			const files = req.files as Express.Multer.File[];
@@ -650,8 +650,8 @@ router.post(
 // Get documents for a loan application
 router.get(
 	"/:id/documents",
-	authenticateToken,
-	async (req: AuthRequest, res) => {
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
 			const userId = req.user!.userId;
@@ -731,8 +731,8 @@ router.get(
 // Update document status
 router.patch(
 	"/:id/documents/:documentId",
-	authenticateToken,
-	async (req: AuthRequest, res) => {
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id, documentId } = req.params;
 			const { status } = req.body;
@@ -803,8 +803,8 @@ router.patch(
 // Delete document
 router.delete(
 	"/:id/documents/:documentId",
-	authenticateToken,
-	async (req: AuthRequest, res) => {
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id, documentId } = req.params;
 			const userId = req.user!.userId;
@@ -889,7 +889,7 @@ router.delete(
  *         description: Server error
  */
 // Delete a loan application (only incomplete applications)
-router.delete("/:id", authenticateToken, async (req: AuthRequest, res) => {
+router.delete("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const { id } = req.params;
 		const userId = req.user!.userId;
@@ -1207,7 +1207,7 @@ router.get("/:id/documents/:documentId", (async (
 // Complete attestation (user endpoint)
 router.post(
 	"/:id/complete-attestation",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
@@ -1382,7 +1382,7 @@ router.post(
  *         description: Server error
  */
 // Get application history timeline for current user
-router.get("/:id/history", authenticateToken, async (req: AuthRequest, res) => {
+router.get("/:id/history", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
 		const { id } = req.params;
 		const userId = req.user!.userId;
@@ -1499,7 +1499,7 @@ router.get("/:id/history", authenticateToken, async (req: AuthRequest, res) => {
 		// Request live video call attestation (user endpoint)
 router.post(
 	"/:id/request-live-call",
-	authenticateToken,
+	authenticateAndVerifyPhone,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
@@ -1669,8 +1669,8 @@ router.post(
 // Link existing documents to a loan application
 router.post(
 	"/:id/link-documents",
-	authenticateToken,
-	async (req: AuthRequest, res) => {
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
 			const { documentIds, documentTypes } = req.body;

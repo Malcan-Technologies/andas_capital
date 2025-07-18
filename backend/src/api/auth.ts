@@ -9,6 +9,8 @@ import {
 import { prisma } from "../lib/prisma";
 import * as bcrypt from "bcryptjs";
 import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
+import { OTPUtils } from "../lib/otpUtils";
+import whatsappService from "../lib/whatsappService";
 
 const router = Router();
 
@@ -111,6 +113,45 @@ router.post("/login", async (req, res) => {
 
 		if (!isValidPassword) {
 			return res.status(401).json({ message: "Invalid credentials" });
+		}
+
+		// Check if phone is verified
+		const userWithVerification = await prisma.user.findUnique({
+			where: { id: user.id },
+			select: { phoneVerified: true }
+		});
+
+		if (!userWithVerification?.phoneVerified) {
+			// Automatically send OTP for phone verification
+			try {
+				// Check rate limiting first
+				const rateLimitCheck = await OTPUtils.canRequestNewOTP(normalizedPhone);
+				if (rateLimitCheck.canRequest) {
+					// Generate and send OTP
+					const otpResult = await OTPUtils.createOTP(user.id, normalizedPhone);
+					if (otpResult.success) {
+						// Send OTP via WhatsApp
+						const whatsappResult = await whatsappService.sendOTP({
+							to: normalizedPhone,
+							otp: otpResult.otp!,
+						});
+						
+						if (!whatsappResult.success) {
+							console.error("WhatsApp OTP send failed during login:", whatsappResult.error);
+						}
+					}
+				}
+			} catch (error) {
+				console.error("Failed to send OTP during login:", error);
+				// Continue anyway, user can request resend
+			}
+
+			return res.status(403).json({ 
+				message: "Please verify your phone number before logging in. We've sent a verification code to your WhatsApp.",
+				requiresPhoneVerification: true,
+				phoneNumber: user.phoneNumber,
+				userId: user.id
+			});
 		}
 
 		// Update last login time
@@ -222,7 +263,7 @@ router.post("/refresh", async (req, res) => {
  * @swagger
  * /api/auth/signup:
  *   post:
- *     summary: Register a new user
+ *     summary: Register a new user and send OTP verification
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -242,7 +283,7 @@ router.post("/refresh", async (req, res) => {
  *                 example: "securepassword"
  *     responses:
  *       201:
- *         description: User created successfully
+ *         description: User created successfully, OTP sent for verification
  *         content:
  *           application/json:
  *             schema:
@@ -250,14 +291,15 @@ router.post("/refresh", async (req, res) => {
  *               properties:
  *                 message:
  *                   type: string
- *                 accessToken:
+ *                 userId:
  *                   type: string
- *                 refreshToken:
+ *                 phoneNumber:
  *                   type: string
- *                 isOnboardingComplete:
+ *                 otpSent:
  *                   type: boolean
- *                 onboardingStep:
- *                   type: number
+ *                 expiresAt:
+ *                   type: string
+ *                   format: date-time
  *       400:
  *         description: User already exists or invalid phone number
  *       500:
@@ -291,28 +333,281 @@ router.post("/signup", async (req, res) => {
 			});
 		}
 
-		// Create new user with normalized phone number
+		// Create new user with normalized phone number (phone not verified yet)
 		const user = await User.create({ 
 			phoneNumber: normalizedPhone, 
 			password 
 		});
 
-		// Generate tokens
+		// Generate and send OTP
+		const otpResult = await OTPUtils.createOTP(user.id, normalizedPhone);
+		if (!otpResult.success) {
+			// If OTP creation fails, we should clean up the user
+			await prisma.user.delete({ where: { id: user.id } });
+			return res.status(500).json({ 
+				message: "Failed to send verification code. Please try again." 
+			});
+		}
+
+		// Send OTP via WhatsApp
+		const whatsappResult = await whatsappService.sendOTP({
+			to: normalizedPhone,
+			otp: otpResult.otp!,
+		});
+
+		if (!whatsappResult.success) {
+			console.error("WhatsApp OTP send failed:", whatsappResult.error);
+			// Still return success to user, but log the error
+			// In production, you might want to fallback to SMS or email
+		}
+
+		return res.status(201).json({
+			message: "Account created successfully. Please verify your phone number with the OTP sent via WhatsApp.",
+			userId: user.id,
+			phoneNumber: normalizedPhone,
+			otpSent: whatsappResult.success,
+			expiresAt: otpResult.expiresAt,
+		});
+	} catch (error) {
+		console.error("Signup error:", error);
+		return res.status(500).json({ message: "Error creating user" });
+	}
+});
+
+/**
+ * @swagger
+ * /api/auth/verify-otp:
+ *   post:
+ *     summary: Verify OTP and complete phone number verification
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *               - otp
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *                 example: "+1234567890"
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: Phone number verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *                 userId:
+ *                   type: string
+ *                 phoneNumber:
+ *                   type: string
+ *                 isOnboardingComplete:
+ *                   type: boolean
+ *                 onboardingStep:
+ *                   type: number
+ *       400:
+ *         description: Invalid or expired OTP
+ *       500:
+ *         description: Server error
+ */
+router.post("/verify-otp", async (req, res) => {
+	try {
+		const { phoneNumber, otp } = req.body;
+
+		if (!phoneNumber || !otp) {
+			return res.status(400).json({ 
+				message: "Phone number and OTP are required" 
+			});
+		}
+
+		// Validate phone number format
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: true,
+			allowLandline: false
+		});
+
+		if (!phoneValidation.isValid) {
+			return res.status(400).json({ 
+				message: phoneValidation.error || "Invalid phone number format" 
+			});
+		}
+
+		// Normalize phone number
+		const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+		// Validate OTP
+		const otpResult = await OTPUtils.validateOTP(normalizedPhone, otp);
+		
+		if (!otpResult.success) {
+			return res.status(400).json({ 
+				message: otpResult.error || "Invalid OTP" 
+			});
+		}
+
+		// Get the verified user
+		const user = await User.findById(otpResult.userId!);
+		if (!user) {
+			return res.status(404).json({ 
+				message: "User not found" 
+			});
+		}
+
+		// Generate tokens for the verified user
 		const { accessToken, refreshToken } = generateTokens(user);
 
 		// Save refresh token
 		await user.updateRefreshToken(refreshToken);
 
-		return res.status(201).json({
-			message: "User created successfully",
+		return res.json({
+			message: "Phone number verified successfully",
 			accessToken,
 			refreshToken,
+			userId: user.id,
+			phoneNumber: user.phoneNumber,
 			isOnboardingComplete: user.isOnboardingComplete,
 			onboardingStep: user.onboardingStep,
 		});
 	} catch (error) {
-		console.error("Signup error:", error);
-		return res.status(500).json({ message: "Error creating user" });
+		console.error("OTP verification error:", error);
+		return res.status(500).json({ message: "Error verifying OTP" });
+	}
+});
+
+/**
+ * @swagger
+ * /api/auth/resend-otp:
+ *   post:
+ *     summary: Resend OTP verification code
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *                 example: "+1234567890"
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 otpSent:
+ *                   type: boolean
+ *                 expiresAt:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: Invalid phone number or rate limit exceeded
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+router.post("/resend-otp", async (req, res) => {
+	try {
+		const { phoneNumber } = req.body;
+
+		if (!phoneNumber) {
+			return res.status(400).json({ 
+				message: "Phone number is required" 
+			});
+		}
+
+		// Validate phone number format
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: true,
+			allowLandline: false
+		});
+
+		if (!phoneValidation.isValid) {
+			return res.status(400).json({ 
+				message: phoneValidation.error || "Invalid phone number format" 
+			});
+		}
+
+		// Normalize phone number
+		const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+		// Check if user exists and is not verified
+		const user = await User.findByPhoneNumber(normalizedPhone);
+		if (!user) {
+			return res.status(404).json({ 
+				message: "User not found. Please register first." 
+			});
+		}
+
+		// Check if user is already verified
+		const userWithVerification = await prisma.user.findUnique({
+			where: { id: user.id },
+			select: { phoneVerified: true }
+		});
+
+		if (userWithVerification?.phoneVerified) {
+			return res.status(400).json({ 
+				message: "Phone number is already verified" 
+			});
+		}
+
+		// Check rate limiting
+		const rateLimitCheck = await OTPUtils.canRequestNewOTP(normalizedPhone);
+		if (!rateLimitCheck.canRequest) {
+			return res.status(400).json({ 
+				message: rateLimitCheck.waitTime 
+					? `Please wait ${rateLimitCheck.waitTime} seconds before requesting a new OTP`
+					: "Rate limit exceeded. Please try again later."
+			});
+		}
+
+		// Generate and send new OTP
+		const otpResult = await OTPUtils.createOTP(user.id, normalizedPhone);
+		if (!otpResult.success) {
+			return res.status(500).json({ 
+				message: "Failed to generate verification code. Please try again." 
+			});
+		}
+
+		// Send OTP via WhatsApp
+		const whatsappResult = await whatsappService.sendOTP({
+			to: normalizedPhone,
+			otp: otpResult.otp!,
+		});
+
+		if (!whatsappResult.success) {
+			console.error("WhatsApp OTP resend failed:", whatsappResult.error);
+			// Still return success to user, but log the error
+		}
+
+		return res.json({
+			message: "Verification code sent successfully via WhatsApp",
+			otpSent: whatsappResult.success,
+			expiresAt: otpResult.expiresAt,
+		});
+	} catch (error) {
+		console.error("OTP resend error:", error);
+		return res.status(500).json({ message: "Error resending OTP" });
 	}
 });
 

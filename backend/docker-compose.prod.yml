@@ -46,6 +46,9 @@ services:
             - PORT=${PORT:-4001}
             - BASE_URL=${BASE_URL}
             - DOCUMENT_STORAGE_PATH=${DOCUMENT_STORAGE_PATH}
+            - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+            - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+            - WHATSAPP_USE_OTP_TEMPLATE=${WHATSAPP_USE_OTP_TEMPLATE:-true}
         depends_on:
             postgres:
                 condition: service_healthy
