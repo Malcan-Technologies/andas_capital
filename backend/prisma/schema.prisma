@@ -70,6 +70,7 @@ model User {
   emergencyContactRelationship String?
   icNumber                     String?
   icType                       String?
+  educationLevel               String?
   phoneVerified                Boolean             @default(false)
   applications                 LoanApplication[]
   loans                        Loan[]

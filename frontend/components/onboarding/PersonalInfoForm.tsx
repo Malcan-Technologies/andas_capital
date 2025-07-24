@@ -14,8 +14,22 @@ import {
 	PhoneIcon, 
 	EnvelopeIcon, 
 	CalendarIcon,
-	UserGroupIcon
+	UserGroupIcon,
+	AcademicCapIcon
 } from "@heroicons/react/24/outline";
+
+const educationLevels = [
+	"Primary School",
+	"Secondary School (SPM/O-Levels)",
+	"Pre-University (STPM/A-Levels/Foundation)",
+	"Diploma",
+	"Bachelor's Degree",
+	"Master's Degree",
+	"Doctorate (PhD)",
+	"Professional Certification",
+	"Vocational Training",
+	"Other",
+] as const;
 
 interface PersonalInfoFormProps {
 	initialValues: Partial<PersonalInfo>;
@@ -39,6 +53,7 @@ export default function PersonalInfoForm({
 		phoneNumber: initialValues.phoneNumber || "",
 		icNumber: initialValues.icNumber || "",
 		icType: initialValues.icType || null,
+		educationLevel: initialValues.educationLevel || "",
 		emergencyContactName: initialValues.emergencyContactName || "",
 		emergencyContactPhone: initialValues.emergencyContactPhone || "",
 		emergencyContactRelationship: initialValues.emergencyContactRelationship || "",
@@ -135,6 +150,11 @@ export default function PersonalInfoForm({
 			}
 		}
 
+		// Education level validation
+		if (!formData.educationLevel?.trim()) {
+			newErrors.educationLevel = "Education level is required";
+		}
+
 		// Emergency contact validation
 		if (!formData.emergencyContactName?.trim()) {
 			newErrors.emergencyContactName = "Emergency contact name is required";
@@ -168,6 +188,7 @@ export default function PersonalInfoForm({
 				phoneNumber: formData.phoneNumber!,
 				icNumber: formData.icNumber!,
 				icType: formData.icType!,
+				educationLevel: formData.educationLevel!,
 				emergencyContactName: formData.emergencyContactName!,
 				emergencyContactPhone: formData.emergencyContactPhone!,
 				emergencyContactRelationship: formData.emergencyContactRelationship!,
@@ -335,6 +356,38 @@ export default function PersonalInfoForm({
 							</div>
 							{errors.email && (
 								<p className="mt-1 text-sm text-red-600 font-body">{errors.email}</p>
+							)}
+						</div>
+
+						{/* Education Level */}
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Education Level <span className="text-red-500">*</span>
+							</label>
+							<div className="relative">
+								<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+									<AcademicCapIcon className="h-5 w-5 text-gray-400" />
+								</div>
+								<select
+									name="educationLevel"
+									value={formData.educationLevel}
+									onChange={handleInputChange}
+									className={`w-full pl-10 pr-8 py-3 border rounded-xl font-body text-base text-gray-900 bg-white transition-all duration-200 ${
+										errors.educationLevel
+											? "border-red-300 focus:border-red-500 focus:ring-red-500"
+											: "border-gray-300 focus:border-purple-primary focus:ring-purple-primary"
+									} focus:outline-none focus:ring-2 focus:ring-opacity-50`}
+								>
+									<option value="">Select your education level</option>
+									{educationLevels.map((level) => (
+										<option key={level} value={level}>
+											{level}
+										</option>
+									))}
+								</select>
+							</div>
+							{errors.educationLevel && (
+								<p className="mt-1 text-sm text-red-600 font-body">{errors.educationLevel}</p>
 							)}
 						</div>
 					</div>

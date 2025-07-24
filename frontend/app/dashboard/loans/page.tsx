@@ -4121,7 +4121,7 @@ function LoansPageContent() {
 												<div className="ml-3 flex-1">
 													<div>
 														<p className="font-semibold text-gray-700 font-heading">
-															Fresh Funds Transfer
+															Fund Transfer
 														</p>
 														<p className="text-sm text-gray-500 font-body">
 															<span className="hidden sm:inline">

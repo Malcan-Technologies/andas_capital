@@ -5183,50 +5183,103 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 	
 	// Total amount to be paid (principal + interest)
 	const totalAmountToPay = SafeMath.add(principal, totalInterest);
-	
-	// Calculate base monthly payment (will be adjusted for final payment)
-	const baseMonthlyPayment = SafeMath.divide(totalAmountToPay, term);
-	
-	// Calculate base monthly portions
-	const baseMonthlyInterest = SafeMath.divide(totalInterest, term);
-	const baseMonthlyPrincipal = SafeMath.divide(principal, term);
 
 	console.log(`Generating payment schedule for loan ${loanId}:`);
 	console.log(`Principal: ${principal}, Interest Rate: ${loan.interestRate}%, Term: ${term} months`);
 	console.log(`Total Interest: ${totalInterest}, Total Amount: ${totalAmountToPay}`);
-	console.log(`Base Monthly Payment: ${baseMonthlyPayment}`);
 
-	// Generate all installments first (except the last one)
+	// Calculate first payment date using new cutoff logic
+	const firstPaymentDate = calculateFirstPaymentDate(new Date(loan.disbursedAt));
+	const disbursementDate = new Date(loan.disbursedAt);
+	
+	// Calculate pro-rated first payment for actual period from disbursement to first payment
+	const daysInFirstPeriod = calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
+	const daysInFullTerm = term * 30; // Total days for the entire loan term (using 30-day months)
+	const monthlyInterestRateDecimal = SafeMath.toNumber(loan.interestRate) / 100; // Monthly interest rate as decimal
+	const dailyInterestRate = monthlyInterestRateDecimal / 30; // Daily interest rate from monthly (consistent with 30-day months)
+	
+	// Calculate interest for the actual period from disbursement to first payment
+	const firstPeriodInterest = SafeMath.toNumber(
+		principal * dailyInterestRate * daysInFirstPeriod
+	);
+	
+	// Calculate principal portion for first payment (proportional to time period)
+	const firstPeriodPrincipalRatio = SafeMath.divide(daysInFirstPeriod, daysInFullTerm);
+	const firstPeriodPrincipal = SafeMath.multiply(principal, firstPeriodPrincipalRatio);
+	
+	console.log(`First payment calculation:`);
+	console.log(`  Disbursement: ${disbursementDate.toISOString()}`);
+	console.log(`  First payment due: ${firstPaymentDate.toISOString()}`);
+	console.log(`  Days in first period: ${daysInFirstPeriod}`);
+	console.log(`  Daily interest rate: ${dailyInterestRate.toFixed(6)}`);
+	console.log(`  First period interest: ${firstPeriodInterest.toFixed(2)}`);
+	console.log(`  First period principal: ${firstPeriodPrincipal.toFixed(2)}`);
+
+	// Calculate remaining amounts after first payment
+	const remainingTerm = term - 1; // Remaining payments after first payment
+	const remainingInterest = SafeMath.subtract(totalInterest, firstPeriodInterest);
+	const remainingPrincipal = SafeMath.subtract(principal, firstPeriodPrincipal);
+	const remainingTotal = SafeMath.add(remainingInterest, remainingPrincipal);
+	
+	// Calculate monthly amounts for remaining payments
+	const baseMonthlyPayment = remainingTerm > 0 ? SafeMath.divide(remainingTotal, remainingTerm) : 0;
+	const baseMonthlyInterest = remainingTerm > 0 ? SafeMath.divide(remainingInterest, remainingTerm) : 0;
+	const baseMonthlyPrincipal = remainingTerm > 0 ? SafeMath.divide(remainingPrincipal, remainingTerm) : 0;
+
+	console.log(`Remaining calculation:`);
+	console.log(`  Remaining term: ${remainingTerm} payments`);
+	console.log(`  Remaining total: ${remainingTotal.toFixed(2)}`);
+	console.log(`  Base monthly payment: ${baseMonthlyPayment.toFixed(2)}`);
+
+	// Generate all installments with new logic
 	let totalScheduled = 0;
 	let totalInterestScheduled = 0;
 	let totalPrincipalScheduled = 0;
 
 	for (let month = 1; month <= term; month++) {
-		// Set due date to end of day exactly 1 month from disbursement
-		const disbursementDate = new Date(loan.disbursedAt);
-		const dueDate = new Date(
-			Date.UTC(
-				disbursementDate.getUTCFullYear(),
-				disbursementDate.getUTCMonth() + month,
-				disbursementDate.getUTCDate(),
-				15,
-				59,
-				59,
-				999
-			)
-		);
+		let dueDate: Date;
+		
+		if (month === 1) {
+			// First payment uses calculated first payment date
+			dueDate = firstPaymentDate;
+		} else {
+			// Subsequent payments are on 1st of each following month
+			const firstPaymentMalaysia = new Date(firstPaymentDate.getTime() + (8 * 60 * 60 * 1000));
+			const targetMonth = firstPaymentMalaysia.getUTCMonth() + (month - 1);
+			let targetYear = firstPaymentMalaysia.getUTCFullYear();
+			
+			// Handle multiple year rollovers correctly
+			const actualMonth = targetMonth % 12;
+			targetYear += Math.floor(targetMonth / 12);
+			
+			dueDate = new Date(
+				Date.UTC(targetYear, actualMonth, 1, 15, 59, 59, 999)
+			);
+		}
 
 		let installmentAmount, interestAmount, principalAmount;
 
 		if (month === term) {
 			// Final installment: adjust to ensure total matches exactly
+			// This handles both single-payment loans (term=1) and final payments of multi-term loans
 			installmentAmount = SafeMath.subtract(totalAmountToPay, totalScheduled);
 			interestAmount = SafeMath.subtract(totalInterest, totalInterestScheduled);
 			principalAmount = SafeMath.subtract(principal, totalPrincipalScheduled);
 			
-			console.log(`Final installment adjustment:`);
+			console.log(`Final installment adjustment (month ${month} of ${term}):`);
 			console.log(`  Target total: ${totalAmountToPay}, Scheduled so far: ${totalScheduled}`);
-			console.log(`  Final payment: ${installmentAmount} (diff: ${SafeMath.subtract(installmentAmount, baseMonthlyPayment)})`);
+			console.log(`  Final payment: ${installmentAmount}`);
+		} else if (month === 1) {
+			// First payment: pro-rated based on actual days from disbursement to first payment
+			// Only applies to multi-term loans (term > 1)
+			interestAmount = firstPeriodInterest;
+			principalAmount = firstPeriodPrincipal;
+			installmentAmount = SafeMath.add(interestAmount, principalAmount);
+			
+			// Track running totals
+			totalScheduled = SafeMath.add(totalScheduled, installmentAmount);
+			totalInterestScheduled = SafeMath.add(totalInterestScheduled, interestAmount);
+			totalPrincipalScheduled = SafeMath.add(totalPrincipalScheduled, principalAmount);
 		} else {
 			// Regular installment: use base amounts
 			installmentAmount = baseMonthlyPayment;
@@ -5268,7 +5321,7 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 		await tx.loan.update({
 			where: { id: loanId },
 			data: {
-				monthlyPayment: baseMonthlyPayment,
+				monthlyPayment: repayments.length > 1 ? baseMonthlyPayment : repayments[0].amount,
 				nextPaymentDue: repayments[0].dueDate,
 			},
 		});
@@ -7260,5 +7313,73 @@ router.post(
 		}
 	}
 );
+
+// Helper function to calculate first payment date with 20th cutoff rule
+function calculateFirstPaymentDate(disbursementDate: Date): Date {
+	// Convert disbursement date to Malaysia timezone for cutoff logic
+	const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
+	
+	const day = malaysiaTime.getUTCDate();
+	const month = malaysiaTime.getUTCMonth();
+	const year = malaysiaTime.getUTCFullYear();
+	
+	let firstPaymentMonth: number;
+	let firstPaymentYear: number;
+	
+	if (day < 20) {
+		// If disbursed before 20th, first payment is 1st of next month
+		firstPaymentMonth = month + 1;
+		firstPaymentYear = year;
+		
+		// Handle year rollover
+		if (firstPaymentMonth > 11) {
+			firstPaymentMonth = 0;
+			firstPaymentYear++;
+		}
+	} else {
+		// If disbursed on or after 20th, first payment is 1st of month after next
+		firstPaymentMonth = month + 2;
+		firstPaymentYear = year;
+		
+		// Handle year rollover
+		if (firstPaymentMonth > 11) {
+			firstPaymentMonth = firstPaymentMonth - 12;
+			firstPaymentYear++;
+		}
+	}
+	
+	// Create first payment date as 1st of target month at end of day (Malaysia timezone)
+	// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
+	const firstPaymentDate = new Date(
+		Date.UTC(firstPaymentYear, firstPaymentMonth, 1, 15, 59, 59, 999)
+	);
+	
+	return firstPaymentDate;
+}
+
+// Helper function to calculate days between two dates in Malaysia timezone
+function calculateDaysBetweenMalaysia(startDate: Date, endDate: Date): number {
+	// Convert both dates to Malaysia timezone for accurate day calculation
+	const startMalaysia = new Date(startDate.getTime() + (8 * 60 * 60 * 1000));
+	const endMalaysia = new Date(endDate.getTime() + (8 * 60 * 60 * 1000));
+	
+	// Get start of day for both dates
+	const startDay = new Date(Date.UTC(
+		startMalaysia.getUTCFullYear(),
+		startMalaysia.getUTCMonth(),
+		startMalaysia.getUTCDate(),
+		0, 0, 0, 0
+	));
+	
+	const endDay = new Date(Date.UTC(
+		endMalaysia.getUTCFullYear(),
+		endMalaysia.getUTCMonth(),
+		endMalaysia.getUTCDate(),
+		0, 0, 0, 0
+	));
+	
+	const diffMs = endDay.getTime() - startDay.getTime();
+	return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+}
 
 export default router;

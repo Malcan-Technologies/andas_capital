@@ -1,5 +1,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { AcademicCapIcon, UserIcon, BriefcaseIcon, HomeIcon } from "@heroicons/react/24/outline";
+import { fetchWithTokenRefresh } from "@/lib/authUtils";
 
 interface PersonalInfo {
 	fullName: string;
@@ -9,6 +11,7 @@ interface PersonalInfo {
 	employerName?: string;
 	monthlyIncome: string;
 	serviceLength?: string;
+	educationLevel: string;
 	address1: string;
 	address2?: string;
 	city: string;
@@ -21,6 +24,19 @@ interface PersonalInfoVerificationFormProps {
 	onSubmit: (values: PersonalInfo) => void;
 	onBack: () => void;
 }
+
+const educationLevels = [
+	"Primary School",
+	"Secondary School (SPM/O-Levels)",
+	"Pre-University (STPM/A-Levels/Foundation)",
+	"Diploma",
+	"Bachelor's Degree",
+	"Master's Degree",
+	"Doctorate (PhD)",
+	"Professional Certification",
+	"Vocational Training",
+	"Other",
+];
 
 // Create a client component for handling searchParams
 function PersonalInfoVerificationFormContent({
@@ -36,6 +52,7 @@ function PersonalInfoVerificationFormContent({
 		employerName: "",
 		monthlyIncome: "",
 		serviceLength: "",
+		educationLevel: "",
 		address1: "",
 		address2: "",
 		city: "",
@@ -60,27 +77,13 @@ function PersonalInfoVerificationFormContent({
 
 				console.log("Fetching user data");
 
-				// Fetch user data from /api/users/me
-				const token = localStorage.getItem("token");
-				const userResponse = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
-				);
-
-				if (!userResponse.ok) {
-					throw new Error("Failed to fetch user data");
-				}
-
-				const userData = await userResponse.json();
+				// Fetch user data using token refresh utility
+				const userData = await fetchWithTokenRefresh<any>("/api/users/me");
 				console.log("User data:", userData);
 
 				// Set form values from user data if available
 				if (userData) {
-					setFormValues({
+					const newFormValues = {
 						fullName: userData.fullName || "",
 						email: userData.email || "",
 						phoneNumber: userData.phoneNumber || "",
@@ -88,13 +91,16 @@ function PersonalInfoVerificationFormContent({
 						employerName: userData.employerName || "",
 						monthlyIncome: userData.monthlyIncome || "",
 						serviceLength: userData.serviceLength || "",
+						educationLevel: userData.educationLevel || "",
 						address1: userData.address1 || "",
 						address2: userData.address2 || "",
 						city: userData.city || "",
 						state: userData.state || "",
 						postalCode:
 							userData.postalCode || userData.zipCode || "",
-					});
+					};
+					
+					setFormValues(newFormValues);
 				}
 			} catch (err) {
 				setError(
@@ -118,7 +124,7 @@ function PersonalInfoVerificationFormContent({
 
 		if (!formValues.email) {
 			newErrors.email = "Email is required";
-		} else if (!/\S+@\S+\.\S+/.test(formValues.email)) {
+		} else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formValues.email)) {
 			newErrors.email = "Please enter a valid email address";
 		}
 
@@ -145,6 +151,10 @@ function PersonalInfoVerificationFormContent({
 				newErrors.monthlyIncome =
 					"Please enter a valid monthly income amount";
 			}
+		}
+
+		if (!formValues.educationLevel) {
+			newErrors.educationLevel = "Education level is required";
 		}
 
 		if (!formValues.address1) {
@@ -178,7 +188,7 @@ function PersonalInfoVerificationFormContent({
 
 	const handleChange =
 		(field: keyof PersonalInfo) =>
-		(e: React.ChangeEvent<HTMLInputElement>) => {
+		(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
 			const value = e.target.value;
 			
 			// Handle employment status changes with clearing logic
@@ -218,11 +228,12 @@ function PersonalInfoVerificationFormContent({
 
 	return (
 		<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-			<form onSubmit={handleSubmit} className="space-y-6">
-				<div className="flex items-center space-x-2 mb-6">
+			<form onSubmit={handleSubmit} className="space-y-8">
+				{/* Header */}
+				<div className="flex items-center space-x-3 mb-6">
 					<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
 						<svg
-							className="h-5 w-5 text-purple-primary"
+							className="h-6 w-6 text-purple-primary"
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
@@ -235,272 +246,340 @@ function PersonalInfoVerificationFormContent({
 							/>
 						</svg>
 					</div>
-					<h2 className="text-lg font-heading text-purple-primary font-semibold">
-						Verify Personal Information
-					</h2>
+					<div>
+						<h2 className="text-xl font-heading text-purple-primary font-bold">
+							Verify Personal Information
+						</h2>
+						<p className="text-sm text-gray-500 font-body">
+							Please review and update your information below
+						</p>
+					</div>
 				</div>
 
-				<div className="space-y-6">
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-							Full Name
-						</label>
-						<input
-							type="text"
-							value={formValues.fullName}
-							onChange={handleChange("fullName")}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							placeholder="Enter your full name"
-						/>
-						{errors.fullName && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{errors.fullName}
-							</p>
-						)}
+				{/* Personal Information Section */}
+				<div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
+					<div className="flex items-center space-x-2 mb-4">
+						<UserIcon className="h-5 w-5 text-blue-600" />
+						<h3 className="text-lg font-heading font-semibold text-blue-600">
+							Personal Information
+						</h3>
 					</div>
-
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-							Email
-						</label>
-						<input
-							type="email"
-							value={formValues.email}
-							onChange={handleChange("email")}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							placeholder="Enter your email address"
-						/>
-						{errors.email && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{errors.email}
-							</p>
-						)}
-					</div>
-
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-							Phone Number
-						</label>
-						<input
-							type="text"
-							value={formValues.phoneNumber}
-							onChange={handleChange("phoneNumber")}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							placeholder="Enter your phone number"
-						/>
-						{errors.phoneNumber && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{errors.phoneNumber}
-							</p>
-						)}
-					</div>
-
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-3 font-body">
-							Employment Status
-						</label>
-						<div className="space-y-3">
-							{[
-								"Employed",
-								"Self-Employed",
-								"Student",
-								"Unemployed",
-							].map((status) => (
-								<label
-									key={status}
-									className="flex items-center"
-								>
-									<input
-										type="radio"
-										name="employmentStatus"
-										value={status}
-										checked={
-											formValues.employmentStatus ===
-											status
-										}
-										onChange={handleChange(
-											"employmentStatus"
-										)}
-										className="w-4 h-4 text-purple-primary bg-white border-gray-300 focus:ring-purple-primary focus:ring-2"
-									/>
-									<span className="ml-3 text-gray-700 font-body">
-										{status}
-									</span>
-								</label>
-							))}
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Full Name (follow IC)
+							</label>
+							<input
+								type="text"
+								value={formValues.fullName}
+								onChange={handleChange("fullName")}
+								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder="Enter your full name"
+							/>
+							{errors.fullName && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.fullName}
+								</p>
+							)}
 						</div>
-						{errors.employmentStatus && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{errors.employmentStatus}
-							</p>
-						)}
-					</div>
 
-					{(formValues.employmentStatus === "Employed" ||
-						formValues.employmentStatus === "Self-Employed") && (
-						<>
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Email
+							</label>
+							<input
+								type="email"
+								value={formValues.email}
+								onChange={handleChange("email")}
+								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder="Enter your email address"
+							/>
+							{errors.email && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.email}
+								</p>
+							)}
+						</div>
+
+						<div className="md:col-span-2">
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Phone Number
+							</label>
+							<input
+								type="text"
+								value={formValues.phoneNumber}
+								disabled
+								className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 font-body cursor-not-allowed"
+								placeholder="Phone number (verified)"
+							/>
+							<p className="mt-1 text-xs text-gray-500 font-body">
+								Your phone number cannot be changed as it's linked to your verified account
+							</p>
+						</div>
+					</div>
+				</div>
+
+				{/* Education & Employment Section */}
+				<div className="bg-emerald-50 rounded-xl p-6 border border-emerald-100">
+					<div className="flex items-center space-x-2 mb-4">
+						<BriefcaseIcon className="h-5 w-5 text-emerald-600" />
+						<h3 className="text-lg font-heading font-semibold text-emerald-600">
+							Education & Employment
+						</h3>
+					</div>
+					<div className="space-y-4">
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Education Level
+							</label>
+							<div className="relative">
+								<div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+									<AcademicCapIcon className="h-5 w-5 text-gray-400" />
+								</div>
+								<select
+									value={formValues.educationLevel}
+									onChange={handleChange("educationLevel")}
+									className="w-full pl-12 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none"
+								>
+									<option value="">Select your education level</option>
+									{educationLevels.map((level) => (
+										<option key={level} value={level}>
+											{level}
+										</option>
+									))}
+								</select>
+								<div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+									<svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+										<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+									</svg>
+								</div>
+							</div>
+							{errors.educationLevel && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.educationLevel}
+								</p>
+							)}
+						</div>
+
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-3 font-body">
+								Employment Status
+							</label>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+								{[
+									"Employed",
+									"Self-Employed",
+									"Student",
+									"Unemployed",
+								].map((status) => (
+									<label
+										key={status}
+										className="flex items-center p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+									>
+										<input
+											type="radio"
+											name="employmentStatus"
+											value={status}
+											checked={
+												formValues.employmentStatus ===
+												status
+											}
+											onChange={handleChange(
+												"employmentStatus"
+											)}
+											className="w-4 h-4 text-purple-primary bg-white border-gray-300 focus:ring-purple-primary focus:ring-2"
+										/>
+										<span className="ml-3 text-sm text-gray-700 font-body">
+											{status}
+										</span>
+									</label>
+								))}
+							</div>
+							{errors.employmentStatus && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.employmentStatus}
+								</p>
+							)}
+						</div>
+
+						{(formValues.employmentStatus === "Employed" ||
+							formValues.employmentStatus === "Self-Employed") && (
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+										Employer Name
+									</label>
+									<input
+										type="text"
+										value={formValues.employerName || ""}
+										onChange={handleChange("employerName")}
+										className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+										placeholder="Enter your employer name"
+									/>
+									{errors.employerName && (
+										<p className="mt-1 text-sm text-red-600 font-body">
+											{errors.employerName}
+										</p>
+									)}
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+										Years at Current Company (Optional)
+									</label>
+									<input
+										type="number"
+										min="0"
+										step="0.1"
+										value={formValues.serviceLength || ""}
+										onChange={handleChange("serviceLength")}
+										className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+										placeholder="0.5"
+									/>
+									<p className="mt-1 text-xs text-gray-500 font-body">
+										Length of time you've been working at your current company
+									</p>
+								</div>
+							</div>
+						)}
+
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Monthly Income
+							</label>
+							<div className="relative">
+								<span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-body">
+									RM
+								</span>
+								<input
+									type="text"
+									value={formValues.monthlyIncome}
+									onChange={handleChange("monthlyIncome")}
+									className="w-full pl-12 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+									placeholder="Enter your monthly income"
+								/>
+							</div>
+							{errors.monthlyIncome && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.monthlyIncome}
+								</p>
+							)}
+						</div>
+					</div>
+				</div>
+
+				{/* Address Section */}
+				<div className="bg-amber-50 rounded-xl p-6 border border-amber-100">
+					<div className="flex items-center space-x-2 mb-4">
+						<HomeIcon className="h-5 w-5 text-amber-600" />
+						<h3 className="text-lg font-heading font-semibold text-amber-600">
+							Residential Address
+						</h3>
+					</div>
+					<div className="space-y-4">
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Address Line 1
+							</label>
+							<input
+								type="text"
+								value={formValues.address1}
+								onChange={handleChange("address1")}
+								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder="Enter your address"
+							/>
+							{errors.address1 && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.address1}
+								</p>
+							)}
+						</div>
+
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Address Line 2 (Optional)
+							</label>
+							<input
+								type="text"
+								value={formValues.address2 || ""}
+								onChange={handleChange("address2")}
+								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+								placeholder="Apartment, suite, etc. (optional)"
+							/>
+						</div>
+
+						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-									Employer Name
+									City
 								</label>
 								<input
 									type="text"
-									value={formValues.employerName || ""}
-									onChange={handleChange("employerName")}
+									value={formValues.city}
+									onChange={handleChange("city")}
 									className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-									placeholder="Enter your employer name"
+									placeholder="Enter your city"
 								/>
-								{errors.employerName && (
+								{errors.city && (
 									<p className="mt-1 text-sm text-red-600 font-body">
-										{errors.employerName}
+										{errors.city}
 									</p>
 								)}
 							</div>
 
 							<div>
 								<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-									Years at Current Company (Optional)
+									State
 								</label>
 								<input
-									type="number"
-									min="0"
-									step="0.1"
-									value={formValues.serviceLength || ""}
-									onChange={handleChange("serviceLength")}
+									type="text"
+									value={formValues.state}
+									onChange={handleChange("state")}
 									className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-									placeholder="0.5"
+									placeholder="Enter your state"
 								/>
-								<p className="mt-1 text-sm text-gray-500 font-body">
-									Length of time you've been working at your current company
-								</p>
+								{errors.state && (
+									<p className="mt-1 text-sm text-red-600 font-body">
+										{errors.state}
+									</p>
+								)}
 							</div>
-						</>
-					)}
 
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-							Monthly Income
-						</label>
-						<div className="relative">
-							<span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-body">
-								RM
-							</span>
-							<input
-								type="text"
-								value={formValues.monthlyIncome}
-								onChange={handleChange("monthlyIncome")}
-								className="w-full pl-12 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-								placeholder="Enter your monthly income"
-							/>
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+									Postal Code
+								</label>
+								<input
+									type="text"
+									value={formValues.postalCode}
+									onChange={handleChange("postalCode")}
+									className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+									placeholder="Enter your postal code"
+								/>
+								{errors.postalCode && (
+									<p className="mt-1 text-sm text-red-600 font-body">
+										{errors.postalCode}
+									</p>
+								)}
+							</div>
 						</div>
-						{errors.monthlyIncome && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{errors.monthlyIncome}
-							</p>
-						)}
-					</div>
-
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-							Address Line 1
-						</label>
-						<input
-							type="text"
-							value={formValues.address1}
-							onChange={handleChange("address1")}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							placeholder="Enter your address"
-						/>
-						{errors.address1 && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{errors.address1}
-							</p>
-						)}
-					</div>
-
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-							Address Line 2 (Optional)
-						</label>
-						<input
-							type="text"
-							value={formValues.address2 || ""}
-							onChange={handleChange("address2")}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							placeholder="Apartment, suite, etc. (optional)"
-						/>
-					</div>
-
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div>
-							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-								City
-							</label>
-							<input
-								type="text"
-								value={formValues.city}
-								onChange={handleChange("city")}
-								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-								placeholder="Enter your city"
-							/>
-							{errors.city && (
-								<p className="mt-1 text-sm text-red-600 font-body">
-									{errors.city}
-								</p>
-							)}
-						</div>
-
-						<div>
-							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-								State
-							</label>
-							<input
-								type="text"
-								value={formValues.state}
-								onChange={handleChange("state")}
-								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-								placeholder="Enter your state"
-							/>
-							{errors.state && (
-								<p className="mt-1 text-sm text-red-600 font-body">
-									{errors.state}
-								</p>
-							)}
-						</div>
-					</div>
-
-					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-							Postal Code
-						</label>
-						<input
-							type="text"
-							value={formValues.postalCode}
-							onChange={handleChange("postalCode")}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							placeholder="Enter your postal code"
-						/>
-						{errors.postalCode && (
-							<p className="mt-1 text-sm text-red-600 font-body">
-								{errors.postalCode}
-							</p>
-						)}
 					</div>
 				</div>
 
-				<div className="flex justify-between pt-6">
+				{/* Action Buttons */}
+				<div className="flex justify-between items-center pt-6 border-t border-gray-200">
 					<button
 						type="button"
 						onClick={handleBack}
 						className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body"
 					>
-						Back
+						← Back
 					</button>
 					<button
 						type="submit"
-						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body"
+						className="px-8 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl"
 					>
-						Continue
+						Continue →
 					</button>
 				</div>
 			</form>

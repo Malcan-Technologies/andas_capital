@@ -86,6 +86,7 @@ function OnboardingPageContent() {
 					isOnboardingComplete: boolean;
 					icNumber: string | null;
 					icType: string | null;
+					educationLevel: string | null;
 				}>("/api/onboarding");
 
 				console.log("Onboarding - User data fetched:", userData);
@@ -100,6 +101,7 @@ function OnboardingPageContent() {
 					phoneNumber: userData.phoneNumber || "",
 					icNumber: userData.icNumber || "",
 					icType: userData.icType as 'IC' | 'PASSPORT' | null,
+					educationLevel: userData.educationLevel || "",
 					address1: userData.address1 || "",
 					address2: userData.address2 || "",
 					city: userData.city || "",
@@ -175,6 +177,7 @@ function OnboardingPageContent() {
 				isOnboardingComplete: boolean;
 				icNumber: string | null;
 				icType: string | null;
+				educationLevel: string | null;
 			}>("/api/onboarding", {
 				method: "POST",
 				headers: {

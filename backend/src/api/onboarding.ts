@@ -26,6 +26,7 @@ interface UserResponse {
 	accountNumber: string | null;
 	icNumber: string | null;
 	icType: string | null;
+	educationLevel: string | null;
 	emergencyContactName: string | null;
 	emergencyContactPhone: string | null;
 	emergencyContactRelationship: string | null;
@@ -61,6 +62,7 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 				accountNumber: true,
 				icNumber: true,
 				icType: true,
+				educationLevel: true,
 				emergencyContactName: true,
 				emergencyContactPhone: true,
 				emergencyContactRelationship: true,
@@ -78,6 +80,7 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 			zipCode: undefined,
 			icNumber: user.icNumber,
 			icType: user.icType,
+			educationLevel: user.educationLevel,
 			serviceLength: user.serviceLength,
 			emergencyContactName: user.emergencyContactName,
 			emergencyContactPhone: user.emergencyContactPhone,
@@ -119,6 +122,7 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 			onboardingStep,
 			icNumber,
 			icType,
+			educationLevel,
 			emergencyContactName,
 			emergencyContactPhone,
 			emergencyContactRelationship,
@@ -143,6 +147,7 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 			isOnboardingComplete: onboardingStep >= 4,
 			icNumber,
 			icType,
+			educationLevel,
 			emergencyContactName,
 			emergencyContactPhone,
 			emergencyContactRelationship,
@@ -185,6 +190,7 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 				accountNumber: true,
 				icNumber: true,
 				icType: true,
+				educationLevel: true,
 				emergencyContactName: true,
 				emergencyContactPhone: true,
 				emergencyContactRelationship: true,
@@ -198,6 +204,7 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 			zipCode: undefined,
 			icNumber: updatedUser.icNumber,
 			icType: updatedUser.icType,
+			educationLevel: updatedUser.educationLevel,
 			serviceLength: updatedUser.serviceLength,
 			emergencyContactName: updatedUser.emergencyContactName,
 			emergencyContactPhone: updatedUser.emergencyContactPhone,

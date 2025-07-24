@@ -531,6 +531,7 @@ export default function SignupPage() {
 											I accept the{" "}
 											<Link
 												href="/terms"
+												target="_blank"
 												className="text-purple-primary hover:text-purple-700"
 											>
 												terms and conditions

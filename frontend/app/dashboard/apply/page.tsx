@@ -59,6 +59,8 @@ interface PersonalInfo {
 	employmentStatus: string;
 	employerName?: string;
 	monthlyIncome: string;
+	serviceLength?: string;
+	educationLevel: string;
 	address1: string;
 	address2?: string;
 	city: string;
@@ -73,6 +75,8 @@ const defaultUserData: PersonalInfo = {
 	phoneNumber: "",
 	employmentStatus: "",
 	monthlyIncome: "",
+	serviceLength: "",
+	educationLevel: "",
 	address1: "",
 	city: "",
 	state: "",

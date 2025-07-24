@@ -5,6 +5,7 @@ export interface PersonalInfo {
 	phoneNumber: string; // Display only, cannot be changed
 	icNumber: string;
 	icType: 'IC' | 'PASSPORT' | null;
+	educationLevel: string;
 	emergencyContactName: string;
 	emergencyContactPhone: string;
 	emergencyContactRelationship: string;

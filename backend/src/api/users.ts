@@ -126,6 +126,8 @@ router.get(
 					// IC/Passport Information
 					icNumber: true,
 					icType: true,
+					// Education Information
+					educationLevel: true,
 					// Emergency Contact Information
 					emergencyContactName: true,
 					emergencyContactPhone: true,
@@ -287,6 +289,8 @@ router.put(
 					// IC/Passport Information
 					icNumber: true,
 					icType: true,
+					// Education Information
+					educationLevel: true,
 					// Emergency Contact Information
 					emergencyContactName: true,
 					emergencyContactPhone: true,
