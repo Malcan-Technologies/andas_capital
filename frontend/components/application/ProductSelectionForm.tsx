@@ -125,10 +125,10 @@ export default function ProductSelectionForm({
 						{activeProducts.map((product) => (
 							<div
 								key={product.id}
-								className={`bg-white border rounded-xl lg:rounded-2xl p-4 sm:p-6 cursor-pointer transition-all hover:border-purple-primary hover:shadow-md ${
+								className={`border rounded-xl lg:rounded-2xl p-4 sm:p-6 cursor-pointer transition-all hover:border-purple-primary hover:shadow-md ${
 									selected === product.id
-										? "border-purple-primary bg-purple-primary/5 shadow-md"
-										: "border-gray-200"
+										? "border-purple-primary bg-purple-50 shadow-md"
+										: "bg-white border-gray-200"
 								}`}
 								onClick={() => handleSelect(product.id)}
 							>
