@@ -453,6 +453,17 @@ router.get(
 						100
 				) / 100;
 
+			// Calculate total late fees collected (actual late fees paid)
+			const totalLateFeesCollectedResult = await prisma.loanRepayment.aggregate({
+				_sum: {
+					lateFeesPaid: true,
+				},
+			});
+
+			const totalLateFeesCollected = Math.round(
+				(totalLateFeesCollectedResult._sum.lateFeesPaid || 0) * 100
+			) / 100;
+
 			// Get total repayments from wallet_transactions (actual cash collected)
 			const totalRepaymentsResult =
 				await prisma.walletTransaction.aggregate({
@@ -497,6 +508,7 @@ router.get(
 				totalLoanValue,
 				currentLoanValue,
 				totalFeesCollected,
+				totalLateFeesCollected,
 				totalRepayments,
 				recentApplications,
 			});

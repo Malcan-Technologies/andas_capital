@@ -185,7 +185,7 @@ export const fetchWithAdminTokenRefresh = async <T>(
 
 		if (isAdminEndpoint) {
 			// These should go to the backend
-			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 			fullUrl = `${backendUrl}${url}`;
 		}
 	}

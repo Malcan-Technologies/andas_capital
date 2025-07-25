@@ -152,27 +152,8 @@ export default function AdminDashboardPage() {
 					"/api/admin/dashboard"
 				);
 
-				// Fetch late fees data
-				let totalLateFeesCollected = 0;
-				try {
-					const lateFeesResponse = await fetchWithAdminTokenRefresh<{
-						success: boolean;
-						data: any[];
-					}>("/api/admin/late-fees");
-
-					if (lateFeesResponse.success && lateFeesResponse.data) {
-						// Calculate total late fees collected (PAID status)
-						totalLateFeesCollected = lateFeesResponse.data
-							.filter((fee: any) => fee.status === "PAID")
-							.reduce(
-								(sum: number, fee: any) => sum + fee.feeAmount,
-								0
-							);
-					}
-				} catch (error) {
-					console.error("Error fetching late fees data:", error);
-					// Don't fail the entire dashboard if late fees can't be fetched
-				}
+				// Total late fees collected is now included in dashboard API response
+				const totalLateFeesCollected = data.totalLateFeesCollected || 0;
 
 				// Fetch real monthly statistics
 				let monthlyStats = [];
@@ -411,10 +392,11 @@ export default function AdminDashboardPage() {
 					try {
 						const paymentsResponse =
 							await fetchWithAdminTokenRefresh<{
+								success: boolean;
 								data: any[];
-							}>("/api/admin/payments/pending");
+							}>("/api/admin/repayments/pending");
 
-						if (paymentsResponse.data) {
+						if (paymentsResponse.success && paymentsResponse.data) {
 							pendingPaymentsCount = paymentsResponse.data.length;
 						}
 					} catch (paymentsError) {
