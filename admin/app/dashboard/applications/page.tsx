@@ -86,13 +86,14 @@ interface Document {
 
 interface LoanApplicationHistory {
 	id: string;
-	loanApplicationId: string;
+	applicationId: string;
 	previousStatus: string | null;
 	newStatus: string;
 	changedBy: string;
-	changedById: string;
-	createdAt: string;
+	changeReason?: string;
 	notes?: string;
+	metadata?: any;
+	createdAt: string;
 }
 
 interface DashboardStats {
@@ -706,9 +707,7 @@ function AdminApplicationsPageContent() {
 			)}`;
 		}
 
-		return `Status changed from ${getStatusLabel(
-			previousStatus
-		)} to ${getStatusLabel(newStatus)}`;
+		return `Status changed to ${getStatusLabel(newStatus)}`;
 	};
 
 	// Approval decision handler
@@ -987,118 +986,136 @@ function AdminApplicationsPageContent() {
 				</div>
 			)}
 
-			{/* Header with summary and refresh button */}
+			{/* Header and Controls */}
 			<div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
 				<div>
 					<h2 className="text-xl font-semibold text-white mb-2">
 						Application Management
 					</h2>
 					<p className="text-gray-400">
-						Review and process applications at various stages
+						{filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => app.status === "PENDING_APPROVAL").length} pending approval • {applications.filter(app => app.status === "PENDING_DISBURSEMENT").length} pending disbursement
 					</p>
 				</div>
 				<button
 					onClick={handleRefresh}
 					disabled={refreshing}
-					className={`mt-4 md:mt-0 flex items-center px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors ${
-						refreshing ? "opacity-50 cursor-not-allowed" : ""
-					}`}
+					className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors"
 				>
-					<ArrowPathIcon
-						className={`h-4 w-4 mr-2 ${
-							refreshing ? "animate-spin" : ""
-						}`}
-					/>
-					{refreshing ? "Refreshing..." : "Refresh Data"}
+					{refreshing ? (
+						<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+					) : (
+						<ArrowPathIcon className="h-4 w-4 mr-2" />
+					)}
+					Refresh Data
 				</button>
 			</div>
 
-			{/* Search Bar */}
-			<div className="mb-6">
-				<div className="relative max-w-md">
-					<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-						<svg
-							className="h-5 w-5 text-gray-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-							/>
-						</svg>
-					</div>
-					<input
-						type="text"
-						placeholder="Search by applicant name, email, or purpose..."
-						value={search}
-						onChange={(e) => setSearch(e.target.value)}
-						className="block w-full pl-10 pr-10 py-2 border border-gray-600 rounded-lg bg-gray-800/50 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-					/>
-					{search && (
-						<button
-							onClick={() => setSearch("")}
-							className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
-							title="Clear search"
-						>
-							<XMarkIcon className="h-4 w-4" />
-						</button>
-					)}
-				</div>
-			</div>
-
-			{/* Status filter chips */}
-			<div className="mb-6">
-				<h3 className="text-white text-sm font-medium mb-3">
-					Filter by status:
-				</h3>
-				<div className="flex flex-wrap gap-2">
-					{[
-						"INCOMPLETE",
-						"PENDING_APP_FEE",
-						"PENDING_KYC",
-						"PENDING_APPROVAL",
-						"PENDING_ATTESTATION",
-						"PENDING_SIGNATURE",
-						"PENDING_DISBURSEMENT",
-						"REJECTED",
-						"WITHDRAWN",
-					].map((status) => {
-						const isActive = selectedFilters.includes(status);
-						const StatusIcon = getStatusIcon(status);
-						return (
-							<button
-								key={status}
-								onClick={() => toggleFilter(status)}
-								className={`flex items-center px-3 py-1.5 rounded-full text-sm border transition-colors ${
-									isActive
-										? getStatusColor(status)
-										: "bg-gray-800 text-gray-400 border-gray-700"
-								}`}
+			{/* Search and Filter Bar */}
+			<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+				<div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
+					<div className="flex-1 relative">
+						<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+							<svg
+								className="h-5 w-5 text-gray-400"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
 							>
-								<StatusIcon className="h-4 w-4 mr-1.5" />
-								{getStatusLabel(status)}
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+								/>
+							</svg>
+						</div>
+						<input
+							type="text"
+							className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+							placeholder="Search by applicant name, email, purpose, or application ID"
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+						/>
+						{search && (
+							<button
+								onClick={() => setSearch("")}
+								className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+								title="Clear search"
+							>
+								<XMarkIcon className="h-4 w-4" />
 							</button>
-						);
-					})}
+						)}
+					</div>
+					<div className="flex space-x-2">
+						<button
+							onClick={() => setSelectedFilters([
+								"PENDING_APP_FEE",
+								"PENDING_KYC",
+								"PENDING_APPROVAL",
+								"PENDING_ATTESTATION",
+								"PENDING_SIGNATURE",
+								"PENDING_DISBURSEMENT",
+							])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 6 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("PENDING_APPROVAL")
+									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							All Active
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_APPROVAL"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_APPROVAL")
+									? "bg-amber-500/30 text-amber-100 border-amber-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Approval
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_DISBURSEMENT")
+									? "bg-green-500/30 text-green-100 border-green-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Disbursement
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_ATTESTATION"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_ATTESTATION")
+									? "bg-cyan-500/30 text-cyan-100 border-cyan-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Attestation
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["REJECTED", "WITHDRAWN"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 2 && selectedFilters.includes("REJECTED") && selectedFilters.includes("WITHDRAWN")
+									? "bg-red-500/30 text-red-100 border-red-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Closed Applications
+						</button>
+					</div>
 				</div>
 			</div>
 
-			{/* Main content */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				{/* Left Panel - Application List */}
 				<div className="lg:col-span-1">
 					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-						<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-							<h2 className="text-lg font-medium text-white">
-								Applications
-							</h2>
-							<span className="px-2 py-1 bg-blue-500/20 text-blue-200 text-xs font-medium rounded-full border border-blue-400/20">
-								{filteredApplications.length}
-							</span>
+						<div className="p-4 border-b border-gray-700/30">
+							<h3 className="text-lg font-medium text-white">
+								Applications ({filteredApplications.length})
+							</h3>
 						</div>
 						<div className="overflow-y-auto max-h-[70vh]">
 							{loading ? (
@@ -1176,9 +1193,13 @@ function AdminApplicationsPageContent() {
 								<div className="p-8 text-center">
 									<ClockIcon className="mx-auto h-12 w-12 text-gray-400" />
 									<p className="mt-4 text-gray-300">
-										No applications found with the selected
-										filters
+										{search ? "No applications found" : "No applications found with the selected filters"}
 									</p>
+									{search && (
+										<p className="text-sm text-gray-400 mt-2">
+											Try adjusting your search criteria
+										</p>
+									)}
 								</div>
 							)}
 						</div>
@@ -1189,25 +1210,16 @@ function AdminApplicationsPageContent() {
 				<div className="lg:col-span-2">
 					{selectedApplication ? (
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
+								<h3 className="text-lg font-medium text-white">
+									Application Details
+								</h3>
+								<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
+									ID: {selectedApplication.id.substring(0, 8)}
+								</span>
+							</div>
+
 							<div className="p-6">
-								<div className="flex justify-between items-center mb-6">
-									<div>
-										<h3 className="text-xl font-semibold text-white">
-											Application Details
-										</h3>
-									</div>
-									<div
-										className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${getStatusColor(
-											selectedApplication.status
-										)}`}
-									>
-										<span className="mr-1.5">
-											{getStatusLabel(
-												selectedApplication.status
-											)}
-										</span>
-									</div>
-								</div>
 
 								{/* Tab Navigation */}
 								<div className="flex border-b border-gray-700/30 mb-6">
@@ -1660,12 +1672,9 @@ function AdminApplicationsPageContent() {
 																					)}
 																				</p>
 																			</div>
-																			<p className="text-xs text-gray-400 mt-1">
-																				Changed
-																				by:{" "}
-																				{historyItem.changedBy ||
-																					"System"}
-																			</p>
+																														<p className="text-xs text-gray-400 mt-1">
+												Changed by: {historyItem.changedBy || "System"}
+											</p>
 																			{historyItem.notes && (
 																				<div className="mt-2 p-2 bg-gray-700/50 rounded text-xs text-gray-300">
 																					<span className="font-medium">
@@ -2488,15 +2497,14 @@ function AdminApplicationsPageContent() {
 							</div>
 						</div>
 					) : (
-						<div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-10">
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg h-full flex items-center justify-center p-8">
 							<div className="text-center">
-								<DocumentTextIcon className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-								<h3 className="text-xl font-medium text-white mb-2">
-									Select an Application
+								<DocumentTextIcon className="mx-auto h-16 w-16 text-gray-500" />
+								<h3 className="mt-4 text-xl font-medium text-white">
+									No Application Selected
 								</h3>
-								<p className="text-gray-400 max-w-md">
-									Choose an application from the list to view
-									its details and manage its status
+								<p className="mt-2 text-gray-400">
+									Select an application from the list to view its details
 								</p>
 							</div>
 						</div>

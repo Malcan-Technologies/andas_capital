@@ -468,6 +468,13 @@ router.patch(
 					OR: [{ id }, { urlLink: id }],
 					userId,
 				},
+				include: {
+					user: {
+						select: {
+							fullName: true,
+						},
+					},
+				},
 			});
 
 			if (!existingApplication) {
@@ -476,13 +483,41 @@ router.patch(
 					.json({ message: "Loan application not found" });
 			}
 
-			// Update the application status
-			const updatedApplication = await prisma.loanApplication.update({
-				where: { id: existingApplication.id },
-				data: { status },
+			// Use a transaction to update status and track the change
+			const result = await prisma.$transaction(async (prismaTransaction) => {
+				// Update the application status
+				const updatedApplication = await prismaTransaction.loanApplication.update({
+					where: { id: existingApplication.id },
+					data: { status },
+					include: {
+						user: {
+							select: {
+								fullName: true,
+							},
+						},
+					},
+				});
+
+				// Track the status change in audit trail
+				await trackApplicationStatusChange(
+					prismaTransaction,
+					existingApplication.id,
+					existingApplication.status,
+					status,
+					existingApplication.user?.fullName || "User",
+					status === "WITHDRAWN" ? "Application withdrawn by user" : "Status updated by user",
+					null,
+					{
+						updatedBy: "USER",
+						userId: userId,
+						userAction: true,
+					}
+				);
+
+				return updatedApplication;
 			});
 
-			return res.json(updatedApplication);
+			return res.json(result);
 		} catch (error) {
 			console.error("Error updating application status:", error);
 			return res.status(500).json({

@@ -67,6 +67,18 @@ interface WalletTransaction {
 	updatedAt: string;
 }
 
+interface LoanApplicationHistory {
+	id: string;
+	applicationId: string;
+	previousStatus: string | null;
+	newStatus: string;
+	changedBy: string;
+	changeReason?: string;
+	notes?: string;
+	metadata?: any;
+	createdAt: string;
+}
+
 interface LoanData {
 	id: string;
 	userId: string;
@@ -129,6 +141,10 @@ function ActiveLoansContent() {
 		WalletTransaction[]
 	>([]);
 	const [loadingTransactions, setLoadingTransactions] = useState(false);
+	const [applicationHistory, setApplicationHistory] = useState<
+		LoanApplicationHistory[]
+	>([]);
+	const [loadingApplicationHistory, setLoadingApplicationHistory] = useState(false);
 	const [fetchedRepaymentsForLoan, setFetchedRepaymentsForLoan] = useState<
 		string | null
 	>(null);
@@ -158,16 +174,20 @@ function ActiveLoansContent() {
 		}
 	}, [searchParams]);
 
-	// Fetch wallet transactions when audit tab is selected
+	// Fetch wallet transactions and application history when audit tab is selected
 	useEffect(() => {
 		if (
 			selectedTab === "audit" &&
-			selectedLoan &&
-			walletTransactions.length === 0
+			selectedLoan
 		) {
-			fetchWalletTransactions(selectedLoan.id);
+			if (walletTransactions.length === 0) {
+				fetchWalletTransactions(selectedLoan.id);
+			}
+			if (applicationHistory.length === 0 && selectedLoan.applicationId) {
+				fetchApplicationHistory(selectedLoan.applicationId);
+			}
 		}
-	}, [selectedTab, selectedLoan?.id]);
+	}, [selectedTab, selectedLoan?.id, selectedLoan?.applicationId]);
 
 	const fetchActiveLoans = async () => {
 		try {
@@ -286,6 +306,49 @@ function ActiveLoansContent() {
 			setWalletTransactions([]);
 		} finally {
 			setLoadingTransactions(false);
+		}
+	};
+
+	const fetchApplicationHistory = async (applicationId: string) => {
+		try {
+			setLoadingApplicationHistory(true);
+			console.log("🔍 Fetching application history for application ID:", applicationId);
+			const response = await fetchWithAdminTokenRefresh<
+				| {
+						applicationId: string;
+						currentStatus: string;
+						timeline: LoanApplicationHistory[];
+				  }
+				| LoanApplicationHistory[]
+			>(`/api/admin/applications/${applicationId}/history`);
+
+			console.log("📊 Application history API response:", response);
+
+			// Handle both old array format and new object format
+			let history: LoanApplicationHistory[] = [];
+			if (Array.isArray(response)) {
+				// Old format - direct array
+				history = response;
+			} else if (
+				response &&
+				typeof response === "object" &&
+				"timeline" in response
+			) {
+				// New format - object with timeline property
+				history = response.timeline || [];
+			}
+
+			console.log("✅ Application history data received:", {
+				totalHistory: history.length,
+				history: history,
+			});
+
+			setApplicationHistory(history);
+		} catch (error) {
+			console.error("Error fetching application history:", error);
+			setApplicationHistory([]);
+		} finally {
+			setLoadingApplicationHistory(false);
 		}
 	};
 
@@ -442,10 +505,14 @@ function ActiveLoansContent() {
 					setFetchedRepaymentsForLoan(null);
 					// Clear existing data
 					setWalletTransactions([]);
+					setApplicationHistory([]);
 					// Fetch fresh detailed data
 					fetchLoanRepayments(currentSelectedLoanId);
 					if (selectedTab === "audit") {
 						fetchWalletTransactions(currentSelectedLoanId);
+						if (updatedSelectedLoan && updatedSelectedLoan.applicationId) {
+							fetchApplicationHistory(updatedSelectedLoan.applicationId);
+						}
 					}
 				}
 			} else {
@@ -464,6 +531,7 @@ function ActiveLoansContent() {
 		setSelectedTab("details"); // Reset to details tab when selecting new loan
 		// Clear previous data
 		setWalletTransactions([]);
+		setApplicationHistory([]);
 		setFetchedRepaymentsForLoan(null); // Reset repayments fetch tracker
 
 		// Immediately fetch repayments to get accurate next payment data for details tab
@@ -697,6 +765,49 @@ function ActiveLoansContent() {
 			.reduce((sum, r) => sum + r.amount, 0);
 
 		return { completed, pending, overdue, totalPaid };
+	};
+
+	// Helper functions for application history
+	const getStatusLabel = (status: string) => {
+		switch (status) {
+			case "INCOMPLETE":
+				return "Incomplete";
+			case "PENDING_APP_FEE":
+				return "Pending Application Fee";
+			case "PENDING_KYC":
+				return "Pending KYC";
+			case "PENDING_APPROVAL":
+				return "Pending Approval";
+			case "PENDING_ATTESTATION":
+				return "Pending Attestation";
+			case "PENDING_SIGNATURE":
+				return "Pending Signature";
+			case "PENDING_DISBURSEMENT":
+				return "Pending Disbursement";
+			case "APPROVED":
+				return "Approved";
+			case "REJECTED":
+				return "Rejected";
+			case "WITHDRAWN":
+				return "Withdrawn";
+			case "ACTIVE":
+				return "Loan Active";
+			case "DISBURSED":
+				return "Disbursed";
+			default:
+				return status.replace(/_/g, " ").toLowerCase();
+		}
+	};
+
+	const getHistoryActionDescription = (
+		previousStatus: string | null,
+		newStatus: string
+	): string => {
+		if (!previousStatus) {
+			return `Application created with status: ${getStatusLabel(newStatus)}`;
+		}
+
+		return `Status changed to ${getStatusLabel(newStatus)}`;
 	};
 
 	const getNextPaymentDetails = (repayments: LoanRepayment[]) => {
@@ -2296,100 +2407,138 @@ function ActiveLoansContent() {
 										<div className="mb-6">
 											<h4 className="text-white font-medium mb-4 flex items-center">
 												<DocumentTextIcon className="h-5 w-5 mr-2 text-blue-400" />
-												Payment Audit Trail
+												Complete Audit Trail
 											</h4>
 											<p className="text-gray-400 text-sm mb-4">
-												Payment transaction history for
-												this loan
+												Application workflow and payment transaction history
 											</p>
 										</div>
 
-										{loadingTransactions ? (
+										{(loadingTransactions || loadingApplicationHistory) ? (
 											<div className="flex items-center justify-center py-12">
 												<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
 												<span className="ml-3 text-gray-400">
-													Loading transactions...
+													Loading audit trail...
 												</span>
 											</div>
-										) : walletTransactions.length > 0 ? (
+										) : (
 											<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 overflow-hidden">
 												<div className="p-4 border-b border-gray-700/30">
 													<h5 className="text-lg font-medium text-white">
-														Transactions (
-														{
-															walletTransactions.length
-														}
-														)
+														Timeline ({applicationHistory.length + walletTransactions.length} events)
 													</h5>
 												</div>
 												<div className="overflow-y-auto max-h-[60vh]">
-													<ul className="divide-y divide-gray-700/30">
-														{walletTransactions.map(
-															(transaction) => (
-																<li
-																	key={
-																		transaction.id
-																	}
-																	className="p-4 hover:bg-gray-700/20 transition-colors"
-																>
-																	<div className="flex justify-between items-start">
-																		<div className="flex-1">
-																			<p className="text-white font-medium">
-																				Payment
-																				Transaction
-																			</p>
-																			<p className="text-sm text-gray-400">
-																				{transaction.reference ||
-																					"No reference"}
-																			</p>
-																			<div className="mt-2 flex items-center text-sm text-gray-300">
-																				<BanknotesIcon className="mr-1 h-4 w-4 text-green-400" />
-																				{formatCurrency(
-																					Math.abs(
-																						transaction.amount
-																					)
-																				)}
+													{(() => {
+														// Combine and sort all timeline events
+														const allEvents = [
+															// Application history events
+															...applicationHistory.map(item => ({
+																type: 'application' as const,
+																id: item.id,
+																createdAt: item.createdAt,
+																data: item
+															})),
+															// Payment transaction events
+															...walletTransactions.map(transaction => ({
+																type: 'transaction' as const,
+																id: transaction.id,
+																createdAt: transaction.createdAt,
+																data: transaction
+															}))
+														].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+														if (allEvents.length === 0) {
+															return (
+																<div className="p-8 text-center">
+																	<DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+																	<p className="mt-4 text-gray-300">No audit trail available</p>
+																	<p className="text-sm text-gray-400 mt-2">
+																		Application history and payment transactions will appear here
+																	</p>
+																</div>
+															);
+														}
+
+														return (
+															<ul className="divide-y divide-gray-700/30">
+																{allEvents.map((event, index) => (
+																	<li
+																		key={`${event.type}-${event.id}`}
+																		className="p-4 hover:bg-gray-700/20 transition-colors"
+																	>
+																		{event.type === 'application' ? (
+																			// Application history item
+																			<div className="flex items-start space-x-3">
+																				<div className="flex-shrink-0 mt-1">
+																					<div className={`w-2 h-2 rounded-full ${index === 0 ? "bg-blue-400" : "bg-purple-500"}`}></div>
+																				</div>
+																				<div className="flex-1 min-w-0">
+																					<div className="flex items-center justify-between">
+																						<p className="text-sm font-medium text-white">
+																							{getHistoryActionDescription(
+																								event.data.previousStatus,
+																								event.data.newStatus
+																							)}
+																						</p>
+																						<p className="text-xs text-gray-400">
+																							{formatDateTime(event.data.createdAt)}
+																						</p>
+																					</div>
+																					<p className="text-xs text-gray-400 mt-1">
+																						Changed by: {event.data.changedBy || "System"}
+																					</p>
+																					{event.data.notes && (
+																						<div className="mt-2 p-2 bg-gray-700/50 rounded text-xs text-gray-300">
+																							<span className="font-medium">Notes:</span> {event.data.notes}
+																						</div>
+																					)}
+																				</div>
 																			</div>
-																		</div>
-																		<div className="text-right ml-4">
-																			<span
-																				className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
-																					transaction.status ===
-																					"APPROVED"
-																						? "bg-green-500/20 text-green-200 border-green-400/20"
-																						: transaction.status ===
-																						  "PENDING"
-																						? "bg-yellow-500/20 text-yellow-200 border-yellow-400/20"
-																						: "bg-red-500/20 text-red-200 border-red-400/20"
-																				}`}
-																			>
-																				{
-																					transaction.status
-																				}
-																			</span>
-																			<p className="text-xs text-gray-400 mt-2">
-																				{formatDateTime(
-																					transaction.createdAt
-																				)}
-																			</p>
-																		</div>
-																	</div>
-																</li>
-															)
-														)}
-													</ul>
+																		) : (
+																			// Payment transaction item
+																			<div className="flex items-start space-x-3">
+																				<div className="flex-shrink-0 mt-1">
+																					<div className={`w-2 h-2 rounded-full ${index === 0 ? "bg-blue-400" : "bg-green-500"}`}></div>
+																				</div>
+																				<div className="flex-1 min-w-0">
+																					<div className="flex items-center justify-between">
+																						<p className="text-sm font-medium text-white">
+																							Payment Transaction
+																						</p>
+																						<p className="text-xs text-gray-400">
+																							{formatDateTime(event.data.createdAt)}
+																						</p>
+																					</div>
+																					<p className="text-xs text-gray-400 mt-1">
+																						Reference: {event.data.reference || "No reference"}
+																					</p>
+																					<div className="mt-2 flex items-center justify-between">
+																						<div className="flex items-center text-sm text-gray-300">
+																							<BanknotesIcon className="mr-1 h-4 w-4 text-green-400" />
+																							{formatCurrency(Math.abs(event.data.amount))}
+																						</div>
+																						<span
+																							className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+																								event.data.status === "APPROVED"
+																									? "bg-green-500/20 text-green-200 border-green-400/20"
+																									: event.data.status === "PENDING"
+																									? "bg-yellow-500/20 text-yellow-200 border-yellow-400/20"
+																									: "bg-red-500/20 text-red-200 border-red-400/20"
+																							}`}
+																						>
+																							{event.data.status}
+																						</span>
+																					</div>
+																				</div>
+																			</div>
+																		)}
+																	</li>
+																))}
+															</ul>
+														);
+													})()}
 												</div>
-											</div>
-										) : (
-											<div className="text-center py-12">
-												<DocumentTextIcon className="mx-auto h-12 w-12 text-gray-500" />
-												<h3 className="mt-4 text-lg font-medium text-white">
-													No Transactions Found
-												</h3>
-												<p className="mt-2 text-gray-400">
-													No payment transactions
-													found for this loan
-												</p>
 											</div>
 										)}
 									</div>

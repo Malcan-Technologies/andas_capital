@@ -24,6 +24,7 @@ import {
 	CalendarDaysIcon,
 	ArrowTrendingUpIcon as TrendingUpIcon,
 	ReceiptPercentIcon,
+	VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../lib/authUtils";
 import Link from "next/link";
@@ -130,6 +131,7 @@ export default function AdminDashboardPage() {
 		PENDING_DISBURSEMENT: 0,
 		PENDING_DISCHARGE: 0,
 		PENDING_PAYMENTS: 0,
+		LIVE_ATTESTATIONS: 0,
 	});
 
 	useEffect(() => {
@@ -406,6 +408,26 @@ export default function AdminDashboardPage() {
 						);
 					}
 
+					// Fetch live attestation requests count
+					let liveAttestationsCount = 0;
+					try {
+						const attestationsResponse =
+							await fetchWithAdminTokenRefresh<any[]>(
+								"/api/admin/applications/live-attestations"
+							);
+
+						if (attestationsResponse) {
+							liveAttestationsCount = attestationsResponse.filter(
+								(app: any) => !app.attestationCompleted
+							).length;
+						}
+					} catch (attestationsError) {
+						console.error(
+							"Error fetching live attestations count:",
+							attestationsError
+						);
+					}
+
 					setWorkflowCounts({
 						PENDING_DECISION:
 							countsData.PENDING_DECISION ||
@@ -417,6 +439,7 @@ export default function AdminDashboardPage() {
 							0,
 						PENDING_DISCHARGE: pendingDischargeCount,
 						PENDING_PAYMENTS: pendingPaymentsCount,
+						LIVE_ATTESTATIONS: liveAttestationsCount,
 					});
 				} catch (countsError) {
 					console.error(
@@ -430,6 +453,7 @@ export default function AdminDashboardPage() {
 							data.pendingDisbursementCount || 0,
 						PENDING_DISCHARGE: 0,
 						PENDING_PAYMENTS: 0,
+						LIVE_ATTESTATIONS: 0, // Will be fetched separately
 					});
 				}
 			} catch (error) {
@@ -542,7 +566,7 @@ export default function AdminDashboardPage() {
 					<ClockIcon className="h-6 w-6 mr-2 text-amber-400" />
 					Quick Actions
 				</h2>
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
 					{/* Pending Decisions */}
 					<Link
 						href="/dashboard/applications/pending-decision"
@@ -671,6 +695,39 @@ export default function AdminDashboardPage() {
 						</p>
 						<div className="flex items-center text-purple-300 text-sm font-medium group-hover:text-purple-200">
 							Review now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+
+					{/* Live Attestations */}
+					<Link
+						href="/dashboard/live-attestations"
+						className="group bg-gradient-to-br from-indigo-600/20 to-indigo-800/20 backdrop-blur-md border border-indigo-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-indigo-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-indigo-500/30 rounded-lg">
+								<VideoCameraIcon className="h-6 w-6 text-indigo-300" />
+							</div>
+							{workflowCounts.LIVE_ATTESTATIONS > 0 && (
+								<span className="bg-indigo-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.LIVE_ATTESTATIONS
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Live Attestations
+						</h3>
+						<p className="text-sm text-indigo-200 mb-3">
+							{workflowCounts.LIVE_ATTESTATIONS > 0
+								? `${formatNumber(
+										workflowCounts.LIVE_ATTESTATIONS
+								  )} video calls pending`
+								: "No pending attestations"}
+						</p>
+						<div className="flex items-center text-indigo-300 text-sm font-medium group-hover:text-indigo-200">
+							Manage now
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</Link>

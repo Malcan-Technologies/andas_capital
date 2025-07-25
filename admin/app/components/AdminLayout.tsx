@@ -35,8 +35,8 @@ import Logo from "./Logo";
 interface AdminLayoutProps {
 	children: React.ReactNode;
 	userName?: string;
-	title?: string;
-	description?: string;
+	title?: string; // Kept for backward compatibility but no longer used
+	description?: string; // Kept for backward compatibility but no longer used
 }
 
 export default function AdminLayout({
@@ -45,11 +45,12 @@ export default function AdminLayout({
 	title = "Admin Dashboard",
 	description = "Overview of your Kapital's performance",
 }: AdminLayoutProps) {
-	const [sidebarOpen, setSidebarOpen] = useState(false);
+	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [adminName, setAdminName] = useState(userName);
 	const [loanWorkflowOpen, setLoanWorkflowOpen] = useState(false);
 	const [managementOpen, setManagementOpen] = useState(false);
+	const [paymentsOpen, setPaymentsOpen] = useState(false);
 	const [applicationsOpen, setApplicationsOpen] = useState(false);
 	const [loansOpen, setLoansOpen] = useState(false);
 	const router = useRouter();
@@ -171,13 +172,16 @@ export default function AdminLayout({
 
 	const navigation = [
 		{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
+	];
+
+	const paymentItems = [
 		{
 			name: "Disbursements",
 			href: "/dashboard/disbursements",
 			icon: CreditCardIcon,
 		},
 		{
-			name: "Payments",
+			name: "Pending Payments",
 			href: "/dashboard/payments",
 			icon: ReceiptPercentIcon,
 		},
@@ -186,13 +190,6 @@ export default function AdminLayout({
 			href: "/dashboard/late-fees",
 			icon: ExclamationTriangleIcon,
 		},
-		{
-			name: "Live Attestations",
-			href: "/dashboard/live-attestations",
-			icon: VideoCameraIcon,
-		},
-		{ name: "Users", href: "/dashboard/users", icon: UserGroupIcon },
-		{ name: "Reports", href: "/dashboard/reports", icon: ChartBarIcon },
 	];
 
 	const loanWorkflowItems = [
@@ -226,6 +223,11 @@ export default function AdminLayout({
 			],
 		},
 		{
+			name: "Live Attestations",
+			href: "/dashboard/live-attestations",
+			icon: VideoCameraIcon,
+		},
+		{
 			name: "Workflow Overview",
 			href: "/dashboard/applications/workflow",
 			icon: ArrowPathIcon,
@@ -233,6 +235,11 @@ export default function AdminLayout({
 	];
 
 	const managementItems = [
+		{
+			name: "Users",
+			href: "/dashboard/users",
+			icon: UserGroupIcon,
+		},
 		{
 			name: "Products",
 			href: "/dashboard/products",
@@ -242,6 +249,11 @@ export default function AdminLayout({
 			name: "Notifications",
 			href: "/dashboard/notifications",
 			icon: BellIcon,
+		},
+		{
+			name: "Reports",
+			href: "/dashboard/reports",
+			icon: ChartBarIcon,
 		},
 		{
 			name: "Settings",
@@ -267,6 +279,9 @@ export default function AdminLayout({
 		const isManagementPath = managementItems.some((item) =>
 			isActive(item.href)
 		);
+		const isPaymentsPath = paymentItems.some((item) =>
+			isActive(item.href)
+		);
 
 		// Check for specific applications and loans paths
 		const isApplicationsPath = pathname.startsWith(
@@ -276,74 +291,39 @@ export default function AdminLayout({
 
 		setLoanWorkflowOpen(isLoanPath);
 		setManagementOpen(isManagementPath);
+		setPaymentsOpen(isPaymentsPath);
 		setApplicationsOpen(isApplicationsPath);
 		setLoansOpen(isLoansPath);
 	}, [pathname]);
 
-	// Function to render navigation items
-	const renderNavigation = (isMobile = false) => {
+	// Function to render navigation items for desktop
+	const renderDesktopNavigation = () => {
 		const getBaseClasses = (active: boolean) => {
-			const baseSize = isMobile
-				? "group flex items-center rounded-md px-2 py-2 text-base font-medium transition-colors duration-200"
-				: "group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors duration-200";
-
 			return active
-				? `${baseSize} bg-blue-600/20 text-blue-200 border border-blue-500/30`
-				: `${baseSize} text-gray-300 hover:bg-gray-800/50 hover:text-white`;
+				? "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 bg-blue-600/20 text-blue-200 border border-blue-500/30"
+				: "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 text-gray-300 hover:bg-gray-800/50 hover:text-white";
 		};
 
 		const getIconClasses = (active: boolean) => {
-			const baseSize = isMobile
-				? "mr-4 h-6 w-6 flex-shrink-0"
-				: "mr-3 h-6 w-6 flex-shrink-0";
-
 			return active
-				? `${baseSize} text-blue-300`
-				: `${baseSize} text-gray-400 group-hover:text-gray-300`;
+				? "mr-2 h-5 w-5 flex-shrink-0 text-blue-300"
+				: "mr-2 h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-gray-300";
+		};
+
+		const getDropdownClasses = (active: boolean) => {
+			return active
+				? "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 bg-blue-600/20 text-blue-200 border border-blue-500/30"
+				: "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 text-gray-300 hover:bg-gray-800/50 hover:text-white";
 		};
 
 		const getSubItemClasses = (active: boolean) => {
-			const baseSize = isMobile
-				? "group flex items-center rounded-md px-2 py-2 pl-11 text-sm font-medium transition-colors duration-200"
-				: "group flex items-center rounded-md px-2 py-2 pl-9 text-sm font-medium transition-colors duration-200";
-
 			return active
-				? `${baseSize} bg-blue-600/20 text-blue-200 border border-blue-500/30`
-				: `${baseSize} text-gray-400 hover:bg-gray-800/30 hover:text-gray-200`;
-		};
-
-		const getSubIconClasses = (active: boolean) => {
-			const baseSize = isMobile
-				? "mr-3 h-5 w-5 flex-shrink-0"
-				: "mr-3 h-5 w-5 flex-shrink-0";
-
-			return active
-				? `${baseSize} text-blue-300`
-				: `${baseSize} text-gray-500 group-hover:text-gray-400`;
-		};
-
-		const getSubSubItemClasses = (active: boolean) => {
-			const baseSize = isMobile
-				? "group flex items-center rounded-md px-2 py-2 pl-16 text-sm transition-colors duration-200"
-				: "group flex items-center rounded-md px-2 py-2 pl-14 text-sm transition-colors duration-200";
-
-			return active
-				? `${baseSize} text-blue-200 font-semibold`
-				: `${baseSize} text-gray-400 hover:text-gray-200`;
-		};
-
-		const getSubSubIconClasses = (active: boolean) => {
-			const baseSize = isMobile
-				? "mr-3 h-4 w-4 flex-shrink-0"
-				: "mr-3 h-4 w-4 flex-shrink-0";
-
-			return active
-				? `${baseSize} text-blue-300`
-				: `${baseSize} text-gray-500 group-hover:text-gray-400`;
+				? "block px-4 py-2 text-sm text-blue-200 hover:bg-gray-800/30 rounded-md"
+				: "block px-4 py-2 text-sm text-gray-400 hover:bg-gray-800/30 hover:text-gray-200 rounded-md";
 		};
 
 		return (
-			<>
+			<div className="hidden lg:flex lg:items-center lg:space-x-4">
 				{navigation.map((item) => {
 					const active = isActive(item.href);
 					return (
@@ -358,7 +338,235 @@ export default function AdminLayout({
 					);
 				})}
 
+				{/* Payments Dropdown */}
+				<div className="relative">
+					<button
+						onClick={() => setPaymentsOpen(!paymentsOpen)}
+						className={getDropdownClasses(paymentsOpen)}
+					>
+						<ReceiptPercentIcon className={getIconClasses(paymentsOpen)} />
+						Payments
+						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
+					</button>
+					{paymentsOpen && (
+						<div className="absolute left-0 z-10 mt-2 w-48 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
+							<div className="py-1">
+								{paymentItems.map((item) => {
+									const active = isActive(item.href);
+									return (
+										<Link
+											key={item.name}
+											href={item.href}
+											className={getSubItemClasses(active)}
+										>
+											<item.icon className="mr-2 h-4 w-4 inline" />
+											{item.name}
+										</Link>
+									);
+								})}
+							</div>
+						</div>
+					)}
+				</div>
+
 				{/* Loans Dropdown */}
+				<div className="relative">
+					<button
+						onClick={() => setLoanWorkflowOpen(!loanWorkflowOpen)}
+						className={getDropdownClasses(loanWorkflowOpen)}
+					>
+						<DocumentTextIcon className={getIconClasses(loanWorkflowOpen)} />
+						Loans
+						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
+					</button>
+					{loanWorkflowOpen && (
+						<div className="absolute left-0 z-10 mt-2 w-64 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
+							<div className="py-1">
+								{loanWorkflowItems.map((item) => {
+									const active = isActive(item.href);
+									const hasSubItems = item.subItems && item.subItems.length > 0;
+									const isExpanded = (item.name === "All Applications" && applicationsOpen) ||
+										(item.name === "All Loans" && loansOpen);
+
+									return (
+										<div key={item.name}>
+											<div className="flex items-center justify-between">
+												<Link
+													href={item.href}
+													className={getSubItemClasses(active)}
+												>
+													<item.icon className="mr-2 h-4 w-4 inline" />
+													{item.name}
+												</Link>
+												{hasSubItems && (
+													<button
+														onClick={() => {
+															if (item.name === "All Applications") {
+																setApplicationsOpen(!applicationsOpen);
+															} else if (item.name === "All Loans") {
+																setLoansOpen(!loansOpen);
+															}
+														}}
+														className="p-1 rounded hover:bg-gray-700 transition-colors"
+													>
+														{isExpanded ? (
+															<ChevronDownIcon className="h-3 w-3 text-gray-400" />
+														) : (
+															<ChevronRightIcon className="h-3 w-3 text-gray-400" />
+														)}
+													</button>
+												)}
+											</div>
+											{hasSubItems && isExpanded && (
+												<div className="ml-4 border-l border-gray-700">
+													{item.subItems.map((subItem) => {
+														const subActive = isActive(subItem.href);
+														return (
+															<Link
+																key={subItem.name}
+																href={subItem.href}
+																className={getSubItemClasses(subActive)}
+															>
+																<subItem.icon className="mr-2 h-4 w-4 inline" />
+																{subItem.name}
+															</Link>
+														);
+													})}
+												</div>
+											)}
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* Management Dropdown */}
+				<div className="relative">
+					<button
+						onClick={() => setManagementOpen(!managementOpen)}
+						className={getDropdownClasses(managementOpen)}
+					>
+						<Cog6ToothIcon className={getIconClasses(managementOpen)} />
+						Management
+						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
+					</button>
+					{managementOpen && (
+						<div className="absolute left-0 z-10 mt-2 w-48 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
+							<div className="py-1">
+								{managementItems.map((item) => {
+									const active = isActive(item.href);
+									return (
+										<Link
+											key={item.name}
+											href={item.href}
+											className={getSubItemClasses(active)}
+										>
+											<item.icon className="mr-2 h-4 w-4 inline" />
+											{item.name}
+										</Link>
+									);
+								})}
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	};
+
+	// Function to render mobile navigation
+	const renderMobileNavigation = () => {
+		const getBaseClasses = (active: boolean) => {
+			return active
+				? "group flex items-center rounded-md px-3 py-2 text-base font-medium transition-colors duration-200 bg-blue-600/20 text-blue-200 border border-blue-500/30"
+				: "group flex items-center rounded-md px-3 py-2 text-base font-medium transition-colors duration-200 text-gray-300 hover:bg-gray-800/50 hover:text-white";
+		};
+
+		const getIconClasses = (active: boolean) => {
+			return active
+				? "mr-3 h-6 w-6 flex-shrink-0 text-blue-300"
+				: "mr-3 h-6 w-6 flex-shrink-0 text-gray-400 group-hover:text-gray-300";
+		};
+
+		const getSubItemClasses = (active: boolean) => {
+			return active
+				? "group flex items-center rounded-md px-3 py-2 pl-9 text-sm font-medium transition-colors duration-200 bg-blue-600/20 text-blue-200 border border-blue-500/30"
+				: "group flex items-center rounded-md px-3 py-2 pl-9 text-sm font-medium transition-colors duration-200 text-gray-400 hover:bg-gray-800/30 hover:text-gray-200";
+		};
+
+		const getSubIconClasses = (active: boolean) => {
+			return active
+				? "mr-3 h-5 w-5 flex-shrink-0 text-blue-300"
+				: "mr-3 h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-400";
+		};
+
+		const getSubSubItemClasses = (active: boolean) => {
+			return active
+				? "group flex items-center rounded-md px-3 py-2 pl-16 text-sm transition-colors duration-200 text-blue-200 font-semibold"
+				: "group flex items-center rounded-md px-3 py-2 pl-16 text-sm transition-colors duration-200 text-gray-400 hover:text-gray-200";
+		};
+
+		const getSubSubIconClasses = (active: boolean) => {
+			return active
+				? "mr-3 h-4 w-4 flex-shrink-0 text-blue-300"
+				: "mr-3 h-4 w-4 flex-shrink-0 text-gray-500 group-hover:text-gray-400";
+		};
+
+		return (
+			<div className="lg:hidden">
+				<div className="space-y-1 px-2 pb-3 pt-2">
+					{navigation.map((item) => {
+						const active = isActive(item.href);
+						return (
+							<Link
+								key={item.name}
+								href={item.href}
+								className={getBaseClasses(active)}
+								onClick={() => setMobileMenuOpen(false)}
+							>
+								<item.icon className={getIconClasses(active)} />
+								{item.name}
+							</Link>
+						);
+					})}
+
+					{/* Payments Section */}
+					<div>
+						<button
+							onClick={() => setPaymentsOpen(!paymentsOpen)}
+							className={getBaseClasses(false)}
+						>
+							<ReceiptPercentIcon className={getIconClasses(false)} />
+							Payments
+							{paymentsOpen ? (
+								<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
+							) : (
+								<ChevronRightIcon className="ml-auto h-5 w-5 text-gray-400" />
+							)}
+						</button>
+						{paymentsOpen && (
+							<div className="mt-1 space-y-1">
+								{paymentItems.map((item) => {
+									const active = isActive(item.href);
+									return (
+										<Link
+											key={item.name}
+											href={item.href}
+											className={getSubItemClasses(active)}
+											onClick={() => setMobileMenuOpen(false)}
+										>
+											<item.icon className={getSubIconClasses(active)} />
+											{item.name}
+										</Link>
+									);
+								})}
+							</div>
+						)}
+					</div>
+
+					{/* Loans Section */}
 				<div>
 					<button
 						onClick={() => setLoanWorkflowOpen(!loanWorkflowOpen)}
@@ -376,46 +584,28 @@ export default function AdminLayout({
 						<div className="mt-1 space-y-1">
 							{loanWorkflowItems.map((item) => {
 								const active = isActive(item.href);
-								const hasSubItems =
-									item.subItems && item.subItems.length > 0;
-								const isExpanded =
-									(item.name === "All Applications" &&
-										applicationsOpen) ||
+									const hasSubItems = item.subItems && item.subItems.length > 0;
+									const isExpanded = (item.name === "All Applications" && applicationsOpen) ||
 									(item.name === "All Loans" && loansOpen);
 
 								return (
 									<div key={item.name}>
-										{hasSubItems ? (
 											<div className="flex items-center">
 												<Link
 													href={item.href}
-													className={`${getSubItemClasses(
-														active
-													)} flex-1 mr-2`}
+													className={`${getSubItemClasses(active)} flex-1 mr-2`}
+													onClick={() => setMobileMenuOpen(false)}
 												>
-													<item.icon
-														className={getSubIconClasses(
-															active
-														)}
-													/>
+													<item.icon className={getSubIconClasses(active)} />
 													{item.name}
 												</Link>
+												{hasSubItems && (
 												<button
 													onClick={() => {
-														if (
-															item.name ===
-															"All Applications"
-														) {
-															setApplicationsOpen(
-																!applicationsOpen
-															);
-														} else if (
-															item.name ===
-															"All Loans"
-														) {
-															setLoansOpen(
-																!loansOpen
-															);
+															if (item.name === "All Applications") {
+																setApplicationsOpen(!applicationsOpen);
+															} else if (item.name === "All Loans") {
+																setLoansOpen(!loansOpen);
 														}
 													}}
 													className="p-1 rounded hover:bg-gray-800/30 transition-colors"
@@ -426,53 +616,24 @@ export default function AdminLayout({
 														<ChevronRightIcon className="h-4 w-4 text-gray-400" />
 													)}
 												</button>
-											</div>
-										) : (
-											<Link
-												href={item.href}
-												className={getSubItemClasses(
-													active
 												)}
-											>
-												<item.icon
-													className={getSubIconClasses(
-														active
-													)}
-												/>
-												{item.name}
-											</Link>
-										)}
-
+											</div>
 										{hasSubItems && isExpanded && (
 											<div className="mt-1 space-y-1">
-												{item.subItems.map(
-													(subItem) => {
-														const subActive =
-															isActive(
-																subItem.href
-															);
+													{item.subItems.map((subItem) => {
+														const subActive = isActive(subItem.href);
 														return (
 															<Link
-																key={
-																	subItem.name
-																}
-																href={
-																	subItem.href
-																}
-																className={getSubSubItemClasses(
-																	subActive
-																)}
+																key={subItem.name}
+																href={subItem.href}
+																className={getSubSubItemClasses(subActive)}
+																onClick={() => setMobileMenuOpen(false)}
 															>
-																<subItem.icon
-																	className={getSubSubIconClasses(
-																		subActive
-																	)}
-																/>
+																<subItem.icon className={getSubSubIconClasses(subActive)} />
 																{subItem.name}
 															</Link>
 														);
-													}
-												)}
+													})}
 											</div>
 										)}
 									</div>
@@ -482,7 +643,7 @@ export default function AdminLayout({
 					)}
 				</div>
 
-				{/* Management Dropdown */}
+					{/* Management Section */}
 				<div>
 					<button
 						onClick={() => setManagementOpen(!managementOpen)}
@@ -505,12 +666,9 @@ export default function AdminLayout({
 										key={item.name}
 										href={item.href}
 										className={getSubItemClasses(active)}
+											onClick={() => setMobileMenuOpen(false)}
 									>
-										<item.icon
-											className={getSubIconClasses(
-												active
-											)}
-										/>
+											<item.icon className={getSubIconClasses(active)} />
 										{item.name}
 									</Link>
 								);
@@ -518,7 +676,8 @@ export default function AdminLayout({
 						</div>
 					)}
 				</div>
-			</>
+				</div>
+			</div>
 		);
 	};
 
@@ -532,40 +691,69 @@ export default function AdminLayout({
 
 	return (
 		<div className="min-h-screen bg-gray-900">
-			{/* Mobile sidebar */}
-			<div
-				className={`fixed inset-0 z-40 lg:hidden ${
-					sidebarOpen ? "" : "hidden"
-				}`}
-			>
-				<div
-					className="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm"
-					onClick={() => setSidebarOpen(false)}
-				></div>
-				<div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-gradient-to-b from-gray-800 to-gray-900 backdrop-blur-md border-r border-gray-700/30">
-					<div className="flex h-16 items-center justify-between px-4">
+			{/* Top navigation bar */}
+			<div className="sticky top-0 z-50 bg-gray-800/95 backdrop-blur-md border-b border-gray-700/50 shadow-xl">
+				<div className="px-4 sm:px-6 lg:px-8">
+					<div className="flex h-16 items-center justify-between">
+						{/* Logo and title */}
 						<div className="flex items-center">
-							<Logo
-								size="md"
-								variant="black"
-								linkTo="/dashboard"
-							/>
+							<Logo size="md" variant="black" linkTo="/dashboard" />
 							<span className="ml-2 px-2 py-1 text-xs font-semibold text-white bg-amber-600 rounded-full">
 								Admin
 							</span>
 						</div>
-						<button
-							onClick={() => setSidebarOpen(false)}
-							className="text-gray-400 hover:text-white"
-						>
-							<XMarkIcon className="h-6 w-6" />
-						</button>
+
+						{/* Desktop navigation */}
+						{renderDesktopNavigation()}
+
+						{/* User menu and mobile menu button */}
+						<div className="flex items-center space-x-4">
+							{/* User info */}
+							<div className="hidden md:flex items-center">
+							<div className="flex-shrink-0">
+									<div className="h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center">
+										<span className="text-gray-200 text-sm font-medium">
+										{adminName.charAt(0)}
+									</span>
+								</div>
+							</div>
+							<div className="ml-3">
+								<p className="text-sm font-medium text-gray-200">
+									{adminName}
+								</p>
+								</div>
+							</div>
+
+							{/* Logout button */}
+								<button
+									onClick={handleLogout}
+								className="hidden md:block text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors"
+								>
+									Logout
+								</button>
+
+							{/* Mobile menu button */}
+							<button
+								type="button"
+								className="lg:hidden text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+								onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+							>
+								<span className="sr-only">Open main menu</span>
+								{mobileMenuOpen ? (
+									<XMarkIcon className="h-6 w-6" aria-hidden="true" />
+								) : (
+									<Bars3Icon className="h-6 w-6" aria-hidden="true" />
+								)}
+							</button>
 					</div>
-					<div className="flex-1 overflow-y-auto">
-						<nav className="px-2 py-4 space-y-1">
-							{renderNavigation(true)}
-						</nav>
-					</div>
+				</div>
+			</div>
+
+				{/* Mobile menu */}
+				{mobileMenuOpen && (
+					<div className="lg:hidden">
+						<div className="border-t border-gray-700/30 bg-gray-800/95 backdrop-blur-md">
+							{renderMobileNavigation()}
 					<div className="border-t border-gray-700/30 p-4">
 						<div className="flex items-center">
 							<div className="flex-shrink-0">
@@ -590,92 +778,20 @@ export default function AdminLayout({
 					</div>
 				</div>
 			</div>
+				)}
+							</div>
 
-			{/* Desktop sidebar */}
-			<div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-				<div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-gray-800 to-gray-900 backdrop-blur-md border-r border-gray-700/30">
-					<div className="flex h-16 items-center px-4">
-						<Logo size="md" variant="black" linkTo="/dashboard" />
-						<span className="ml-2 px-2 py-1 text-xs font-semibold text-white bg-amber-600 rounded-full">
-							Admin
-						</span>
-					</div>
-					<div className="flex-1 overflow-y-auto">
-						<nav className="px-2 py-4 space-y-1">
-							{renderNavigation(false)}
-						</nav>
-					</div>
-					<div className="border-t border-gray-700/30 p-4">
-						<div className="flex items-center">
-							<div className="flex-shrink-0">
-								<div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center">
-									<span className="text-gray-200 font-medium">
-										{adminName.charAt(0)}
-									</span>
-								</div>
-							</div>
-							<div className="ml-3">
-								<p className="text-sm font-medium text-gray-200">
-									{adminName}
-								</p>
-								<button
-									onClick={handleLogout}
-									className="text-xs font-medium text-gray-400 hover:text-gray-200"
-								>
-									Logout
-								</button>
-							</div>
-						</div>
-					</div>
+			{/* Page header - removed title since it's duplicated in page content */}
+			<div className="bg-gray-800/50 border-b border-gray-700/30">
+				<div className="px-4 sm:px-6 lg:px-8 py-2">
+					{/* Empty header for spacing consistency */}
 				</div>
 			</div>
 
 			{/* Main content */}
-			<div className="lg:pl-64">
-				<div className="sticky top-0 z-10 flex h-24 flex-shrink-0 bg-gray-800/95 backdrop-blur-md border-b border-gray-700/50 shadow-xl">
-					<button
-						type="button"
-						className="border-r border-gray-700/50 px-4 text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 lg:hidden"
-						onClick={() => setSidebarOpen(true)}
-					>
-						<span className="sr-only">Open sidebar</span>
-						<Bars3Icon className="h-6 w-6" aria-hidden="true" />
-					</button>
-					<div className="flex flex-1 justify-between px-4 sm:px-6 lg:px-8">
-						<div className="flex items-center">
-							<div>
-								<h1 className="text-2xl font-bold text-white">
-									{title}
-								</h1>
-								<p className="text-sm text-gray-400">
-									{description}
-								</p>
-							</div>
-						</div>
-						<div className="ml-4 flex items-center md:ml-6">
-							<div className="flex items-center space-x-4">
-								<div className="flex items-center">
-									<div className="flex-shrink-0">
-										<div className="h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center">
-											<span className="text-gray-200 text-sm font-medium">
-												{adminName.charAt(0)}
-											</span>
-										</div>
-									</div>
-									<div className="ml-3 hidden md:block">
-										<p className="text-sm font-medium text-gray-200">
-											{adminName}
-										</p>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-				<main className="flex-1">
-					<div className="py-6 px-4 sm:px-6 lg:px-8">{children}</div>
-				</main>
-			</div>
+			<main className="flex-1">
+				<div className="py-8 px-6 sm:px-8 lg:px-12 xl:px-16">{children}</div>
+			</main>
 		</div>
 	);
 }

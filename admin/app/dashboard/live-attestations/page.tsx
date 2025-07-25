@@ -12,6 +12,10 @@ import {
 	ClockIcon,
 	DocumentTextIcon,
 	CalendarDaysIcon,
+	ArrowPathIcon,
+	BanknotesIcon,
+	MagnifyingGlassIcon,
+	XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "@/lib/authUtils";
 
@@ -47,10 +51,47 @@ export default function LiveAttestationsPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [processingId, setProcessingId] = useState<string | null>(null);
+	const [selectedApplication, setSelectedApplication] = useState<LoanApplication | null>(null);
+	const [searchTerm, setSearchTerm] = useState("");
+	const [filteredApplications, setFilteredApplications] = useState<LoanApplication[]>([]);
 
 	useEffect(() => {
 		loadLiveAttestationRequests();
 	}, []);
+
+	// Filter applications based on search term
+	useEffect(() => {
+		if (!searchTerm.trim()) {
+			setFilteredApplications(applications);
+		} else {
+			const search = searchTerm.toLowerCase();
+			const filtered = applications.filter(
+				(application) =>
+					application.user.fullName.toLowerCase().includes(search) ||
+					application.user.email.toLowerCase().includes(search) ||
+					application.user.phoneNumber.toLowerCase().includes(search) ||
+					application.product.name.toLowerCase().includes(search) ||
+					application.id.toLowerCase().includes(search) ||
+					application.purpose?.toLowerCase().includes(search)
+			);
+			setFilteredApplications(filtered);
+		}
+	}, [applications, searchTerm]);
+
+	// Auto-select first application when filtered list changes
+	useEffect(() => {
+		if (
+			filteredApplications.length > 0 &&
+			(!selectedApplication ||
+				!filteredApplications.find(
+					(app) => app.id === selectedApplication.id
+				))
+		) {
+			setSelectedApplication(filteredApplications[0]);
+		} else if (filteredApplications.length === 0) {
+			setSelectedApplication(null);
+		}
+	}, [filteredApplications, selectedApplication]);
 
 	const loadLiveAttestationRequests = async () => {
 		try {
@@ -68,6 +109,10 @@ export default function LiveAttestationsPage() {
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+		setSearchTerm(e.target.value);
 	};
 
 	const handleCompleteAttestation = async (applicationId: string) => {
@@ -163,294 +208,360 @@ export default function LiveAttestationsPage() {
 			title="Live Video Attestations"
 			description="Manage live video call attestation requests"
 		>
-			<div className="px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
-				<div className="space-y-6">
-					{/* Header */}
-					<div className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0">
-						<div className="flex items-center space-x-3">
-							<div className="p-3 bg-purple-500/20 border border-purple-400/20 rounded-lg">
-								<VideoCameraIcon className="h-6 w-6 text-purple-400" />
-							</div>
-							<div>
-								<h1 className="text-2xl font-bold text-white">
-									Live Video Attestations
-								</h1>
-								<p className="text-gray-400">
-									Manage live video call attestation requests
-								</p>
-							</div>
-						</div>
+			{/* Header and Controls */}
+			<div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
+				<div>
+					<h2 className="text-xl font-semibold text-white mb-2">
+						Live Video Attestations
+					</h2>
+					<p className="text-gray-400">
+						{filteredApplications.length} attestation request{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => !app.attestationCompleted).length} pending calls
+					</p>
+				</div>
+				<button
+					onClick={loadLiveAttestationRequests}
+					className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors"
+				>
+					<ArrowPathIcon className="h-4 w-4 mr-2" />
+					Refresh Data
+				</button>
+			</div>
+
+			{/* Search Bar */}
+			<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+				<div className="relative">
+					<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+						<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+					</div>
+					<input
+						type="text"
+						className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+						placeholder="Search by customer name, email, phone, product, or application ID"
+						value={searchTerm}
+						onChange={handleSearch}
+					/>
+					{searchTerm && (
 						<button
-							onClick={loadLiveAttestationRequests}
-							className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 px-4 py-2 rounded-lg font-medium transition-colors border border-purple-400/20"
+							onClick={() => setSearchTerm("")}
+							className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+							title="Clear search"
 						>
-							Refresh
+							<XMarkIcon className="h-4 w-4" />
 						</button>
-					</div>
+					)}
+				</div>
+			</div>
 
-					{/* Stats */}
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
-							<div className="flex items-center">
-								<div className="p-2 bg-amber-500/20 border border-amber-400/20 rounded-lg">
-									<ClockIcon className="h-5 w-5 text-amber-400" />
-								</div>
-								<div className="ml-3">
-									<p className="text-sm font-medium text-gray-400">
-										Pending Calls
-									</p>
-									<p className="text-2xl font-bold text-white">
-										{
-											applications.filter(
-												(app) =>
-													!app.attestationCompleted
-											).length
-										}
-									</p>
-								</div>
-							</div>
-						</div>
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
-							<div className="flex items-center">
-								<div className="p-2 bg-green-500/20 border border-green-400/20 rounded-lg">
-									<CheckCircleIcon className="h-5 w-5 text-green-400" />
-								</div>
-								<div className="ml-3">
-									<p className="text-sm font-medium text-gray-400">
-										Completed Calls
-									</p>
-									<p className="text-2xl font-bold text-white">
-										{
-											applications.filter(
-												(app) =>
-													app.attestationCompleted
-											).length
-										}
-									</p>
-								</div>
-							</div>
-						</div>
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
-							<div className="flex items-center">
-								<div className="p-2 bg-blue-500/20 border border-blue-400/20 rounded-lg">
-									<VideoCameraIcon className="h-5 w-5 text-blue-400" />
-								</div>
-								<div className="ml-3">
-									<p className="text-sm font-medium text-gray-400">
-										Total Requests
-									</p>
-									<p className="text-2xl font-bold text-white">
-										{applications.length}
-									</p>
-								</div>
-							</div>
-						</div>
-					</div>
-
-					{/* Applications List */}
-					{applications.length === 0 ? (
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-12 text-center">
-							<VideoCameraIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-							<h3 className="text-lg font-medium text-white mb-2">
-								No Live Attestation Requests
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				{/* Left Panel - Applications List */}
+				<div className="lg:col-span-1">
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+						<div className="p-4 border-b border-gray-700/30">
+							<h3 className="text-lg font-medium text-white">
+								Attestation Requests ({filteredApplications.length})
 							</h3>
-							<p className="text-gray-400">
-								When users request live video calls for
-								attestation, they will appear here.
-							</p>
 						</div>
-					) : (
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-							<div className="px-6 py-4 border-b border-gray-700/30">
-								<h2 className="text-lg font-medium text-white">
-									Live Attestation Requests
-								</h2>
-								<p className="text-sm text-gray-400 mt-1">
-									{applications.length} total request
-									{applications.length !== 1 ? "s" : ""}
-								</p>
-							</div>
-							<div className="divide-y divide-gray-700/30">
-								{applications.map((application) => (
-									<div
-										key={application.id}
-										className="p-6 hover:bg-gray-800/30 transition-colors"
-									>
-										<div className="flex items-start justify-between">
-											<div className="flex-1">
-												{/* Customer Info */}
-												<div className="flex items-start space-x-4">
-													<div className="p-3 bg-purple-500/20 border border-purple-400/20 rounded-lg">
-														<UserIcon className="h-6 w-6 text-purple-400" />
+						<div className="overflow-y-auto max-h-[70vh]">
+							{filteredApplications.length > 0 ? (
+								<ul className="divide-y divide-gray-700/30">
+									{filteredApplications.map((application) => (
+										<li
+											key={application.id}
+											className="p-4 hover:bg-gray-800/30 transition-colors cursor-pointer"
+											onClick={() => setSelectedApplication(application)}
+										>
+											<div className="flex justify-between items-start">
+												<div className="flex-1">
+													<p className="text-white font-medium">
+														{application.user.fullName}
+													</p>
+													<p className="text-sm text-gray-400">
+														{application.product.name}
+													</p>
+													<div className="mt-2 flex items-center text-sm text-gray-300">
+														<BanknotesIcon className="mr-1 h-4 w-4 text-green-400" />
+														{formatCurrency(application.amount)}
 													</div>
-													<div className="flex-1">
-														<div className="flex items-center space-x-2">
-															<h3 className="text-lg font-medium text-white">
-																{
-																	application
-																		.user
-																		.fullName
-																}
-															</h3>
-															<span
-																className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-																	application.attestationCompleted
-																		? "bg-green-500/20 text-green-300 border-green-400/20"
-																		: "bg-amber-500/20 text-amber-300 border-amber-400/20"
-																}`}
-															>
-																{application.attestationCompleted
-																	? "Completed"
-																	: "Pending"}
-															</span>
-														</div>
-														<div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-															<div className="flex items-center space-x-2 text-sm text-gray-300">
-																<EnvelopeIcon className="h-4 w-4 text-gray-400" />
-																<span>
-																	{
-																		application
-																			.user
-																			.email
-																	}
-																</span>
-															</div>
-															<div className="flex items-center space-x-2 text-sm text-gray-300">
-																<PhoneIcon className="h-4 w-4 text-gray-400" />
-																<span>
-																	{
-																		application
-																			.user
-																			.phoneNumber
-																	}
-																</span>
-															</div>
-														</div>
-													</div>
+													<p className="text-xs text-gray-400 mt-1">
+														{application.term} months
+													</p>
 												</div>
-
-												{/* Application Info */}
-												<div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-													<div>
-														<span className="font-medium text-gray-300">
-															Product:
-														</span>
-														<span className="ml-1 text-gray-400">
-															{
-																application
-																	.product
-																	.name
-															}
-														</span>
-													</div>
-													<div>
-														<span className="font-medium text-gray-300">
-															Amount:
-														</span>
-														<span className="ml-1 text-gray-400">
-															{formatCurrency(
-																application.amount
-															)}
-														</span>
-													</div>
-													<div>
-														<span className="font-medium text-gray-300">
-															Term:
-														</span>
-														<span className="ml-1 text-gray-400">
-															{application.term}{" "}
-															months
-														</span>
-													</div>
-												</div>
-
-												{/* Timeline */}
-												<div className="mt-4 flex items-center space-x-6 text-xs text-gray-400">
-													<div className="flex items-center space-x-1">
-														<CalendarDaysIcon className="h-4 w-4" />
-														<span>
-															Requested:{" "}
-															{formatDate(
-																application.updatedAt
-															)}
-														</span>
-													</div>
-													{application.meetingCompletedAt && (
-														<div className="flex items-center space-x-1">
-															<CheckCircleIcon className="h-4 w-4 text-green-400" />
-															<span>
-																Completed:{" "}
-																{formatDate(
-																	application.meetingCompletedAt
-																)}
-															</span>
-														</div>
-													)}
-												</div>
-
-												{/* Notes */}
-												{application.attestationNotes && (
-													<div className="mt-3 p-3 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-														<div className="flex items-start space-x-2">
-															<DocumentTextIcon className="h-4 w-4 text-gray-400 mt-0.5" />
-															<div>
-																<p className="text-xs font-medium text-gray-300">
-																	Admin Notes:
-																</p>
-																<p className="text-sm text-gray-400 mt-1">
-																	{
-																		application.attestationNotes
-																	}
-																</p>
-															</div>
-														</div>
-													</div>
-												)}
-											</div>
-
-											{/* Action Button */}
-											<div className="ml-4">
-												{!application.attestationCompleted ? (
-													<button
-														onClick={() =>
-															handleCompleteAttestation(
-																application.id
-															)
-														}
-														disabled={
-															processingId ===
-															application.id
-														}
-														className="bg-green-500/20 hover:bg-green-500/30 disabled:bg-gray-600/20 text-green-300 disabled:text-gray-400 px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 border border-green-400/20 disabled:border-gray-600/20"
+												<div className="text-right ml-4">
+													<span
+														className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+															application.attestationCompleted
+																? "bg-green-500/20 text-green-300 border-green-400/20"
+																: "bg-amber-500/20 text-amber-300 border-amber-400/20"
+														}`}
 													>
-														{processingId ===
-														application.id ? (
-															<>
-																<div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-																<span>
-																	Processing...
-																</span>
-															</>
+														{application.attestationCompleted ? (
+															<CheckCircleIcon className="h-3 w-3 mr-1" />
 														) : (
-															<>
-																<CheckCircleIcon className="h-4 w-4" />
-																<span>
-																	Mark
-																	Complete
-																</span>
-															</>
+															<ClockIcon className="h-3 w-3 mr-1" />
 														)}
-													</button>
+														{application.attestationCompleted ? "Completed" : "Pending"}
+													</span>
+													<p className="text-xs text-gray-400 mt-2">
+														{formatDateOnly(application.updatedAt)}
+													</p>
+												</div>
+											</div>
+										</li>
+									))}
+								</ul>
+							) : (
+								<div className="p-8 text-center">
+									<VideoCameraIcon className="mx-auto h-12 w-12 text-gray-400" />
+									<p className="mt-4 text-gray-300">
+										{searchTerm ? "No attestation requests found" : "No attestation requests found"}
+									</p>
+									{searchTerm && (
+										<p className="text-sm text-gray-400 mt-2">
+											Try adjusting your search criteria
+										</p>
+									)}
+									{!searchTerm && (
+										<p className="text-sm text-gray-400 mt-2">
+											When users request live video calls for attestation, they will appear here.
+										</p>
+									)}
+								</div>
+							)}
+						</div>
+					</div>
+				</div>
+
+				{/* Right Panel - Application Details */}
+				<div className="lg:col-span-2">
+					{selectedApplication ? (
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
+								<h3 className="text-lg font-medium text-white">
+									Attestation Details
+								</h3>
+								<span
+									className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+										selectedApplication.attestationCompleted
+											? "bg-green-500/20 text-green-300 border-green-400/20"
+											: "bg-amber-500/20 text-amber-300 border-amber-400/20"
+									}`}
+								>
+									{selectedApplication.attestationCompleted ? (
+										<CheckCircleIcon className="h-3 w-3 mr-1" />
+									) : (
+										<ClockIcon className="h-3 w-3 mr-1" />
+									)}
+									{selectedApplication.attestationCompleted ? "Completed" : "Pending"}
+								</span>
+							</div>
+
+							<div className="p-6">
+								{/* Summary Cards */}
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
+										<p className="text-gray-400 text-sm mb-1">
+											Loan Amount
+										</p>
+										<p className="text-2xl font-bold text-white">
+											{formatCurrency(selectedApplication.amount)}
+										</p>
+									</div>
+									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
+										<p className="text-gray-400 text-sm mb-1">
+											Status
+										</p>
+										<div className="flex items-center">
+											<span
+												className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${
+													selectedApplication.attestationCompleted
+														? "bg-green-500/20 text-green-300 border-green-400/20"
+														: "bg-amber-500/20 text-amber-300 border-amber-400/20"
+												}`}
+											>
+												{selectedApplication.attestationCompleted ? (
+													<CheckCircleIcon className="h-4 w-4 mr-1" />
 												) : (
-													<div className="text-green-400 font-medium text-sm flex items-center space-x-1">
-														<CheckCircleIcon className="h-4 w-4" />
-														<span>Completed</span>
-													</div>
+													<ClockIcon className="h-4 w-4 mr-1" />
 												)}
+												{selectedApplication.attestationCompleted ? "Completed" : "Pending"}
+											</span>
+										</div>
+									</div>
+									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
+										<p className="text-gray-400 text-sm mb-1">
+											Requested Date
+										</p>
+										<p className="text-sm font-medium text-white text-center">
+											{formatDate(selectedApplication.updatedAt)}
+										</p>
+									</div>
+								</div>
+
+								{/* Details */}
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+									{/* Customer Information */}
+									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
+										<h4 className="text-white font-medium mb-3 flex items-center">
+											<UserIcon className="h-5 w-5 mr-2 text-blue-400" />
+											Customer Information
+										</h4>
+										<div className="space-y-3">
+											<div>
+												<p className="text-gray-400 text-sm">
+													Full Name
+												</p>
+												<p className="text-white">
+													{selectedApplication.user.fullName}
+												</p>
+											</div>
+											<div>
+												<p className="text-gray-400 text-sm">
+													Email
+												</p>
+												<p className="text-white">
+													{selectedApplication.user.email}
+												</p>
+											</div>
+											<div>
+												<p className="text-gray-400 text-sm">
+													Phone
+												</p>
+												<p className="text-white">
+													{selectedApplication.user.phoneNumber}
+												</p>
 											</div>
 										</div>
 									</div>
-								))}
+
+									{/* Application Information */}
+									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
+										<h4 className="text-white font-medium mb-3 flex items-center">
+											<DocumentTextIcon className="h-5 w-5 mr-2 text-purple-400" />
+											Application Details
+										</h4>
+										<div className="space-y-3">
+											<div>
+												<p className="text-gray-400 text-sm">
+													Product
+												</p>
+												<p className="text-white">
+													{selectedApplication.product.name}
+												</p>
+											</div>
+											<div>
+												<p className="text-gray-400 text-sm">
+													Loan Amount
+												</p>
+												<p className="text-white">
+													{formatCurrency(selectedApplication.amount)}
+												</p>
+											</div>
+											<div>
+												<p className="text-gray-400 text-sm">
+													Term
+												</p>
+												<p className="text-white">
+													{selectedApplication.term} months
+												</p>
+											</div>
+											<div>
+												<p className="text-gray-400 text-sm">
+													Purpose
+												</p>
+												<p className="text-white">
+													{selectedApplication.purpose || "N/A"}
+												</p>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								{/* Timeline */}
+								<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 mb-6">
+									<h4 className="text-white font-medium mb-3 flex items-center">
+										<CalendarDaysIcon className="h-5 w-5 mr-2 text-green-400" />
+										Timeline
+									</h4>
+									<div className="space-y-3">
+										<div className="flex items-center space-x-3">
+											<ClockIcon className="h-4 w-4 text-amber-400" />
+											<div>
+												<p className="text-sm text-gray-300">
+													Requested
+												</p>
+												<p className="text-xs text-gray-400">
+													{formatDate(selectedApplication.updatedAt)}
+												</p>
+											</div>
+										</div>
+										{selectedApplication.meetingCompletedAt && (
+											<div className="flex items-center space-x-3">
+												<CheckCircleIcon className="h-4 w-4 text-green-400" />
+												<div>
+													<p className="text-sm text-gray-300">
+														Completed
+													</p>
+													<p className="text-xs text-gray-400">
+														{formatDate(selectedApplication.meetingCompletedAt)}
+													</p>
+												</div>
+											</div>
+										)}
+									</div>
+								</div>
+
+								{/* Notes */}
+								{selectedApplication.attestationNotes && (
+									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 mb-6">
+										<h4 className="text-white font-medium mb-3 flex items-center">
+											<DocumentTextIcon className="h-5 w-5 mr-2 text-blue-400" />
+											Admin Notes
+										</h4>
+										<p className="text-gray-300">
+											{selectedApplication.attestationNotes}
+										</p>
+									</div>
+								)}
+
+								{/* Action Buttons */}
+								<div className="flex flex-wrap gap-3">
+									{!selectedApplication.attestationCompleted ? (
+										<button
+											onClick={() => handleCompleteAttestation(selectedApplication.id)}
+											disabled={processingId === selectedApplication.id}
+											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
+										>
+											{processingId === selectedApplication.id ? (
+												<>
+													<div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+													Processing...
+												</>
+											) : (
+												<>
+													<CheckCircleIcon className="h-5 w-5 mr-2" />
+													Mark Complete
+												</>
+											)}
+										</button>
+									) : (
+										<div className="text-green-400 font-medium text-sm flex items-center">
+											<CheckCircleIcon className="h-4 w-4 mr-1" />
+											Attestation Completed
+										</div>
+									)}
+								</div>
+							</div>
+						</div>
+					) : (
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg h-full flex items-center justify-center p-8">
+							<div className="text-center">
+								<VideoCameraIcon className="mx-auto h-16 w-16 text-gray-500" />
+								<h3 className="mt-4 text-xl font-medium text-white">
+									No Attestation Selected
+								</h3>
+								<p className="mt-2 text-gray-400">
+									Select an attestation request from the list to view its details
+								</p>
 							</div>
 						</div>
 					)}

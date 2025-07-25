@@ -668,13 +668,13 @@ export default function AdminUsersPage() {
 			{/* Edit User Modal */}
 			{editDialogOpen && (
 				<div className="fixed inset-0 z-50 overflow-y-auto">
-					<div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+					<div className="flex items-center justify-center min-h-screen p-4">
 						<div
 							className="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity"
 							onClick={handleEditCancel}
 						></div>
 
-						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-7xl sm:w-full max-h-[90vh] border border-gray-700/30">
+						<div className="relative bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all w-full max-w-lg border border-gray-700/30">
 							<div className="px-6 py-4 border-b border-gray-700/30">
 								<h3 className="text-lg font-medium text-white">
 									Edit User

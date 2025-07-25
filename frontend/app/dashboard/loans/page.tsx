@@ -167,13 +167,14 @@ interface LoanApplication {
 
 interface LoanApplicationHistory {
 	id: string;
-	loanApplicationId: string;
+	applicationId: string;
 	previousStatus: string | null;
 	newStatus: string;
 	changedBy: string;
-	changedById: string;
-	createdAt: string;
+	changeReason?: string;
 	notes?: string;
+	metadata?: any;
+	createdAt: string;
 }
 
 function LoansPageContent() {
@@ -183,7 +184,7 @@ function LoansPageContent() {
 	const [loans, setLoans] = useState<Loan[]>([]);
 	const [applications, setApplications] = useState<LoanApplication[]>([]);
 	const [activeTab, setActiveTab] = useState<
-		"loans" | "discharged" | "applications" | "incomplete"
+		"loans" | "discharged" | "applications" | "incomplete" | "rejected"
 	>("loans");
 	const [loanSummary, setLoanSummary] = useState<LoanSummary>({
 		totalOutstanding: 0,
@@ -367,6 +368,8 @@ function LoansPageContent() {
 			setActiveTab("discharged");
 		} else if (tab === "incomplete") {
 			setActiveTab("incomplete");
+		} else if (tab === "rejected") {
+			setActiveTab("rejected");
 		}
 	}, [searchParams]);
 
@@ -965,9 +968,7 @@ function LoansPageContent() {
 			)}`;
 		}
 
-		return `Status changed from ${getApplicationStatusLabel(
-			previousStatus
-		)} to ${getApplicationStatusLabel(newStatus)}`;
+		return `Status changed to ${getApplicationStatusLabel(newStatus)}`;
 	};
 
 	const toggleApplicationDetails = (applicationId: string) => {
@@ -1045,6 +1046,12 @@ function LoansPageContent() {
 						: app
 				)
 			);
+
+			// Clear any cached application history to force refresh
+			setApplicationHistory((prev) => ({
+				...prev,
+				[selectedApplication.id]: [],
+			}));
 
 			setShowWithdrawModal(false);
 			setSelectedApplication(null);
@@ -1700,23 +1707,20 @@ function LoansPageContent() {
 						{/* Tab Navigation - Mobile Friendly */}
 						<div className="border-b border-gray-100 bg-gray-50/50">
 							<nav
-								className="grid grid-cols-4 px-2 sm:flex sm:space-x-4 sm:px-6 lg:px-8"
+								className="grid grid-cols-3 gap-1 px-1 sm:grid-cols-5 sm:gap-0 sm:flex sm:space-x-4 sm:px-6 lg:px-8"
 								aria-label="Tabs"
 							>
 								<button
 									onClick={() => setActiveTab("loans")}
-									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
+									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "loans"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
-										<CreditCardIcon className="h-4 w-4" />
-										<span className="hidden sm:inline">
-											Active Loans
-										</span>
-										<span className="sm:hidden text-xs">
+									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
+										<CreditCardIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+										<span className="text-xs sm:text-sm">
 											Active
 										</span>
 										{loans.filter((loan) =>
@@ -1744,18 +1748,15 @@ function LoansPageContent() {
 								</button>
 								<button
 									onClick={() => setActiveTab("discharged")}
-									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
+									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "discharged"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
-										<CheckCircleIcon className="h-4 w-4" />
-										<span className="hidden sm:inline">
-											Discharged
-										</span>
-										<span className="sm:hidden text-xs">
+									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
+										<CheckCircleIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+										<span className="text-xs sm:text-sm">
 											Discharged
 										</span>
 										{loans.filter(
@@ -1777,25 +1778,24 @@ function LoansPageContent() {
 								</button>
 								<button
 									onClick={() => setActiveTab("applications")}
-									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
+									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "applications"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
-										<DocumentTextIcon className="h-4 w-4" />
-										<span className="hidden sm:inline">
+									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
+										<DocumentTextIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+										<span className="text-xs sm:text-sm">
 											Applications
-										</span>
-										<span className="sm:hidden text-xs">
-											Apps
 										</span>
 										{applications.filter(
 											(app) =>
 												![
 													"ACTIVE",
 													"INCOMPLETE",
+													"WITHDRAWN",
+													"REJECTED",
 												].includes(
 													app.status.toUpperCase()
 												)
@@ -1807,6 +1807,8 @@ function LoansPageContent() {
 															![
 																"ACTIVE",
 																"INCOMPLETE",
+																"WITHDRAWN",
+																"REJECTED",
 															].includes(
 																app.status.toUpperCase()
 															)
@@ -1818,19 +1820,16 @@ function LoansPageContent() {
 								</button>
 								<button
 									onClick={() => setActiveTab("incomplete")}
-									className={`py-3 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
+									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "incomplete"
 											? "border-blue-600 text-blue-600"
 											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
 									}`}
 								>
-									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
-										<ClockIcon className="h-4 w-4" />
-										<span className="hidden sm:inline">
-											Pending
-										</span>
-										<span className="sm:hidden text-xs">
-											Pending
+									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
+										<ClockIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+										<span className="text-xs sm:text-sm">
+											Incomplete
 										</span>
 										{applications.filter(
 											(app) =>
@@ -1843,6 +1842,38 @@ function LoansPageContent() {
 														(app) =>
 															app.status.toUpperCase() ===
 															"INCOMPLETE"
+													).length
+												}
+											</span>
+										)}
+									</div>
+								</button>
+								<button
+									onClick={() => setActiveTab("rejected")}
+									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
+										activeTab === "rejected"
+											? "border-blue-600 text-blue-600"
+											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+									}`}
+								>
+									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
+										<ExclamationTriangleIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+										<span className="text-xs sm:text-sm">
+											Rejected
+										</span>
+										{applications.filter(
+											(app) =>
+												["REJECTED", "WITHDRAWN"].includes(
+													app.status.toUpperCase()
+												)
+										).length > 0 && (
+											<span className="bg-red-100 text-red-700 py-0.5 px-1.5 rounded-full text-xs font-medium border border-red-200 font-body sm:px-2">
+												{
+													applications.filter(
+														(app) =>
+															["REJECTED", "WITHDRAWN"].includes(
+																app.status.toUpperCase()
+															)
 													).length
 												}
 											</span>
@@ -2956,7 +2987,7 @@ function LoansPageContent() {
 										);
 									}
 								} else if (activeTab === "applications") {
-									// Applications Content (excluding ACTIVE and INCOMPLETE)
+									// Applications Content (excluding ACTIVE, INCOMPLETE, REJECTED, and WITHDRAWN)
 									const filteredApplications =
 										applications.filter(
 											(app) =>
@@ -2964,6 +2995,7 @@ function LoansPageContent() {
 													"ACTIVE",
 													"INCOMPLETE",
 													"WITHDRAWN",
+													"REJECTED",
 												].includes(
 													app.status.toUpperCase()
 												)
@@ -3417,25 +3449,20 @@ function LoansPageContent() {
 																									key={
 																										historyItem.id
 																									}
-																									className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-200"
+																									className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-gray-200"
 																								>
-																									<div className="w-8 h-8 bg-blue-tertiary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+																									<div className="w-8 h-8 bg-blue-tertiary/10 rounded-full flex items-center justify-center flex-shrink-0">
 																										<ClockIcon className="h-4 w-4 text-blue-tertiary" />
 																									</div>
 																									<div className="flex-1 min-w-0">
-																										<p className="text-sm font-medium text-gray-700 font-body">
-																											{getHistoryActionDescription(
-																												historyItem.previousStatus,
-																												historyItem.newStatus
-																											)}
-																										</p>
-																										<div className="flex items-center justify-between text-xs text-gray-500 mt-1 font-body">
-																											<span>
-																												{
-																													historyItem.changedBy
-																												}
-																											</span>
-																											<span>
+																										<div className="flex items-center justify-between">
+																											<p className="text-sm font-medium text-gray-700 font-body">
+																												{getHistoryActionDescription(
+																													historyItem.previousStatus,
+																													historyItem.newStatus
+																												)}
+																											</p>
+																											<span className="text-xs text-gray-500 font-body ml-4">
 																												{formatDateTime(
 																													historyItem.createdAt
 																												)}
@@ -3717,6 +3744,358 @@ function LoansPageContent() {
 												>
 													<PlusIcon className="h-5 w-5 mr-2" />
 													Start New Application
+												</Link>
+											</div>
+										);
+									}
+								} else if (activeTab === "rejected") {
+									// Rejected Applications Content
+									const rejectedApplications =
+										applications.filter(
+											(app) =>
+												["REJECTED", "WITHDRAWN"].includes(
+													app.status.toUpperCase()
+												)
+										);
+
+									if (rejectedApplications.length > 0) {
+										return (
+											<div className="space-y-4">
+												{rejectedApplications.map(
+													(app) => {
+														const isExpanded =
+															showApplicationDetails[
+																app.id
+															];
+
+														return (
+															<div
+																key={app.id}
+																className="bg-red-50/30 border border-red-200 rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all overflow-hidden"
+															>
+																{/* Application Header */}
+																<div className="p-6 lg:p-8">
+																	<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 space-y-4 sm:space-y-0">
+																		<div className="flex items-center space-x-4">
+																			<div className="w-16 h-16 lg:w-20 lg:h-20 bg-red-600/10 rounded-xl lg:rounded-2xl flex items-center justify-center border border-red-600/20">
+																				<ExclamationTriangleIcon className="h-8 w-8 lg:h-10 lg:w-10 text-red-600" />
+																			</div>
+																			<div>
+																				<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+																					{app
+																						.product
+																						?.name ||
+																						"Unknown Product"}
+																				</h4>
+																				<p className="text-sm lg:text-base text-red-600 font-semibold">
+																					ID: {app.id
+																						.slice(
+																							-8
+																						)
+																						.toUpperCase()}
+																				</p>
+																			</div>
+																		</div>
+																	</div>
+
+																	{/* Application Summary - Redesigned to match active loans */}
+																	<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+																		{/* Amount Requested */}
+																		<div className="text-left">
+																			<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
+																				<div className="flex items-center mb-4">
+																					<div className="w-12 h-12 lg:w-14 lg:h-14 bg-red-600/10 rounded-xl flex items-center justify-center mr-3">
+																						<BanknotesIcon className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" />
+																					</div>
+																					<div>
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																							Amount Requested
+																						</h4>
+																					</div>
+																				</div>
+																				<div className="space-y-4 lg:space-y-6">
+																					<div>
+																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																							{app.amount ? formatCurrency(app.amount) : "-"}
+																						</p>
+																					</div>
+																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																						Loan amount requested
+																					</div>
+																				</div>
+																			</div>
+																		</div>
+
+																		{/* Term & Purpose */}
+																		<div className="text-left">
+																			<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
+																				<div className="flex items-center mb-4">
+																					<div className="w-12 h-12 lg:w-14 lg:h-14 bg-red-600/10 rounded-xl flex items-center justify-center mr-3">
+																						<ClockIcon className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" />
+																					</div>
+																					<div>
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																							Term & Purpose
+																						</h4>
+																					</div>
+																				</div>
+																				<div className="space-y-4 lg:space-y-6">
+																					<div>
+																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																							{app.term ? `${app.term} months` : "-"}
+																						</p>
+																					</div>
+																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																						{app.purpose || "Purpose not specified"}
+																					</div>
+																				</div>
+																			</div>
+																		</div>
+
+																		{/* Status Date */}
+																		<div className="text-left">
+																			<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
+																				<div className="flex items-center mb-4">
+																					<div className="w-12 h-12 lg:w-14 lg:h-14 bg-red-600/10 rounded-xl flex items-center justify-center mr-3">
+																						<CalendarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" />
+																					</div>
+																					<div>
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																							{app.status.toUpperCase() === "REJECTED" ? "Rejected On" : "Withdrawn On"}
+																						</h4>
+																					</div>
+																				</div>
+																				<div className="space-y-4 lg:space-y-6">
+																					<div>
+																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																							{formatDate(app.updatedAt)}
+																						</p>
+																					</div>
+																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																						{app.status.toUpperCase() === "REJECTED" ? "Application rejected" : "Application withdrawn"}
+																					</div>
+																				</div>
+																			</div>
+																		</div>
+																	</div>
+
+																	{/* Status Alert */}
+																	<div className="mb-4">
+																		<div className="flex items-center p-4 bg-red-50 rounded-xl border border-red-200">
+																			<ExclamationTriangleIcon className="h-8 w-8 text-red-600 mr-3" />
+																			<div className="flex-1">
+																				<p className="text-lg font-semibold text-red-700">
+																					{app.status.toUpperCase() === "REJECTED" ? "Application Rejected" : "Application Withdrawn"}
+																				</p>
+																				<p className="text-sm text-gray-600">
+																					{app.status.toUpperCase() === "REJECTED" 
+																						? "Your loan application was not approved. Check the application history for details."
+																						: "Your loan application was withdrawn. Check the application history for details."
+																					}
+																				</p>
+																			</div>
+																		</div>
+																	</div>
+
+																	{/* View Details Button - Centered to match other cards */}
+																	<div className="flex justify-center mt-6">
+																		<button
+																			onClick={() =>
+																				toggleApplicationDetails(
+																					app.id
+																				)
+																			}
+																			className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
+																		>
+																			{isExpanded ? "Hide Details" : "View Details"}
+																			{isExpanded ? (
+																				<ChevronUpIcon className="ml-2 h-4 w-4" />
+																			) : (
+																				<ChevronDownIcon className="ml-2 h-4 w-4" />
+																			)}
+																		</button>
+																	</div>
+																</div>
+
+																{/* Expanded Application Details */}
+																{isExpanded && (
+																	<div className="p-6 lg:p-8 border-t border-gray-200 bg-gray-50/30">
+																		<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+																			{/* Application Information */}
+																			<div>
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																					Application Information
+																				</h5>
+																				<div className="space-y-3 text-sm lg:text-base">
+																					<div className="flex justify-between py-2">
+																						<span className="text-gray-500 font-body">
+																							Product
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app.product?.name || "Unknown"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between py-2">
+																						<span className="text-gray-500 font-body">
+																							Loan Amount
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app.amount ? formatCurrency(app.amount) : "-"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between py-2">
+																						<span className="text-gray-500 font-body">
+																							Loan Term
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app.term ? `${app.term} months` : "-"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between py-2">
+																						<span className="text-gray-500 font-body">
+																							Loan Purpose
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{app.purpose || "-"}
+																						</span>
+																					</div>
+																					<div className="flex justify-between py-2">
+																						<span className="text-gray-500 font-body">
+																							Applied
+																						</span>
+																						<span className="font-medium text-gray-700 font-body">
+																							{formatDate(app.createdAt)}
+																						</span>
+																					</div>
+																					<div className="flex justify-between py-2">
+																						<span className="text-gray-500 font-body">
+																							{app.status.toUpperCase() === "REJECTED" ? "Rejected" : "Withdrawn"}
+																						</span>
+																						<span className="font-medium text-red-700 font-body">
+																							{formatDate(app.updatedAt)}
+																						</span>
+																					</div>
+																				</div>
+																			</div>
+
+																			{/* Application History */}
+																			<div>
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																					Application History
+																				</h5>
+																				{loadingApplicationHistory[
+																					app
+																						.id
+																				] ? (
+																					<div className="flex items-center justify-center py-4">
+																						<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
+																						<span className="ml-2 text-sm text-gray-500">
+																							Loading
+																							history...
+																						</span>
+																					</div>
+																				) : applicationHistory[
+																						app
+																							.id
+																				  ] &&
+																				  applicationHistory[
+																						app
+																							.id
+																				  ]
+																						.length >
+																						0 ? (
+																					<div className="space-y-3">
+																						{applicationHistory[
+																							app
+																								.id
+																						].map(
+																							(
+																								historyItem
+																							) => (
+																								<div
+																									key={
+																										historyItem.id
+																									}
+																									className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-gray-200"
+																								>
+																									<div className="w-8 h-8 bg-blue-tertiary/10 rounded-full flex items-center justify-center flex-shrink-0">
+																										<ClockIcon className="h-4 w-4 text-blue-tertiary" />
+																									</div>
+																									<div className="flex-1 min-w-0">
+																										<div className="flex items-center justify-between">
+																											<p className="text-sm font-medium text-gray-700 font-body">
+																												{getHistoryActionDescription(
+																													historyItem.previousStatus,
+																													historyItem.newStatus
+																												)}
+																											</p>
+																											<span className="text-xs text-gray-500 font-body ml-4">
+																												{formatDateTime(
+																													historyItem.createdAt
+																												)}
+																											</span>
+																										</div>
+																										{historyItem.notes && (
+																											<p className="text-xs text-gray-600 mt-2 italic font-body">
+																												"
+																												{
+																													historyItem.notes
+																												}
+
+																												"
+																											</p>
+																										)}
+																									</div>
+																								</div>
+																							)
+																						)}
+																					</div>
+																				) : (
+																					<div className="text-center py-4">
+																						<p className="text-sm text-gray-500 mb-2 font-body">
+																							No
+																							history
+																							available
+																						</p>
+																						<p className="text-xs text-gray-500 font-body">
+																							Application
+																							history
+																							will
+																							appear
+																							here
+																							once
+																							status
+																							changes
+																							occur
+																						</p>
+																					</div>
+																				)}
+																			</div>
+																		</div>
+																	</div>
+																)}
+															</div>
+														);
+													}
+												)}
+											</div>
+										);
+									} else {
+										return (
+											<div className="text-center py-12">
+												<ExclamationTriangleIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+													No Rejected or Withdrawn Applications
+												</h4>
+												<p className="text-gray-500 mb-6 font-body">
+													Applications that have been rejected or withdrawn will appear here.
+												</p>
+												<Link
+													href="/dashboard/apply"
+													className="bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
+												>
+													<PlusIcon className="h-5 w-5 mr-2" />
+													Apply for a New Loan
 												</Link>
 											</div>
 										);
