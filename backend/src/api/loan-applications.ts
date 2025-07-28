@@ -314,6 +314,13 @@ router.patch("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: R
 				OR: [{ id }, { urlLink: id }],
 				userId,
 			},
+			include: {
+				user: {
+					select: {
+						fullName: true,
+					},
+				},
+			},
 		});
 
 		if (!existingApplication) {
@@ -322,13 +329,51 @@ router.patch("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: R
 				.json({ message: "Loan application not found" });
 		}
 
-		// Update the loan application
-		const updatedApplication = await prisma.loanApplication.update({
-			where: { id: existingApplication.id },
-			data: updateData,
+		// Use a transaction to update application and track status changes
+		const result = await prisma.$transaction(async (prismaTransaction) => {
+			// Update the loan application
+			const updatedApplication = await prismaTransaction.loanApplication.update({
+				where: { id: existingApplication.id },
+				data: updateData,
+				include: {
+					user: {
+						select: {
+							fullName: true,
+						},
+					},
+				},
+			});
+
+			// Track status change if status was updated
+			if (updateData.status && updateData.status !== existingApplication.status) {
+				const statusChangeReason = updateData.status === "COLLATERAL_REVIEW" 
+					? "Application submitted for collateral review"
+					: updateData.status === "PENDING_APP_FEE"
+					? "Application submitted - pending payment"
+					: "Application status updated by user";
+
+				await trackApplicationStatusChange(
+					prismaTransaction,
+					existingApplication.id,
+					existingApplication.status,
+					updateData.status,
+					existingApplication.user?.fullName || "User",
+					statusChangeReason,
+					null,
+					{
+						updatedBy: "USER",
+						userId: userId,
+						userAction: true,
+						acceptTerms: updateData.acceptTerms || false,
+						appStep: updateData.appStep || null,
+					}
+				);
+			}
+
+			return updatedApplication;
 		});
 
-		return res.json(updatedApplication);
+		return res.json(result);
 	} catch (error) {
 		console.error("Error updating loan application:", error);
 		return res

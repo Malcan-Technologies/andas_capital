@@ -277,9 +277,8 @@ function ApplicationDetailsFormContent({
 	}
 
 	return (
-		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-			<div className="p-4 sm:p-6 lg:p-8">
-				<form onSubmit={handleSubmit} className="space-y-6">
+		<div>
+			<form onSubmit={handleSubmit} className="space-y-6">
 					<div className="flex items-center space-x-2 mb-6 lg:mb-8">
 						<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
 							<svg
@@ -420,9 +419,8 @@ function ApplicationDetailsFormContent({
 					</div>
 				</form>
 			</div>
-		</div>
-	);
-}
+		);
+	}
 
 export default function ApplicationDetailsForm(
 	props: ApplicationDetailsFormProps

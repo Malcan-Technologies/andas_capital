@@ -155,6 +155,7 @@ interface ProductDetails {
 	interestRate: number;
 	code: string;
 	requiredDocuments?: string[];
+	collateralRequired?: boolean;
 }
 
 // Create a client component for handling searchParams
@@ -424,6 +425,10 @@ function ReviewAndSubmitFormContent({
 				throw new Error("Authentication token not found");
 			}
 
+			// Determine the appropriate status based on whether it's a collateral loan
+			const isCollateralLoan = productDetails?.collateralRequired === true;
+			const newStatus = isCollateralLoan ? "COLLATERAL_REVIEW" : "PENDING_APP_FEE";
+
 			// Update the application status and terms acceptance
 			const response = await fetch(
 				`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${applicationId}`,
@@ -435,7 +440,7 @@ function ReviewAndSubmitFormContent({
 					},
 					body: JSON.stringify({
 						acceptTerms: true,
-						status: "PENDING_APP_FEE",
+						status: newStatus,
 						appStep: 5, // Set to final step
 					}),
 				}
@@ -510,9 +515,23 @@ function ReviewAndSubmitFormContent({
 
 	const handleBack = () => {
 		const currentStep = parseInt(searchParams.get("step") || "1", 10);
-		const newStep = Math.max(currentStep - 1, 1);
+		let newStep = Math.max(currentStep - 1, 1);
 		const applicationId = searchParams.get("applicationId");
 		const productCode = searchParams.get("productCode");
+
+		// Check if we need to skip the document step (step 4) for collateral loans
+		if (currentStep === 5 && newStep === 4) {
+			// Check if this is a collateral loan or a product with no required documents
+			const isCollateralLoan = productDetails?.collateralRequired === true;
+			const hasRequiredDocuments = productDetails?.requiredDocuments && 
+				Array.isArray(productDetails.requiredDocuments) && 
+				productDetails.requiredDocuments.length > 0;
+			
+			// Skip document step if it's a collateral loan or no documents required
+			if (isCollateralLoan || !hasRequiredDocuments) {
+				newStep = 3; // Go back to step 3 (Personal Information) instead
+			}
+		}
 
 		// Build the URL with proper query parameters
 		const params = new URLSearchParams();
@@ -592,13 +611,12 @@ function ReviewAndSubmitFormContent({
 	}
 
 	return (
-		<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-			<Box
-				component="form"
-				onSubmit={handleSubmit}
-				className="space-y-6"
-				sx={lightThemeOverrides}
-			>
+		<Box
+			component="form"
+			onSubmit={handleSubmit}
+			className="space-y-6"
+			sx={lightThemeOverrides}
+		>
 				{/* Consistent Header Design */}
 				<div className="flex items-center space-x-2 mb-6">
 					<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
@@ -1262,7 +1280,6 @@ function ReviewAndSubmitFormContent({
 					</Button>
 				</Box>
 			</Box>
-		</div>
 	);
 }
 

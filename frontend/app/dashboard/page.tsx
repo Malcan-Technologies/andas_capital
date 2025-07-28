@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import Link from "next/link";
 import PieChart from "@/components/PieChart";
-import CreditScoreGauge from "@/components/CreditScoreGauge";
 import ActionNotificationBar from "@/components/ActionNotificationBar";
 import {
 	ArrowRightIcon,
@@ -469,79 +468,6 @@ export default function DashboardPage() {
 				totalLateFees: 0,
 			}
 		);
-	};
-
-	const getCreditScoreInfo = (score: number) => {
-		if (score >= 744) {
-			return {
-				range: "744 - 850",
-				category: "Excellent",
-				description:
-					"Excellent! You're viewed very favourably by lenders.",
-				color: "text-gray-700",
-				bgColor: "bg-purple-primary/5",
-				borderColor: "border-purple-primary/20",
-			};
-		} else if (score >= 718) {
-			return {
-				range: "718 - 743",
-				category: "Very Good",
-				description: "Very Good! You're viewed as a prime customer.",
-				color: "text-gray-700",
-				bgColor: "bg-purple-primary/5",
-				borderColor: "border-purple-primary/20",
-			};
-		} else if (score >= 697) {
-			return {
-				range: "697 - 717",
-				category: "Good",
-				description:
-					"Good! You're above average and viable for new credit.",
-				color: "text-gray-700",
-				bgColor: "bg-purple-primary/5",
-				borderColor: "border-purple-primary/20",
-			};
-		} else if (score >= 651) {
-			return {
-				range: "651 - 696",
-				category: "Fair",
-				description:
-					"Fair. You're below average and less viable for credit.",
-				color: "text-gray-700",
-				bgColor: "bg-purple-primary/5",
-				borderColor: "border-purple-primary/20",
-			};
-		} else if (score >= 529) {
-			return {
-				range: "529 - 650",
-				category: "Low",
-				description:
-					"Low. You may face diﬃculties when applying for credit.",
-				color: "text-gray-700",
-				bgColor: "bg-purple-primary/5",
-				borderColor: "border-purple-primary/20",
-			};
-		} else if (score >= 300) {
-			return {
-				range: "300 - 528",
-				category: "Poor",
-				description:
-					"Poor. Your credit applications will likely be affected.",
-				color: "text-gray-700",
-				bgColor: "bg-purple-primary/5",
-				borderColor: "border-purple-primary/20",
-			};
-		} else {
-			return {
-				range: "No Score",
-				category: "No Score",
-				description:
-					"Your score couldn't be generated due to insufficient information.",
-				color: "text-gray-700",
-				bgColor: "bg-purple-primary/5",
-				borderColor: "border-purple-primary/20",
-			};
-		}
 	};
 
 	// Convert applications to action notifications
@@ -1061,176 +987,104 @@ export default function DashboardPage() {
 						</div>
 					</div>
 
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-						{/* Wallet Card */}
-						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
-							<div className="p-4 sm:p-6 lg:p-8">
-								{/* Header - Mobile: Stack, Desktop: Side by side */}
-								<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
-									<div className="flex items-center">
-										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
-											<WalletIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
-										</div>
-										<div className="min-w-0">
-											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-												Wallet
-											</h3>
-											<p className="text-sm lg:text-base text-purple-primary font-semibold">
-												Your financial hub
-											</p>
-										</div>
+					{/* Wallet Card - Now single column */}
+					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+						<div className="p-4 sm:p-6 lg:p-8">
+							{/* Header - Mobile: Stack, Desktop: Side by side */}
+							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
+								<div className="flex items-center">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+										<WalletIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
 									</div>
-									{/* Desktop Manage Button */}
-									<Link
-										href="/dashboard/wallet"
-										className="hidden lg:inline-flex bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
-									>
-										Manage
-										<ArrowRightIcon className="ml-1 h-4 w-4" />
-									</Link>
+									<div className="min-w-0">
+										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+											Wallet
+										</h3>
+										<p className="text-sm lg:text-base text-purple-primary font-semibold">
+											Your financial hub
+										</p>
+									</div>
 								</div>
+								{/* Desktop Manage Button */}
+								<Link
+									href="/dashboard/wallet"
+									className="hidden lg:inline-flex bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
+								>
+									Manage
+									<ArrowRightIcon className="ml-1 h-4 w-4" />
+								</Link>
+							</div>
 
-								{/* Main Balance */}
-								<div className="text-center lg:text-left mb-6">
-									<p className="text-gray-500 text-sm mb-2 font-body">
-										Total Balance
-									</p>
-									<p className="text-2xl sm:text-3xl lg:text-4xl font-heading font-bold text-gray-700 mb-3">
-										{formatCurrency(walletData.balance)}
-									</p>
-									<p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
-										Available:{" "}
+							{/* Main Balance */}
+							<div className="text-center lg:text-left mb-6">
+								<p className="text-gray-500 text-sm mb-2 font-body">
+									Total Balance
+								</p>
+								<p className="text-2xl sm:text-3xl lg:text-4xl font-heading font-bold text-gray-700 mb-3">
+									{formatCurrency(walletData.balance)}
+								</p>
+								<p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+									Available:{" "}
+									{formatCurrency(
+										walletData.availableForWithdrawal
+									)}
+								</p>
+							</div>
+
+							{/* Subtle separator line */}
+							<div className="border-t border-gray-100 mb-6"></div>
+
+							{/* Quick Stats Grid */}
+							<div className="grid grid-cols-2 md:grid-cols-2 gap-4 lg:gap-6 justify-items-center lg:justify-items-start mb-6">
+								<div className="space-y-2 text-center lg:text-left w-full">
+									<div className="flex items-center space-x-2 justify-center lg:justify-start">
+										<ArrowDownIcon className="h-4 w-4 text-purple-primary" />
+										<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
+											Deposits
+										</span>
+									</div>
+									<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
 										{formatCurrency(
-											walletData.availableForWithdrawal
+											walletData.totalDeposits
 										)}
 									</p>
 								</div>
-
-								{/* Subtle separator line */}
-								<div className="border-t border-gray-100 mb-6"></div>
-
-								{/* Quick Stats Grid */}
-								<div className="grid grid-cols-2 md:grid-cols-2 gap-4 lg:gap-6 justify-items-center lg:justify-items-start mb-6">
-									<div className="space-y-2 text-center lg:text-left w-full">
-										<div className="flex items-center space-x-2 justify-center lg:justify-start">
-											<ArrowDownIcon className="h-4 w-4 text-purple-primary" />
-											<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
-												Deposits
-											</span>
-										</div>
-										<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
-											{formatCurrency(
-												walletData.totalDeposits
-											)}
-										</p>
+								<div className="space-y-2 text-center lg:text-left w-full">
+									<div className="flex items-center space-x-2 justify-center lg:justify-start">
+										<CreditCardIcon className="h-4 w-4 text-purple-primary" />
+										<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
+											Disbursed
+										</span>
 									</div>
-									<div className="space-y-2 text-center lg:text-left w-full">
-										<div className="flex items-center space-x-2 justify-center lg:justify-start">
-											<CreditCardIcon className="h-4 w-4 text-purple-primary" />
-											<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
-												Disbursed
-											</span>
-										</div>
-										<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
-											{formatCurrency(
-												walletData.totalDisbursed
-											)}
-										</p>
-									</div>
-								</div>
-
-								{/* Bank Status */}
-								<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
-									<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-										<div className="flex items-center space-x-3">
-											<div
-												className={`p-2 rounded-xl ${
-													walletData.bankConnected
-														? "bg-purple-primary/10"
-														: "bg-white"
-												} border ${
-													walletData.bankConnected
-														? "border-purple-primary/20"
-														: "border-gray-500/10"
-												}`}
-											>
-												<svg
-													className={`h-5 w-5 ${
-														walletData.bankConnected
-															? "text-purple-primary"
-															: "text-gray-500"
-													}`}
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-													/>
-												</svg>
-											</div>
-											<div>
-												<p className="font-semibold text-sm text-gray-700 font-body">
-													{walletData.bankConnected
-														? "Bank Connected"
-														: "Bank Not Connected"}
-												</p>
-												{walletData.bankConnected &&
-												walletData.bankName ? (
-													<p className="text-xs text-gray-500 font-body">
-														{walletData.bankName}{" "}
-														•••
-														{walletData.accountNumber?.slice(
-															-4
-														)}
-													</p>
-												) : (
-													<p className="text-xs text-gray-500 font-body">
-														Connect to enable
-														transfers
-													</p>
-												)}
-											</div>
-										</div>
-										{walletData.pendingTransactions > 0 && (
-											<div className="flex items-center space-x-1 bg-purple-primary/10 px-2 py-1 rounded-full border border-purple-primary/20">
-												<ClockIcon className="h-3 w-3 text-gray-500" />
-												<span className="text-xs font-medium text-gray-500 font-body">
-													{
-														walletData.pendingTransactions
-													}{" "}
-													pending
-												</span>
-											</div>
+									<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
+										{formatCurrency(
+											walletData.totalDisbursed
 										)}
-									</div>
-								</div>
-
-								{/* Mobile Manage Button */}
-								<div className="border-t border-gray-100 pt-4 lg:hidden">
-									<Link
-										href="/dashboard/wallet"
-										className="w-full bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
-									>
-										Manage
-										<ArrowRightIcon className="ml-1 h-4 w-4" />
-									</Link>
+									</p>
 								</div>
 							</div>
-						</div>
 
-						{/* Credit Score Card */}
-						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
-							<div className="p-4 sm:p-6 lg:p-8">
-								{/* Header - Mobile: Stack, Desktop: Side by side */}
-								<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
-									<div className="flex items-center">
-										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+							{/* Bank Status */}
+							<div className="bg-blue-tertiary/5 rounded-xl p-6 border border-blue-tertiary/20">
+								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+									<div className="flex items-center space-x-3">
+										<div
+											className={`p-2 rounded-xl ${
+												walletData.bankConnected
+													? "bg-purple-primary/10"
+													: "bg-white"
+											} border ${
+												walletData.bankConnected
+													? "border-purple-primary/20"
+													: "border-gray-500/10"
+											}`}
+										>
 											<svg
-												className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary"
+												className={`h-5 w-5 ${
+													walletData.bankConnected
+														? "text-purple-primary"
+														: "text-gray-500"
+												}`}
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -1239,97 +1093,56 @@ export default function DashboardPage() {
 													strokeLinecap="round"
 													strokeLinejoin="round"
 													strokeWidth={2}
-													d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+													d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
 												/>
 											</svg>
 										</div>
-										<div className="min-w-0">
-											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-												Credit Score
-											</h3>
-											<p className="text-sm lg:text-base text-purple-primary font-semibold">
-												Your creditworthiness
+										<div>
+											<p className="font-semibold text-sm text-gray-700 font-body">
+												{walletData.bankConnected
+													? "Bank Connected"
+													: "Bank Not Connected"}
 											</p>
+											{walletData.bankConnected &&
+											walletData.bankName ? (
+												<p className="text-xs text-gray-500 font-body">
+													{walletData.bankName}{" "}
+													•••
+													{walletData.accountNumber?.slice(
+														-4
+													)}
+												</p>
+											) : (
+												<p className="text-xs text-gray-500 font-body">
+													Connect to enable
+													transfers
+												</p>
+											)}
 										</div>
 									</div>
-									{/* Desktop View Details Button */}
-									<Link
-										href="/dashboard/credit-score"
-										className="hidden lg:inline-flex bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md items-center"
-									>
-										View Details
-										<ArrowRightIcon className="ml-1 h-4 w-4" />
-									</Link>
+									{walletData.pendingTransactions > 0 && (
+										<div className="flex items-center space-x-1 bg-purple-primary/10 px-2 py-1 rounded-full border border-purple-primary/20">
+											<ClockIcon className="h-3 w-3 text-gray-500" />
+											<span className="text-xs font-medium text-gray-500 font-body">
+												{
+													walletData.pendingTransactions
+												}{" "}
+												pending
+											</span>
+										</div>
+									)}
 								</div>
+							</div>
 
-								<div className="space-y-6">
-									{/* Gauge Section */}
-									<div className="flex flex-col items-center">
-										<CreditScoreGauge
-											score={600}
-											size={300}
-										/>
-									</div>
-
-									{/* Subtle separator line */}
-									<div className="border-t border-gray-100"></div>
-
-									{/* Score Info Section */}
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 justify-items-center lg:justify-items-start">
-										{(() => {
-											const scoreInfo =
-												getCreditScoreInfo(600);
-											return (
-												<>
-													{/* Current Score Info */}
-													<div className="space-y-2 text-center lg:text-left w-full">
-														<div className="flex items-center space-x-2 justify-center lg:justify-start">
-															<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
-																{scoreInfo.category}
-															</span>
-														</div>
-														<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
-															600
-														</p>
-														<p className="text-xs text-gray-500 font-body">
-															Range: {scoreInfo.range}
-														</p>
-													</div>
-
-													{/* Last Updated */}
-													<div className="space-y-2 text-center lg:text-left w-full">
-														<div className="flex items-center space-x-2 justify-center lg:justify-start">
-															<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
-																Last Updated
-															</span>
-														</div>
-														<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
-															Never
-														</p>
-													</div>
-												</>
-											);
-										})()}
-									</div>
-
-									{/* Description */}
-									<div className="text-center lg:text-left">
-										<p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
-											{getCreditScoreInfo(600).description}
-										</p>
-									</div>
-								</div>
-
-								{/* Mobile View Details Button */}
-								<div className="border-t border-gray-100 pt-4 lg:hidden">
-									<Link
-										href="/dashboard/credit-score"
-										className="w-full bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
-									>
-										View Details
-										<ArrowRightIcon className="ml-1 h-4 w-4" />
-									</Link>
-								</div>
+							{/* Mobile Manage Button */}
+							<div className="border-t border-gray-100 pt-4 lg:hidden">
+								<Link
+									href="/dashboard/wallet"
+									className="w-full bg-purple-primary hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center"
+								>
+									Manage
+									<ArrowRightIcon className="ml-1 h-4 w-4" />
+								</Link>
 							</div>
 						</div>
 					</div>

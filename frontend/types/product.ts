@@ -20,4 +20,5 @@ export interface ProductType {
 	loanTypes?: string[];
 	requirements?: string[];
 	isActive: boolean;
+	collateralRequired: boolean;
 }

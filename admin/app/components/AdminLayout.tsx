@@ -53,6 +53,7 @@ export default function AdminLayout({
 	const [paymentsOpen, setPaymentsOpen] = useState(false);
 	const [applicationsOpen, setApplicationsOpen] = useState(false);
 	const [loansOpen, setLoansOpen] = useState(false);
+	const [allowAutoExpand, setAllowAutoExpand] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
 
@@ -176,7 +177,7 @@ export default function AdminLayout({
 
 	const paymentItems = [
 		{
-			name: "Disbursements",
+			name: "Past Disbursements",
 			href: "/dashboard/disbursements",
 			icon: CreditCardIcon,
 		},
@@ -264,11 +265,22 @@ export default function AdminLayout({
 
 	// Function to check if any sub-item in a dropdown is active
 	const isDropdownActive = (items: any[]) => {
-		return items.some((item) => isActive(item.href));
+		return items.some((item) => {
+			// Check if the main item is active
+			const isMainActive = isActive(item.href);
+			// Check if any sub-item is active
+			const isSubActive = item.subItems?.some((subItem: any) =>
+				isActive(subItem.href)
+			);
+			return isMainActive || isSubActive;
+		});
 	};
 
-	// Auto-expand dropdowns based on current path
+	// Auto-expand dropdowns based on current path (only when explicitly enabled)
 	useEffect(() => {
+		// Only auto-expand if explicitly allowed (e.g., when navigating through menu items)
+		if (!allowAutoExpand) return;
+
 		const isLoanPath = loanWorkflowItems.some((item) => {
 			const isMainActive = isActive(item.href);
 			const isSubActive = item.subItems?.some((subItem) =>
@@ -294,7 +306,10 @@ export default function AdminLayout({
 		setPaymentsOpen(isPaymentsPath);
 		setApplicationsOpen(isApplicationsPath);
 		setLoansOpen(isLoansPath);
-	}, [pathname]);
+
+		// Reset the auto-expand flag after applying
+		setAllowAutoExpand(false);
+	}, [pathname, allowAutoExpand]);
 
 	// Function to render navigation items for desktop
 	const renderDesktopNavigation = () => {
@@ -331,6 +346,7 @@ export default function AdminLayout({
 							key={item.name}
 							href={item.href}
 							className={getBaseClasses(active)}
+							onClick={() => setAllowAutoExpand(true)}
 						>
 							<item.icon className={getIconClasses(active)} />
 							{item.name}
@@ -341,10 +357,14 @@ export default function AdminLayout({
 				{/* Payments Dropdown */}
 				<div className="relative">
 					<button
-						onClick={() => setPaymentsOpen(!paymentsOpen)}
-						className={getDropdownClasses(paymentsOpen)}
+						onClick={() => {
+							setPaymentsOpen(!paymentsOpen);
+							setLoanWorkflowOpen(false);
+							setManagementOpen(false);
+						}}
+						className={getDropdownClasses(paymentsOpen || isDropdownActive(paymentItems))}
 					>
-						<ReceiptPercentIcon className={getIconClasses(paymentsOpen)} />
+						<ReceiptPercentIcon className={getIconClasses(paymentsOpen || isDropdownActive(paymentItems))} />
 						Payments
 						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
 					</button>
@@ -358,6 +378,7 @@ export default function AdminLayout({
 											key={item.name}
 											href={item.href}
 											className={getSubItemClasses(active)}
+											onClick={() => setAllowAutoExpand(true)}
 										>
 											<item.icon className="mr-2 h-4 w-4 inline" />
 											{item.name}
@@ -372,10 +393,14 @@ export default function AdminLayout({
 				{/* Loans Dropdown */}
 				<div className="relative">
 					<button
-						onClick={() => setLoanWorkflowOpen(!loanWorkflowOpen)}
-						className={getDropdownClasses(loanWorkflowOpen)}
+						onClick={() => {
+							setLoanWorkflowOpen(!loanWorkflowOpen);
+							setPaymentsOpen(false);
+							setManagementOpen(false);
+						}}
+						className={getDropdownClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))}
 					>
-						<DocumentTextIcon className={getIconClasses(loanWorkflowOpen)} />
+						<DocumentTextIcon className={getIconClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))} />
 						Loans
 						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
 					</button>
@@ -394,6 +419,7 @@ export default function AdminLayout({
 												<Link
 													href={item.href}
 													className={getSubItemClasses(active)}
+													onClick={() => setAllowAutoExpand(true)}
 												>
 													<item.icon className="mr-2 h-4 w-4 inline" />
 													{item.name}
@@ -426,6 +452,7 @@ export default function AdminLayout({
 																key={subItem.name}
 																href={subItem.href}
 																className={getSubItemClasses(subActive)}
+																onClick={() => setAllowAutoExpand(true)}
 															>
 																<subItem.icon className="mr-2 h-4 w-4 inline" />
 																{subItem.name}
@@ -445,10 +472,14 @@ export default function AdminLayout({
 				{/* Management Dropdown */}
 				<div className="relative">
 					<button
-						onClick={() => setManagementOpen(!managementOpen)}
-						className={getDropdownClasses(managementOpen)}
+						onClick={() => {
+							setManagementOpen(!managementOpen);
+							setPaymentsOpen(false);
+							setLoanWorkflowOpen(false);
+						}}
+						className={getDropdownClasses(managementOpen || isDropdownActive(managementItems))}
 					>
-						<Cog6ToothIcon className={getIconClasses(managementOpen)} />
+						<Cog6ToothIcon className={getIconClasses(managementOpen || isDropdownActive(managementItems))} />
 						Management
 						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
 					</button>
@@ -462,6 +493,7 @@ export default function AdminLayout({
 											key={item.name}
 											href={item.href}
 											className={getSubItemClasses(active)}
+											onClick={() => setAllowAutoExpand(true)}
 										>
 											<item.icon className="mr-2 h-4 w-4 inline" />
 											{item.name}
@@ -524,7 +556,10 @@ export default function AdminLayout({
 								key={item.name}
 								href={item.href}
 								className={getBaseClasses(active)}
-								onClick={() => setMobileMenuOpen(false)}
+								onClick={() => {
+									setMobileMenuOpen(false);
+									setAllowAutoExpand(true);
+								}}
 							>
 								<item.icon className={getIconClasses(active)} />
 								{item.name}
@@ -535,10 +570,14 @@ export default function AdminLayout({
 					{/* Payments Section */}
 					<div>
 						<button
-							onClick={() => setPaymentsOpen(!paymentsOpen)}
-							className={getBaseClasses(false)}
+							onClick={() => {
+								setPaymentsOpen(!paymentsOpen);
+								setLoanWorkflowOpen(false);
+								setManagementOpen(false);
+							}}
+							className={getBaseClasses(paymentsOpen || isDropdownActive(paymentItems))}
 						>
-							<ReceiptPercentIcon className={getIconClasses(false)} />
+							<ReceiptPercentIcon className={getIconClasses(paymentsOpen || isDropdownActive(paymentItems))} />
 							Payments
 							{paymentsOpen ? (
 								<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
@@ -555,7 +594,10 @@ export default function AdminLayout({
 											key={item.name}
 											href={item.href}
 											className={getSubItemClasses(active)}
-											onClick={() => setMobileMenuOpen(false)}
+											onClick={() => {
+												setMobileMenuOpen(false);
+												setAllowAutoExpand(true);
+											}}
 										>
 											<item.icon className={getSubIconClasses(active)} />
 											{item.name}
@@ -569,10 +611,14 @@ export default function AdminLayout({
 					{/* Loans Section */}
 				<div>
 					<button
-						onClick={() => setLoanWorkflowOpen(!loanWorkflowOpen)}
-						className={getBaseClasses(false)}
+						onClick={() => {
+							setLoanWorkflowOpen(!loanWorkflowOpen);
+							setPaymentsOpen(false);
+							setManagementOpen(false);
+						}}
+						className={getBaseClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))}
 					>
-						<DocumentTextIcon className={getIconClasses(false)} />
+						<DocumentTextIcon className={getIconClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))} />
 						Loans
 						{loanWorkflowOpen ? (
 							<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
@@ -594,7 +640,10 @@ export default function AdminLayout({
 												<Link
 													href={item.href}
 													className={`${getSubItemClasses(active)} flex-1 mr-2`}
-													onClick={() => setMobileMenuOpen(false)}
+													onClick={() => {
+														setMobileMenuOpen(false);
+														setAllowAutoExpand(true);
+													}}
 												>
 													<item.icon className={getSubIconClasses(active)} />
 													{item.name}
@@ -627,7 +676,10 @@ export default function AdminLayout({
 																key={subItem.name}
 																href={subItem.href}
 																className={getSubSubItemClasses(subActive)}
-																onClick={() => setMobileMenuOpen(false)}
+																onClick={() => {
+																	setMobileMenuOpen(false);
+																	setAllowAutoExpand(true);
+																}}
 															>
 																<subItem.icon className={getSubSubIconClasses(subActive)} />
 																{subItem.name}
@@ -646,10 +698,14 @@ export default function AdminLayout({
 					{/* Management Section */}
 				<div>
 					<button
-						onClick={() => setManagementOpen(!managementOpen)}
-						className={getBaseClasses(false)}
+						onClick={() => {
+							setManagementOpen(!managementOpen);
+							setPaymentsOpen(false);
+							setLoanWorkflowOpen(false);
+						}}
+						className={getBaseClasses(managementOpen || isDropdownActive(managementItems))}
 					>
-						<Cog6ToothIcon className={getIconClasses(false)} />
+						<Cog6ToothIcon className={getIconClasses(managementOpen || isDropdownActive(managementItems))} />
 						Management
 						{managementOpen ? (
 							<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
@@ -666,9 +722,12 @@ export default function AdminLayout({
 										key={item.name}
 										href={item.href}
 										className={getSubItemClasses(active)}
-											onClick={() => setMobileMenuOpen(false)}
+										onClick={() => {
+											setMobileMenuOpen(false);
+											setAllowAutoExpand(true);
+										}}
 									>
-											<item.icon className={getSubIconClasses(active)} />
+										<item.icon className={getSubIconClasses(active)} />
 										{item.name}
 									</Link>
 								);

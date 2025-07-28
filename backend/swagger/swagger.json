@@ -2835,6 +2835,76 @@
         }
       }
     },
+    "/api/admin/payments/manual": {
+      "post": {
+        "summary": "Create a manual payment for a loan (admin only)",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "loanId",
+                  "amount",
+                  "paymentMethod",
+                  "reference"
+                ],
+                "properties": {
+                  "loanId": {
+                    "type": "string",
+                    "description": "The loan ID to apply payment to"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Payment amount"
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "description": "Payment method (e.g., bank_transfer, cash, etc.)"
+                  },
+                  "reference": {
+                    "type": "string",
+                    "description": "Payment reference/transaction ID"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Admin notes about the payment"
+                  },
+                  "paymentDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Date when payment was made (defaults to now)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment created and allocated successfully"
+          },
+          "400": {
+            "description": "Invalid request data"
+          },
+          "404": {
+            "description": "Loan not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
     "/api/auth/login": {
       "post": {
         "summary": "Login with phone number and password",
@@ -4835,6 +4905,34 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get a product by ID",
+        "tags": [
+          "Products"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Product ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product details"
           },
           "404": {
             "description": "Product not found"

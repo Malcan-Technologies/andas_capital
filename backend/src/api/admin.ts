@@ -346,11 +346,13 @@ router.get(
 			// Get all users count
 			const totalUsers = await prisma.user.count();
 
-			// Get applications that need review (status = PENDING_APPROVAL)
+			// Get applications that need review (status = PENDING_APPROVAL or COLLATERAL_REVIEW)
 			const pendingReviewApplications =
 				await prisma.loanApplication.count({
 					where: {
-						status: "PENDING_APPROVAL",
+						status: {
+							in: ["PENDING_APPROVAL", "COLLATERAL_REVIEW"],
+						},
 					},
 				});
 
@@ -1502,6 +1504,7 @@ router.get(
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
+				"COLLATERAL_REVIEW",
 				"ACTIVE",
 				"WITHDRAWN",
 				"REJECTED",
@@ -2071,7 +2074,7 @@ router.patch(
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
-			const { status, notes, referenceNumber } = req.body;
+			const { status, notes, referenceNumber, currentStatus } = req.body;
 			const adminUserId = req.user?.userId;
 
 			const validStatuses = [
@@ -2083,10 +2086,46 @@ router.patch(
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
+				"COLLATERAL_REVIEW",
 				"ACTIVE",
 				"REJECTED",
 				"WITHDRAWN",
 			];
+
+			// First, get the current application state to validate
+			const currentApplication = await prisma.loanApplication.findUnique({
+				where: { id },
+				include: {
+					loan: true,
+					disbursement: true,
+				},
+			});
+
+			if (!currentApplication) {
+				return res.status(404).json({ message: "Application not found" });
+			}
+
+			// Check if the loan is already disbursed/active - prevent any status changes
+			if (currentApplication.status === "ACTIVE" || currentApplication.loan?.status === "ACTIVE" || currentApplication.disbursement) {
+				return res.status(409).json({
+					error: "LOAN_ALREADY_DISBURSED",
+					message: "This loan has already been disbursed and cannot be modified. Please refresh your page to see the current status.",
+					currentStatus: currentApplication.status,
+					disbursedAt: currentApplication.disbursement?.disbursedAt || currentApplication.loan?.disbursedAt,
+					disbursedBy: currentApplication.disbursement?.disbursedBy,
+				});
+			}
+
+			// Optimistic locking: Check if the current status matches what the frontend expects
+			if (currentStatus && currentApplication.status !== currentStatus) {
+				return res.status(409).json({
+					error: "STATUS_CONFLICT",
+					message: "The application status has been changed by another admin. Please refresh your page to see the current status.",
+					expectedStatus: currentStatus,
+					actualStatus: currentApplication.status,
+					lastUpdated: currentApplication.updatedAt,
+				});
+			}
 
 			if (!validStatuses.includes(status)) {
 				return res
@@ -2437,6 +2476,10 @@ router.patch(
 							}
 
 							// Track the status change in history
+							const disbursementNotes = (notes && notes.trim()) 
+								? `${notes.trim()} | Disbursed Amount: RM ${disbursementAmount.toFixed(2)}`
+								: `Disbursed Amount: RM ${disbursementAmount.toFixed(2)}`;
+
 							await trackApplicationStatusChange(
 								prismaTransaction,
 								id,
@@ -2444,7 +2487,7 @@ router.patch(
 								"ACTIVE",
 								adminUserId,
 								"Loan disbursement",
-								notes,
+								disbursementNotes,
 								{
 									referenceNumber: disbursementReference,
 									amount: disbursementAmount,
@@ -2530,6 +2573,18 @@ router.patch(
 					`Processing regular status update to ${finalStatus}`
 				);
 
+				// Get the current application to track the previous status
+				const currentApplication = await prisma.loanApplication.findUnique({
+					where: { id },
+					select: { status: true }
+				});
+
+				if (!currentApplication) {
+					return res.status(404).json({ message: "Application not found" });
+				}
+
+				const previousStatus = currentApplication.status;
+
 				const application = await prisma.loanApplication.update({
 					where: { id },
 					data: { status: finalStatus },
@@ -2580,7 +2635,7 @@ router.patch(
 				await trackApplicationStatusChange(
 					prisma,
 					id,
-					application.status,
+					previousStatus,
 					finalStatus,
 					adminUserId,
 					status === "APPROVED"
@@ -3266,6 +3321,10 @@ router.post(
 								});
 
 							// Track the status change in history
+							const disbursementNotes = (notes && notes.trim()) 
+								? `${notes.trim()} | Disbursed Amount: RM ${disbursementAmount.toFixed(2)}`
+								: `Disbursed Amount: RM ${disbursementAmount.toFixed(2)}`;
+
 							await trackApplicationStatusChange(
 								prismaTransaction,
 								id,
@@ -3273,7 +3332,7 @@ router.post(
 								"ACTIVE",
 								adminUserId,
 								"Loan disbursement",
-								notes,
+								disbursementNotes,
 								{
 									referenceNumber: disbursementReference,
 									amount: disbursementAmount,
@@ -7393,5 +7452,268 @@ function calculateDaysBetweenMalaysia(startDate: Date, endDate: Date): number {
 	const diffMs = endDay.getTime() - startDay.getTime();
 	return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 }
+
+/**
+ * @swagger
+ * /api/admin/payments/manual:
+ *   post:
+ *     summary: Create a manual payment for a loan (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - loanId
+ *               - amount
+ *               - paymentMethod
+ *               - reference
+ *             properties:
+ *               loanId:
+ *                 type: string
+ *                 description: The loan ID to apply payment to
+ *               amount:
+ *                 type: number
+ *                 description: Payment amount
+ *               paymentMethod:
+ *                 type: string
+ *                 description: Payment method (e.g., bank_transfer, cash, etc.)
+ *               reference:
+ *                 type: string
+ *                 description: Payment reference/transaction ID
+ *               notes:
+ *                 type: string
+ *                 description: Admin notes about the payment
+ *               paymentDate:
+ *                 type: string
+ *                 format: date
+ *                 description: Date when payment was made (defaults to now)
+ *     responses:
+ *       200:
+ *         description: Payment created and allocated successfully
+ *       400:
+ *         description: Invalid request data
+ *       404:
+ *         description: Loan not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/payments/manual",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { loanId, amount, paymentMethod, reference, notes, paymentDate } = req.body;
+			const adminUserId = req.user?.userId;
+
+			// Validate required fields
+			if (!loanId || !amount || !paymentMethod || !reference) {
+				return res.status(400).json({
+					success: false,
+					message: "Missing required fields: loanId, amount, paymentMethod, reference"
+				});
+			}
+
+			if (amount <= 0) {
+				return res.status(400).json({
+					success: false,
+					message: "Payment amount must be greater than 0"
+				});
+			}
+
+			// Get the loan to verify it exists and is active
+			const loan = await prisma.loan.findUnique({
+				where: { id: loanId },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+						}
+					},
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true
+								}
+							}
+						}
+					}
+				}
+			});
+
+			if (!loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Loan not found"
+				});
+			}
+
+			if (loan.status !== "ACTIVE") {
+				return res.status(400).json({
+					success: false,
+					message: `Cannot create payment for loan with status: ${loan.status}. Only ACTIVE loans can receive payments.`
+				});
+			}
+
+			const processedPaymentDate = paymentDate ? new Date(paymentDate) : new Date();
+
+			// Use a transaction to create the payment and handle allocation
+			const result = await prisma.$transaction(async (tx) => {
+				// Get user's wallet first
+				const wallet = await tx.wallet.findUnique({
+					where: { userId: loan.userId }
+				});
+
+				if (!wallet) {
+					throw new Error("User wallet not found");
+				}
+
+				// Create a wallet transaction record exactly like user repayments
+				const walletTransaction = await tx.walletTransaction.create({
+					data: {
+						userId: loan.userId,
+						walletId: wallet.id,
+						loanId: loanId,
+						amount: -amount, // Negative for outgoing payment (like user repayments)
+						type: "LOAN_REPAYMENT", // Same type as user repayments
+						status: "APPROVED", // Manual payments are pre-approved
+						description: `Manual loan repayment for loan ${loanId} via ${paymentMethod}`,
+						reference: reference,
+						processedAt: processedPaymentDate,
+						metadata: {
+							paymentMethod: paymentMethod,
+							loanId: loanId,
+							outstandingBalance: loan.outstandingBalance,
+							originalAmount: amount,
+							createdBy: "ADMIN",
+							adminUserId: adminUserId,
+							notes: notes || "",
+							paymentDate: processedPaymentDate.toISOString(),
+						} as any,
+					},
+				});
+
+				// Import and use the payment allocation function
+				const { LateFeeProcessor } = await import("../lib/lateFeeProcessor");
+				const allocationResult = await LateFeeProcessor.handlePaymentAllocation(
+					loanId,
+					amount,
+					processedPaymentDate,
+					tx
+				);
+
+				if (!allocationResult.success) {
+					throw new Error(allocationResult.errorMessage || "Failed to allocate payment");
+				}
+
+				// Update the wallet transaction with allocation details
+				const currentMetadata = walletTransaction.metadata as any;
+				await tx.walletTransaction.update({
+					where: { id: walletTransaction.id },
+					data: {
+						metadata: {
+							...currentMetadata,
+							allocationResult: {
+								lateFeesPaid: allocationResult.lateFeesPaid,
+								principalPaid: allocationResult.principalPaid,
+								paymentAllocation: allocationResult.paymentAllocation,
+								remainingPayment: allocationResult.remainingPayment,
+							}
+						} as any
+					}
+				});
+
+				// Update loan outstanding balance
+				const { calculateOutstandingBalance } = await import("./wallet");
+				await calculateOutstandingBalance(loanId, tx);
+
+				// Create notification for the user (like user repayments do)
+				await tx.notification.create({
+					data: {
+						userId: loan.userId,
+						title: "Payment Processed",
+						message: `A manual payment of RM ${amount.toFixed(2)} has been processed for your loan. Reference: ${reference}`,
+						type: "SYSTEM",
+						priority: "MEDIUM",
+						metadata: {
+							transactionId: walletTransaction.id,
+							loanId: loanId,
+							amount: amount,
+							paymentMethod: paymentMethod,
+							reference: reference,
+							processedBy: "ADMIN",
+							adminUserId: adminUserId,
+							notes: notes || "",
+						},
+					},
+				});
+
+				return {
+					walletTransaction,
+					allocationResult,
+					loan
+				};
+			});
+
+			// Send WhatsApp notification for payment approval if phone number available
+			try {
+				if (loan.user.phoneNumber && loan.user.fullName) {
+					const whatsappService = await import("../lib/whatsappService");
+					const whatsappResult = await whatsappService.default.sendPaymentApprovedNotification({
+						to: loan.user.phoneNumber,
+						fullName: loan.user.fullName,
+						paymentAmount: amount.toFixed(2),
+						loanName: loan.application.product.name,
+						nextPaymentAmount: "0.00", // Will be calculated separately if needed
+						nextDueDate: "TBD", // Will be calculated separately if needed  
+						completedPayments: "N/A", // Will be calculated separately if needed
+						totalPayments: "N/A" // Will be calculated separately if needed
+					});
+					
+					if (whatsappResult.success) {
+						console.log(`WhatsApp payment notification sent to ${loan.user.phoneNumber}. Message ID: ${whatsappResult.messageId}`);
+					} else {
+						console.error(`Failed to send WhatsApp payment notification: ${whatsappResult.error}`);
+					}
+				}
+			} catch (whatsappError) {
+				console.error("Error sending WhatsApp payment notification:", whatsappError);
+				// Don't fail the entire operation if WhatsApp fails
+			}
+
+			console.log(`Manual payment created successfully: ${result.walletTransaction.id} for loan ${loanId}, amount: RM ${amount}`);
+
+			return res.json({
+				success: true,
+				message: `Manual payment of RM ${amount.toFixed(2)} created successfully`,
+				data: {
+					paymentId: result.walletTransaction.id,
+					loanId: loanId,
+					amount: amount,
+					paymentMethod: paymentMethod,
+					reference: reference,
+					paymentDate: processedPaymentDate,
+					allocationResult: result.allocationResult,
+				}
+			});
+		} catch (error) {
+			console.error("Error creating manual payment:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to create manual payment",
+				error: error instanceof Error ? error.message : "Unknown error"
+			});
+		}
+	}
+);
 
 export default router;

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import Lottie from "lottie-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Logo from "@/components/Logo";
 import CTASection from "@/components/CTASection";
+import happyAnimation from "@/public/animations/family.json";
 import {
 	MdArrowForward,
 	MdCheck,
@@ -85,188 +87,18 @@ export default function Home() {
 							</div>
 						</div>
 
-						{/* Hero Image */}
-						<div className="relative h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]">
-							<Image
-								src="/load.svg"
-								alt="Modern Digital Banking"
-								fill
-								className="object-contain"
-								priority
+						{/* Hero Animation */}
+						<div className="relative h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px] flex items-center justify-center">
+							<Lottie
+								animationData={happyAnimation}
+								loop={true}
+								autoplay={true}
+								className="w-full h-full object-contain"
 							/>
 						</div>
 					</div>
 				</div>
-			</section>
-
-			{/* Partners Section */}
-			<section className="py-12 sm:py-16 bg-gray-50 border-b border-gray-100 w-full">
-				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					<div className="text-center mb-8 sm:mb-12">
-						<h2 className="text-xl sm:text-xl md:text-2xl font-heading font-bold text-gray-600 mb-2">
-							Our Partners
-						</h2>
-					</div>
-
-					{/* Scrolling partner logos */}
-					<div className="relative overflow-hidden">
-						<div className="flex animate-scroll space-x-16">
-							{/* First set of logos */}
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/opg.png"
-									alt="OPG Capital Holdings"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/kpkt.png"
-									alt="KPKT - Ministry of Housing and Local Government"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/ctos.png"
-									alt="CTOS Data Systems"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/ssm_einfo.png"
-									alt="SSM eInfo"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/al-kathiri.png"
-									alt="Al-Kathiri Holdings"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							{/* Duplicate set for seamless loop */}
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/opg.png"
-									alt="OPG Capital Holdings"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/kpkt.png"
-									alt="KPKT - Ministry of Housing and Local Government"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/ctos.png"
-									alt="CTOS Data Systems"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/ssm_einfo.png"
-									alt="SSM eInfo"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/al-kathiri.png"
-									alt="Al-Kathiri Holdings"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							{/* Third set for extra smooth scrolling */}
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/opg.png"
-									alt="OPG Capital Holdings"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/kpkt.png"
-									alt="KPKT - Ministry of Housing and Local Government"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/ctos.png"
-									alt="CTOS Data Systems"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/ssm_einfo.png"
-									alt="SSM eInfo"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-
-							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
-								<Image
-									src="/logos/al-kathiri.png"
-									alt="Al-Kathiri Holdings"
-									width={160}
-									height={80}
-									className="object-contain h-full w-auto"
-								/>
-							</div>
-						</div>
-					</div>
-				</div>
-			</section>
+			</section>			
 
 			{/* Products Section */}
 			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">

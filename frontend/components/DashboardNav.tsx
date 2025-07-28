@@ -32,11 +32,6 @@ const navigation = [
 		icon: <WalletIcon className="h-5 w-5" />,
 	},
 	{
-		name: "Credit Score",
-		href: "/dashboard/credit-score",
-		icon: <StarIcon className="h-5 w-5" />,
-	},
-	{
 		name: "Loans",
 		href: "/dashboard/loans",
 		icon: <BanknotesIcon className="h-5 w-5" />,

@@ -29,6 +29,7 @@ model Product {
   lateFeeFixedAmount   Float             @default(0)
   lateFeeFrequencyDays Int               @default(7)
   lateFeeRate          Float             @default(8.0)
+  collateralRequired   Boolean           @default(false)
   applications         LoanApplication[]
 
   @@map("products")

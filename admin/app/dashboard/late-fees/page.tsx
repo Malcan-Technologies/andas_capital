@@ -119,9 +119,7 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 		useState<ProcessingStatus | null>(null);
 	const [processing, setProcessing] = useState(false);
 	const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-	const [waiveModalOpen, setWaiveModalOpen] = useState(false);
-	const [waiveReason, setWaiveReason] = useState("");
-	const [waiveProcessing, setWaiveProcessing] = useState(false);
+
 
 	// Update search term when initialSearchTerm changes
 	useEffect(() => {
@@ -345,70 +343,7 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 		}
 	};
 
-	const handleWaiveLateFees = async () => {
-		if (!selectedLateFee) return;
 
-		if (!waiveReason.trim()) {
-			alert("Please provide a reason for waiving the late fees.");
-			return;
-		}
-
-		setWaiveProcessing(true);
-		try {
-			const response = await fetchWithAdminTokenRefresh<{
-				success: boolean;
-				message: string;
-				data: {
-					waivedFees: number;
-					totalWaivedAmount: number;
-					reason: string;
-				};
-			}>(
-				`/api/admin/late-fees/repayment/${selectedLateFee.loanRepaymentId}/waive`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						reason: waiveReason,
-						adminUserId: "admin", // You can get this from auth context
-					}),
-				}
-			);
-
-			if (response.success) {
-				const { waivedFees, totalWaivedAmount } = response.data;
-
-				alert(
-					`Successfully waived ${waivedFees} late fees totaling $${totalWaivedAmount.toFixed(
-						2
-					)}.\n\nReason: ${waiveReason}\n\nData will be refreshed automatically.`
-				);
-
-				// Close modal and reset form
-				setWaiveModalOpen(false);
-				setWaiveReason("");
-
-				// Force a complete refresh of all data
-				setSelectedLateFee(null);
-				await fetchLateFees();
-			} else {
-				throw new Error(
-					response.message || "Failed to waive late fees"
-				);
-			}
-		} catch (error) {
-			console.error("Error waiving late fees:", error);
-			const errorMessage =
-				error instanceof Error ? error.message : "Unknown error";
-			alert(
-				`Failed to waive late fees: ${errorMessage}\n\nPlease try again or check the system logs.`
-			);
-		} finally {
-			setWaiveProcessing(false);
-		}
-	};
 
 	const formatCurrency = (amount: number) => {
 		return new Intl.NumberFormat("en-MY", {
@@ -1369,23 +1304,6 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 
 								{/* Action Buttons */}
 								<div className="flex flex-wrap gap-3">
-									{selectedLateFee.status === "ACTIVE" && 
-										(() => {
-											const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
-											const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
-											const outstandingFees = Math.max(0, lateFeeAmount - lateFeesPaid);
-											return outstandingFees > 0;
-										})() && (
-										<button
-											onClick={() =>
-												setWaiveModalOpen(true)
-											}
-											className="px-4 py-2 bg-yellow-500/20 text-yellow-200 rounded-lg border border-yellow-400/20 hover:bg-yellow-500/30 transition-colors flex items-center"
-										>
-											<XCircleIcon className="h-5 w-5 mr-2" />
-											Waive Late Fees
-										</button>
-									)}
 									{selectedLateFee.loanRepayment.loan
 										.application.id && (
 										<Link
@@ -1425,96 +1343,7 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 				</div>
 			</div>
 
-			{/* Waive Late Fees Modal */}
-			{waiveModalOpen && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-					<div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg max-w-md w-full">
-						<div className="p-6">
-							<div className="flex justify-between items-center mb-4">
-								<h3 className="text-lg font-medium text-white">
-									Waive Late Fees
-								</h3>
-								<button
-									onClick={() => {
-										setWaiveModalOpen(false);
-										setWaiveReason("");
-									}}
-									className="text-gray-400 hover:text-white"
-								>
-									<XMarkIcon className="h-6 w-6" />
-								</button>
-							</div>
 
-							{selectedLateFee && (
-								<div className="mb-4">
-									<p className="text-gray-300 text-sm mb-2">
-										You are about to waive late fees for:
-									</p>
-									<div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700/30">
-										<p className="text-white font-medium">
-											{selectedLateFee.loanRepayment.loan
-												.user.fullName || "N/A"}
-										</p>
-										<p className="text-gray-400 text-sm">
-											Installment #
-											{
-												selectedLateFee.loanRepayment
-													.installmentNumber
-											}
-										</p>
-										<p className="text-yellow-400 font-medium">
-											{(() => {
-												const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
-												const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
-												const outstandingFees = Math.max(0, lateFeeAmount - lateFeesPaid);
-												return formatCurrency(outstandingFees);
-											})()}
-										</p>
-									</div>
-								</div>
-							)}
-
-							<div className="mb-4">
-								<label className="block text-sm font-medium text-gray-300 mb-2">
-									Reason for waiving (required)
-								</label>
-								<textarea
-									value={waiveReason}
-									onChange={(e) =>
-										setWaiveReason(e.target.value)
-									}
-									placeholder="Enter the reason for waiving these late fees..."
-									className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 resize-none"
-									rows={3}
-								/>
-							</div>
-
-							<div className="flex gap-3">
-								<button
-									onClick={() => {
-										setWaiveModalOpen(false);
-										setWaiveReason("");
-									}}
-									className="flex-1 px-4 py-2 bg-gray-700/50 text-gray-300 rounded-lg border border-gray-600/30 hover:bg-gray-700/70 transition-colors"
-								>
-									Cancel
-								</button>
-								<button
-									onClick={handleWaiveLateFees}
-									disabled={
-										waiveProcessing || !waiveReason.trim()
-									}
-									className="flex-1 px-4 py-2 bg-yellow-500/20 text-yellow-200 rounded-lg border border-yellow-400/20 hover:bg-yellow-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									{waiveProcessing
-										? "Waiving..."
-										: "Waive Fees"}
-								</button>
-							</div>
-						</div>
-					</div>
-				</div>
-			)}
 		</AdminLayout>
 	);
 }

@@ -1,6 +1,7 @@
 import { logger } from "./logger";
 import { SafeMath, TimeUtils } from "./precisionUtils";
 import { prisma } from "../../lib/prisma";
+import { trackApplicationStatusChange } from "../api/admin";
 
 // Lock constants for PostgreSQL advisory locks
 const LATE_FEE_PROCESSING_LOCK_ID = 123456789; // Unique identifier for late fee processing
@@ -501,6 +502,42 @@ export class LateFeeProcessor {
 						status: status
 					}
 				});
+
+				// Add audit trail entry for late fee charging
+				try {
+					// Get the loan application ID for audit trail
+					const loan = await tx.loan.findUnique({
+						where: { id: loanCalc.loanId },
+						select: { applicationId: true }
+					});
+
+					if (loan && loan.applicationId && loanCalc.totalAccruedFees > 0) {
+						const lateFeeNotes = `Late payment fees charged: RM ${loanCalc.totalAccruedFees.toFixed(2)} | Days overdue: ${Object.values(loanCalc.calculationDetails).map((detail: any) => detail.daysOverdue).join(', ')} | Repayments affected: ${Object.keys(loanCalc.calculationDetails).length}`;
+
+						await trackApplicationStatusChange(
+							tx,
+							loan.applicationId,
+							"ACTIVE", // Current status (loan is active)
+							"ACTIVE", // Status remains the same
+							"SYSTEM",
+							"Late payment fees charged",
+							lateFeeNotes,
+							{
+								loanId: loanCalc.loanId,
+								totalFeesCharged: loanCalc.totalAccruedFees,
+								calculationDate: today.toISOString(),
+								repaymentDetails: loanCalc.calculationDetails,
+								chargedBy: "AUTOMATED_LATE_FEE_PROCESSOR",
+								chargedAt: new Date().toISOString(),
+							}
+						);
+
+						logger.info(`Added audit trail for late fee charge: Loan ${loanCalc.loanId}, Amount: RM ${loanCalc.totalAccruedFees.toFixed(2)}`);
+					}
+				} catch (auditError) {
+					logger.error(`Failed to add audit trail for late fee charge on loan ${loanCalc.loanId}:`, auditError);
+					// Don't fail the entire transaction if audit fails
+				}
 			}
 		}, {
 			timeout: 30000, // 30 second timeout

@@ -227,7 +227,7 @@ function PersonalInfoVerificationFormContent({
 	};
 
 	return (
-		<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+		<div>
 			<form onSubmit={handleSubmit} className="space-y-8">
 				{/* Header */}
 				<div className="flex items-center space-x-3 mb-6">
@@ -257,10 +257,10 @@ function PersonalInfoVerificationFormContent({
 				</div>
 
 				{/* Personal Information Section */}
-				<div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
-					<div className="flex items-center space-x-2 mb-4">
-						<UserIcon className="h-5 w-5 text-blue-600" />
-						<h3 className="text-lg font-heading font-semibold text-blue-600">
+				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+					<div className="flex items-center space-x-2 mb-6">
+						<UserIcon className="h-5 w-5 text-blue-400" />
+						<h3 className="text-lg font-heading font-semibold text-blue-400">
 							Personal Information
 						</h3>
 					</div>
@@ -320,10 +320,10 @@ function PersonalInfoVerificationFormContent({
 				</div>
 
 				{/* Education & Employment Section */}
-				<div className="bg-emerald-50 rounded-xl p-6 border border-emerald-100">
-					<div className="flex items-center space-x-2 mb-4">
-						<BriefcaseIcon className="h-5 w-5 text-emerald-600" />
-						<h3 className="text-lg font-heading font-semibold text-emerald-600">
+				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+					<div className="flex items-center space-x-2 mb-6">
+						<BriefcaseIcon className="h-5 w-5 text-blue-400" />
+						<h3 className="text-lg font-heading font-semibold text-blue-400">
 							Education & Employment
 						</h3>
 					</div>
@@ -469,10 +469,10 @@ function PersonalInfoVerificationFormContent({
 				</div>
 
 				{/* Address Section */}
-				<div className="bg-amber-50 rounded-xl p-6 border border-amber-100">
-					<div className="flex items-center space-x-2 mb-4">
-						<HomeIcon className="h-5 w-5 text-amber-600" />
-						<h3 className="text-lg font-heading font-semibold text-amber-600">
+				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+					<div className="flex items-center space-x-2 mb-6">
+						<HomeIcon className="h-5 w-5 text-blue-400" />
+						<h3 className="text-lg font-heading font-semibold text-blue-400">
 							Residential Address
 						</h3>
 					</div>

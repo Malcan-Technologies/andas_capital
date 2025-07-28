@@ -299,8 +299,26 @@ function ApplyPageContent() {
 
 		try {
 			const token = localStorage.getItem("token") || Cookies.get("token");
-			const prevStep = activeStep + 1; // Add 1 to convert from 0-based to 1-based
-			setActiveStep((prev) => prev - 1);
+			let newActiveStep = activeStep - 1;
+
+			// Check if we need to skip the document step (activeStep 3) for collateral loans
+			if (activeStep === 4 && newActiveStep === 3) { // Going from activeStep 4 to activeStep 3
+				// Check if this is a collateral loan or a product with no required documents
+				const isCollateralLoan = selectedProduct?.collateralRequired === true;
+				const hasRequiredDocuments = selectedProduct?.requiredDocuments && 
+					Array.isArray(selectedProduct.requiredDocuments) && 
+					selectedProduct.requiredDocuments.length > 0;
+				
+				// Skip document step if it's a collateral loan or no documents required
+				if (isCollateralLoan || !hasRequiredDocuments) {
+					newActiveStep = 2; // Go back to activeStep 2 (Personal Information) instead
+				}
+			}
+
+			setActiveStep(newActiveStep);
+
+			// Calculate the 1-based step for database and URL (based on newActiveStep)
+			const prevStep = newActiveStep + 1; // Convert from 0-based to 1-based
 
 			// Update the application step in the database
 			const response = await fetch(

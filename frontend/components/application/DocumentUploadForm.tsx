@@ -263,6 +263,7 @@ export default function DocumentUploadForm({
 	const [selectedPreviousDocs, setSelectedPreviousDocs] = useState<string[]>([]);
 	const [previewFile, setPreviewFile] = useState<PreviousDocument | null>(null);
 	const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+	const [isSkippingStep, setIsSkippingStep] = useState(false);
 
 	const getApplicationId = useCallback(() => {
 		// First try the prop
@@ -426,6 +427,62 @@ export default function DocumentUploadForm({
 
 				setProductName(productData.name);
 
+				// Check if this product requires any documents
+				// Also skip documents for collateral-based loans as they have a different workflow
+				const hasRequiredDocuments = productData.requiredDocuments && 
+					Array.isArray(productData.requiredDocuments) && 
+					productData.requiredDocuments.length > 0;
+				
+				const isCollateralLoan = productData.collateralRequired === true;
+
+				// If no documents are required OR it's a collateral loan, automatically advance to next step
+				if (!hasRequiredDocuments || isCollateralLoan) {
+					console.log(
+						isCollateralLoan 
+							? "Collateral loan detected, skipping document step" 
+							: "No documents required for this product, skipping document step"
+					);
+					setIsSkippingStep(true);
+					
+					// Update application step to skip document upload
+					const currentApplicationId = getApplicationId();
+					if (currentApplicationId) {
+						try {
+							const response = await fetch(
+								`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${currentApplicationId}`,
+								{
+									method: "PATCH",
+									headers: {
+										"Content-Type": "application/json",
+										Authorization: `Bearer ${localStorage.getItem("token")}`,
+									},
+									body: JSON.stringify({
+										appStep: 5, // Skip to next step after documents
+									}),
+								}
+							);
+
+							if (response.ok) {
+								// Update URL to next step
+								const url = new URL(window.location.href);
+								url.searchParams.set("step", "5");
+								window.history.pushState({}, "", url.toString());
+								
+								// Call success callback to advance the step
+								if (onSuccess) {
+									onSuccess();
+								}
+								return; // Exit early since we're skipping this step
+							}
+						} catch (error) {
+							console.error("Error updating application step:", error);
+							// Continue with normal flow if update fails
+						} finally {
+							setIsSkippingStep(false);
+						}
+					}
+				}
+
 				// Create a map of existing documents by type
 				const documentsByType = (existingDocuments || []).reduce(
 					(acc: { [key: string]: any[] }, doc: any) => {
@@ -439,7 +496,7 @@ export default function DocumentUploadForm({
 				);
 
 				// Initialize documents array with required document types and existing files
-				const initialDocs = productData.requiredDocuments.map(
+				const initialDocs = (productData.requiredDocuments || []).map(
 					(docName: string, index: number) => {
 						const existingDocs = documentsByType[docName] || [];
 						return {
@@ -873,13 +930,15 @@ export default function DocumentUploadForm({
 		window.location.href = newUrl.toString();
 	};
 
-	if (loading) {
+	if (loading || isSkippingStep) {
 		return (
 			<div className="flex justify-center items-center min-h-[200px]">
 				<div className="flex flex-col items-center space-y-4">
 					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary"></div>
 					<p className="text-gray-700 font-body">
-						Loading documents...
+						{isSkippingStep 
+							? "No documents required - advancing to next step..." 
+							: "Loading documents..."}
 					</p>
 				</div>
 			</div>
@@ -902,6 +961,85 @@ export default function DocumentUploadForm({
 						className="px-6 py-2 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-body"
 					>
 						Back
+					</button>
+				</div>
+			</div>
+		);
+	}
+
+	// If no documents are required, show a simplified interface
+	if (documents.length === 0) {
+		return (
+			<div className="space-y-6">
+				<div className="flex items-center gap-3 mb-4">
+					<h2 className="text-xl font-semibold text-gray-700 font-heading">
+						Document Upload - {productName}
+					</h2>
+					<span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-700/10">
+						No Documents Required
+					</span>
+				</div>
+
+				<div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+					<div className="flex justify-center mb-4">
+						<CheckCircleIcon className="h-12 w-12 text-green-600" />
+					</div>
+					<h3 className="text-lg font-semibold text-green-800 mb-2">
+						No Documents Required
+					</h3>
+					<p className="text-green-700 mb-4">
+						This loan product does not require any supporting documents at this stage. 
+						You can proceed directly to the next step.
+					</p>
+				</div>
+
+				<div className="flex justify-between pt-6">
+					<button
+						type="button"
+						onClick={handleBack}
+						className="px-6 py-2 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-body"
+					>
+						Back
+					</button>
+					<button
+						type="button"
+						onClick={async () => {
+							// Update the application step before continuing
+							const currentApplicationId = getApplicationId();
+							if (currentApplicationId) {
+								try {
+									const response = await fetch(
+										`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${currentApplicationId}`,
+										{
+											method: "PATCH",
+											headers: {
+												"Content-Type": "application/json",
+												Authorization: `Bearer ${localStorage.getItem("token")}`,
+											},
+											body: JSON.stringify({
+												appStep: 5, // Move to next step
+											}),
+										}
+									);
+
+									if (response.ok) {
+										// Update URL
+										const url = new URL(window.location.href);
+										url.searchParams.set("step", "5");
+										window.history.pushState({}, "", url.toString());
+									}
+								} catch (error) {
+									console.error("Error updating application step:", error);
+								}
+							}
+
+							if (onSuccess) {
+								onSuccess();
+							}
+						}}
+						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors font-body"
+					>
+						Continue
 					</button>
 				</div>
 			</div>

@@ -23,6 +23,7 @@ interface ProductInput {
 	features: string[];
 	loanTypes: string[];
 	isActive?: boolean;
+	collateralRequired?: boolean;
 }
 
 // interface Product extends ProductInput {
@@ -106,6 +107,7 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 					features: true,
 					loanTypes: true,
 					isActive: true,
+					collateralRequired: true,
 				},
 			});
 
@@ -144,6 +146,7 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 				features: true,
 				loanTypes: true,
 				isActive: true,
+				collateralRequired: true,
 			},
 			orderBy: {
 				createdAt: "asc",
@@ -206,6 +209,7 @@ const createProduct: RequestHandler<{}, any, ProductInput> = async (
 				features: data.features,
 				loanTypes: data.loanTypes,
 				isActive: data.isActive !== undefined ? data.isActive : true,
+				collateralRequired: data.collateralRequired !== undefined ? data.collateralRequired : false,
 			},
 		});
 
@@ -286,6 +290,7 @@ const updateProduct: RequestHandler<ProductParams, any, ProductInput> = async (
 				features: data.features,
 				loanTypes: data.loanTypes,
 				isActive: data.isActive,
+				collateralRequired: data.collateralRequired,
 			},
 		});
 
@@ -346,7 +351,70 @@ const deleteProduct: RequestHandler<ProductParams> = async (req, res) => {
 	}
 };
 
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   get:
+ *     summary: Get a product by ID
+ *     tags: [Products]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Product ID
+ *     responses:
+ *       200:
+ *         description: Product details
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Server error
+ */
+const getProductById: RequestHandler<ProductParams> = async (req, res) => {
+	try {
+		const { id } = req.params;
+
+		const product = await prisma.product.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				code: true,
+				name: true,
+				description: true,
+				minAmount: true,
+				maxAmount: true,
+				repaymentTerms: true,
+				interestRate: true,
+				eligibility: true,
+				lateFeeRate: true,
+				lateFeeFixedAmount: true,
+				lateFeeFrequencyDays: true,
+				originationFee: true,
+				legalFee: true,
+				applicationFee: true,
+				requiredDocuments: true,
+				features: true,
+				loanTypes: true,
+				isActive: true,
+				collateralRequired: true,
+			},
+		});
+
+		if (!product) {
+			return res.status(404).json({ message: "Product not found" });
+		}
+
+		return res.json(product);
+	} catch (error) {
+		console.error("Error fetching product by ID:", error);
+		return res.status(500).json({ message: "Error fetching product" });
+	}
+};
+
 router.get("/", getProducts);
+router.get("/:id", getProductById);
 router.post("/", authenticateToken, createProduct as unknown as RequestHandler);
 router.patch(
 	"/:id",

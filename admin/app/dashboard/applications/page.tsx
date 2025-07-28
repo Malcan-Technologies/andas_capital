@@ -34,6 +34,7 @@ import {
 	PencilSquareIcon,
 	ArrowLeftIcon,
 	XMarkIcon,
+	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 
 interface LoanApplication {
@@ -136,9 +137,11 @@ function AdminApplicationsPageContent() {
 	// Initialize filters based on URL parameter
 	const getInitialFilters = () => {
 		if (filterParam === "pending-approval") {
-			return ["PENDING_APPROVAL"];
+			return ["PENDING_APPROVAL", "COLLATERAL_REVIEW"];
 		} else if (filterParam === "pending-disbursement") {
 			return ["PENDING_DISBURSEMENT"];
+		} else if (filterParam === "collateral-review") {
+			return ["COLLATERAL_REVIEW"];
 		} else {
 			// Default "All Applications" view - show active workflow statuses, exclude rejected/withdrawn/incomplete
 			return [
@@ -148,6 +151,7 @@ function AdminApplicationsPageContent() {
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
+				"COLLATERAL_REVIEW",
 			];
 		}
 	};
@@ -158,10 +162,15 @@ function AdminApplicationsPageContent() {
 
 	// Additional states for approval, attestation, and disbursement
 	const [decisionNotes, setDecisionNotes] = useState("");
+	const [collateralNotes, setCollateralNotes] = useState("");
 	const [disbursementNotes, setDisbursementNotes] = useState("");
 	const [disbursementReference, setDisbursementReference] = useState("");
 	const [processingDecision, setProcessingDecision] = useState(false);
+	const [processingCollateral, setProcessingCollateral] = useState(false);
 	const [processingDisbursement, setProcessingDisbursement] = useState(false);
+	const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
+	const [lastKnownStatus, setLastKnownStatus] = useState<string | null>(null);
+	const [showStatusChangeAlert, setShowStatusChangeAlert] = useState(false);
 
 	// Attestation states
 	const [attestationType, setAttestationType] = useState<
@@ -215,6 +224,8 @@ function AdminApplicationsPageContent() {
 				return DocumentTextIcon;
 			case "PENDING_DISBURSEMENT":
 				return BanknotesIcon;
+			case "COLLATERAL_REVIEW":
+				return DocumentMagnifyingGlassIcon;
 			case "REJECTED":
 				return XCircleIcon;
 			case "WITHDRAWN":
@@ -240,6 +251,8 @@ function AdminApplicationsPageContent() {
 				return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
 			case "PENDING_DISBURSEMENT":
 				return "bg-emerald-500/20 text-emerald-200 border-emerald-400/20";
+			case "COLLATERAL_REVIEW":
+				return "bg-orange-500/20 text-orange-200 border-orange-400/20";
 			case "REJECTED":
 				return "bg-red-500/20 text-red-200 border-red-400/20";
 			case "WITHDRAWN":
@@ -265,6 +278,8 @@ function AdminApplicationsPageContent() {
 				return "Pending Signature";
 			case "PENDING_DISBURSEMENT":
 				return "Pending Disbursement";
+			case "COLLATERAL_REVIEW":
+				return "Collateral Review";
 			case "REJECTED":
 				return "Rejected";
 			case "WITHDRAWN":
@@ -278,29 +293,84 @@ function AdminApplicationsPageContent() {
 	const handleRefresh = async () => {
 		setRefreshing(true);
 		try {
-			// Refresh all applications
-			await fetchApplications();
+			setError(null);
 
-			// If there's a selected application, refresh its history specifically
-			if (selectedApplication) {
-				const updatedHistory = await fetchApplicationHistory(
-					selectedApplication.id
+			// Fetch user data
+			try {
+				const userData = await fetchWithAdminTokenRefresh<any>(
+					"/api/users/me"
 				);
-				const updatedApp = {
-					...selectedApplication,
-					history: updatedHistory,
-				};
-				setSelectedApplication(updatedApp);
+				if (userData.fullName) {
+					setUserName(userData.fullName);
+				}
+			} catch (error) {
+				console.error("Error fetching user data:", error);
+			}
 
-				// Also update it in the applications list
-				setApplications((prev) =>
-					prev.map((app) =>
-						app.id === selectedApplication.id ? updatedApp : app
-					)
+			// Try fetching applications from applications endpoint
+			try {
+				const applicationsData = await fetchWithAdminTokenRefresh<
+					LoanApplication[]
+				>("/api/admin/applications");
+
+				// For each application, fetch its history
+				const applicationsWithHistory = await Promise.all(
+					applicationsData.map(async (app) => {
+						try {
+							const historyData =
+								await fetchWithAdminTokenRefresh<
+									| {
+											applicationId: string;
+											currentStatus: string;
+											timeline: LoanApplicationHistory[];
+									  }
+									| LoanApplicationHistory[]
+								>(`/api/admin/applications/${app.id}/history`);
+
+							// Handle both old array format and new object format
+							let history: LoanApplicationHistory[] = [];
+							if (Array.isArray(historyData)) {
+								// Old format - direct array
+								history = historyData;
+							} else if (
+								historyData &&
+								typeof historyData === "object" &&
+								"timeline" in historyData
+							) {
+								// New format - object with timeline property
+								history = historyData.timeline || [];
+							}
+
+							return { ...app, history };
+						} catch (historyError) {
+							console.error(
+								`Error fetching history for application ${app.id}:`,
+								historyError
+							);
+							return app;
+						}
+					})
 				);
+
+				setApplications(applicationsWithHistory);
+
+				// If there's a selected application, update it with fresh data
+				if (selectedApplication) {
+					const updatedApp = applicationsWithHistory.find(
+						app => app.id === selectedApplication.id
+					);
+					if (updatedApp) {
+						setSelectedApplication(updatedApp);
+					}
+				}
+
+			} catch (appError) {
+				console.error("Error fetching applications:", appError);
+				setError("Failed to refresh applications. Please try again.");
 			}
 		} catch (error) {
 			console.error("Error refreshing data:", error);
+			setError("An unexpected error occurred during refresh.");
 		} finally {
 			setRefreshing(false);
 		}
@@ -556,18 +626,26 @@ function AdminApplicationsPageContent() {
 		}
 	};
 
-	// Handle status change
+	// Handle status change with optimistic locking and conflict detection
 	const handleStatusChange = async (
 		applicationId: string,
-		newStatus: string
+		newStatus: string,
+		notes?: string
 	) => {
 		try {
+			const currentApp = applications.find(app => app.id === applicationId) || selectedApplication;
+			const currentStatus = currentApp?.status;
+
 			const updatedApplication =
 				await fetchWithAdminTokenRefresh<LoanApplication>(
 					`/api/admin/applications/${applicationId}/status`,
 					{
 						method: "PATCH",
-						body: JSON.stringify({ status: newStatus }),
+						body: JSON.stringify({ 
+							status: newStatus, 
+							notes,
+							currentStatus // Send current status for optimistic locking
+						}),
 					}
 				);
 
@@ -587,11 +665,50 @@ function AdminApplicationsPageContent() {
 			if (selectedApplication?.id === applicationId) {
 				setSelectedApplication(applicationWithHistory);
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error("Error updating application status:", error);
-			alert(
-				"Failed to update status. API endpoint may not be implemented yet."
-			);
+			
+			// Handle specific error cases
+			if (error.error === "LOAN_ALREADY_DISBURSED") {
+				alert(
+					`❌ Cannot modify this application.\n\n` +
+					`This loan has already been disbursed and cannot be changed.\n` +
+					`Disbursed: ${error.disbursedAt ? new Date(error.disbursedAt).toLocaleString() : 'Unknown'}\n` +
+					`By: ${error.disbursedBy || 'Unknown admin'}\n\n` +
+					`The page will automatically refresh to show the current status.`
+				);
+				// Automatically refresh the applications list to keep all admins in sync
+				await fetchApplications();
+				// Show status change alert to indicate the page was refreshed
+				setShowStatusChangeAlert(true);
+			} else if (error.error === "STATUS_CONFLICT") {
+				// Show notification and automatically refresh
+				alert(
+					`⚠️ Status Conflict Detected\n\n` +
+					`Another admin has already changed this application's status.\n\n` +
+					`Expected: ${error.expectedStatus}\n` +
+					`Current: ${error.actualStatus}\n` +
+					`Last updated: ${new Date(error.lastUpdated).toLocaleString()}\n\n` +
+					`The page will automatically refresh to show the current status.`
+				);
+				
+				// Automatically refresh to keep all admins in sync
+				await fetchApplications();
+				// If this was the selected application, refresh its details
+				if (selectedApplication?.id === applicationId) {
+					const refreshedApp = applications.find(app => app.id === applicationId);
+					if (refreshedApp) {
+						setSelectedApplication(refreshedApp);
+					}
+				}
+				// Show status change alert to indicate the page was refreshed
+				setShowStatusChangeAlert(true);
+			} else {
+				alert(
+					`Failed to update status: ${error.message || 'Unknown error'}\n\n` +
+					`Please try again or refresh the page.`
+				);
+			}
 		}
 	};
 
@@ -607,6 +724,82 @@ function AdminApplicationsPageContent() {
 
 		return documentTypeMap[type] || type;
 	};
+
+	// Helper function to check if a loan is already disbursed
+	const isLoanDisbursed = (application: LoanApplication): boolean => {
+		return application.status === "ACTIVE" || 
+			   (application as any).loan?.status === "ACTIVE" || 
+			   !!(application as any).disbursement;
+	};
+
+	// Function to check for status changes in real-time
+	const checkForStatusChanges = async (applicationId: string) => {
+		try {
+			const currentApp = await fetchWithAdminTokenRefresh<LoanApplication>(
+				`/api/admin/applications/${applicationId}`,
+				{ method: "GET" }
+			);
+
+			if (lastKnownStatus && currentApp.status !== lastKnownStatus) {
+				setShowStatusChangeAlert(true);
+				// Update the application in the list
+				setApplications(prev => 
+					prev.map(app => 
+						app.id === applicationId ? { ...app, status: currentApp.status } : app
+					)
+				);
+				// Update selected application if it's the one being checked
+				if (selectedApplication?.id === applicationId) {
+					setSelectedApplication(prev => 
+						prev ? { ...prev, status: currentApp.status } : null
+					);
+				}
+			}
+			setLastKnownStatus(currentApp.status);
+		} catch (error) {
+			console.error("Error checking status changes:", error);
+		}
+	};
+
+	// Start periodic status checking when an application is selected
+	useEffect(() => {
+		if (selectedApplication?.id && !isLoanDisbursed(selectedApplication)) {
+			setLastKnownStatus(selectedApplication.status);
+			
+			// Clear any existing interval
+			if (statusCheckInterval) {
+				clearInterval(statusCheckInterval);
+				setStatusCheckInterval(null);
+			}
+
+			// Set up new interval to check every 30 seconds
+			const interval = setInterval(() => {
+				checkForStatusChanges(selectedApplication.id);
+			}, 30000);
+
+			setStatusCheckInterval(interval);
+
+			return () => {
+				clearInterval(interval);
+				setStatusCheckInterval(null);
+			};
+		} else {
+			// Clear interval if no application selected or loan is disbursed
+			if (statusCheckInterval) {
+				clearInterval(statusCheckInterval);
+				setStatusCheckInterval(null);
+			}
+		}
+	}, [selectedApplication?.id, selectedApplication?.status]);
+
+	// Cleanup interval on unmount
+	useEffect(() => {
+		return () => {
+			if (statusCheckInterval) {
+				clearInterval(statusCheckInterval);
+			}
+		};
+	}, [statusCheckInterval]);
 
 	const getDocumentStatusColor = (
 		status: string
@@ -725,51 +918,50 @@ function AdminApplicationsPageContent() {
 		setProcessingDecision(true);
 		try {
 			const newStatus = decision === "approve" ? "APPROVED" : "REJECTED";
+			const notes = decisionNotes || `Application ${decision}d by admin`;
 
-			const response = await fetch(
-				`/api/admin/applications/${selectedApplication.id}/status`,
-				{
-					method: "PATCH",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem(
-							"adminToken"
-						)}`,
-					},
-					body: JSON.stringify({
-						status: newStatus,
-						notes:
-							decisionNotes ||
-							`Application ${decision}d by admin`,
-					}),
-				}
-			);
-
-			if (response.ok) {
-				const data = await response.json();
-				// Refresh the application data
-				await fetchApplications();
-				await fetchApplicationHistory(selectedApplication.id);
-				setDecisionNotes("");
-
-				// Update selected application with the final status from backend
-				setSelectedApplication((prev) =>
-					prev ? { ...prev, status: data.status || newStatus } : null
-				);
-			} else {
-				const errorData = await response.json();
-				console.error("Approval decision error:", errorData);
-				setError(
-					errorData.error ||
-						errorData.message ||
-						`Failed to ${decision} application`
-				);
-			}
+			await handleStatusChange(selectedApplication.id, newStatus, notes);
+			
+			// Clear decision notes and refresh data
+			setDecisionNotes("");
+			await fetchApplications();
+			await fetchApplicationHistory(selectedApplication.id);
 		} catch (error) {
 			console.error(`Error ${decision}ing application:`, error);
-			setError(`Failed to ${decision} application`);
+			// Error handling is already done in handleStatusChange
 		} finally {
 			setProcessingDecision(false);
+		}
+	};
+
+	// Collateral decision handler
+	const handleCollateralDecision = async (decision: "approve" | "reject") => {
+		if (!selectedApplication) return;
+
+		// Show confirmation dialog
+		const actionText = decision === "approve" ? "approve" : "reject";
+		const confirmMessage = `Are you sure you want to ${actionText} this collateral loan application for ${selectedApplication.user?.fullName}?`;
+
+		if (!window.confirm(confirmMessage)) {
+			return;
+		}
+
+		setProcessingCollateral(true);
+		try {
+			const newStatus = decision === "approve" ? "PENDING_DISBURSEMENT" : "REJECTED";
+			const notes = collateralNotes || `Collateral ${decision}d by admin`;
+
+			await handleStatusChange(selectedApplication.id, newStatus, notes);
+			
+			// Clear collateral notes and refresh data
+			setCollateralNotes("");
+			await fetchApplications();
+			await fetchApplicationHistory(selectedApplication.id);
+		} catch (error) {
+			console.error(`Error ${decision}ing collateral application:`, error);
+			// Error handling is already done in handleStatusChange
+		} finally {
+			setProcessingCollateral(false);
 		}
 	};
 
@@ -959,6 +1151,8 @@ function AdminApplicationsPageContent() {
 			return "Pending Approval";
 		} else if (filterParam === "pending-disbursement") {
 			return "Pending Disbursement";
+		} else if (filterParam === "collateral-review") {
+			return "Collateral Review";
 		} else {
 			return "Loan Applications";
 		}
@@ -969,6 +1163,8 @@ function AdminApplicationsPageContent() {
 			return "Review and make credit decisions on loan applications";
 		} else if (filterParam === "pending-disbursement") {
 			return "Process loan disbursements for approved applications";
+		} else if (filterParam === "collateral-review") {
+			return "Review collateral-based loan applications requiring asset evaluation";
 		} else {
 			return "Manage active loan applications in the workflow (excludes incomplete, rejected, and withdrawn)";
 		}
@@ -986,6 +1182,31 @@ function AdminApplicationsPageContent() {
 				</div>
 			)}
 
+			{/* Status Change Alert */}
+			{showStatusChangeAlert && (
+				<div className="mb-6 p-4 bg-amber-500/10 border border-amber-400/20 rounded-lg">
+					<div className="flex items-start justify-between">
+						<div className="flex items-center">
+							<ExclamationTriangleIcon className="h-6 w-6 text-amber-400 mr-3 flex-shrink-0" />
+							<div>
+								<p className="text-amber-200 font-medium">
+									Application Status Changed
+								</p>
+								<p className="text-amber-300/70 text-sm">
+									This application's status has been updated by another admin. The page has been automatically refreshed.
+								</p>
+							</div>
+						</div>
+						<button
+							onClick={() => setShowStatusChangeAlert(false)}
+							className="text-amber-400 hover:text-amber-300 transition-colors"
+						>
+							<XMarkIcon className="h-5 w-5" />
+						</button>
+					</div>
+				</div>
+			)}
+
 			{/* Header and Controls */}
 			<div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
 				<div>
@@ -993,7 +1214,7 @@ function AdminApplicationsPageContent() {
 						Application Management
 					</h2>
 					<p className="text-gray-400">
-						{filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => app.status === "PENDING_APPROVAL").length} pending approval • {applications.filter(app => app.status === "PENDING_DISBURSEMENT").length} pending disbursement
+						{filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => app.status === "PENDING_APPROVAL").length} pending approval • {applications.filter(app => app.status === "PENDING_DISBURSEMENT").length} pending disbursement • {applications.filter(app => app.status === "COLLATERAL_REVIEW").length} collateral review
 					</p>
 				</div>
 				<button
@@ -1055,9 +1276,10 @@ function AdminApplicationsPageContent() {
 								"PENDING_ATTESTATION",
 								"PENDING_SIGNATURE",
 								"PENDING_DISBURSEMENT",
+								"COLLATERAL_REVIEW",
 							])}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 6 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("PENDING_APPROVAL")
+								selectedFilters.length === 7 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW")
 									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
@@ -1083,6 +1305,16 @@ function AdminApplicationsPageContent() {
 							}`}
 						>
 							Pending Disbursement
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["COLLATERAL_REVIEW"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("COLLATERAL_REVIEW")
+									? "bg-orange-500/30 text-orange-100 border-orange-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Collateral Review
 						</button>
 						<button
 							onClick={() => setSelectedFilters(["PENDING_ATTESTATION"])}
@@ -1285,6 +1517,23 @@ function AdminApplicationsPageContent() {
 										>
 											<DocumentMagnifyingGlassIcon className="inline h-4 w-4 mr-1" />
 											Approval
+										</div>
+									)}
+									{/* Show Collateral Review tab for COLLATERAL_REVIEW applications */}
+									{selectedApplication.status ===
+										"COLLATERAL_REVIEW" && (
+										<div
+											className={`px-4 py-2 cursor-pointer transition-colors ${
+												selectedTab === "collateral"
+													? "border-b-2 border-amber-400 font-medium text-white"
+													: "text-gray-400 hover:text-gray-200"
+											}`}
+											onClick={() =>
+												setSelectedTab("collateral")
+											}
+										>
+											<ClipboardDocumentCheckIcon className="inline h-4 w-4 mr-1" />
+											Collateral Review
 										</div>
 									)}
 									{/* Show Attestation tab for PENDING_ATTESTATION applications */}
@@ -1771,40 +2020,56 @@ function AdminApplicationsPageContent() {
 											</div>
 
 											{/* Decision Buttons */}
-											<div className="flex space-x-4">
-												<button
-													onClick={() =>
-														handleApprovalDecision(
-															"approve"
-														)
-													}
-													disabled={
-														processingDecision
-													}
-													className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
-												>
-													<CheckCircleIcon className="h-5 w-5 mr-2" />
-													{processingDecision
-														? "Processing..."
-														: "Approve Application"}
-												</button>
-												<button
-													onClick={() =>
-														handleApprovalDecision(
-															"reject"
-														)
-													}
-													disabled={
-														processingDecision
-													}
-													className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 text-white font-medium rounded-lg transition-colors"
-												>
-													<XCircleIcon className="h-5 w-5 mr-2" />
-													{processingDecision
-														? "Processing..."
-														: "Reject Application"}
-												</button>
-											</div>
+											{isLoanDisbursed(selectedApplication) ? (
+												<div className="p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+													<div className="flex items-center">
+														<CheckCircleIcon className="h-6 w-6 text-blue-400 mr-3" />
+														<div>
+															<p className="text-blue-200 font-medium">
+																Loan Already Disbursed
+															</p>
+															<p className="text-blue-300/70 text-sm">
+																This loan has been disbursed and cannot be modified.
+															</p>
+														</div>
+													</div>
+												</div>
+											) : (
+												<div className="flex space-x-4">
+													<button
+														onClick={() =>
+															handleApprovalDecision(
+																"approve"
+															)
+														}
+														disabled={
+															processingDecision
+														}
+														className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
+													>
+														<CheckCircleIcon className="h-5 w-5 mr-2" />
+														{processingDecision
+															? "Processing..."
+															: "Approve Application"}
+													</button>
+													<button
+														onClick={() =>
+															handleApprovalDecision(
+																"reject"
+															)
+														}
+														disabled={
+															processingDecision
+														}
+														className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 text-white font-medium rounded-lg transition-colors"
+													>
+														<XCircleIcon className="h-5 w-5 mr-2" />
+														{processingDecision
+															? "Processing..."
+															: "Reject Application"}
+													</button>
+												</div>
+											)}
 
 											{/* Workflow Information */}
 											<div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
@@ -1829,6 +2094,166 @@ function AdminApplicationsPageContent() {
 													</li>
 													<li>
 														• All decisions are
+														logged in the audit
+														trail with timestamps
+													</li>
+												</ul>
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Collateral Review Tab */}
+								{selectedTab === "collateral" && (
+									<div>
+										{/* Collateral Review Section */}
+										<div className="border border-amber-500/30 rounded-lg p-6 bg-amber-500/10 mb-6">
+											<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+												<ClipboardDocumentCheckIcon className="h-6 w-6 mr-2 text-amber-400" />
+												Collateral Review Decision
+											</h4>
+
+											{/* Application Summary */}
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Applicant
+													</h5>
+													<p className="text-white">
+														{
+															selectedApplication
+																.user?.fullName
+														}
+													</p>
+													<p className="text-sm text-gray-400">
+														{
+															selectedApplication
+																.user?.email
+														}
+													</p>
+												</div>
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Loan Details
+													</h5>
+													<p className="text-white">
+														{selectedApplication.amount
+															? formatCurrency(
+																	selectedApplication.amount
+															  )
+															: "Amount not set"}
+													</p>
+													<p className="text-sm text-gray-400">
+														{selectedApplication.term
+															? `${selectedApplication.term} months`
+															: "Term not set"}
+													</p>
+												</div>
+											</div>
+
+											{/* Collateral Information */}
+											<div className="mb-6 p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+												<h5 className="text-sm font-medium text-amber-200 mb-2">
+													Collateral Loan Information
+												</h5>
+												<p className="text-xs text-amber-200/80">
+													This is a collateral-backed loan that requires manual review of the collateral details before approval. Please review all collateral documentation and valuation before making a decision.
+												</p>
+											</div>
+
+											{/* Decision Notes */}
+											<div className="mb-6">
+												<label className="block text-sm font-medium text-gray-300 mb-2">
+													Review Notes (Optional)
+												</label>
+												<textarea
+													value={collateralNotes}
+													onChange={(e) =>
+														setCollateralNotes(
+															e.target.value
+														)
+													}
+													placeholder="Add notes about your collateral review decision..."
+													className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+													rows={3}
+												/>
+											</div>
+
+											{/* Decision Buttons */}
+											{isLoanDisbursed(selectedApplication) ? (
+												<div className="p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+													<div className="flex items-center">
+														<CheckCircleIcon className="h-6 w-6 text-blue-400 mr-3" />
+														<div>
+															<p className="text-blue-200 font-medium">
+																Loan Already Disbursed
+															</p>
+															<p className="text-blue-300/70 text-sm">
+																This loan has been disbursed and cannot be modified.
+															</p>
+														</div>
+													</div>
+												</div>
+											) : (
+												<div className="flex space-x-4">
+													<button
+														onClick={() =>
+															handleCollateralDecision(
+																"approve"
+															)
+														}
+														disabled={
+															processingCollateral
+														}
+														className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
+													>
+														<CheckCircleIcon className="h-5 w-5 mr-2" />
+														{processingCollateral
+															? "Processing..."
+															: "Approve Collateral & Proceed to Disbursement"}
+													</button>
+													<button
+														onClick={() =>
+															handleCollateralDecision(
+																"reject"
+															)
+														}
+														disabled={
+															processingCollateral
+														}
+														className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 text-white font-medium rounded-lg transition-colors"
+													>
+														<XCircleIcon className="h-5 w-5 mr-2" />
+														{processingCollateral
+															? "Processing..."
+															: "Reject Application"}
+													</button>
+												</div>
+											)}
+
+											{/* Workflow Information */}
+											<div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+												<h5 className="text-sm font-medium text-blue-200 mb-2">
+													Next Steps
+												</h5>
+												<ul className="text-xs text-blue-200 space-y-1">
+													<li>
+														•{" "}
+														<strong>
+															Approve:
+														</strong>{" "}
+														Application will move to
+														PENDING_DISBURSEMENT status for fund transfer
+													</li>
+													<li>
+														•{" "}
+														<strong>Reject:</strong>{" "}
+														Application will be
+														marked as REJECTED and
+														user will be notified
+													</li>
+													<li>
+														• All collateral review decisions are
 														logged in the audit
 														trail with timestamps
 													</li>
@@ -2373,17 +2798,18 @@ function AdminApplicationsPageContent() {
 												Update Application Status
 											</h4>
 											<div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-												{[
-													"INCOMPLETE",
-													"PENDING_APP_FEE",
-													"PENDING_KYC",
-													"PENDING_APPROVAL",
-													"PENDING_ATTESTATION",
-													"PENDING_SIGNATURE",
-													"PENDING_DISBURSEMENT",
-													"REJECTED",
-													"WITHDRAWN",
-												].map((status) => (
+																							{[
+												"INCOMPLETE",
+												"PENDING_APP_FEE",
+												"PENDING_KYC",
+												"PENDING_APPROVAL",
+												"PENDING_ATTESTATION",
+												"PENDING_SIGNATURE",
+												"PENDING_DISBURSEMENT",
+												"COLLATERAL_REVIEW",
+												"REJECTED",
+												"WITHDRAWN",
+											].map((status) => (
 													<button
 														key={status}
 														onClick={() =>
@@ -2439,8 +2865,18 @@ function AdminApplicationsPageContent() {
 														tab
 													</p>
 												)}
+												{selectedApplication.status ===
+													"COLLATERAL_REVIEW" && (
+													<p className="text-xs text-amber-200 mt-1">
+														• This collateral loan
+														requires review - use the
+														approval buttons above
+													</p>
+												)}
 											</div>
 										</div>
+
+
 
 										{/* Advanced Actions */}
 										<div className="flex justify-end space-x-3">
@@ -2454,7 +2890,9 @@ function AdminApplicationsPageContent() {
 												selectedApplication.status !==
 													"PENDING_APPROVAL" &&
 												selectedApplication.status !==
-													"PENDING_DISBURSEMENT" && (
+													"PENDING_DISBURSEMENT" &&
+												selectedApplication.status !==
+													"COLLATERAL_REVIEW" && (
 													<button
 														onClick={() => {
 															// Determine next status based on current status

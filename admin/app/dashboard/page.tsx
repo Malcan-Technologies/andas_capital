@@ -430,9 +430,8 @@ export default function AdminDashboardPage() {
 
 					setWorkflowCounts({
 						PENDING_DECISION:
-							countsData.PENDING_DECISION ||
-							data.pendingReviewApplications ||
-							0,
+							(countsData.PENDING_APPROVAL || 0) + 
+							(countsData.COLLATERAL_REVIEW || 0),
 						PENDING_DISBURSEMENT:
 							countsData.PENDING_DISBURSEMENT ||
 							data.pendingDisbursementCount ||
