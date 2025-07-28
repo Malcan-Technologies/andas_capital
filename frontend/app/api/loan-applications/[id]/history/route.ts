@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
@@ -8,10 +7,10 @@ export async function GET(
 	{ params }: { params: { id: string } }
 ) {
 	try {
-		const cookieStore = await cookies();
-		const token = cookieStore.get("token")?.value;
-
-		if (!token) {
+		// Extract authorization header from the request
+		const authHeader = req.headers.get("authorization");
+		
+		if (!authHeader) {
 			return NextResponse.json(
 				{ message: "Unauthorized" },
 				{ status: 401 }
@@ -22,7 +21,7 @@ export async function GET(
 			`${API_URL}/api/loan-applications/${params.id}/history`,
 			{
 				headers: {
-					Authorization: `Bearer ${token}`,
+					Authorization: authHeader,
 				},
 			}
 		);

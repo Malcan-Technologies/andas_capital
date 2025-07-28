@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
 	try {
-		const cookieStore = await cookies();
-		const adminToken = cookieStore.get("adminToken")?.value;
-
-		if (!adminToken) {
+		// Extract authorization header from the request
+		const authHeader = req.headers.get("authorization");
+		
+		if (!authHeader) {
 			return NextResponse.json(
 				{ message: "Unauthorized" },
 				{ status: 401 }
@@ -19,7 +18,7 @@ export async function GET() {
 			`${API_URL}/api/admin/applications/live-attestations`,
 			{
 				headers: {
-					Authorization: `Bearer ${adminToken}`,
+					Authorization: authHeader,
 				},
 			}
 		);

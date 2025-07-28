@@ -54,7 +54,7 @@ export default function Home() {
 				</div>
 
 				{/* Content */}
-				<div className="relative w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-32">
+				<div className="relative w-full px-4 sm:px-6 lg:pl-16 lg:pr-8 xl:pl-20 xl:pr-12 2xl:pl-24 2xl:pr-16 py-32">
 					<div className="grid lg:grid-cols-2 gap-12 items-center">
 						<div className="text-center lg:text-left">
 							<h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-heading font-bold tracking-tight mb-6 leading-tight">
