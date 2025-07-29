@@ -2228,10 +2228,10 @@ export default function AdminDashboardPage() {
 										{stats.statusBreakdown?.map(
 											(entry, index) => {
 												const colors = [
-													"#10B981",
-													"#F59E0B",
-													"#EF4444",
-													"#3B82F6",
+													"#10B981", // Green for Disbursed
+													"#3B82F6", // Blue for Pending Disbursement
+													"#F59E0B", // Yellow/Amber for Pending Review
+													"#EF4444", // Red for Rejected
 												];
 												return (
 													<Cell
