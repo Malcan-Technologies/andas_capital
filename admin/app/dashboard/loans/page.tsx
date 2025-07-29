@@ -19,6 +19,7 @@ import {
 	CheckCircleIcon,
 	CalendarDaysIcon,
 	CurrencyDollarIcon,
+	DocumentArrowDownIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -935,6 +936,513 @@ function ActiveLoansContent() {
 		};
 	};
 
+	const downloadCSV = async () => {
+		try {
+			setRefreshing(true);
+			
+			// Prepare CSV data with comprehensive loan information
+			const csvData = [];
+			
+			// Add header row
+			csvData.push([
+				'Loan ID',
+				'User Name',
+				'Email',
+				'Phone',
+				'Product',
+				'Loan Purpose',
+				'Principal Amount',
+				'Total Amount',
+				'Outstanding Balance',
+				'Interest Rate (%)',
+				'Term (months)',
+				'Monthly Payment',
+				'Total Paid',
+				'Next Payment Due',
+				'Status',
+				'Disbursed At',
+				'Created At',
+				'Employer',
+				'Monthly Income',
+				'Bank Name',
+				'Account Number',
+				'--- REPAYMENTS ---',
+				'Repayment ID',
+				'Installment #',
+				'Due Date',
+				'Amount',
+				'Principal',
+				'Interest',
+				'Status',
+				'Paid At',
+				'Payment Type',
+				'Days Late',
+				'Late Fee Amount',
+				'Late Fees Paid',
+				'Principal Paid',
+				'Contributing Payments',
+				'--- AUDIT TRAIL ---',
+				'History ID',
+				'Previous Status',
+				'New Status',
+				'Changed By',
+				'Change Reason',
+				'Notes',
+				'Changed At'
+			]);
+
+			// Process each loan
+			for (const loan of filteredLoans) {
+				// Fetch detailed repayments data if not already loaded
+				let repayments = loan.repayments || [];
+				if (!repayments.length && loan.id) {
+					try {
+						const repaymentsData = await fetchWithAdminTokenRefresh(
+							`/api/admin/loans/${loan.id}/repayments`
+						) as any;
+						repayments = repaymentsData.repayments || [];
+					} catch (error) {
+						console.error('Error fetching repayments for CSV:', error);
+					}
+				}
+
+				// Fetch application history
+				let history: LoanApplicationHistory[] = [];
+				if (loan.applicationId) {
+					try {
+						const historyData = await fetchWithAdminTokenRefresh(
+							`/api/admin/applications/${loan.applicationId}/history`
+						) as any;
+						// The API returns the timeline directly as an array
+						history = Array.isArray(historyData) ? historyData : (historyData.timeline || historyData.history || []);
+						console.log(`CSV Export - Fetched ${history.length} history entries for loan ${loan.id}`);
+					} catch (error) {
+						console.error('Error fetching history for CSV:', error);
+					}
+				}
+
+				// Base loan data
+				const baseLoanData = [
+					loan.id,
+					loan.application?.user?.fullName || loan.user?.fullName || '',
+					loan.application?.user?.email || loan.user?.email || '',
+					loan.application?.user?.phoneNumber || loan.user?.phoneNumber || '',
+					loan.application?.product?.name || '',
+					loan.application?.purpose || '',
+					formatCurrency(loan.principalAmount),
+					formatCurrency(loan.totalAmount || loan.principalAmount),
+					formatCurrency(loan.outstandingBalance),
+					`${loan.interestRate}%`,
+					loan.term,
+					formatCurrency(loan.monthlyPayment),
+					formatCurrency(loan.totalPaid || 0),
+					loan.nextPaymentDue ? formatDate(loan.nextPaymentDue) : '',
+					loan.status,
+					loan.disbursedAt ? formatDateTime(loan.disbursedAt) : '',
+					formatDateTime(loan.createdAt),
+					loan.application?.user?.employerName || '',
+					loan.application?.user?.monthlyIncome || '',
+					loan.application?.user?.bankName || '',
+					loan.application?.user?.accountNumber || ''
+				];
+
+				// Add repayments data first
+				if (repayments.length > 0) {
+					repayments.forEach((repayment) => {
+						const contributingPaymentsText = repayment.contributingPayments?.map(
+							p => `${p.reference}: ${formatCurrency(p.amount)} (${formatDateTime(p.createdAt)})`
+						).join('; ') || '';
+
+						csvData.push([
+							...baseLoanData,
+							'--- REPAYMENTS ---',
+							repayment.id,
+							repayment.installmentNumber || '',
+							formatDate(repayment.dueDate),
+							formatCurrency(repayment.amount),
+							formatCurrency(repayment.principalAmount),
+							formatCurrency(repayment.interestAmount),
+							repayment.status,
+							repayment.paidAt ? formatDateTime(repayment.paidAt) : '',
+							repayment.paymentType || '',
+							repayment.daysLate || '',
+							formatCurrency(repayment.lateFeeAmount || 0),
+							formatCurrency(repayment.lateFeesPaid || 0),
+							formatCurrency(repayment.principalPaid || 0),
+							contributingPaymentsText,
+							'--- AUDIT TRAIL ---',
+							'', '', '', '', '', '', ''
+						]);
+					});
+				} else {
+					// Add empty repayments row if no repayments exist
+					csvData.push([
+						...baseLoanData,
+						'--- REPAYMENTS ---',
+						'', '', '', '', '', '', '', '', '', '', '', '', '', '',
+						'--- AUDIT TRAIL ---',
+						'', '', '', '', '', '', ''
+					]);
+				}
+
+				// Add audit trail data as separate rows (application history only for bulk export to avoid too much data)
+				if (history.length > 0) {
+					console.log(`CSV Export - Bulk - Adding ${history.length} history entries for loan ${loan.id}`);
+					history.forEach(historyEntry => {
+						csvData.push([
+							...baseLoanData,
+							'--- REPAYMENTS ---',
+							'', '', '', '', '', '', '', '', '', '', '', '', '', '',
+							'--- AUDIT TRAIL ---',
+							historyEntry.id,
+							historyEntry.previousStatus || '',
+							historyEntry.newStatus,
+							historyEntry.changedBy,
+							historyEntry.changeReason || '',
+							historyEntry.notes || '',
+							formatDateTime(historyEntry.createdAt)
+						]);
+					});
+				} else {
+					console.log(`CSV Export - Bulk - No history entries found for loan ${loan.id}`);
+				}
+			}
+
+			// Convert to CSV string
+			const csvContent = csvData
+				.map(row => 
+					row.map(cell => {
+						// Escape quotes and wrap in quotes if contains comma, quote, or newline
+						const cellString = String(cell || '');
+						if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
+							return '"' + cellString.replace(/"/g, '""') + '"';
+						}
+						return cellString;
+					}).join(',')
+				)
+				.join('\n');
+
+			// Create and download the file
+			const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+			const link = document.createElement('a');
+			
+			if (link.download !== undefined) {
+				const url = URL.createObjectURL(blob);
+				link.setAttribute('href', url);
+				link.setAttribute('download', `loans_data_${new Date().toISOString().split('T')[0]}.csv`);
+				link.style.visibility = 'hidden';
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			}
+		} catch (error) {
+			console.error('Error downloading CSV:', error);
+			setError('Failed to download CSV file');
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
+	const downloadIndividualLoanCSV = async (loan: LoanData) => {
+		try {
+			setRefreshing(true);
+			
+			// Prepare CSV data for individual loan
+			const csvData = [];
+			
+			// Add header row
+			csvData.push([
+				'Loan ID',
+				'User Name',
+				'Email',
+				'Phone',
+				'Product',
+				'Loan Purpose',
+				'Principal Amount',
+				'Total Amount',
+				'Outstanding Balance',
+				'Interest Rate (%)',
+				'Term (months)',
+				'Monthly Payment',
+				'Total Paid',
+				'Next Payment Due',
+				'Status',
+				'Disbursed At',
+				'Created At',
+				'Employer',
+				'Monthly Income',
+				'Bank Name',
+				'Account Number',
+				'--- REPAYMENTS ---',
+				'Repayment ID',
+				'Installment #',
+				'Due Date',
+				'Amount',
+				'Principal',
+				'Interest',
+				'Status',
+				'Paid At',
+				'Payment Type',
+				'Days Late',
+				'Late Fee Amount',
+				'Late Fees Paid',
+				'Principal Paid',
+				'Contributing Payments',
+				'--- AUDIT TRAIL ---',
+				'Event ID',
+				'Event Type',
+				'Event Description',
+				'Performed By',
+				'Category/Reason',
+				'Details/Notes',
+				'Event Time'
+			]);
+
+			// Fetch detailed repayments data if not already loaded
+			let repayments = loan.repayments || [];
+			if (!repayments.length && loan.id) {
+				try {
+					const repaymentsData = await fetchWithAdminTokenRefresh(
+						`/api/admin/loans/${loan.id}/repayments`
+					) as any;
+					repayments = repaymentsData.repayments || [];
+				} catch (error) {
+					console.error('Error fetching repayments for CSV:', error);
+				}
+			}
+
+			// Fetch application history
+			let history: LoanApplicationHistory[] = [];
+			if (loan.applicationId) {
+				try {
+					console.log(`CSV Export - Fetching history for application ID: ${loan.applicationId}`);
+					const historyData = await fetchWithAdminTokenRefresh(
+						`/api/admin/applications/${loan.applicationId}/history`
+					) as any;
+					console.log(`CSV Export - Raw history response:`, historyData);
+					// The API returns the timeline directly as an array
+					history = Array.isArray(historyData) ? historyData : (historyData.timeline || historyData.history || []);
+					console.log(`CSV Export - Individual Loan - Fetched ${history.length} history entries for loan ${loan.id}`);
+					if (history.length > 0) {
+						console.log(`CSV Export - First history entry:`, history[0]);
+					}
+				} catch (error) {
+					console.error('Error fetching history for CSV:', error);
+				}
+			} else {
+				console.log(`CSV Export - No application ID for loan ${loan.id}`);
+			}
+
+			// Base loan data
+			const baseLoanData = [
+				loan.id,
+				loan.application?.user?.fullName || loan.user?.fullName || '',
+				loan.application?.user?.email || loan.user?.email || '',
+				loan.application?.user?.phoneNumber || loan.user?.phoneNumber || '',
+				loan.application?.product?.name || '',
+				loan.application?.purpose || '',
+				formatCurrency(loan.principalAmount),
+				formatCurrency(loan.totalAmount || loan.principalAmount),
+				formatCurrency(loan.outstandingBalance),
+				`${loan.interestRate}%`,
+				loan.term,
+				formatCurrency(loan.monthlyPayment),
+				formatCurrency(loan.totalPaid || 0),
+				loan.nextPaymentDue ? formatDate(loan.nextPaymentDue) : '',
+				loan.status,
+				loan.disbursedAt ? formatDateTime(loan.disbursedAt) : '',
+				formatDateTime(loan.createdAt),
+				loan.application?.user?.employerName || '',
+				loan.application?.user?.monthlyIncome || '',
+				loan.application?.user?.bankName || '',
+				loan.application?.user?.accountNumber || ''
+			];
+
+			// Add repayments data first
+			if (repayments.length > 0) {
+				repayments.forEach((repayment) => {
+					const contributingPaymentsText = repayment.contributingPayments?.map(
+						p => `${p.reference}: ${formatCurrency(p.amount)} (${formatDateTime(p.createdAt)})`
+					).join('; ') || '';
+
+					csvData.push([
+						...baseLoanData,
+						'--- REPAYMENTS ---',
+						repayment.id,
+						repayment.installmentNumber || '',
+						formatDate(repayment.dueDate),
+						formatCurrency(repayment.amount),
+						formatCurrency(repayment.principalAmount),
+						formatCurrency(repayment.interestAmount),
+						repayment.status,
+						repayment.paidAt ? formatDateTime(repayment.paidAt) : '',
+						repayment.paymentType || '',
+						repayment.daysLate || '',
+						formatCurrency(repayment.lateFeeAmount || 0),
+						formatCurrency(repayment.lateFeesPaid || 0),
+						formatCurrency(repayment.principalPaid || 0),
+						contributingPaymentsText,
+						'--- AUDIT TRAIL ---',
+						'', '', '', '', '', '', ''
+					]);
+				});
+			} else {
+				// Add empty repayments row if no repayments exist
+				csvData.push([
+					...baseLoanData,
+					'--- REPAYMENTS ---',
+					'', '', '', '', '', '', '', '', '', '', '', '', '', '',
+					'--- AUDIT TRAIL ---',
+					'', '', '', '', '', '', ''
+				]);
+			}
+
+			// Fetch wallet transactions for audit trail
+			let walletTransactions: WalletTransaction[] = [];
+			try {
+				console.log(`CSV Export - Fetching transactions for loan ID: ${loan.id}`);
+				const transactionsData = await fetchWithAdminTokenRefresh(
+					`/api/admin/loans/${loan.id}/transactions`
+				) as any;
+				console.log(`CSV Export - Raw transactions response:`, transactionsData);
+				// Handle different response structures
+				if (transactionsData.success && transactionsData.data) {
+					walletTransactions = transactionsData.data;
+				} else if (transactionsData.transactions) {
+					walletTransactions = transactionsData.transactions;
+				} else if (Array.isArray(transactionsData)) {
+					walletTransactions = transactionsData;
+				} else {
+					walletTransactions = [];
+				}
+				console.log(`CSV Export - Extracted ${walletTransactions.length} wallet transactions`);
+				if (walletTransactions.length > 0) {
+					console.log(`CSV Export - First transaction:`, walletTransactions[0]);
+				}
+			} catch (error) {
+				console.error('Error fetching wallet transactions for CSV:', error);
+			}
+
+			// Add audit trail data (application history + wallet transactions)
+			const allAuditEvents = [
+				// Application history events
+				...history.map(item => ({
+					type: 'application' as const,
+					id: item.id,
+					createdAt: item.createdAt,
+					data: item
+				})),
+				// Wallet transaction events
+				...walletTransactions.map(transaction => ({
+					type: 'transaction' as const,
+					id: transaction.id,
+					createdAt: transaction.createdAt,
+					data: transaction
+				}))
+			].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+			console.log(`CSV Export - Individual Loan - Total audit events: ${allAuditEvents.length} (${history.length} history + ${walletTransactions.length} transactions)`);
+
+			// Add audit trail entries as separate rows
+			if (allAuditEvents.length > 0) {
+				console.log(`CSV Export - Individual Loan - Adding ${allAuditEvents.length} audit trail entries`);
+				allAuditEvents.forEach((event, index) => {
+					if (event.type === 'application') {
+						const historyData = event.data as LoanApplicationHistory;
+						console.log(`CSV Export - Adding application history event ${index + 1}: ${historyData.previousStatus} -> ${historyData.newStatus}`);
+						csvData.push([
+							...baseLoanData,
+							'--- REPAYMENTS ---',
+							'', '', '', '', '', '', '', '', '', '', '', '', '', '',
+							'--- AUDIT TRAIL ---',
+							historyData.id,
+							`Application Status Change`,
+							`${historyData.previousStatus || 'NEW'} → ${historyData.newStatus}`,
+							historyData.changedBy || 'System',
+							historyData.changeReason || 'Status update',
+							historyData.notes || '',
+							formatDateTime(historyData.createdAt)
+						]);
+					} else {
+						const transactionData = event.data as WalletTransaction;
+						console.log(`CSV Export - Adding transaction event ${index + 1}: ${transactionData.type} - ${formatCurrency(Math.abs(transactionData.amount))}`);
+						
+						// Create a more descriptive transaction description
+						let transactionDescription = '';
+						if (transactionData.type === 'DEPOSIT') {
+							transactionDescription = 'Wallet Deposit';
+						} else if (transactionData.type === 'WITHDRAWAL') {
+							transactionDescription = 'Wallet Withdrawal';
+						} else if (transactionData.type === 'LOAN_REPAYMENT') {
+							transactionDescription = 'Loan Repayment';
+						} else if (transactionData.type === 'TRANSFER') {
+							transactionDescription = 'Transfer';
+						} else {
+							transactionDescription = `Payment Transaction (${transactionData.type || 'Unknown'})`;
+						}
+						
+						// Create detailed notes including amount, reference, and description
+						const transactionNotes = [
+							`Amount: ${formatCurrency(Math.abs(transactionData.amount))}`,
+							transactionData.reference ? `Reference: ${transactionData.reference}` : null,
+							transactionData.description ? `Description: ${transactionData.description}` : null,
+							transactionData.metadata ? `Metadata: ${JSON.stringify(transactionData.metadata)}` : null
+						].filter(Boolean).join(' | ');
+						
+						csvData.push([
+							...baseLoanData,
+							'--- REPAYMENTS ---',
+							'', '', '', '', '', '', '', '', '', '', '', '', '', '',
+							'--- AUDIT TRAIL ---',
+							transactionData.id,
+							transactionDescription,
+							transactionData.status || 'COMPLETED',
+							'System',
+							transactionData.type || 'TRANSACTION',
+							transactionNotes,
+							formatDateTime(transactionData.createdAt)
+						]);
+					}
+				});
+			} else {
+				console.log(`CSV Export - Individual Loan - No audit trail events found for loan ${loan.id}`);
+			}
+
+			// Convert to CSV string
+			const csvContent = csvData
+				.map(row => 
+					row.map(cell => {
+						// Escape quotes and wrap in quotes if contains comma, quote, or newline
+						const cellString = String(cell || '');
+						if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
+							return '"' + cellString.replace(/"/g, '""') + '"';
+						}
+						return cellString;
+					}).join(',')
+				)
+				.join('\n');
+
+			// Create and download the file
+			const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+			const link = document.createElement('a');
+			
+			if (link.download !== undefined) {
+				const url = URL.createObjectURL(blob);
+				link.setAttribute('href', url);
+				link.setAttribute('download', `loan_${loan.id.substring(0, 8)}_${new Date().toISOString().split('T')[0]}.csv`);
+				link.style.visibility = 'hidden';
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			}
+		} catch (error) {
+			console.error('Error downloading individual loan CSV:', error);
+			setError('Failed to download loan CSV file');
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
 	if (loading) {
 		return (
 			<AdminLayout
@@ -988,6 +1496,18 @@ function ActiveLoansContent() {
 					>
 						<CurrencyDollarIcon className="h-4 w-4 mr-2" />
 						Create Manual Payment
+					</button>
+					<button
+						onClick={downloadCSV}
+						disabled={refreshing}
+						className="flex items-center px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors"
+					>
+						{refreshing ? (
+							<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+						) : (
+							<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+						)}
+						Download All (CSV)
 					</button>
 					<button
 						onClick={handleRefresh}
@@ -1215,12 +1735,27 @@ function ActiveLoansContent() {
 					{selectedLoan ? (
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
 							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-								<h3 className="text-lg font-medium text-white">
-									Loan Details
-								</h3>
-								<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
-									ID: {selectedLoan.id.substring(0, 8)}
-								</span>
+								<div className="flex items-center gap-3">
+									<h3 className="text-lg font-medium text-white">
+										Loan Details
+									</h3>
+									<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
+										ID: {selectedLoan.id.substring(0, 8)}
+									</span>
+								</div>
+								<button
+									onClick={() => downloadIndividualLoanCSV(selectedLoan)}
+									disabled={refreshing}
+									className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+									title="Download loan data as CSV"
+								>
+									{refreshing ? (
+										<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
+									) : (
+										<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
+									)}
+									Download CSV
+								</button>
 							</div>
 
 							<div className="p-6">

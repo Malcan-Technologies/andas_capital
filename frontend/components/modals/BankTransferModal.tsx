@@ -62,7 +62,7 @@ export default function BankTransferModal({
 								Beneficiary Account Number
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-mono text-lg font-semibold text-gray-700">
+								<p className="font-mono font-semibold text-gray-700">
 									001866001878013
 								</p>
 								<button
@@ -74,10 +74,7 @@ export default function BankTransferModal({
 									Copy
 								</button>
 							</div>
-							<p className="text-xs text-gray-400 mt-1 font-body">
-								The account number is exclusive to{" "}
-								{userName.toUpperCase()}
-							</p>
+					
 						</div>
 
 						<div>
@@ -85,8 +82,8 @@ export default function BankTransferModal({
 								Beneficiary Name
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-mono text-lg font-semibold text-gray-700">
-									GROWKAPITAL187813
+								<p className="font-mono font-semibold text-gray-700">
+									OPG Capital Holdings Sdn. Bhd.
 								</p>
 								<button
 									onClick={() =>
@@ -104,7 +101,7 @@ export default function BankTransferModal({
 								Beneficiary Bank
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-semibold text-gray-700 font-heading">
+								<p className="font-mono font-semibold text-gray-700 font-heading">
 									HSBC Bank Malaysia Berhad
 								</p>
 								<button
@@ -125,7 +122,7 @@ export default function BankTransferModal({
 								Reference (Required)
 							</p>
 							<div className="flex items-center justify-between">
-								<p className="font-mono text-lg font-semibold text-blue-600">
+								<p className="font-mono font-semibold text-gray-700">
 									{reference}
 								</p>
 								<button

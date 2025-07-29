@@ -96,7 +96,7 @@ const upload = multer({
 // Create a new loan application
 router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
 	try {
-		const { productId, amount, term, purpose, appStep, product } = req.body;
+		const { productId, amount, term, purpose, appStep } = req.body;
 		const userId = req.user!.userId;
 
 		// Get product details to calculate fees
@@ -113,12 +113,12 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 			userId,
 			productId,
 			appStep: appStep || 0,
-			// Include product fees
-			interestRate: product.interestRate,
-			lateFee: product.lateFee,
-			originationFee: product.originationFee,
-			legalFee: product.legalFee,
-			applicationFee: product.applicationFee,
+			// Include product fees from database, not request body to prevent tampering
+			interestRate: productDetails.interestRate,
+			lateFee: productDetails.lateFeeRate,
+			originationFee: productDetails.originationFee,
+			legalFee: productDetails.legalFee,
+			applicationFee: productDetails.applicationFee,
 		};
 
 		// Only add optional fields if they are provided

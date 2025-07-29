@@ -6,6 +6,9 @@ import { trackApplicationStatusChange } from "../api/admin";
 // Lock constants for PostgreSQL advisory locks
 const LATE_FEE_PROCESSING_LOCK_ID = 123456789; // Unique identifier for late fee processing
 
+// Grace period before late fees start accruing (in days)
+const LATE_FEE_GRACE_PERIOD_DAYS = 3;
+
 /**
  * Acquire a PostgreSQL advisory lock for late fee processing
  * @returns Promise<boolean> - true if lock acquired, false if already locked
@@ -214,7 +217,7 @@ export class LateFeeProcessor {
 
 			// Save all calculations in a transaction
 			if (repaymentUpdates.length > 0) {
-				await LateFeeProcessor.saveLateFees(repaymentUpdates, Array.from(loanCalculations.values()));
+				await LateFeeProcessor.saveLateFees(repaymentUpdates, Array.from(loanCalculations.values()), force);
 				
 				// Update outstanding balances for all affected loans to reflect new late fees
 				logger.info(`Recalculating outstanding balances for ${loanCalculations.size} loans...`);
@@ -331,11 +334,20 @@ export class LateFeeProcessor {
 	): Promise<RepaymentLateFeeUpdate | null> {
 		const dueDate = new Date(repayment.dueDate);
 		
-		// Calculate days overdue using UTC-consistent calculation
-		const daysOverdue = TimeUtils.daysOverdue(dueDate);
+		// Calculate days overdue using Malaysia timezone calculation
+		const totalDaysOverdue = TimeUtils.daysOverdue(dueDate);
 
-		if (daysOverdue <= 0) {
+		if (totalDaysOverdue <= 0) {
 			return null; // Not actually overdue
+		}
+
+		// Apply grace period - late fees only start after grace period expires
+		const daysOverdueForFees = Math.max(0, totalDaysOverdue - LATE_FEE_GRACE_PERIOD_DAYS);
+
+		if (daysOverdueForFees <= 0) {
+			// Still within grace period, no late fees applied
+			console.log(`⏰ Repayment ${repayment.id} is ${totalDaysOverdue} days overdue but within ${LATE_FEE_GRACE_PERIOD_DAYS}-day grace period. No late fees applied.`);
+			return null;
 		}
 
 		// Convert all amounts to safe numbers with 2 decimal precision
@@ -359,7 +371,9 @@ export class LateFeeProcessor {
 			lateFeesPaid: lateFeesPaid,
 			principalPaid: principalPaid,
 			outstandingPrincipal: outstandingPrincipal,
-			daysOverdue: daysOverdue,
+			totalDaysOverdue: totalDaysOverdue,
+			daysOverdueForFees: daysOverdueForFees,
+			gracePeriod: LATE_FEE_GRACE_PERIOD_DAYS,
 			status: repayment.status,
 			currentLateFeeAmount: SafeMath.toNumber(repayment.lateFeeAmount || 0)
 		});
@@ -376,15 +390,15 @@ export class LateFeeProcessor {
 
 
 
-		// Calculate total interest fees for all overdue days
+		// Calculate total interest fees for fee-eligible overdue days (after grace period)
 		// Use the REMAINING UNPAID BALANCE, not the full principal
 		// Use high precision calculation for small percentage rates like 0.022% per day
-		const totalInterestFeeAmount = daysOverdue > 0
-			? SafeMath.lateFeeCalculation(outstandingPrincipal, dailyRate, daysOverdue)
+		const totalInterestFeeAmount = daysOverdueForFees > 0
+			? SafeMath.lateFeeCalculation(outstandingPrincipal, dailyRate, daysOverdueForFees)
 				: 0;
 
-		// Calculate total fixed fees for completed periods
-		const completedPeriods = Math.floor(daysOverdue / frequencyDays);
+		// Calculate total fixed fees for completed periods (after grace period)
+		const completedPeriods = Math.floor(daysOverdueForFees / frequencyDays);
 		const totalFixedFeeAmount = SafeMath.multiply(completedPeriods, fixedFeeAmount);
 
 		// Combine total fee amount (this is the total amount owed, not incremental)
@@ -399,7 +413,8 @@ export class LateFeeProcessor {
 			totalFixedFeeAmount: totalFixedFeeAmount,
 			totalFeeAmount: totalFeeAmount,
 			outstandingPrincipal: outstandingPrincipal,
-			daysOverdue: daysOverdue,
+			totalDaysOverdue: totalDaysOverdue,
+			daysOverdueForFees: daysOverdueForFees,
 			willCalculateFees: totalFeeAmount > 0 || force
 		});
 
@@ -411,7 +426,7 @@ export class LateFeeProcessor {
 		return {
 			repaymentId: repayment.id,
 			lateFeeAmount: totalFeeAmount,
-			daysOverdue,
+			daysOverdue: totalDaysOverdue, // Report total days overdue for audit purposes
 			outstandingPrincipal: outstandingPrincipal,
 		};
 	}
@@ -422,7 +437,8 @@ export class LateFeeProcessor {
 	 */
 	private static async saveLateFees(
 		repaymentUpdates: RepaymentLateFeeUpdate[], 
-		loanCalculations: LoanLateFeeCalculation[]
+		loanCalculations: LoanLateFeeCalculation[],
+		isManualRun: boolean = false
 	) {
 		const today = TimeUtils.malaysiaStartOfDay();
 
@@ -508,34 +524,66 @@ export class LateFeeProcessor {
 					// Get the loan application ID for audit trail
 					const loan = await tx.loan.findUnique({
 						where: { id: loanCalc.loanId },
-						select: { applicationId: true }
+						select: { applicationId: true, status: true }
 					});
 
 					if (loan && loan.applicationId && loanCalc.totalAccruedFees > 0) {
-						const lateFeeNotes = `Late payment fees charged: RM ${loanCalc.totalAccruedFees.toFixed(2)} | Days overdue: ${Object.values(loanCalc.calculationDetails).map((detail: any) => detail.daysOverdue).join(', ')} | Repayments affected: ${Object.keys(loanCalc.calculationDetails).length}`;
+						// Calculate outstanding amounts for each affected repayment
+						const repaymentSummaries = await Promise.all(
+							Object.keys(loanCalc.calculationDetails).map(async (repaymentId) => {
+								const detail = loanCalc.calculationDetails[repaymentId];
+								
+								// Get current payment status for this repayment
+								const repayment = await tx.loanRepayment.findUnique({
+									where: { id: repaymentId },
+									select: { lateFeeAmount: true, lateFeesPaid: true }
+								});
+								
+								const lateFeeAmount = SafeMath.toNumber(repayment?.lateFeeAmount || 0);
+								const lateFeesPaid = SafeMath.toNumber(repayment?.lateFeesPaid || 0);
+								const outstandingFees = SafeMath.max(0, SafeMath.subtract(lateFeeAmount, lateFeesPaid));
+								
+								// Show grace period context in audit trail
+								const gracePeriodInfo = detail.daysOverdue <= LATE_FEE_GRACE_PERIOD_DAYS 
+									? ` (within ${LATE_FEE_GRACE_PERIOD_DAYS}-day grace period)` 
+									: ` (${detail.daysOverdue - LATE_FEE_GRACE_PERIOD_DAYS} days past grace period)`;
+								
+								return `Repayment ${repaymentId}: ${detail.daysOverdue} days overdue${gracePeriodInfo}, RM ${outstandingFees.toFixed(2)} outstanding`;
+							})
+						);
+
+						// Calculate total outstanding fees across all affected repayments
+						const totalOutstandingFees = totalOutstandingLateFees; // This was already calculated above
+
+						const lateFeeNotes = `Late payment fees applied to ${Object.keys(loanCalc.calculationDetails).length} overdue repayment(s) with ${LATE_FEE_GRACE_PERIOD_DAYS}-day grace period. Outstanding fees: RM ${totalOutstandingFees.toFixed(2)}. Details: ${repaymentSummaries.join(' | ')}`;
 
 						await trackApplicationStatusChange(
 							tx,
 							loan.applicationId,
-							"ACTIVE", // Current status (loan is active)
-							"ACTIVE", // Status remains the same
+							loan.status, // Current loan status
+							loan.status, // Status remains unchanged (this is a fee application, not status change)
 							"SYSTEM",
-							"Late payment fees charged",
+							"Late payment fees applied",
 							lateFeeNotes,
 							{
+								eventType: "LATE_FEES_APPLIED",
 								loanId: loanCalc.loanId,
 								totalFeesCharged: loanCalc.totalAccruedFees,
+								outstandingFees: totalOutstandingFees,
+								gracePeriodDays: LATE_FEE_GRACE_PERIOD_DAYS,
 								calculationDate: today.toISOString(),
 								repaymentDetails: loanCalc.calculationDetails,
-								chargedBy: "AUTOMATED_LATE_FEE_PROCESSOR",
-								chargedAt: new Date().toISOString(),
+								affectedRepayments: Object.keys(loanCalc.calculationDetails).length,
+								processingMode: isManualRun ? "MANUAL" : "AUTOMATED",
+								processor: isManualRun ? "ADMIN_MANUAL_TRIGGER" : "LATE_FEE_PROCESSOR_CRON",
+								processedAt: new Date().toISOString(),
 							}
 						);
 
-						logger.info(`Added audit trail for late fee charge: Loan ${loanCalc.loanId}, Amount: RM ${loanCalc.totalAccruedFees.toFixed(2)}`);
+						logger.info(`Added audit trail for late fee application: Loan ${loanCalc.loanId}, Outstanding: RM ${totalOutstandingFees.toFixed(2)}, Repayments: ${Object.keys(loanCalc.calculationDetails).length}`);
 					}
 				} catch (auditError) {
-					logger.error(`Failed to add audit trail for late fee charge on loan ${loanCalc.loanId}:`, auditError);
+					logger.error(`Failed to add audit trail for late fee application on loan ${loanCalc.loanId}:`, auditError);
 					// Don't fail the entire transaction if audit fails
 				}
 			}

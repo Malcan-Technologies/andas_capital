@@ -25,6 +25,7 @@ import {
 	ArrowTrendingUpIcon as TrendingUpIcon,
 	ReceiptPercentIcon,
 	VideoCameraIcon,
+	InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../lib/authUtils";
 import Link from "next/link";
@@ -82,6 +83,8 @@ interface DashboardStats {
 		approvals: number;
 		disbursements: number;
 		revenue: number;
+		fees_earned: number;
+		accrued_interest: number;
 		disbursement_amount: number;
 		disbursement_count: number;
 		users: number;
@@ -93,6 +96,83 @@ interface DashboardStats {
 		repayment_count: number;
 		scheduled_count: number;
 	}[];
+	dailyStats?: {
+		date: string;
+		applications: number;
+		approvals: number;
+		disbursements: number;
+		revenue: number;
+		fees_earned: number;
+		accrued_interest: number;
+		disbursement_amount: number;
+		disbursement_count: number;
+		users: number;
+		kyc_users: number;
+		actual_repayments: number;
+		scheduled_repayments: number;
+		total_loan_value: number;
+		current_loan_value: number;
+		repayment_count: number;
+		scheduled_count: number;
+	}[];
+
+	// 🔹 NEW INDUSTRY-STANDARD LOAN PORTFOLIO KPIs
+	portfolioOverview?: {
+		activeLoanBook: number;
+		numberOfActiveLoans: number;
+		totalRepaidAmount: number;
+		averageLoanSize: number;
+		averageLoanTerm: number;
+		totalValueWithInterest: number;
+		accruedInterest: number;
+	};
+
+	repaymentPerformance?: {
+		repaymentRate: number;
+		delinquencyRate30Days: number;
+		delinquencyRate60Days: number;
+		delinquencyRate90Days: number;
+		defaultRate: number;
+		collectionsLast30Days: number;
+		upcomingPaymentsDue7Days: {
+			amount: number;
+			count: number;
+		};
+		upcomingPaymentsDue30Days: {
+			amount: number;
+			count: number;
+		};
+		latePayments: {
+			amount: number;
+			count: number;
+		};
+	};
+
+	revenueMetrics?: {
+		totalInterestEarned: number;
+		averageInterestRate: number;
+		totalFeesEarned: number;
+		penaltyFeesCollected: number;
+	};
+
+	userInsights?: {
+		totalBorrowers: number;
+		newBorrowersThisMonth: number;
+		repeatBorrowersPercentage: number;
+		topBorrowersByExposure: {
+			id: string;
+			fullName: string;
+			email: string;
+			totalExposure: number;
+		}[];
+	};
+
+	operationalKPIs?: {
+		loanApprovalTime: number;
+		disbursementTime: number;
+		applicationApprovalRatio: number;
+		manualReviewRate: number;
+	};
 	statusBreakdown?: {
 		status: string;
 		count: number;
@@ -122,10 +202,12 @@ export default function AdminDashboardPage() {
 		conversionRate: 0,
 		totalRevenue: 0,
 		monthlyStats: [],
+		dailyStats: [],
 		statusBreakdown: [],
 	});
 	const [loading, setLoading] = useState(true);
 	const [userName, setUserName] = useState("Admin");
+	const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly');
 	const [workflowCounts, setWorkflowCounts] = useState({
 		PENDING_DECISION: 0,
 		PENDING_DISBURSEMENT: 0,
@@ -157,7 +239,7 @@ export default function AdminDashboardPage() {
 				// Total late fees collected is now included in dashboard API response
 				const totalLateFeesCollected = data.totalLateFeesCollected || 0;
 
-				// Fetch real monthly statistics
+				// Fetch monthly statistics
 				let monthlyStats = [];
 				try {
 					const monthlyData = await fetchWithAdminTokenRefresh<{
@@ -167,15 +249,24 @@ export default function AdminDashboardPage() {
 							approvals: number;
 							disbursements: number;
 							revenue: number;
+							fees_earned: number;
+							accrued_interest: number;
 							disbursement_amount: number;
 							disbursement_count: number;
 							users: number;
 							kyc_users: number;
+							actual_repayments: number;
+							scheduled_repayments: number;
+							total_loan_value: number;
+							current_loan_value: number;
+							repayment_count: number;
+							scheduled_count: number;
 						}[];
 					}>("/api/admin/monthly-stats");
 					monthlyStats = monthlyData.monthlyStats;
 				} catch (error) {
 					console.error("Error fetching monthly stats:", error);
+					console.log("Using fallback mock data for monthly stats");
 					// Fallback to mock data if API fails
 					monthlyStats = [
 						{
@@ -184,6 +275,8 @@ export default function AdminDashboardPage() {
 							approvals: 32,
 							disbursements: 28,
 							revenue: 14000,
+							fees_earned: 4700,
+							accrued_interest: 2800,
 							disbursement_amount: 280000,
 							disbursement_count: 28,
 							users: 12,
@@ -201,6 +294,8 @@ export default function AdminDashboardPage() {
 							approvals: 38,
 							disbursements: 35,
 							revenue: 17500,
+							fees_earned: 5800,
+							accrued_interest: 3500,
 							disbursement_amount: 350000,
 							disbursement_count: 35,
 							users: 15,
@@ -218,6 +313,8 @@ export default function AdminDashboardPage() {
 							approvals: 35,
 							disbursements: 32,
 							revenue: 16000,
+							fees_earned: 5300,
+							accrued_interest: 3200,
 							disbursement_amount: 320000,
 							disbursement_count: 32,
 							users: 18,
@@ -235,6 +332,8 @@ export default function AdminDashboardPage() {
 							approvals: 44,
 							disbursements: 40,
 							revenue: 20000,
+							fees_earned: 6700,
+							accrued_interest: 4000,
 							disbursement_amount: 400000,
 							disbursement_count: 40,
 							users: 22,
@@ -252,6 +351,8 @@ export default function AdminDashboardPage() {
 							approvals: 42,
 							disbursements: 38,
 							revenue: 19000,
+							fees_earned: 6300,
+							accrued_interest: 3800,
 							disbursement_amount: 380000,
 							disbursement_count: 38,
 							users: 19,
@@ -269,6 +370,8 @@ export default function AdminDashboardPage() {
 							approvals: 49,
 							disbursements: 45,
 							revenue: 22500,
+							fees_earned: 7500,
+							accrued_interest: 4500,
 							disbursement_amount: 450000,
 							disbursement_count: 45,
 							users: 25,
@@ -281,6 +384,63 @@ export default function AdminDashboardPage() {
 							scheduled_count: 48,
 						},
 					];
+				}
+
+				// Fetch daily statistics
+				let dailyStats = [];
+				try {
+					const dailyData = await fetchWithAdminTokenRefresh<{
+						dailyStats: {
+							date: string;
+							applications: number;
+							approvals: number;
+							disbursements: number;
+							revenue: number;
+							fees_earned: number;
+							accrued_interest: number;
+							disbursement_amount: number;
+							disbursement_count: number;
+							users: number;
+							kyc_users: number;
+							actual_repayments: number;
+							scheduled_repayments: number;
+							total_loan_value: number;
+							current_loan_value: number;
+							repayment_count: number;
+							scheduled_count: number;
+						}[];
+					}>("/api/admin/daily-stats");
+					dailyStats = dailyData.dailyStats;
+				} catch (error) {
+					console.error("Error fetching daily stats:", error);
+					console.log("Using fallback mock data for daily stats");
+					// Generate mock daily data for last 30 days if API fails
+					const mockDailyStats = [];
+					const now = new Date();
+					for (let i = 29; i >= 0; i--) {
+						const date = new Date(now);
+						date.setDate(date.getDate() - i);
+						mockDailyStats.push({
+							date: date.toISOString().split('T')[0],
+							applications: Math.floor(Math.random() * 8) + 1,
+							approvals: Math.floor(Math.random() * 6) + 1,
+							disbursements: Math.floor(Math.random() * 4) + 1,
+							revenue: Math.floor(Math.random() * 3000) + 500,
+							fees_earned: Math.floor(Math.random() * 1000) + 200,
+							accrued_interest: Math.floor(Math.random() * 800) + 100,
+							disbursement_amount: Math.floor(Math.random() * 50000) + 10000,
+							disbursement_count: Math.floor(Math.random() * 3) + 1,
+							users: Math.floor(Math.random() * 5) + 1,
+							kyc_users: Math.floor(Math.random() * 3) + 1,
+							actual_repayments: Math.floor(Math.random() * 2500) + 500,
+							scheduled_repayments: Math.floor(Math.random() * 3000) + 600,
+							total_loan_value: Math.floor(Math.random() * 100000) + 20000,
+							current_loan_value: Math.floor(Math.random() * 80000) + 15000,
+							repayment_count: Math.floor(Math.random() * 4) + 1,
+							scheduled_count: Math.floor(Math.random() * 5) + 1,
+						});
+					}
+					dailyStats = mockDailyStats;
 				}
 
 				// Use totalApplications from API instead of calculating
@@ -300,6 +460,21 @@ export default function AdminDashboardPage() {
 				// Enhance monthlyStats with missing fields if they don't exist
 				const enhancedMonthlyStats = monthlyStats.map((stat: any) => ({
 					...stat,
+					fees_earned: stat.fees_earned || 0,
+					accrued_interest: stat.accrued_interest || 0,
+					actual_repayments: stat.actual_repayments || 0,
+					scheduled_repayments: stat.scheduled_repayments || 0,
+					total_loan_value: stat.total_loan_value || 0,
+					current_loan_value: stat.current_loan_value || 0,
+					repayment_count: stat.repayment_count || 0,
+					scheduled_count: stat.scheduled_count || 0,
+				}));
+
+				// Enhance dailyStats with missing fields if they don't exist
+				const enhancedDailyStats = dailyStats.map((stat: any) => ({
+					...stat,
+					fees_earned: stat.fees_earned || 0,
+					accrued_interest: stat.accrued_interest || 0,
 					actual_repayments: stat.actual_repayments || 0,
 					scheduled_repayments: stat.scheduled_repayments || 0,
 					total_loan_value: stat.total_loan_value || 0,
@@ -327,6 +502,7 @@ export default function AdminDashboardPage() {
 					activeUsers: Math.floor((data.totalUsers || 0) * 0.7), // Mock data
 					totalRevenue: (data.totalDisbursedAmount || 0) * 0.05, // Assuming 5% fee
 					monthlyStats: enhancedMonthlyStats,
+					dailyStats: enhancedDailyStats,
 					statusBreakdown: [
 						{
 							status: "Disbursed",
@@ -530,15 +706,64 @@ export default function AdminDashboardPage() {
 
 	// Helper function to calculate totals and growth
 	const calculateMetrics = (data: any[], key: string) => {
-		const total = data.reduce((sum, item) => sum + (item[key] || 0), 0);
-		const currentMonth = data[data.length - 1]?.[key] || 0;
-		const previousMonth = data[data.length - 2]?.[key] || 0;
+		let total;
+		let currentPeriod;
+		
+		if (key === 'current_loan_value' || key === 'accrued_interest') {
+			// For current loan value and accrued interest, "total" should be the current value, not a sum
+			total = data[data.length - 1]?.[key] || 0;
+			
+			// For current loan value and accrued interest, "currentPeriod" should show the change for the period
+			const latestValue = data[data.length - 1]?.[key] || 0;
+			if (viewMode === 'monthly') {
+				// For monthly: show change from previous month to current month
+				const previousMonthValue = data[data.length - 2]?.[key] || latestValue;
+				currentPeriod = latestValue - previousMonthValue;
+			} else {
+				// For daily: show change from yesterday to today
+				const yesterdayValue = data[data.length - 2]?.[key] || latestValue;
+				currentPeriod = latestValue - yesterdayValue;
+			}
+		} else {
+			// For other metrics, sum them up (applications, repayments, etc.)
+			total = data.reduce((sum, item) => sum + (item[key] || 0), 0);
+			currentPeriod = data[data.length - 1]?.[key] || 0;
+		}
+		
+		const latestValue = data[data.length - 1]?.[key] || 0;
+		const previousValue = data[data.length - 2]?.[key] || 0;
 		const growth =
-			previousMonth > 0
-				? ((currentMonth - previousMonth) / previousMonth) * 100
+			previousValue > 0
+				? ((latestValue - previousValue) / previousValue) * 100
 				: 0;
 
-		return { total, currentMonth, growth };
+		return { total, currentPeriod, growth };
+	};
+
+	// Get current data based on view mode
+	const getCurrentData = () => {
+		return viewMode === 'monthly' ? stats.monthlyStats || [] : stats.dailyStats || [];
+	};
+
+	// Format chart data labels based on view mode
+	const formatChartLabel = (value: any) => {
+		if (viewMode === 'monthly') {
+			return value;
+		} else {
+			// For daily view, format date as "MM/DD"
+			const date = new Date(value);
+			return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+		}
+	};
+
+	// Get period label
+	const getPeriodLabel = () => {
+		return viewMode === 'monthly' ? 'This Month' : 'Today';
+	};
+
+	// Get growth label
+	const getGrowthLabel = () => {
+		return viewMode === 'monthly' ? 'MoM Growth' : 'DoD Growth';
 	};
 
 	if (loading) {
@@ -553,6 +778,8 @@ export default function AdminDashboardPage() {
 			</AdminLayout>
 		);
 	}
+
+	const currentData = getCurrentData();
 
 	return (
 		<AdminLayout
@@ -733,201 +960,148 @@ export default function AdminDashboardPage() {
 				</div>
 			</div>
 
-			{/* Key Metrics */}
+			{/* Global View Toggle */}
 			<div className="mb-8">
-				<h2 className="text-lg font-medium text-white mb-5 flex items-center">
+				<div className="flex items-center justify-between">
+					<h2 className="text-lg font-medium text-white flex items-center">
 					<ChartBarIcon className="h-6 w-6 mr-2 text-blue-400" />
-					Key Metrics
+						Analytics & Trends
 				</h2>
-				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{/* Total Users */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
-						<div className="p-6">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm font-medium text-gray-300">
-										Total Users
-									</p>
-									<p className="text-3xl font-bold text-blue-400">
-										{formatNumber(stats.totalUsers)}
-									</p>
-									<div className="flex items-center mt-2">
-										<TrendingUpIcon className="h-4 w-4 text-green-400 mr-1" />
-										<span className="text-sm text-green-400">
-											+{stats.monthlyGrowth?.toFixed(1)}%
-										</span>
-										<span className="text-xs text-gray-400 ml-1">
-											this month
-										</span>
-									</div>
-								</div>
-								<div className="p-3 bg-gray-700/50 rounded-xl">
-									<UserGroupIcon className="h-8 w-8 text-gray-400" />
-								</div>
+					<div className="flex items-center bg-gray-800/50 rounded-lg p-1 border border-gray-700/50">
+						<button
+							onClick={() => setViewMode('monthly')}
+							className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+								viewMode === 'monthly'
+									? 'bg-blue-600 text-white shadow-sm'
+									: 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+							}`}
+						>
+							Monthly
+						</button>
+						<button
+							onClick={() => setViewMode('daily')}
+							className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+								viewMode === 'daily'
+									? 'bg-blue-600 text-white shadow-sm'
+									: 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+							}`}
+						>
+							Daily (30d)
+						</button>
 							</div>
 						</div>
 					</div>
 
-					{/* Total Applications */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+			{/* Main Dashboard - 2 columns on ultrawide (3xl+) */}
+			<div className="grid grid-cols-1 3xl:grid-cols-2 gap-8 3xl:gap-12">
+				
+				{/* Left Column */}
+				<div className="space-y-8">
+					{/* 🔹 1. LOAN PORTFOLIO OVERVIEW */}
+					<div className="mb-8">
+						<h2 className="text-lg font-medium text-white mb-5 flex items-center">
+							<BanknotesIcon className="h-6 w-6 mr-2 text-blue-400" />
+							Loan Portfolio Overview
+						</h2>
+						<div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+														{/* Total Value with Interest */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
 						<div className="p-6">
 							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm font-medium text-gray-300">
-										Total Applications
-									</p>
+								<div className="flex-1">
+									<div className="flex items-center gap-2 mb-2">
+										<p className="text-sm font-medium text-gray-300">
+													Total Value with Interest
+										</p>
+										<div className="group relative">
+											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+											<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+												<div className="text-left">
+													<p className="font-semibold mb-1">How it's calculated:</p>
+													<p>Total value of all active loans including both outstanding principal balance and accrued interest. This represents the complete exposure including scheduled interest.</p>
+												</div>
+												<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+											</div>
+										</div>
+									</div>
 									<p className="text-3xl font-bold text-purple-400">
-										{formatNumber(
-											stats.totalApplications || 0
-										)}
+												{formatCurrencyCompact(stats.portfolioOverview?.totalValueWithInterest || 0)}
 									</p>
 									<div className="flex items-center mt-2">
 										<span className="text-sm text-purple-400">
-											{stats.conversionRate?.toFixed(1)}%
-										</span>
-										<span className="text-xs text-gray-400 ml-1">
-											approval rate
+													Outstanding + scheduled interest
 										</span>
 									</div>
 								</div>
 								<div className="p-3 bg-gray-700/50 rounded-xl">
-									<DocumentTextIcon className="h-8 w-8 text-gray-400" />
+									<TrendingUpIcon className="h-8 w-8 text-gray-400" />
 								</div>
 							</div>
 						</div>
 					</div>
 
-					{/* Current Loan Value */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							{/* Accrued Interest */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
 						<div className="p-6">
 							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm font-medium text-gray-300">
-										Current Loan Value
-									</p>
-									<p className="text-3xl font-bold text-green-400">
-										{formatCurrencyCompact(
-											stats.currentLoanValue || 0
-										)}
-									</p>
-									<div className="flex items-center mt-2">
-										<span className="text-sm text-green-400">
-											{formatNumber(stats.disbursedLoans)}
-										</span>
-										<span className="text-xs text-gray-400 ml-1">
-											active loans
-										</span>
+								<div className="flex-1">
+									<div className="flex items-center gap-2 mb-2">
+										<p className="text-sm font-medium text-gray-300">
+													Accrued Interest
+										</p>
+										<div className="group relative">
+											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+											<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+												<div className="text-left">
+													<p className="font-semibold mb-1">How it's calculated:</p>
+													<p>Total unpaid scheduled interest from all active loans. This represents interest that has been scheduled for payment but not yet collected from borrowers.</p>
+												</div>
+												<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+											</div>
+										</div>
 									</div>
-								</div>
-								<div className="p-3 bg-gray-700/50 rounded-xl">
-									<BanknotesIcon className="h-8 w-8 text-gray-400" />
-								</div>
-							</div>
-						</div>
-					</div>
-
-					{/* Total Disbursed */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
-						<div className="p-6">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm font-medium text-gray-300">
-										Total Disbursed
-									</p>
-									<p className="text-3xl font-bold text-indigo-400">
-										{formatCurrencyCompact(
-											stats.totalDisbursedAmount
-										)}
-									</p>
-									<div className="flex items-center mt-2">
-										<span className="text-sm text-indigo-400">
-											{formatCurrencyCompact(
-												stats.totalDisbursedAmount /
-													(stats.disbursedLoans || 1)
-											)}
-										</span>
-										<span className="text-xs text-gray-400 ml-1">
-											avg disbursed
-										</span>
-									</div>
-								</div>
-								<div className="p-3 bg-gray-700/50 rounded-xl">
-									<CreditCardIcon className="h-8 w-8 text-gray-400" />
-								</div>
-							</div>
-						</div>
-					</div>
-
-					{/* Total Repayments */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
-						<div className="p-6">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm font-medium text-gray-300">
-										Total Repayments
-									</p>
 									<p className="text-3xl font-bold text-amber-400">
-										{formatCurrencyCompact(
-											stats.totalRepayments || 0
-										)}
+												{formatCurrencyCompact(stats.portfolioOverview?.accruedInterest || 0)}
 									</p>
 									<div className="flex items-center mt-2">
 										<span className="text-sm text-amber-400">
-											{stats.monthlyStats &&
-											stats.monthlyStats.length > 0
-												? formatCurrencyCompact(
-														stats.monthlyStats.reduce(
-															(sum, month) =>
-																sum +
-																month.actual_repayments,
-															0
-														) /
-															stats.monthlyStats.reduce(
-																(sum, month) =>
-																	sum +
-																	month.repayment_count,
-																0
-															) || 0
-												  )
-												: "RM0"}
-										</span>
-										<span className="text-xs text-gray-400 ml-1">
-											avg repayment amount
+													Unpaid scheduled interest
 										</span>
 									</div>
 								</div>
 								<div className="p-3 bg-gray-700/50 rounded-xl">
-									<CurrencyDollarIcon className="h-8 w-8 text-gray-400" />
+									<ReceiptPercentIcon className="h-8 w-8 text-gray-400" />
 								</div>
 							</div>
 						</div>
 					</div>
 
-					{/* Total Fees Collected */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							{/* Active Loan Book */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
 						<div className="p-6">
 							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm font-medium text-gray-300">
-										Total Fees Deducted
-									</p>
-									<p className="text-3xl font-bold text-emerald-400">
-										{formatCurrencyCompact(
-											stats.totalFeesCollected || 0
-										)}
+								<div className="flex-1">
+									<div className="flex items-center gap-2 mb-2">
+										<p className="text-sm font-medium text-gray-300">
+													Active Loan Book
+										</p>
+										<div className="group relative">
+											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+											<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+												<div className="text-left">
+													<p className="font-semibold mb-1">How it's calculated:</p>
+													<p>Total outstanding principal balance from all active loans currently being repaid. This represents the total amount owed by borrowers (excluding interest).</p>
+												</div>
+												<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+											</div>
+										</div>
+									</div>
+											<p className="text-3xl font-bold text-green-400">
+												{formatCurrencyCompact(stats.portfolioOverview?.activeLoanBook || 0)}
 									</p>
 									<div className="flex items-center mt-2">
-										<span className="text-sm text-emerald-400">
-											{stats.disbursedLoans > 0
-												? formatCurrencyCompact(
-														(stats.totalFeesCollected ||
-															0) /
-															stats.disbursedLoans
-												  )
-												: "RM0"}
-										</span>
-										<span className="text-xs text-gray-400 ml-1">
-											avg fee per loan
+												<span className="text-sm text-green-400">
+													{formatNumber(stats.portfolioOverview?.numberOfActiveLoans || 0)} active loans
 										</span>
 									</div>
 								</div>
@@ -938,132 +1112,124 @@ export default function AdminDashboardPage() {
 						</div>
 					</div>
 
-					{/* Total Late Fees Collected */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							{/* Average Loan Size */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
 						<div className="p-6">
 							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm font-medium text-gray-300">
-										Total Late Fees Collected
-									</p>
-									<p className="text-3xl font-bold text-red-400">
-										{formatCurrencyCompact(
-											stats.totalLateFeesCollected || 0
-										)}
+								<div className="flex-1">
+									<div className="flex items-center gap-2 mb-2">
+										<p className="text-sm font-medium text-gray-300">
+													Average Loan Size
+										</p>
+										<div className="group relative">
+											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+											<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+												<div className="text-left">
+													<p className="font-semibold mb-1">How it's calculated:</p>
+													<p>Average principal amount of all active loans. Calculated as: <span className="text-indigo-400">(Total active loan principal ÷ Number of active loans)</span></p>
+												</div>
+												<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+											</div>
+										</div>
+									</div>
+											<p className="text-3xl font-bold text-indigo-400">
+												{formatCurrencyCompact(stats.portfolioOverview?.averageLoanSize || 0)}
 									</p>
 									<div className="flex items-center mt-2">
-										<span className="text-sm text-red-400">
-											{stats.totalLateFeesCollected &&
-											stats.totalLateFeesCollected > 0
-												? `${(
-														(stats.totalLateFeesCollected /
-															(stats.totalRepayments ||
-																1)) *
-														100
-												  ).toFixed(1)}%`
-												: "0%"}
-										</span>
-										<span className="text-xs text-gray-400 ml-1">
-											of total repayments
+												<span className="text-sm text-indigo-400">
+													{Math.round(stats.portfolioOverview?.averageLoanTerm || 0)} days avg term
 										</span>
 									</div>
 								</div>
 								<div className="p-3 bg-gray-700/50 rounded-xl">
-									<ExclamationTriangleIcon className="h-8 w-8 text-gray-400" />
-								</div>
+											<CreditCardIcon className="h-8 w-8 text-gray-400" />
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			{/* Charts Section */}
-			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-				{/* Monthly Trends Chart */}
+						{/* Portfolio Performance Chart */}
+						<div className="mt-6">
 				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h3 className="text-lg font-medium text-white">
-							Monthly Application Trends
+										{viewMode === 'monthly' ? 'Monthly' : 'Daily'} Portfolio Performance
 						</h3>
-						<ChartBarIcon className="h-6 w-6 text-blue-400" />
+									<BanknotesIcon className="h-6 w-6 text-green-400" />
 					</div>
 
-					{/* Application Headlines */}
-					<div className="grid grid-cols-3 gap-4 mb-6">
+								{/* Portfolio Headlines */}
+								<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 						<div className="text-center">
-							<p className="text-2xl font-bold text-blue-400">
-								{formatNumber(
+										<p className="text-2xl font-bold text-green-400">
+											{formatCurrencyCompact(
 									calculateMetrics(
-										stats.monthlyStats || [],
-										"applications"
+													currentData,
+													"current_loan_value"
 									).total
 								)}
 							</p>
 							<p className="text-xs text-gray-400">
-								Total Applications
+											Active Loan Book
 							</p>
 						</div>
 						<div className="text-center">
-							<p className="text-2xl font-bold text-white">
-								{formatNumber(
-									calculateMetrics(
-										stats.monthlyStats || [],
-										"applications"
-									).currentMonth
+										<p className={`text-2xl font-bold ${
+											calculateMetrics(currentData, "current_loan_value").currentPeriod >= 0 
+												? "text-green-400" 
+												: "text-red-400"
+										}`}>
+											{calculateMetrics(currentData, "current_loan_value").currentPeriod >= 0 ? "+" : ""}
+											{formatCurrencyCompact(
+												calculateMetrics(currentData, "current_loan_value").currentPeriod
 								)}
 							</p>
-							<p className="text-xs text-gray-400">This Month</p>
+										<p className="text-xs text-gray-400">{viewMode === 'monthly' ? 'This Month Change' : 'Today Change'}</p>
 						</div>
 						<div className="text-center">
 							<p
 								className={`text-2xl font-bold ${
 									calculateMetrics(
-										stats.monthlyStats || [],
-										"applications"
+													currentData,
+													"current_loan_value"
 									).growth >= 0
 										? "text-green-400"
 										: "text-red-400"
 								}`}
 							>
 								{calculateMetrics(
-									stats.monthlyStats || [],
-									"applications"
+												currentData,
+												"current_loan_value"
 								).growth >= 0
 									? "+"
 									: ""}
 								{calculateMetrics(
-									stats.monthlyStats || [],
-									"applications"
+												currentData,
+												"current_loan_value"
 								).growth.toFixed(1)}
 								%
 							</p>
-							<p className="text-xs text-gray-400">MoM Growth</p>
+										<p className="text-xs text-gray-400">{getGrowthLabel()}</p>
+									</div>
+									<div className="text-center">
+										<p className="text-2xl font-bold text-amber-500">
+											{formatCurrencyCompact(
+												calculateMetrics(
+													currentData,
+													"accrued_interest"
+												).total
+											)}
+										</p>
+										<p className="text-xs text-gray-400">Accrued Interest</p>
 						</div>
 					</div>
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
-							<AreaChart data={stats.monthlyStats}>
+										<AreaChart data={currentData}>
 								<defs>
 									<linearGradient
-										id="colorApplications"
-										x1="0"
-										y1="0"
-										x2="0"
-										y2="1"
-									>
-										<stop
-											offset="5%"
-											stopColor="#3B82F6"
-											stopOpacity={0.8}
-										/>
-										<stop
-											offset="95%"
-											stopColor="#3B82F6"
-											stopOpacity={0.1}
-										/>
-									</linearGradient>
-									<linearGradient
-										id="colorApprovals"
+													id="colorLoanValue"
 										x1="0"
 										y1="0"
 										x2="0"
@@ -1081,7 +1247,7 @@ export default function AdminDashboardPage() {
 										/>
 									</linearGradient>
 									<linearGradient
-										id="colorDisbursements"
+													id="colorAccruedInterest"
 										x1="0"
 										y1="0"
 										x2="0"
@@ -1104,9 +1270,10 @@ export default function AdminDashboardPage() {
 									stroke="#374151"
 								/>
 								<XAxis
-									dataKey="month"
+												dataKey={viewMode === 'monthly' ? 'month' : 'date'}
 									stroke="#9CA3AF"
 									fontSize={12}
+												tickFormatter={viewMode === 'daily' ? formatChartLabel : undefined}
 								/>
 								<YAxis stroke="#9CA3AF" fontSize={12} />
 								<Tooltip
@@ -1116,174 +1283,206 @@ export default function AdminDashboardPage() {
 										borderRadius: "8px",
 										color: "#F9FAFB",
 									}}
+												labelFormatter={(value) => {
+													if (viewMode === 'daily') {
+														const date = new Date(value);
+														return date.toLocaleDateString("en-US", {
+															month: "short",
+															day: "numeric",
+															year: "numeric"
+														});
+													}
+													return value;
+												}}
+												formatter={(value: any, name: any) => [formatCurrencyCompact(value), name]}
 								/>
 								<Legend wrapperStyle={{ color: "#9CA3AF" }} />
 								<Area
 									type="monotone"
-									dataKey="applications"
-									stroke="#3B82F6"
-									fillOpacity={1}
-									fill="url(#colorApplications)"
-									name="Applications"
-								/>
-								<Area
-									type="monotone"
-									dataKey="approvals"
+												dataKey="current_loan_value"
 									stroke="#10B981"
 									fillOpacity={1}
-									fill="url(#colorApprovals)"
-									name="Approvals"
+												fill="url(#colorLoanValue)"
+												name="Outstanding Balance"
 								/>
 								<Area
 									type="monotone"
-									dataKey="disbursements"
+												dataKey="accrued_interest"
 									stroke="#F59E0B"
 									fillOpacity={1}
-									fill="url(#colorDisbursements)"
-									name="Disbursements"
+												fill="url(#colorAccruedInterest)"
+												name="Accrued Interest"
 								/>
 							</AreaChart>
 						</ResponsiveContainer>
 					</div>
 				</div>
-
-				{/* Application Status Breakdown */}
-				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
-					<div className="flex items-center justify-between mb-4">
-						<h3 className="text-lg font-medium text-white">
-							Application Status Distribution
-						</h3>
-						<DocumentTextIcon className="h-6 w-6 text-purple-400" />
+						</div>
 					</div>
 
-					{/* Status Headlines */}
-					<div className="grid grid-cols-3 gap-4 mb-6">
-						<div className="text-center">
-							<p className="text-2xl font-bold text-green-400">
-								{formatNumber(stats.disbursedLoans || 0)}
-							</p>
-							<p className="text-xs text-gray-400">
-								Total Disbursed
-							</p>
+					{/* 🔹 2. REPAYMENT & PERFORMANCE METRICS */}
+					<div className="mb-8">
+						<h2 className="text-lg font-medium text-white mb-5 flex items-center">
+							<ArrowTrendingUpIcon className="h-6 w-6 mr-2 text-green-400" />
+							Repayment & Performance
+						</h2>
+						<div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+							{/* Total Collections */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Total Collections
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Total amount collected from borrowers since inception, including principal repayments, interest payments, and fees. This represents actual cash received.</p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-emerald-400">
+												{formatCurrencyCompact(stats.portfolioOverview?.totalRepaidAmount || 0)}
+											</p>
+											<div className="flex items-center mt-2">
+												<CurrencyDollarIcon className="h-4 w-4 text-emerald-400 mr-1" />
+												<span className="text-xs text-gray-400">
+													All time collections
+												</span>
 						</div>
-						<div className="text-center">
-							<p className="text-2xl font-bold text-yellow-400">
-								{formatNumber(
-									stats.pendingReviewApplications || 0
-								)}
-							</p>
-							<p className="text-xs text-gray-400">
-								Pending Review
-							</p>
+										</div>
+										<div className="p-3 bg-gray-700/50 rounded-xl">
+											<BanknotesIcon className="h-8 w-8 text-gray-400" />
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Repayment Rate */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Repayment Rate
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Percentage of repayments paid on time (within 3-day grace period). Calculated as: <span className="text-green-400">(On-time payments ÷ Total due payments) × 100</span></p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-green-400">
+												{(stats.repaymentPerformance?.repaymentRate || 0).toFixed(1)}%
+											</p>
+											<div className="flex items-center mt-2">
+												<CheckCircleIcon className="h-4 w-4 text-green-400 mr-1" />
+												<span className="text-xs text-gray-400">
+													On-time payments
+												</span>
 						</div>
-						<div className="text-center">
-							<p className="text-2xl font-bold text-purple-400">
-								{stats.conversionRate?.toFixed(1) || 0}%
-							</p>
-							<p className="text-xs text-gray-400">
-								Approval Rate
-							</p>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Delinquency Rate */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Delinquency Rate
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Percentage of loans with payments overdue by 30+ days (beyond grace period). Calculated as: <span className="text-yellow-400">(Loans 30+ days overdue ÷ Total active loans) × 100</span></p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-yellow-400">
+												{(stats.repaymentPerformance?.delinquencyRate30Days || 0).toFixed(1)}%
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													30+ days overdue
+												</span>
 						</div>
 					</div>
-					<div className="h-80">
-						<ResponsiveContainer width="100%" height="100%">
-							<PieChart>
-								<Pie
-									data={stats.statusBreakdown}
-									cx="50%"
-									cy="50%"
-									innerRadius={60}
-									outerRadius={120}
-									paddingAngle={5}
-									dataKey="count"
-									nameKey="status"
-								>
-									{stats.statusBreakdown?.map(
-										(entry, index) => {
-											const colors = [
-												"#10B981",
-												"#F59E0B",
-												"#EF4444",
-												"#3B82F6",
-											];
-											return (
-												<Cell
-													key={`cell-${index}`}
-													fill={
-														colors[
-															index %
-																colors.length
-														]
-													}
-												/>
-											);
-										}
-									)}
-								</Pie>
-								<Tooltip
-									contentStyle={{
-										backgroundColor: "#1F2937",
-										border: "1px solid #374151",
-										borderRadius: "8px",
-										color: "#F9FAFB",
-									}}
-									labelStyle={{ color: "#F9FAFB" }}
-									itemStyle={{ color: "#F9FAFB" }}
-								/>
-							</PieChart>
-						</ResponsiveContainer>
 					</div>
-					<div className="mt-4 grid grid-cols-2 gap-4">
-						{stats.statusBreakdown?.map((status, index) => {
-							const colors = [
-								"#10B981",
-								"#F59E0B",
-								"#EF4444",
-								"#3B82F6",
-							];
-							return (
-								<div
-									key={status.status}
-									className="flex items-center space-x-2"
-								>
-									<div
-										className="w-3 h-3 rounded-full"
-										style={{
-											backgroundColor:
-												colors[index % colors.length],
-										}}
-									></div>
-									<span className="text-sm text-gray-300">
-										{status.status}
-									</span>
-									<span className="text-sm font-medium text-white">
-										({status.count})
+								</div>
+							</div>
+
+							{/* Default Rate */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Default Rate
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Percentage of loans that have been written off as uncollectible. Calculated as: <span className="text-red-400">(Defaulted loans ÷ Total loans issued) × 100</span></p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-red-400">
+												{(stats.repaymentPerformance?.defaultRate || 0).toFixed(1)}%
+											</p>
+											<div className="flex items-center mt-2">
+												<XCircleIcon className="h-4 w-4 text-red-400 mr-1" />
+												<span className="text-xs text-gray-400">
+													Written off
 									</span>
 								</div>
-							);
-						})}
+										</div>
+									</div>
 					</div>
 				</div>
 			</div>
 
-			{/* Additional Charts Row */}
-			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-				{/* Monthly Repayments vs Scheduled */}
+						{/* Repayment Performance Chart */}
+						<div className="mt-6">
 				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h3 className="text-lg font-medium text-white">
-							Monthly Collections vs Scheduled
+										{viewMode === 'monthly' ? 'Monthly' : 'Daily'} Repayment Trends
 						</h3>
-						<CurrencyDollarIcon className="h-6 w-6 text-green-400" />
+									<ArrowTrendingUpIcon className="h-6 w-6 text-emerald-400" />
 					</div>
 
-					{/* Repayments Headlines */}
+								{/* Repayment Headlines */}
 					<div className="grid grid-cols-3 gap-4 mb-6">
 						<div className="text-center">
-							<p className="text-2xl font-bold text-green-400">
+										<p className="text-2xl font-bold text-emerald-400">
 								{formatCurrencyCompact(
 									calculateMetrics(
-										stats.monthlyStats || [],
+													currentData,
 										"actual_repayments"
 									).total
 								)}
@@ -1296,18 +1495,18 @@ export default function AdminDashboardPage() {
 							<p className="text-2xl font-bold text-white">
 								{formatCurrencyCompact(
 									calculateMetrics(
-										stats.monthlyStats || [],
+													currentData,
 										"actual_repayments"
-									).currentMonth
+												).currentPeriod
 								)}
 							</p>
-							<p className="text-xs text-gray-400">This Month</p>
+										<p className="text-xs text-gray-400">{getPeriodLabel()}</p>
 						</div>
 						<div className="text-center">
 							<p
 								className={`text-2xl font-bold ${
 									calculateMetrics(
-										stats.monthlyStats || [],
+													currentData,
 										"actual_repayments"
 									).growth >= 0
 										? "text-green-400"
@@ -1315,40 +1514,34 @@ export default function AdminDashboardPage() {
 								}`}
 							>
 								{calculateMetrics(
-									stats.monthlyStats || [],
+												currentData,
 									"actual_repayments"
 								).growth >= 0
 									? "+"
 									: ""}
 								{calculateMetrics(
-									stats.monthlyStats || [],
+												currentData,
 									"actual_repayments"
 								).growth.toFixed(1)}
 								%
 							</p>
-							<p className="text-xs text-gray-400">MoM Growth</p>
+										<p className="text-xs text-gray-400">{getGrowthLabel()}</p>
 						</div>
 					</div>
-
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
-							<BarChart data={stats.monthlyStats}>
+										<BarChart data={currentData}>
 								<CartesianGrid
 									strokeDasharray="3 3"
 									stroke="#374151"
 								/>
 								<XAxis
-									dataKey="month"
+												dataKey={viewMode === 'monthly' ? 'month' : 'date'}
 									stroke="#9CA3AF"
 									fontSize={12}
-								/>
-								<YAxis
-									stroke="#9CA3AF"
-									fontSize={12}
-									tickFormatter={(value) =>
-										`RM${(value / 1000).toFixed(0)}K`
-									}
-								/>
+												tickFormatter={viewMode === 'daily' ? formatChartLabel : undefined}
+											/>
+											<YAxis stroke="#9CA3AF" fontSize={12} />
 								<Tooltip
 									contentStyle={{
 										backgroundColor: "#1F2937",
@@ -1356,109 +1549,226 @@ export default function AdminDashboardPage() {
 										borderRadius: "8px",
 										color: "#F9FAFB",
 									}}
-									formatter={(
-										value: number,
-										name: string
-									) => [
-										formatCurrencyCompact(value),
-										name === "actual_repayments"
-											? "Collections (Actual)"
-											: "Scheduled Repayments",
-									]}
-								/>
-								<Legend
-									wrapperStyle={{ color: "#9CA3AF" }}
-									formatter={(value: string) =>
-										value === "actual_repayments"
-											? "Collections (Actual)"
-											: "Scheduled Repayments"
-									}
-								/>
+												labelFormatter={(value) => {
+													if (viewMode === 'daily') {
+														const date = new Date(value);
+														return date.toLocaleDateString("en-US", {
+															month: "short",
+															day: "numeric",
+															year: "numeric"
+														});
+													}
+													return value;
+												}}
+												formatter={(value: any) => [formatCurrencyCompact(value)]}
+											/>
+											<Legend wrapperStyle={{ color: "#9CA3AF" }} />
 								<Bar
 									dataKey="actual_repayments"
 									fill="#10B981"
+												name="Actual Repayments"
 									radius={[4, 4, 0, 0]}
-									name="actual_repayments"
 								/>
 								<Bar
 									dataKey="scheduled_repayments"
-									fill="#F59E0B"
+												fill="#60A5FA"
+												name="Scheduled Repayments"
 									radius={[4, 4, 0, 0]}
-									name="scheduled_repayments"
 								/>
 							</BarChart>
 						</ResponsiveContainer>
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
 
-				{/* Total Loan Value (TLV) Trends */}
+				{/* Right Column */}
+				<div className="space-y-8">
+					{/* 🔹 3. REVENUE & INTEREST METRICS */}
+					<div className="mb-8">
+						<h2 className="text-lg font-medium text-white mb-5 flex items-center">
+							<CurrencyDollarIcon className="h-6 w-6 mr-2 text-emerald-400" />
+							Revenue & Interest
+						</h2>
+						<div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+							{/* Portfolio Yield - MOVED TO FIRST POSITION */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Portfolio Yield
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Weighted average annual return including interest, fees, and penalties. Calculated as: <span className="text-blue-400">(Base Interest Rate + Amortized Fees + Penalty Yield) × 12</span></p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-blue-400">
+												{(typeof stats.revenueMetrics?.averageInterestRate === 'number' 
+													? stats.revenueMetrics.averageInterestRate 
+													: 0).toFixed(1)}%
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													Incl. interest, fees & penalties
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Total Interest Earned */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Total Interest Earned
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Total cumulative interest collected from all loans since inception. This represents the actual interest revenue received from borrowers.</p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-emerald-400">
+												{formatCurrencyCompact(stats.revenueMetrics?.totalInterestEarned || 0)}
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													Cumulative revenue
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Fees Earned */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Fees Earned
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Total upfront fees collected from loan applications, including <span className="text-purple-400">application fees</span>, <span className="text-purple-400">origination fees</span>, and <span className="text-purple-400">legal fees</span>.</p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-purple-400">
+												{formatCurrencyCompact(stats.revenueMetrics?.totalFeesEarned || 0)}
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													Application, origination & legal
+												</span>
+											</div>
+										</div>
+										<div className="p-3 bg-gray-700/50 rounded-xl">
+											<DocumentTextIcon className="h-8 w-8 text-gray-400" />
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Penalty Fees */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Penalty Fees
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Total late fees collected from borrowers who made payments after the due date (beyond the 3-day grace period). These are penalty charges for overdue payments.</p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-amber-400">
+												{formatCurrencyCompact(stats.revenueMetrics?.penaltyFeesCollected || 0)}
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													Late payment fees
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Revenue Performance Chart */}
+						<div className="mt-6">
 				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h3 className="text-lg font-medium text-white">
-							Monthly Current Loan Value
+										{viewMode === 'monthly' ? 'Monthly' : 'Daily'} Revenue Performance
 						</h3>
-						<BanknotesIcon className="h-6 w-6 text-blue-400" />
+									<CurrencyDollarIcon className="h-6 w-6 text-emerald-400" />
 					</div>
 
-					{/* TLV Headlines */}
+															{/* Revenue Headlines */}
 					<div className="grid grid-cols-3 gap-4 mb-6">
 						<div className="text-center">
-							<p className="text-2xl font-bold text-blue-400">
-								{formatCurrencyCompact(
-									calculateMetrics(
-										stats.monthlyStats || [],
-										"current_loan_value"
-									).total
-								)}
+									<p className="text-2xl font-bold text-emerald-400">
+										{formatCurrencyCompact(stats.revenueMetrics?.totalInterestEarned || 0)}
 							</p>
 							<p className="text-xs text-gray-400">
-								Current Loan Value
+										Interest Revenue
 							</p>
 						</div>
 						<div className="text-center">
-							<p className="text-2xl font-bold text-white">
-								{formatCurrencyCompact(
-									calculateMetrics(
-										stats.monthlyStats || [],
-										"current_loan_value"
-									).currentMonth
-								)}
-							</p>
-							<p className="text-xs text-gray-400">This Month</p>
+									<p className="text-2xl font-bold text-purple-400">
+										{formatCurrencyCompact(stats.revenueMetrics?.totalFeesEarned || 0)}
+									</p>
+									<p className="text-xs text-gray-400">Fees Revenue</p>
 						</div>
 						<div className="text-center">
-							<p
-								className={`text-2xl font-bold ${
-									calculateMetrics(
-										stats.monthlyStats || [],
-										"current_loan_value"
-									).growth >= 0
-										? "text-green-400"
-										: "text-red-400"
-								}`}
-							>
-								{calculateMetrics(
-									stats.monthlyStats || [],
-									"current_loan_value"
-								).growth >= 0
-									? "+"
-									: ""}
-								{calculateMetrics(
-									stats.monthlyStats || [],
-									"current_loan_value"
-								).growth.toFixed(1)}
-								%
-							</p>
-							<p className="text-xs text-gray-400">MoM Growth</p>
+									<p className="text-2xl font-bold text-amber-400">
+										{formatCurrencyCompact(stats.revenueMetrics?.penaltyFeesCollected || 0)}
+									</p>
+									<p className="text-xs text-gray-400">Penalty Fees</p>
 						</div>
 					</div>
-
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
-							<AreaChart data={stats.monthlyStats}>
+										<AreaChart data={currentData}>
 								<defs>
 									<linearGradient
-										id="colorTLV"
+													id="colorRevenue"
 										x1="0"
 										y1="0"
 										x2="0"
@@ -1466,32 +1776,46 @@ export default function AdminDashboardPage() {
 									>
 										<stop
 											offset="5%"
-											stopColor="#3B82F6"
+														stopColor="#10B981"
 											stopOpacity={0.8}
 										/>
 										<stop
 											offset="95%"
-											stopColor="#3B82F6"
+														stopColor="#10B981"
 											stopOpacity={0.1}
 										/>
 									</linearGradient>
+												<linearGradient
+													id="colorFees"
+													x1="0"
+													y1="0"
+													x2="0"
+													y2="1"
+												>
+													<stop
+														offset="5%"
+														stopColor="#A855F7"
+														stopOpacity={0.8}
+													/>
+													<stop
+														offset="95%"
+														stopColor="#A855F7"
+														stopOpacity={0.1}
+													/>
+												</linearGradient>
+
 								</defs>
 								<CartesianGrid
 									strokeDasharray="3 3"
 									stroke="#374151"
 								/>
 								<XAxis
-									dataKey="month"
+												dataKey={viewMode === 'monthly' ? 'month' : 'date'}
 									stroke="#9CA3AF"
 									fontSize={12}
-								/>
-								<YAxis
-									stroke="#9CA3AF"
-									fontSize={12}
-									tickFormatter={(value) =>
-										`RM${(value / 1000).toFixed(0)}K`
-									}
-								/>
+												tickFormatter={viewMode === 'daily' ? formatChartLabel : undefined}
+											/>
+											<YAxis stroke="#9CA3AF" fontSize={12} />
 								<Tooltip
 									contentStyle={{
 										backgroundColor: "#1F2937",
@@ -1499,95 +1823,323 @@ export default function AdminDashboardPage() {
 										borderRadius: "8px",
 										color: "#F9FAFB",
 									}}
-									formatter={(value: number) => [
-										formatCurrencyCompact(value),
-										"Current Loan Value",
-									]}
-								/>
+												labelFormatter={(value) => {
+													if (viewMode === 'daily') {
+														const date = new Date(value);
+														return date.toLocaleDateString("en-US", {
+															month: "short",
+															day: "numeric",
+															year: "numeric"
+														});
+													}
+													return value;
+												}}
+												formatter={(value: any) => [formatCurrencyCompact(value)]}
+											/>
+											<Legend wrapperStyle={{ color: "#9CA3AF" }} />
 								<Area
 									type="monotone"
-									dataKey="current_loan_value"
-									stroke="#3B82F6"
+												dataKey="revenue"
+												stroke="#10B981"
 									fillOpacity={1}
-									fill="url(#colorTLV)"
-									name="Current Loan Value"
+												fill="url(#colorRevenue)"
+												name="Interest Revenue"
+											/>
+											<Area
+												type="monotone"
+												dataKey="fees_earned"
+												stroke="#A855F7"
+												fillOpacity={1}
+												fill="url(#colorFees)"
+												name="Fees Revenue"
 								/>
 							</AreaChart>
 						</ResponsiveContainer>
+								</div>
+							</div>
 					</div>
 				</div>
 
-				{/* User Growth */}
+					{/* 🔹 4. OPERATIONAL KPIs */}
+					<div className="mb-8">
+						<h2 className="text-lg font-medium text-white mb-5 flex items-center">
+							<Cog6ToothIcon className="h-6 w-6 mr-2 text-purple-400" />
+							Operational Efficiency
+						</h2>
+						<div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+							{/* Application Approval Ratio */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Approval Ratio
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Percentage of applications that get approved (excluding pending reviews). Calculated as: <span className="text-green-400">(Approved applications ÷ (Approved + Rejected applications)) × 100</span></p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-green-400">
+												{(stats.operationalKPIs?.applicationApprovalRatio || 0).toFixed(1)}%
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													Application funnel
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Decision Time */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Decision Time
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Average time from when an application enters <span className="text-blue-400">PENDING_APPROVAL</span> status until it receives a decision (<span className="text-green-400">APPROVED</span>, <span className="text-red-400">REJECTED</span>, or moves to next stage).</p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-blue-400">
+												{stats.operationalKPIs?.loanApprovalTime 
+													? stats.operationalKPIs.loanApprovalTime >= 60 
+														? `${(stats.operationalKPIs.loanApprovalTime / 60).toFixed(1)}h`
+														: `${Math.round(stats.operationalKPIs.loanApprovalTime)}m`
+													: '0m'
+												}
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													Avg. time to make a decision
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Disbursement Time */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Disbursement Time
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Average time from when an application enters <span className="text-orange-400">PENDING_DISBURSEMENT</span> status until the funds are actually disbursed to the borrower's account.</p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-indigo-400">
+												{stats.operationalKPIs?.disbursementTime 
+													? stats.operationalKPIs.disbursementTime >= 60 
+														? `${(stats.operationalKPIs.disbursementTime / 60).toFixed(1)}h`
+														: `${Math.round(stats.operationalKPIs.disbursementTime)}m`
+													: '0m'
+												}
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+												Avg. time to disburse
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Manual Review Rate */}
+							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
+								<div className="p-6">
+									<div className="flex items-center justify-between">
+										<div className="flex-1">
+											<div className="flex items-center gap-2 mb-2">
+												<p className="text-sm font-medium text-gray-300">
+													Manual Review Rate
+												</p>
+												<div className="group relative">
+													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
+													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
+														<div className="text-left">
+															<p className="font-semibold mb-1">How it's calculated:</p>
+															<p>Percentage of applications that require manual review by admin staff, calculated as: <span className="text-yellow-400">(Applications needing manual review ÷ Total applications) × 100</span></p>
+														</div>
+														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+													</div>
+												</div>
+											</div>
+											<p className="text-3xl font-bold text-yellow-400">
+												{(stats.operationalKPIs?.manualReviewRate || 0).toFixed(1)}%
+											</p>
+											<div className="flex items-center mt-2">
+												<span className="text-xs text-gray-400">
+													Needs intervention
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Application Flow Chart */}
+						<div className="mt-6">
 				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h3 className="text-lg font-medium text-white">
-							User Growth & KYC Completion
+										{viewMode === 'monthly' ? 'Monthly' : 'Daily'} Application Flow
 						</h3>
-						<UserGroupIcon className="h-6 w-6 text-blue-400" />
+									<Cog6ToothIcon className="h-6 w-6 text-purple-400" />
 					</div>
 
-					{/* User Growth Headlines */}
+								{/* Application Headlines */}
 					<div className="grid grid-cols-3 gap-4 mb-6">
 						<div className="text-center">
 							<p className="text-2xl font-bold text-blue-400">
 								{formatNumber(
 									calculateMetrics(
-										stats.monthlyStats || [],
-										"users"
+													currentData,
+													"applications"
 									).total
 								)}
 							</p>
-							<p className="text-xs text-gray-400">Total Users</p>
+										<p className="text-xs text-gray-400">
+											Total Applications
+										</p>
 						</div>
 						<div className="text-center">
 							<p className="text-2xl font-bold text-white">
 								{formatNumber(
 									calculateMetrics(
-										stats.monthlyStats || [],
-										"users"
-									).currentMonth
+													currentData,
+													"applications"
+												).currentPeriod
 								)}
 							</p>
-							<p className="text-xs text-gray-400">This Month</p>
+										<p className="text-xs text-gray-400">{getPeriodLabel()}</p>
 						</div>
 						<div className="text-center">
 							<p
 								className={`text-2xl font-bold ${
 									calculateMetrics(
-										stats.monthlyStats || [],
-										"users"
+													currentData,
+													"applications"
 									).growth >= 0
 										? "text-green-400"
 										: "text-red-400"
 								}`}
 							>
 								{calculateMetrics(
-									stats.monthlyStats || [],
-									"users"
+												currentData,
+												"applications"
 								).growth >= 0
 									? "+"
 									: ""}
 								{calculateMetrics(
-									stats.monthlyStats || [],
-									"users"
+												currentData,
+												"applications"
 								).growth.toFixed(1)}
 								%
 							</p>
-							<p className="text-xs text-gray-400">MoM Growth</p>
+										<p className="text-xs text-gray-400">{getGrowthLabel()}</p>
 						</div>
 					</div>
-
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
-							<LineChart data={stats.monthlyStats}>
+										<AreaChart data={currentData}>
+											<defs>
+												<linearGradient
+													id="colorApplicationsFlow"
+													x1="0"
+													y1="0"
+													x2="0"
+													y2="1"
+												>
+													<stop
+														offset="5%"
+														stopColor="#3B82F6"
+														stopOpacity={0.8}
+													/>
+													<stop
+														offset="95%"
+														stopColor="#3B82F6"
+														stopOpacity={0.1}
+													/>
+												</linearGradient>
+												<linearGradient
+													id="colorApprovalsFlow"
+													x1="0"
+													y1="0"
+													x2="0"
+													y2="1"
+												>
+													<stop
+														offset="5%"
+														stopColor="#10B981"
+														stopOpacity={0.8}
+													/>
+													<stop
+														offset="95%"
+														stopColor="#10B981"
+														stopOpacity={0.1}
+													/>
+												</linearGradient>
+												<linearGradient
+													id="colorDisbursementsFlow"
+													x1="0"
+													y1="0"
+													x2="0"
+													y2="1"
+												>
+													<stop
+														offset="5%"
+														stopColor="#F59E0B"
+														stopOpacity={0.8}
+													/>
+													<stop
+														offset="95%"
+														stopColor="#F59E0B"
+														stopOpacity={0.1}
+													/>
+												</linearGradient>
+											</defs>
 								<CartesianGrid
 									strokeDasharray="3 3"
 									stroke="#374151"
 								/>
 								<XAxis
-									dataKey="month"
+												dataKey={viewMode === 'monthly' ? 'month' : 'date'}
 									stroke="#9CA3AF"
 									fontSize={12}
+												tickFormatter={viewMode === 'daily' ? formatChartLabel : undefined}
 								/>
 								<YAxis stroke="#9CA3AF" fontSize={12} />
 								<Tooltip
@@ -1597,47 +2149,225 @@ export default function AdminDashboardPage() {
 										borderRadius: "8px",
 										color: "#F9FAFB",
 									}}
+												labelFormatter={(value) => {
+													if (viewMode === 'daily') {
+														const date = new Date(value);
+														return date.toLocaleDateString("en-US", {
+															month: "short",
+															day: "numeric",
+															year: "numeric"
+														});
+													}
+													return value;
+												}}
 								/>
 								<Legend wrapperStyle={{ color: "#9CA3AF" }} />
-								<Line
+											<Area
 									type="monotone"
-									dataKey="users"
+												dataKey="applications"
 									stroke="#3B82F6"
-									strokeWidth={3}
-									dot={{
-										fill: "#3B82F6",
-										strokeWidth: 2,
-										r: 6,
-									}}
-									activeDot={{
-										r: 8,
-										stroke: "#3B82F6",
-										strokeWidth: 2,
-									}}
-									name="Total Users"
-								/>
-								<Line
+												fillOpacity={1}
+												fill="url(#colorApplicationsFlow)"
+												name="Applications"
+											/>
+											<Area
 									type="monotone"
-									dataKey="kyc_users"
+												dataKey="approvals"
 									stroke="#10B981"
-									strokeWidth={3}
-									dot={{
-										fill: "#10B981",
-										strokeWidth: 2,
-										r: 6,
-									}}
-									activeDot={{
-										r: 8,
-										stroke: "#10B981",
-										strokeWidth: 2,
-									}}
-									name="KYC Users"
-								/>
-							</LineChart>
-						</ResponsiveContainer>
+												fillOpacity={1}
+												fill="url(#colorApprovalsFlow)"
+												name="Approvals"
+											/>
+											<Area
+												type="monotone"
+												dataKey="disbursements"
+												stroke="#F59E0B"
+												fillOpacity={1}
+												fill="url(#colorDisbursementsFlow)"
+												name="Disbursements"
+											/>
+										</AreaChart>
+									</ResponsiveContainer>
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
 			</div>
+
+			{/* Summary Analytics - Full Width */}
+			<div className="mt-12 mb-8">
+				<h2 className="text-lg font-medium text-white mb-6 flex items-center">
+					<ChartBarIcon className="h-6 w-6 mr-2 text-purple-400" />
+					Application Status Summary
+				</h2>
+				{/* Application Status Overview - Grid Layout */}
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+					{/* Pie Chart */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
+						<div className="flex items-center justify-between mb-4">
+							<h3 className="text-lg font-medium text-white">
+								Application Status Distribution
+							</h3>
+							<ChartBarIcon className="h-6 w-6 text-purple-400" />
+						</div>
+
+						<div className="h-80">
+							<ResponsiveContainer width="100%" height="100%">
+								<PieChart>
+									<Pie
+										data={stats.statusBreakdown}
+										cx="50%"
+										cy="50%"
+										innerRadius={60}
+										outerRadius={120}
+										paddingAngle={5}
+										dataKey="count"
+										nameKey="status"
+									>
+										{stats.statusBreakdown?.map(
+											(entry, index) => {
+												const colors = [
+													"#10B981",
+													"#F59E0B",
+													"#EF4444",
+													"#3B82F6",
+												];
+												return (
+													<Cell
+														key={`cell-${index}`}
+														fill={
+															colors[
+																index %
+																	colors.length
+															]
+														}
+													/>
+												);
+											}
+										)}
+									</Pie>
+									<Tooltip
+										contentStyle={{
+											backgroundColor: "#1F2937",
+											border: "1px solid #374151",
+											borderRadius: "8px",
+											color: "#F9FAFB",
+										}}
+										labelStyle={{ color: "#F9FAFB" }}
+										itemStyle={{ color: "#F9FAFB" }}
+									/>
+								</PieChart>
+						</ResponsiveContainer>
+						</div>
+					</div>
+
+					{/* Status Cards Grid */}
+					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						{/* Total Disbursed */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-6">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Total Disbursed
+										</p>
+										<p className="text-3xl font-bold text-green-400">
+											{formatNumber(stats.disbursedLoans || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<CheckCircleIcon className="h-4 w-4 text-green-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Successfully funded
+											</span>
+										</div>
+									</div>
+									<div className="p-3 bg-gray-700/50 rounded-xl">
+										<BanknotesIcon className="h-8 w-8 text-gray-400" />
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Pending Review */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-6">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Pending Review
+										</p>
+										<p className="text-3xl font-bold text-yellow-400">
+											{formatNumber(stats.pendingReviewApplications || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<ClockIcon className="h-4 w-4 text-yellow-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Awaiting decision
+											</span>
+										</div>
+									</div>
+									<div className="p-3 bg-gray-700/50 rounded-xl">
+										<DocumentTextIcon className="h-8 w-8 text-gray-400" />
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Pending Disbursement */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-6">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Pending Disbursement
+										</p>
+										<p className="text-3xl font-bold text-blue-400">
+											{formatNumber(stats.pendingDisbursementCount || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<CurrencyDollarIcon className="h-4 w-4 text-blue-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Ready to fund
+											</span>
+										</div>
+									</div>
+									<div className="p-3 bg-gray-700/50 rounded-xl">
+										<CreditCardIcon className="h-8 w-8 text-gray-400" />
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Total Applications */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-6">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Total Applications
+										</p>
+										<p className="text-3xl font-bold text-purple-400">
+											{formatNumber(stats.totalApplications || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<UserGroupIcon className="h-4 w-4 text-purple-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												All time submissions
+											</span>
+										</div>
+									</div>
+									<div className="p-3 bg-gray-700/50 rounded-xl">
+										<DocumentTextIcon className="h-8 w-8 text-gray-400" />
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+
 		</AdminLayout>
 	);
 }

@@ -597,6 +597,96 @@
         }
       }
     },
+    "/api/admin/daily-stats": {
+      "get": {
+        "summary": "Get daily statistics for dashboard charts (last 30 days)",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily statistics data for the last 30 days",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dailyStats": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "applications": {
+                            "type": "number"
+                          },
+                          "approvals": {
+                            "type": "number"
+                          },
+                          "disbursements": {
+                            "type": "number"
+                          },
+                          "revenue": {
+                            "type": "number"
+                          },
+                          "disbursement_amount": {
+                            "type": "number"
+                          },
+                          "disbursement_count": {
+                            "type": "number"
+                          },
+                          "users": {
+                            "type": "number"
+                          },
+                          "kyc_users": {
+                            "type": "number"
+                          },
+                          "actual_repayments": {
+                            "type": "number"
+                          },
+                          "scheduled_repayments": {
+                            "type": "number"
+                          },
+                          "total_loan_value": {
+                            "type": "number"
+                          },
+                          "current_loan_value": {
+                            "type": "number"
+                          },
+                          "repayment_count": {
+                            "type": "number"
+                          },
+                          "scheduled_count": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Access denied, admin privileges required"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
     "/api/admin/users": {
       "get": {
         "summary": "Get all users (admin only)",

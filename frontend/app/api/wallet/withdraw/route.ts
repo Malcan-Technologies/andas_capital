@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+// Force dynamic rendering since we use cookies
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
 	try {
 		console.log("Wallet Withdraw - Starting withdrawal request");

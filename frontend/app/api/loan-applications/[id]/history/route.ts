@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
+// Force dynamic rendering since we need to access request headers
+export const dynamic = 'force-dynamic';
+
 export async function GET(
 	req: NextRequest,
 	{ params }: { params: { id: string } }

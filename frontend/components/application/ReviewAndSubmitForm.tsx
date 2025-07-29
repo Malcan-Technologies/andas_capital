@@ -427,7 +427,7 @@ function ReviewAndSubmitFormContent({
 
 			// Determine the appropriate status based on whether it's a collateral loan
 			const isCollateralLoan = productDetails?.collateralRequired === true;
-			const newStatus = isCollateralLoan ? "COLLATERAL_REVIEW" : "PENDING_APP_FEE";
+			const newStatus = isCollateralLoan ? "COLLATERAL_REVIEW" : "PENDING_KYC";
 
 			// Update the application status and terms acceptance
 			const response = await fetch(

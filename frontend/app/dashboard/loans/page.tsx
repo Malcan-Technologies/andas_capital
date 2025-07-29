@@ -219,13 +219,8 @@ function LoansPageContent() {
 		useState<boolean>(false);
 	const [showPaymentMethodModal, setShowPaymentMethodModal] =
 		useState<boolean>(false);
-	const [showBankTransferModal, setShowBankTransferModal] =
-		useState<boolean>(false);
 	const [repaymentAmount, setRepaymentAmount] = useState<string>("");
-	const [paymentMethod, setPaymentMethod] = useState<
-		"WALLET_BALANCE" | "FRESH_FUNDS"
-	>("WALLET_BALANCE");
-	const [walletBalance, setWalletBalance] = useState<number>(0);
+	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"FPX" | "BANK_TRANSFER">("BANK_TRANSFER");
 	const [repaymentError, setRepaymentError] = useState<string>("");
 
 	// Late fee information
@@ -474,16 +469,7 @@ function LoansPageContent() {
 		}
 	};
 
-	const loadWalletBalance = async () => {
-		try {
-			const data = await fetchWithTokenRefresh<any>("/api/wallet");
-			if (data?.balance) {
-				setWalletBalance(data.balance);
-			}
-		} catch (error) {
-			console.error("Error loading wallet balance:", error);
-		}
-	};
+	// Removed wallet balance loading as we only support bank transfer
 
 	const loadLateFeeInfo = async (loanId: string, forceRefresh = false) => {
 		// Don't reload if currently loading, unless it's a force refresh
@@ -588,62 +574,25 @@ function LoansPageContent() {
 			// If only one loan, select it automatically
 			setSelectedLoan(loans[0]);
 		}
-		loadWalletBalance();
 		setShowLoanRepayModal(true);
 	};
 
 	const handleConfirmRepayment = async () => {
 		if (!selectedLoan || !repaymentAmount) return;
 
-		if (paymentMethod === "FRESH_FUNDS") {
-			setShowLoanRepayModal(false);
-			setShowPaymentMethodModal(true);
-		} else {
-			try {
-				const amount = parseFloat(repaymentAmount);
-
-				const response = await fetchWithTokenRefresh(
-					"/api/wallet/repay-loan",
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({
-							loanId: selectedLoan.id,
-							amount,
-							paymentMethod,
-						}),
-					}
-				);
-
-				if (response) {
-					// Wallet balance payment - reload data
-					await Promise.all([
-						loadLoansAndSummary(),
-						loadWalletBalance(),
-					]);
-					setShowLoanRepayModal(false);
-					setRepaymentAmount("");
-					setSelectedLoan(null);
-				}
-			} catch (error) {
-				console.error("Error processing repayment:", error);
-			}
+		if (selectedPaymentMethod === "FPX") {
+			// Handle FPX payment flow - not implemented yet
+			console.log("FPX payment selected");
+			alert("FPX payment is not implemented yet. Please use Bank Transfer.");
+			return;
 		}
+
+		// For Bank Transfer, show the bank transfer modal
+		setShowLoanRepayModal(false);
+		setShowPaymentMethodModal(true);
 	};
 
-	const handleFPXSelect = () => {
-		// Handle FPX payment flow
-		console.log("FPX payment selected");
-	};
-
-	const handleBankTransferSelect = () => {
-		setShowPaymentMethodModal(false);
-		setShowBankTransferModal(true);
-	};
-
-	const handleBankTransferConfirm = async () => {
+	const handlePaymentConfirm = async () => {
 		if (!selectedLoan || !repaymentAmount) return;
 
 		try {
@@ -670,7 +619,7 @@ function LoansPageContent() {
 
 			if (response) {
 				// Bank transfer payment submitted successfully
-				setShowBankTransferModal(false);
+				setShowPaymentMethodModal(false);
 				setRepaymentAmount("");
 				setSelectedLoan(null);
 
@@ -845,9 +794,8 @@ function LoansPageContent() {
 		return { color: "text-green-600", text: `Due in ${daysUntilDue} days` };
 	};
 
-	const validateRepaymentAmount = (amount: string, loan: Loan, currentPaymentMethod?: "WALLET_BALANCE" | "FRESH_FUNDS") => {
+	const validateRepaymentAmount = (amount: string, loan: Loan) => {
 		const numAmount = parseFloat(amount);
-		const methodToCheck = currentPaymentMethod || paymentMethod;
 
 		if (!amount || amount.trim() === "") {
 			setRepaymentError("");
@@ -863,15 +811,6 @@ function LoansPageContent() {
 			setRepaymentError(
 				`Amount cannot exceed outstanding balance of ${formatCurrency(
 					loan.outstandingBalance
-				)}`
-			);
-			return;
-		}
-
-		if (methodToCheck === "WALLET_BALANCE" && numAmount > walletBalance) {
-			setRepaymentError(
-				`Insufficient wallet balance. Available: ${formatCurrency(
-					walletBalance
 				)}`
 			);
 			return;
@@ -1946,7 +1885,7 @@ function LoansPageContent() {
 																			<p className="text-sm lg:text-base text-blue-600 font-semibold font-body">
 																				ID: {loan.id
 																					.slice(
-																						-8
+																						0, 8
 																					)
 																					.toUpperCase()}
 																			</p>
@@ -2723,7 +2662,7 @@ function LoansPageContent() {
 																		<p className="text-sm lg:text-base text-green-600 font-semibold">
 																			ID: {loan.id
 																				.slice(
-																					-8
+																					0, 8
 																				)
 																				.toUpperCase()}
 																		</p>
@@ -4398,126 +4337,132 @@ function LoansPageContent() {
 											Payment Method
 										</h4>
 										<div className="space-y-3">
-											<label className="flex items-start p-4 border border-gray-200 rounded-xl hover:bg-blue-600/5 cursor-pointer bg-white shadow-sm transition-colors">
-												<input
-													type="radio"
-													name="paymentMethod"
-													value="WALLET_BALANCE"
-													checked={
-														paymentMethod ===
-														"WALLET_BALANCE"
-													}
-													onChange={(e) => {
-														const newMethod = e
-															.target.value as
-															| "WALLET_BALANCE"
-															| "FRESH_FUNDS";
-														setPaymentMethod(
-															newMethod
-														);
-														if (
-															selectedLoan &&
-															repaymentAmount
-														) {
-															validateRepaymentAmount(
-																repaymentAmount,
-																selectedLoan,
-																newMethod
-															);
-														}
-													}}
-													className="h-4 w-4 text-blue-600 focus:ring-blue-600 border-gray-300 bg-white mt-1"
-												/>
-												<div className="ml-3 flex-1">
-													<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+											{/* FPX Express Payment */}
+											<button
+												onClick={() => setSelectedPaymentMethod("FPX")}
+												className={`w-full border rounded-xl p-4 transition-colors bg-white text-left shadow-sm ${
+													selectedPaymentMethod === "FPX"
+														? "border-green-500 bg-green-50/50"
+														: "border-gray-200 hover:border-green-400 hover:bg-green-50/30"
+												}`}
+											>
+												<div className="flex items-center justify-between mb-3">
+													<div className="flex items-center space-x-3">
+														<div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center border border-green-200">
+															<span className="text-green-700 font-bold text-sm">
+																FPX
+															</span>
+														</div>
 														<div>
-															<p className="font-semibold text-gray-700 font-heading">
-																Wallet Balance
-															</p>
-															<p className="text-sm text-gray-500 font-body">
-																<span className="hidden sm:inline">
-																	Pay from
-																	your current
-																	wallet
-																	balance
-																</span>
-																<span className="sm:hidden">
-																	Use wallet
-																	balance
-																</span>
-															</p>
-														</div>
-														<div className="text-left sm:text-right">
-															<p className="font-semibold text-gray-700 font-heading">
-																{formatCurrency(
-																	walletBalance
-																)}
-															</p>
-															<p className="text-xs text-gray-500 font-body">
-																Available
-															</p>
+															<h3 className="font-semibold text-gray-700 font-heading">
+																FPX Express Payment
+															</h3>
+															<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 font-body">
+																Popular
+															</span>
 														</div>
 													</div>
+													<div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+														selectedPaymentMethod === "FPX"
+															? "border-green-500 bg-green-500"
+															: "border-gray-300"
+													}`}>
+														{selectedPaymentMethod === "FPX" && (
+															<div className="w-2 h-2 bg-white rounded-full"></div>
+														)}
+													</div>
 												</div>
-											</label>
+												<div className="space-y-2 text-sm text-gray-500 font-body">
+													<div className="flex justify-between">
+														<span>Estimated Arrival</span>
+														<span className="text-gray-700">
+															Usually 5 Min
+														</span>
+													</div>
+													<div className="flex justify-between">
+														<span>Fees</span>
+														<span className="text-gray-700">
+															Up to 2%
+														</span>
+													</div>
+													{/* <div className="flex justify-between">
+														<span>Supported Banks</span>
+														<span className="text-gray-700">
+															Most Malaysian Banks
+														</span>
+													</div> */}
+												</div>
+											</button>
 
-											<label className="flex items-start p-4 border border-gray-200 rounded-xl hover:bg-blue-600/5 cursor-pointer bg-white shadow-sm transition-colors">
-												<input
-													type="radio"
-													name="paymentMethod"
-													value="FRESH_FUNDS"
-													checked={
-														paymentMethod ===
-														"FRESH_FUNDS"
-													}
-													onChange={(e) => {
-														const newMethod = e
-															.target.value as
-															| "WALLET_BALANCE"
-															| "FRESH_FUNDS";
-														setPaymentMethod(
-															newMethod
-														);
-														if (
-															selectedLoan &&
-															repaymentAmount
-														) {
-															validateRepaymentAmount(
-																repaymentAmount,
-																selectedLoan,
-																newMethod
-															);
-														}
-													}}
-													className="h-4 w-4 text-blue-600 focus:ring-blue-600 border-gray-300 bg-white mt-1"
-												/>
-												<div className="ml-3 flex-1">
-													<div>
-														<p className="font-semibold text-gray-700 font-heading">
-															Fund Transfer
-														</p>
-														<p className="text-sm text-gray-500 font-body">
-															<span className="hidden sm:inline">
-																Transfer
-																directly from
-																your bank
-																account
-															</span>
-															<span className="sm:hidden">
-																Bank transfer
-															</span>
-														</p>
+											{/* Bank Transfer */}
+											<button
+												onClick={() => setSelectedPaymentMethod("BANK_TRANSFER")}
+												className={`w-full border rounded-xl p-4 transition-colors text-left bg-white shadow-sm ${
+													selectedPaymentMethod === "BANK_TRANSFER"
+														? "border-blue-500 bg-blue-50/50"
+														: "border-gray-200 hover:border-blue-400 hover:bg-blue-50/30"
+												}`}
+											>
+												<div className="flex items-center justify-between mb-3">
+													<div className="flex items-center space-x-3">
+														<div className="w-10 h-10 bg-blue-600/10 rounded-lg flex items-center justify-center border border-blue-600/20">
+															<svg
+																className="w-5 h-5 text-blue-600"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	strokeLinecap="round"
+																	strokeLinejoin="round"
+																	strokeWidth={2}
+																	d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+																/>
+															</svg>
+														</div>
+														<h3 className="font-semibold text-gray-700 font-heading">
+															Bank Transfer
+														</h3>
+													</div>
+													<div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+														selectedPaymentMethod === "BANK_TRANSFER"
+															? "border-blue-500 bg-blue-500"
+															: "border-gray-300"
+													}`}>
+														{selectedPaymentMethod === "BANK_TRANSFER" && (
+															<div className="w-2 h-2 bg-white rounded-full"></div>
+														)}
 													</div>
 												</div>
-											</label>
+												<div className="space-y-2 text-sm text-gray-500 font-body">
+													<div className="flex justify-between">
+														<span>Estimated Arrival</span>
+														<span className="text-gray-700">
+															Usually 1 Business Day
+														</span>
+													</div>
+													<div className="flex justify-between">
+														<span>Fees</span>
+														<span className="text-gray-700">Free</span>
+													</div>
+													<div className="flex justify-between">
+														<span>Supported Banks</span>
+														<span className="text-gray-700">
+															Most Malaysian Banks
+														</span>
+													</div>
+												</div>
+											</button>
 										</div>
 									</div>
 
+
+
 									{/* Repayment Amount */}
 									<div className="mb-6">
-										<div className="flex items-center justify-between mb-2">
-											<label className="block text-sm font-medium text-gray-500 font-body">
-												Repayment Amount (MYR)
+										<div className="flex items-center justify-between mb-4">
+											<label className=" text-lg font-semibold text-gray-700 font-heading">
+												Payment Amount (RM)
 											</label>
 											<div className="flex items-center space-x-3">
 												{(() => {
@@ -4656,18 +4601,11 @@ function LoansPageContent() {
 												parseFloat(repaymentAmount) <=
 													0 ||
 												parseFloat(repaymentAmount) >
-													selectedLoan.outstandingBalance ||
-												(paymentMethod ===
-													"WALLET_BALANCE" &&
-													parseFloat(
-														repaymentAmount
-													) > walletBalance)
+													selectedLoan.outstandingBalance
 											}
 											className="bg-blue-600 text-white flex-1 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
 										>
-											{paymentMethod === "WALLET_BALANCE"
-												? "Pay Now"
-												: "Continue"}
+											{selectedPaymentMethod === "FPX" ? "Continue with FPX" : "Continue"}
 										</button>
 									</div>
 								</div>
@@ -4677,26 +4615,19 @@ function LoansPageContent() {
 				</div>
 			)}
 
-			{/* Payment Method Selection Modal */}
-			{showPaymentMethodModal && (
-				<PaymentMethodModal
-					onClose={() => setShowPaymentMethodModal(false)}
-					onFPXSelect={handleFPXSelect}
-					onBankTransferSelect={handleBankTransferSelect}
-					amount={repaymentAmount}
-					title="How would you like to pay?"
-				/>
-			)}
-
 			{/* Bank Transfer Details Modal */}
-			{showBankTransferModal && selectedLoan && (
+			{showPaymentMethodModal && selectedLoan && (
 				<BankTransferModal
-					onClose={() => setShowBankTransferModal(false)}
-					onConfirm={handleBankTransferConfirm}
+					onClose={() => setShowPaymentMethodModal(false)}
+					onConfirm={handlePaymentConfirm}
 					amount={repaymentAmount}
-					reference={`LOAN-${selectedLoan.id
-						.slice(-8)
-						.toUpperCase()}`}
+					reference={`${selectedLoan.id
+						.slice(0, 8)
+						.toUpperCase()}-${new Date().toLocaleDateString('en-GB', {
+							day: '2-digit',
+							month: '2-digit',
+							year: '2-digit'
+						}).replace(/\//g, '')}`}
 					userName={userName}
 				/>
 			)}
