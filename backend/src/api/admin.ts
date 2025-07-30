@@ -5944,6 +5944,102 @@ router.get(
 
 /**
  * @swagger
+ * /api/admin/repayments:
+ *   get:
+ *     summary: Get all repayment requests with status filter (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, APPROVED, REJECTED, all]
+ *         description: Filter by payment status (default is 'all')
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *         description: Maximum number of results to return
+ *     responses:
+ *       200:
+ *         description: List of repayment requests
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/repayments",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { status = 'all', limit = 100 } = req.query;
+			
+			// Build where clause based on status filter
+			const whereClause: any = {
+				type: "LOAN_REPAYMENT",
+			};
+			
+			if (status && status !== 'all') {
+				whereClause.status = status;
+			}
+
+			// Get wallet transactions for loan repayments with status filter
+			const repayments = await prisma.walletTransaction.findMany({
+				where: whereClause,
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true,
+						},
+					},
+					loan: {
+						include: {
+							application: {
+								include: {
+									product: {
+										select: {
+											name: true,
+											code: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				orderBy: {
+					createdAt: "desc",
+				},
+				take: parseInt(limit as string, 10),
+			});
+
+			return res.json({
+				success: true,
+				data: repayments,
+			});
+		} catch (error) {
+			console.error("Error fetching repayments:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch repayments",
+				error: error.message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
  * /api/admin/repayments/{id}/approve:
  *   post:
  *     summary: Approve a pending repayment (admin only)

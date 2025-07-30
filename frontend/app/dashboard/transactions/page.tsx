@@ -30,6 +30,15 @@ export default function TransactionsPage() {
 	const [transactionFilter, setTransactionFilter] = useState<string>("ALL");
 	const [loading, setLoading] = useState<boolean>(true);
 
+	// Set filter from URL parameter on component mount
+	useEffect(() => {
+		const urlParams = new URLSearchParams(window.location.search);
+		const filterParam = urlParams.get('filter');
+		if (filterParam && ['DEPOSIT', 'WITHDRAWAL', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT'].includes(filterParam)) {
+			setTransactionFilter(filterParam);
+		}
+	}, []);
+
 	useEffect(() => {
 		const checkAuthAndLoadData = async () => {
 			try {

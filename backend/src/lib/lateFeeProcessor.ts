@@ -527,13 +527,16 @@ export class LateFeeProcessor {
 					});
 
 					if (loan && loan.applicationId && loanCalc.totalAccruedFees > 0) {
-						// Get the most overdue repayment for display
-						const mostOverdueRepayment = Object.keys(loanCalc.calculationDetails).reduce((max, repaymentId) => {
-							const detail = loanCalc.calculationDetails[repaymentId];
-							return detail.daysOverdue > max.daysOverdue ? detail : max;
-						}, { daysOverdue: 0 });
-
-						const lateFeeNotes = `Outstanding fees: RM ${totalOutstandingLateFees.toFixed(2)}, ${mostOverdueRepayment.daysOverdue} days overdue`;
+						const affectedRepaymentsCount = Object.keys(loanCalc.calculationDetails).length;
+						
+						// Get all days overdue, sorted from highest to lowest for better readability
+						const daysOverdueArray = Object.values(loanCalc.calculationDetails)
+							.map(detail => detail.daysOverdue)
+							.sort((a, b) => b - a); // Sort descending (most overdue first)
+						
+						// Create detailed notes with specific days overdue for each repayment
+						const daysOverdueList = daysOverdueArray.join(', ');
+						const lateFeeNotes = `Late payment fees charged: RM ${totalOutstandingLateFees.toFixed(2)} | Days overdue: ${daysOverdueList} | Repayments affected: ${affectedRepaymentsCount}`;
 
 						// Create audit trail entry specifically for late fee application (not status change)
 						await tx.loanApplicationHistory.create({

@@ -2085,7 +2085,7 @@ function ActiveLoansContent() {
 											const mostOverdueRepayment = overdueRepayments.length > 0 
 												? overdueRepayments.reduce((max, current) => 
 													current.daysOverdue > max.daysOverdue ? current : max
-												)
+												  )
 												: null;
 
 											if (hasOverduePayments && mostOverdueRepayment) {
@@ -3273,7 +3273,7 @@ function ActiveLoansContent() {
 							{selectedLoan && (
 								<p className="mt-2 text-purple-300">
 									For: {selectedLoan.user.fullName} (Loan ID: {selectedLoan.id.substring(0, 8)})
-								</p>
+						</p>
 							)}
 						</div>
 						

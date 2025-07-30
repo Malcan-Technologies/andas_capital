@@ -135,6 +135,7 @@ interface WalletTransaction {
 	description: string;
 	createdAt: string;
 	updatedAt: string;
+	reference?: string;
 }
 
 interface LoanApplication {
@@ -219,6 +220,7 @@ function LoansPageContent() {
 		useState<boolean>(false);
 	const [showPaymentMethodModal, setShowPaymentMethodModal] =
 		useState<boolean>(false);
+	const [currentPaymentReference, setCurrentPaymentReference] = useState<string>("");
 	const [repaymentAmount, setRepaymentAmount] = useState<string>("");
 	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"FPX" | "BANK_TRANSFER">("BANK_TRANSFER");
 	const [repaymentError, setRepaymentError] = useState<string>("");
@@ -587,7 +589,11 @@ function LoansPageContent() {
 			return;
 		}
 
-		// For Bank Transfer, show the bank transfer modal
+		// For Bank Transfer, generate reference and show the bank transfer modal
+		const paymentReference = `${selectedLoan.id
+			.slice(0, 8)
+			.toUpperCase()}-${Date.now().toString().slice(-8)}`;
+		setCurrentPaymentReference(paymentReference);
 		setShowLoanRepayModal(false);
 		setShowPaymentMethodModal(true);
 	};
@@ -610,6 +616,7 @@ function LoansPageContent() {
 						loanId: selectedLoan.id,
 						amount,
 						paymentMethod: "FRESH_FUNDS",
+						reference: currentPaymentReference,
 						description: `Loan repayment - ${formatCurrency(
 							amount
 						)}`,
@@ -620,6 +627,7 @@ function LoansPageContent() {
 			if (response) {
 				// Bank transfer payment submitted successfully
 				setShowPaymentMethodModal(false);
+				setCurrentPaymentReference("");
 				setRepaymentAmount("");
 				setSelectedLoan(null);
 
@@ -2524,7 +2532,7 @@ function LoansPageContent() {
 																									}
 																									className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
 																								>
-																									<div>
+																									<div className="flex-1 min-w-0">
 																										<p className="text-sm font-medium text-gray-700">
 																											{formatCurrency(
 																												transaction.amount
@@ -2535,10 +2543,17 @@ function LoansPageContent() {
 																												transaction.createdAt
 																											)}
 																										</p>
+																										{transaction.reference && (
+																											<p className="text-xs text-gray-500 truncate">
+																												Ref: {transaction.reference}
+																											</p>
+																										)}
 																									</div>
-																									{getStatusBadge(
-																										transaction.status
-																									)}
+																									<div className="flex-shrink-0 ml-3">
+																										{getStatusBadge(
+																											transaction.status
+																										)}
+																									</div>
 																								</div>
 																							)
 																						)}
@@ -2554,6 +2569,19 @@ function LoansPageContent() {
 																							3
 																							payments
 																						</p>
+																					)}
+																					{/* See All Button */}
+																					{loanTransactions[loan.id]?.length > 0 && (
+																						<div className="flex justify-center mt-3">
+																							<button
+																								onClick={() => {
+																									router.push('/dashboard/transactions?filter=LOAN_REPAYMENT');
+																								}}
+																								className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors border border-blue-200 hover:border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50"
+																							>
+																								See All Payments
+																							</button>
+																						</div>
 																					)}
 																				</div>
 																			) : (
@@ -2875,21 +2903,41 @@ function LoansPageContent() {
 																								key={transaction.id}
 																								className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
 																							>
-																								<div>
+																								<div className="flex-1 min-w-0">
 																									<p className="text-sm font-medium text-gray-700">
 																										{formatCurrency(transaction.amount)}
 																									</p>
 																									<p className="text-xs text-gray-500">
 																										{formatDateTime(transaction.createdAt)}
 																									</p>
+																									{transaction.reference && (
+																										<p className="text-xs text-gray-500 truncate">
+																											Ref: {transaction.reference}
+																										</p>
+																									)}
 																								</div>
-																								{getStatusBadge(transaction.status)}
+																								<div className="flex-shrink-0 ml-3">
+																									{getStatusBadge(transaction.status)}
+																								</div>
 																							</div>
 																						))}
 																					{loanTransactions[loan.id].length > 3 && (
 																						<p className="text-xs text-gray-500 text-center mt-2">
 																							Showing latest 3 payments
 																						</p>
+																					)}
+																					{/* See All Button */}
+																					{loanTransactions[loan.id]?.length > 0 && (
+																						<div className="flex justify-center mt-3">
+																							<button
+																								onClick={() => {
+																									router.push('/dashboard/transactions?filter=LOAN_REPAYMENT');
+																								}}
+																								className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors border border-blue-200 hover:border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50"
+																							>
+																								See All Payments
+																							</button>
+																						</div>
 																					)}
 																				</div>
 																			) : (
@@ -4618,16 +4666,13 @@ function LoansPageContent() {
 			{/* Bank Transfer Details Modal */}
 			{showPaymentMethodModal && selectedLoan && (
 				<BankTransferModal
-					onClose={() => setShowPaymentMethodModal(false)}
+					onClose={() => {
+						setShowPaymentMethodModal(false);
+						setCurrentPaymentReference("");
+					}}
 					onConfirm={handlePaymentConfirm}
 					amount={repaymentAmount}
-					reference={`${selectedLoan.id
-						.slice(0, 8)
-						.toUpperCase()}-${new Date().toLocaleDateString('en-GB', {
-							day: '2-digit',
-							month: '2-digit',
-							year: '2-digit'
-						}).replace(/\//g, '')}`}
+					reference={currentPaymentReference}
 					userName={userName}
 				/>
 			)}

@@ -177,15 +177,16 @@ export default function AdminLayout({
 
 	const paymentItems = [
 		{
+			name: "Payments",
+			href: "/dashboard/payments",
+			icon: ReceiptPercentIcon,
+		},
+		{
 			name: "Past Disbursements",
 			href: "/dashboard/disbursements",
 			icon: CreditCardIcon,
 		},
-		{
-			name: "Pending Payments",
-			href: "/dashboard/payments",
-			icon: ReceiptPercentIcon,
-		},
+	
 		{
 			name: "Overdue Payments",
 			href: "/dashboard/late-fees",

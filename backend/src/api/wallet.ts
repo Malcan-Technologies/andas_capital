@@ -697,7 +697,7 @@ router.post(
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user!.userId;
-			const { loanId, amount, paymentMethod, description } = req.body;
+			const { loanId, amount, paymentMethod, description, reference } = req.body;
 
 			if (!loanId || !amount || amount <= 0) {
 				return res
@@ -777,7 +777,7 @@ router.post(
 					description:
 						description ||
 						`Loan repayment for loan ${loanId} via ${paymentMethod}`,
-					reference: `REP-${Date.now()}`,
+					reference: reference || `REP-${Date.now()}`,
 									metadata: {
 					paymentMethod,
 					loanId,

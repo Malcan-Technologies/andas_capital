@@ -15,15 +15,18 @@ import {
 	ArrowPathIcon,
 	UserCircleIcon,
 	DocumentTextIcon,
+	XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
-interface PendingPayment {
+interface Payment {
 	id: string;
 	amount: number;
 	description: string;
 	reference?: string;
 	createdAt: string;
+	status: "PENDING" | "APPROVED" | "REJECTED";
+	processedAt?: string;
 	metadata: any;
 	user: {
 		id: string;
@@ -82,29 +85,51 @@ function getPaymentMethodDisplay(metadata: any): string {
 	return metadata.paymentMethod || "Manual Payment";
 }
 
-function getDisplayAmount(payment: PendingPayment): number {
+function getDisplayAmount(payment: Payment): number {
 	// Use originalAmount from metadata if available, otherwise use absolute value of amount
 	return payment.metadata?.originalAmount || Math.abs(payment.amount);
 }
 
-// Note: Using fetchWithAdminTokenRefresh utility for consistent API handling
+function getStatusColor(status: string) {
+	switch (status) {
+		case "PENDING":
+			return {
+				bg: "bg-orange-500/20",
+				text: "text-orange-200",
+				border: "border-orange-400/20",
+			};
+		case "APPROVED":
+			return {
+				bg: "bg-green-500/20",
+				text: "text-green-200",
+				border: "border-green-400/20",
+			};
+		case "REJECTED":
+			return {
+				bg: "bg-red-500/20",
+				text: "text-red-200",
+				border: "border-red-400/20",
+			};
+		default:
+			return {
+				bg: "bg-gray-500/20",
+				text: "text-gray-200",
+				border: "border-gray-400/20",
+			};
+	}
+}
 
 function PaymentsContent() {
 	const searchParams = useSearchParams();
-	const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>(
-		[]
-	);
-	const [filteredPayments, setFilteredPayments] = useState<PendingPayment[]>(
-		[]
-	);
+	const [payments, setPayments] = useState<Payment[]>([]);
+	const [filteredPayments, setFilteredPayments] = useState<Payment[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [selectedPayment, setSelectedPayment] =
-		useState<PendingPayment | null>(null);
+	const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 	const [searchTerm, setSearchTerm] = useState("");
+	const [statusFilter, setStatusFilter] = useState("PENDING");
 	const [refreshing, setRefreshing] = useState(false);
 	const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-	const [refreshInterval, setRefreshInterval] =
-		useState<NodeJS.Timeout | null>(null);
+	const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
 
 	// Modal states
 	const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -133,8 +158,8 @@ function PaymentsContent() {
 		}
 	}, [searchParams]);
 
-	// Fetch pending payments with automatic token refresh and cache busting
-	const fetchPendingPayments = async (
+	// Fetch payments with automatic token refresh and cache busting
+	const fetchPayments = useCallback(async (
 		showLoader = true,
 		bustCache = false
 	) => {
@@ -145,25 +170,30 @@ function PaymentsContent() {
 		try {
 			// Add cache-busting parameter to ensure fresh data
 			const cacheBuster = bustCache ? `?_t=${Date.now()}` : "";
+			const statusParam = statusFilter === "all" ? "" : `&status=${statusFilter}`;
+			const url = cacheBuster ? 
+				`/api/admin/repayments${cacheBuster}${statusParam}` : 
+				`/api/admin/repayments?status=${statusFilter}`;
+			
 			const data = await fetchWithAdminTokenRefresh<{
 				success: boolean;
-				data: PendingPayment[];
-			}>(`/api/admin/repayments/pending${cacheBuster}`);
+				data: Payment[];
+			}>(url);
 
 			if (data.success && data.data) {
-				setPendingPayments(data.data);
+				setPayments(data.data);
 				setLastRefresh(new Date());
 			} else {
-				throw new Error("Failed to fetch pending payments");
+				throw new Error("Failed to fetch payments");
 			}
 		} catch (error) {
-			console.error("Error fetching pending payments:", error);
-			setPendingPayments([]);
+			console.error("Error fetching payments:", error);
+			setPayments([]);
 		} finally {
 			setLoading(false);
 			setRefreshing(false);
 		}
-	};
+	}, [statusFilter]);
 
 	// Setup auto-refresh with cleanup
 	const setupAutoRefresh = useCallback(() => {
@@ -172,18 +202,21 @@ function PaymentsContent() {
 			clearInterval(refreshInterval);
 		}
 
-		// Set up new interval
-		const interval = setInterval(() => {
-			fetchPendingPayments(false); // Silent refresh
-		}, 30000); // 30 seconds
+		// Set up new interval (only for pending payments)
+		if (statusFilter === "PENDING") {
+			const interval = setInterval(() => {
+				fetchPayments(false); // Silent refresh
+			}, 30000); // 30 seconds
 
-		setRefreshInterval(interval);
-		return interval;
-	}, [refreshInterval]);
+			setRefreshInterval(interval);
+			return interval;
+		}
+		return null;
+	}, [refreshInterval, fetchPayments, statusFilter]);
 
-	// Auto-refresh every 30 seconds to keep data fresh
+	// Auto-refresh every 30 seconds to keep data fresh and re-fetch when status filter changes
 	useEffect(() => {
-		fetchPendingPayments();
+		fetchPayments();
 		const interval = setupAutoRefresh();
 
 		return () => {
@@ -191,7 +224,7 @@ function PaymentsContent() {
 				clearInterval(interval);
 			}
 		};
-	}, []);
+	}, [statusFilter]);
 
 	// Clean up interval on unmount
 	useEffect(() => {
@@ -205,13 +238,13 @@ function PaymentsContent() {
 	// Filter payments based on search term with exact loan ID matching
 	const filterPayments = useCallback(() => {
 		if (!searchTerm.trim()) {
-			setFilteredPayments(pendingPayments);
+			setFilteredPayments(payments);
 		} else {
 			const search = searchTerm.toLowerCase();
 
 			// First, check for exact loan ID match
-			const exactLoanMatch = pendingPayments.find(
-				(payment) => payment.loan.id.toLowerCase() === search
+			const exactLoanMatch = payments.find(
+				(payment: Payment) => payment.loan.id.toLowerCase() === search
 			);
 
 			if (exactLoanMatch) {
@@ -219,8 +252,8 @@ function PaymentsContent() {
 				setFilteredPayments([exactLoanMatch]);
 			} else {
 				// Otherwise, do partial matching across all fields
-				const filtered = pendingPayments.filter(
-					(payment) =>
+				const filtered = payments.filter(
+					(payment: Payment) =>
 						payment.user.fullName.toLowerCase().includes(search) ||
 						payment.user.email.toLowerCase().includes(search) ||
 						payment.id.toLowerCase().includes(search) ||
@@ -236,7 +269,7 @@ function PaymentsContent() {
 				setFilteredPayments(filtered);
 			}
 		}
-	}, [searchTerm, pendingPayments]);
+	}, [searchTerm, payments]);
 
 	useEffect(() => {
 		filterPayments();
@@ -257,13 +290,13 @@ function PaymentsContent() {
 		}
 	}, [filteredPayments, selectedPayment]);
 
-	const handleViewPayment = (payment: PendingPayment) => {
+	const handleViewPayment = (payment: Payment) => {
 		setSelectedPayment(payment);
 	};
 
 	const handleRefresh = () => {
 		setRefreshing(true);
-		fetchPendingPayments(true, true); // Force cache bust
+		fetchPayments(true, true); // Force cache bust
 	};
 
 	const handleApprovePayment = async () => {
@@ -289,8 +322,8 @@ function PaymentsContent() {
 
 			if (data.success) {
 				// Remove from pending list immediately
-				setPendingPayments((prev) =>
-					prev.filter((r) => r.id !== selectedPayment.id)
+				setPayments((prev: Payment[]) =>
+					prev.filter((r: Payment) => r.id !== selectedPayment.id)
 				);
 				setSelectedPayment(null);
 				setShowApprovalModal(false);
@@ -300,7 +333,7 @@ function PaymentsContent() {
 				alert("Payment approved successfully!");
 
 				// Force refresh with cache busting
-				await fetchPendingPayments(false, true);
+				await fetchPayments(false, true);
 
 				// Restart auto-refresh
 				setupAutoRefresh();
@@ -318,7 +351,7 @@ function PaymentsContent() {
 				alert(
 					"This payment has already been processed. Refreshing the list..."
 				);
-				await fetchPendingPayments(false, true);
+				await fetchPayments(false, true);
 				setShowApprovalModal(false);
 				setApprovalNotes("");
 			} else {
@@ -356,8 +389,8 @@ function PaymentsContent() {
 
 			if (data.success) {
 				// Remove from pending list immediately
-				setPendingPayments((prev) =>
-					prev.filter((r) => r.id !== selectedPayment.id)
+				setPayments((prev: Payment[]) =>
+					prev.filter((r: Payment) => r.id !== selectedPayment.id)
 				);
 				setSelectedPayment(null);
 				setShowRejectionModal(false);
@@ -368,7 +401,7 @@ function PaymentsContent() {
 				alert("Payment rejected successfully!");
 
 				// Force refresh with cache busting
-				await fetchPendingPayments(false, true);
+				await fetchPayments(false, true);
 
 				// Restart auto-refresh
 				setupAutoRefresh();
@@ -386,7 +419,7 @@ function PaymentsContent() {
 				alert(
 					"This payment has already been processed. Refreshing the list..."
 				);
-				await fetchPendingPayments(false, true);
+				await fetchPayments(false, true);
 				setShowRejectionModal(false);
 				setRejectionReason("");
 				setRejectionNotes("");
@@ -446,7 +479,7 @@ function PaymentsContent() {
 				setShowManualPaymentModal(false);
 				
 				// Refresh payments list
-				await fetchPendingPayments(false, true);
+				await fetchPayments(false, true);
 			} else {
 				throw new Error(data.message || "Failed to create manual payment");
 			}
@@ -475,14 +508,14 @@ function PaymentsContent() {
 				<div className="flex justify-between items-center">
 					<div>
 						<h1 className="text-2xl font-bold text-white">
-							Pending Payments
+							Payment Management
 						</h1>
 						<p className="text-gray-400">
-							Review and approve pending loan payments
+							Review and manage loan payments
 						</p>
 						<p className="text-xs text-gray-500 mt-1">
 							Last updated: {lastRefresh.toLocaleTimeString()} •
-							Auto-refreshes every 30s
+							{statusFilter === "PENDING" ? " Auto-refreshes every 30s" : " Manual refresh"}
 						</p>
 					</div>
 					<div className="flex gap-3">
@@ -508,17 +541,72 @@ function PaymentsContent() {
 					</div>
 				</div>
 
-				{/* Search */}
+				{/* Search and Filter Bar */}
 				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
-					<div className="relative">
-						<MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-						<input
-							type="text"
-							placeholder="Search by customer name, email, payment ID, loan ID, or product..."
-							value={searchTerm}
-							onChange={(e) => setSearchTerm(e.target.value)}
-							className="w-full pl-10 pr-4 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-						/>
+					<div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
+						<div className="flex-1 relative">
+							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+								<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+							</div>
+							<input
+								type="text"
+								className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+								placeholder="Search by customer name, email, payment ID, loan ID, or product..."
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+							/>
+							{searchTerm && (
+								<button
+									onClick={() => setSearchTerm("")}
+									className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+									title="Clear search"
+								>
+									<XMarkIcon className="h-4 w-4" />
+								</button>
+							)}
+						</div>
+						<div className="flex space-x-2">
+							<button
+								onClick={() => setStatusFilter("PENDING")}
+								className={`px-4 py-2 rounded-lg border transition-colors ${
+									statusFilter === "PENDING"
+										? "bg-orange-500/30 text-orange-100 border-orange-400/30"
+										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+								}`}
+							>
+								Pending
+							</button>
+							<button
+								onClick={() => setStatusFilter("APPROVED")}
+								className={`px-4 py-2 rounded-lg border transition-colors ${
+									statusFilter === "APPROVED"
+										? "bg-green-500/30 text-green-100 border-green-400/30"
+										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+								}`}
+							>
+								Approved
+							</button>
+							<button
+								onClick={() => setStatusFilter("REJECTED")}
+								className={`px-4 py-2 rounded-lg border transition-colors ${
+									statusFilter === "REJECTED"
+										? "bg-red-500/30 text-red-100 border-red-400/30"
+										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+								}`}
+							>
+								Rejected
+							</button>
+							<button
+								onClick={() => setStatusFilter("all")}
+								className={`px-4 py-2 rounded-lg border transition-colors ${
+									statusFilter === "all"
+										? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+								}`}
+							>
+								All
+							</button>
+						</div>
 					</div>
 				</div>
 
@@ -529,74 +617,91 @@ function PaymentsContent() {
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
 							<div className="p-4 border-b border-gray-700/30">
 								<h3 className="text-lg font-medium text-white">
-									Pending Payments ({filteredPayments.length})
+									{statusFilter === "all" ? "All Payments" : `${statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase()} Payments`} ({filteredPayments.length})
 								</h3>
 							</div>
 							<div className="overflow-y-auto max-h-[70vh]">
 								{filteredPayments.length > 0 ? (
 									<ul className="divide-y divide-gray-700/30">
-										{filteredPayments.map((payment) => (
-											<li
-												key={payment.id}
-												className={`p-4 hover:bg-gray-800/30 transition-colors cursor-pointer ${
-													selectedPayment?.id ===
-													payment.id
-														? "bg-gray-800/50"
-														: ""
-												}`}
-												onClick={() =>
-													handleViewPayment(payment)
-												}
-											>
-												<div className="flex justify-between items-start">
-													<div className="flex-1">
-														<p className="text-white font-medium">
-															{payment.user
-																.fullName ||
-																"N/A"}
-														</p>
-														<p className="text-sm text-gray-400">
-															{payment.reference ||
-																payment.id}
-														</p>
-														<div className="mt-2 flex items-center text-sm text-gray-300">
-															<BanknotesIcon className="mr-1 h-4 w-4 text-green-400" />
-															{formatCurrency(
-																getDisplayAmount(
-																	payment
-																)
+										{filteredPayments.map((payment) => {
+											const statusColor = getStatusColor(payment.status);
+											return (
+												<li
+													key={payment.id}
+													className={`p-4 hover:bg-gray-800/30 transition-colors cursor-pointer ${
+														selectedPayment?.id ===
+														payment.id
+															? "bg-gray-800/50"
+															: ""
+													}`}
+													onClick={() =>
+														handleViewPayment(payment)
+													}
+												>
+													<div className="flex justify-between items-start">
+														<div className="flex-1">
+															<p className="text-white font-medium">
+																{payment.user
+																	.fullName ||
+																	"N/A"}
+															</p>
+															<p className="text-sm text-gray-400">
+																{payment.reference ||
+																	payment.id}
+															</p>
+															<div className="mt-2 flex items-center text-sm text-gray-300">
+																<BanknotesIcon className="mr-1 h-4 w-4 text-green-400" />
+																{formatCurrency(
+																	getDisplayAmount(
+																		payment
+																	)
+																)}
+															</div>
+															<p className="text-xs text-gray-400 mt-1">
+																{
+																	payment.loan
+																		.application
+																		.product
+																		.name
+																}
+															</p>
+															<p className="text-xs text-blue-400 mt-1">
+																{getPaymentMethodDisplay(
+																	payment.metadata
+																)}
+															</p>
+															<div className="mt-2">
+																<span
+																	className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
+																>
+																	{payment.status}
+																</span>
+															</div>
+														</div>
+														<div className="text-right ml-4">
+															<p className="text-xs text-gray-400">
+																{formatDate(
+																	payment.createdAt
+																)}
+															</p>
+															{payment.processedAt && (
+																<p className="text-xs text-gray-500 mt-1">
+																	Processed: {formatDate(
+																		payment.processedAt
+																	)}
+																</p>
 															)}
 														</div>
-														<p className="text-xs text-gray-400 mt-1">
-															{
-																payment.loan
-																	.application
-																	.product
-																	.name
-															}
-														</p>
-														<p className="text-xs text-blue-400 mt-1">
-															{getPaymentMethodDisplay(
-																payment.metadata
-															)}
-														</p>
 													</div>
-													<div className="text-right ml-4">
-														<p className="text-xs text-gray-400">
-															{formatDate(
-																payment.createdAt
-															)}
-														</p>
-													</div>
-												</div>
-											</li>
-										))}
+												</li>
+											);
+										})}
 									</ul>
 								) : (
 									<div className="p-8 text-center">
 										<BanknotesIcon className="mx-auto h-12 w-12 text-gray-400" />
 										<p className="mt-4 text-gray-300">
-											No pending payments found
+											No {statusFilter === "all" ? "" : statusFilter.toLowerCase()} payments found
 										</p>
 										{searchTerm && (
 											<p className="text-sm text-gray-400 mt-2">
@@ -618,10 +723,22 @@ function PaymentsContent() {
 									<h3 className="text-lg font-medium text-white">
 										Payment Details
 									</h3>
-									<span className="px-2 py-1 bg-blue-500/20 text-blue-200 text-xs font-medium rounded-full border border-blue-400/20">
-										{selectedPayment.reference ||
-											selectedPayment.id}
-									</span>
+									<div className="flex items-center space-x-2">
+										{(() => {
+											const statusColor = getStatusColor(selectedPayment.status);
+											return (
+												<span
+													className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
+												>
+													{selectedPayment.status}
+												</span>
+											);
+										})()}
+										<span className="px-2 py-1 bg-blue-500/20 text-blue-200 text-xs font-medium rounded-full border border-blue-400/20">
+											{selectedPayment.reference ||
+												selectedPayment.id}
+										</span>
+									</div>
 								</div>
 
 								<div className="p-6">
@@ -651,11 +768,11 @@ function PaymentsContent() {
 										</div>
 										<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
 											<p className="text-gray-400 text-sm mb-1">
-												Submitted Date
+												{selectedPayment.status === "PENDING" ? "Submitted Date" : "Processed Date"}
 											</p>
 											<p className="text-sm font-medium text-white text-center">
 												{formatDate(
-													selectedPayment.createdAt
+													selectedPayment.processedAt || selectedPayment.createdAt
 												)}
 											</p>
 										</div>
@@ -796,26 +913,30 @@ function PaymentsContent() {
 
 									{/* Action Buttons */}
 									<div className="flex flex-wrap gap-3">
-										<button
-											onClick={() =>
-												setShowApprovalModal(true)
-											}
-											disabled={processing}
-											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
-										>
-											<CheckCircleIcon className="h-5 w-5 mr-2" />
-											Approve Payment
-										</button>
-										<button
-											onClick={() =>
-												setShowRejectionModal(true)
-											}
-											disabled={processing}
-											className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center disabled:opacity-50"
-										>
-											<XCircleIcon className="h-5 w-5 mr-2" />
-											Reject Payment
-										</button>
+										{selectedPayment.status === "PENDING" && (
+											<>
+												<button
+													onClick={() =>
+														setShowApprovalModal(true)
+													}
+													disabled={processing}
+													className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
+												>
+													<CheckCircleIcon className="h-5 w-5 mr-2" />
+													Approve Payment
+												</button>
+												<button
+													onClick={() =>
+														setShowRejectionModal(true)
+													}
+													disabled={processing}
+													className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center disabled:opacity-50"
+												>
+													<XCircleIcon className="h-5 w-5 mr-2" />
+													Reject Payment
+												</button>
+											</>
+										)}
 										{selectedPayment.loan.application
 											.id && (
 											<Link
