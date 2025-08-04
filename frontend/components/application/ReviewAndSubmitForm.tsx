@@ -110,7 +110,7 @@ import Cookies from "js-cookie";
 interface ApplicationData {
 	productId: string;
 	loanAmount: string;
-	loanPurpose: string;
+	loanPurpose: string | null;
 	loanTerm: string;
 	monthlyRepayment: string;
 	interestRate: string;
@@ -268,7 +268,7 @@ function ReviewAndSubmitFormContent({
 				const transformedData: ApplicationData = {
 					productId: data.productId,
 					loanAmount: data.amount.toString(),
-					loanPurpose: data.purpose,
+					loanPurpose: data.purpose && data.purpose.trim() !== "" ? data.purpose : null,
 					loanTerm: data.term.toString(),
 					monthlyRepayment: data.monthlyRepayment.toString(),
 					interestRate: data.interestRate.toString(),
@@ -670,14 +670,16 @@ function ReviewAndSubmitFormContent({
 										)}
 									</Typography>
 								</div>
-								<div className="flex justify-between">
-									<Typography className="text-gray-600">
-										Loan Purpose
-									</Typography>
-									<Typography className="text-gray-900 font-medium">
-										{applicationData.loanPurpose}
-									</Typography>
-								</div>
+								{applicationData.loanPurpose && (
+									<div className="flex justify-between">
+										<Typography className="text-gray-600">
+											Loan Purpose
+										</Typography>
+										<Typography className="text-gray-900 font-medium">
+											{applicationData.loanPurpose}
+										</Typography>
+									</div>
+								)}
 								<div className="flex justify-between">
 									<Typography className="text-gray-600">
 										Loan Term

@@ -218,7 +218,20 @@ export const fetchWithAdminTokenRefresh = async <T>(
 	}
 
 	if (!response.ok) {
-		throw new Error(`API request failed with status: ${response.status}`);
+		// Try to get the error message from the response body
+		let errorMessage = `API request failed with status: ${response.status}`;
+		try {
+			const errorData = await response.json();
+			if (errorData.message) {
+				errorMessage = errorData.message;
+			}
+		} catch (e) {
+			// If we can't parse the response, use the generic message
+		}
+		
+		const error = new Error(errorMessage);
+		(error as any).status = response.status;
+		throw error;
 	}
 
 	return response.json();

@@ -11,6 +11,7 @@ import {
 	XMarkIcon,
 	CubeIcon,
 	ArrowPathIcon,
+	TrashIcon,
 } from "@heroicons/react/24/outline";
 
 interface Product {
@@ -159,11 +160,12 @@ export default function AdminProductsPage() {
 	};
 
 	const handleDelete = async (id: string) => {
-		if (!confirm("Are you sure you want to delete this product?")) {
+		if (!confirm("Are you sure you want to delete this product? This action cannot be undone.")) {
 			return;
 		}
 
 		try {
+			setError(null);
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			// Use fetchWithAdminTokenRefresh for deletion
 			await fetchWithAdminTokenRefresh(
@@ -173,10 +175,17 @@ export default function AdminProductsPage() {
 				}
 			);
 
+			setSuccess("Product deleted successfully");
 			fetchProducts();
-		} catch (err) {
+		} catch (err: any) {
 			console.error("Error deleting product:", err);
-			setError("Failed to delete product. Please try again later.");
+			
+			// Handle foreign key constraint errors (409 status)
+			if (err?.status === 409 || err?.message?.includes('foreign key') || err?.message?.includes('constraint') || err?.message?.includes('loan applications')) {
+				setError(err?.message || "Cannot delete this product because it has existing loan applications. Please remove all associated loan applications first.");
+			} else {
+				setError(err?.message || "Failed to delete product. Please try again later.");
+			}
 		}
 	};
 
@@ -440,12 +449,22 @@ export default function AdminProductsPage() {
 											)}
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-											<button
-												onClick={() => handleEdit(product)}
-												className="text-blue-400 hover:text-blue-300 mr-3 transition-colors"
-											>
-												<PencilIcon className="h-4 w-4" />
-											</button>
+											<div className="flex items-center justify-end space-x-2">
+												<button
+													onClick={() => handleEdit(product)}
+													className="text-blue-400 hover:text-blue-300 transition-colors"
+													title="Edit product"
+												>
+													<PencilIcon className="h-4 w-4" />
+												</button>
+												<button
+													onClick={() => handleDelete(product.id)}
+													className="text-red-400 hover:text-red-300 transition-colors"
+													title="Delete product"
+												>
+													<TrashIcon className="h-4 w-4" />
+												</button>
+											</div>
 										</td>
 									</tr>
 								))
@@ -733,7 +752,10 @@ export default function AdminProductsPage() {
 									<textarea
 										value={formData.eligibility?.join("\n") || ""}
 										onChange={(e) => {
-											const lines = e.target.value.split("\n");
+											const lines = e.target.value
+												.split("\n")
+												.map(line => line.trim())
+												.filter(line => line !== "");
 											setFormData({
 												...formData,
 												eligibility: lines,
@@ -751,7 +773,10 @@ export default function AdminProductsPage() {
 									<textarea
 										value={formData.requiredDocuments?.join("\n") || ""}
 										onChange={(e) => {
-											const lines = e.target.value.split("\n");
+											const lines = e.target.value
+												.split("\n")
+												.map(line => line.trim())
+												.filter(line => line !== "");
 											setFormData({
 												...formData,
 												requiredDocuments: lines,
@@ -769,7 +794,10 @@ export default function AdminProductsPage() {
 									<textarea
 										value={formData.features?.join("\n") || ""}
 										onChange={(e) => {
-											const lines = e.target.value.split("\n");
+											const lines = e.target.value
+												.split("\n")
+												.map(line => line.trim())
+												.filter(line => line !== "");
 											setFormData({
 												...formData,
 												features: lines,
@@ -787,7 +815,10 @@ export default function AdminProductsPage() {
 									<textarea
 										value={formData.loanTypes?.join("\n") || ""}
 										onChange={(e) => {
-											const lines = e.target.value.split("\n");
+											const lines = e.target.value
+												.split("\n")
+												.map(line => line.trim())
+												.filter(line => line !== "");
 											setFormData({
 												...formData,
 												loanTypes: lines,

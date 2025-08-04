@@ -3496,157 +3496,168 @@ function ActiveLoansContent() {
 
 			{/* Manual Payment Modal */}
 			{showManualPaymentModal && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-					<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 w-full max-w-lg border border-gray-700/30">
-						<h3 className="text-lg font-medium text-white mb-4">
-							Create Manual Payment
-						</h3>
-						<div className="text-gray-300 mb-6 text-sm">
-							<p>Create a manual payment for direct bank transfers or other offline payments.</p>
-							{selectedLoan && (
-								<p className="mt-2 text-purple-300">
-									For: {selectedLoan.user.fullName} (Loan ID: {selectedLoan.id.substring(0, 8)})
-						</p>
-							)}
-						</div>
-						
-						<div className="space-y-4">
-							{/* Loan ID - Pre-filled and read-only */}
-							<div>
-								<label className="block text-sm font-medium text-gray-300 mb-2">
-									Loan ID *
-								</label>
-								<input
-									type="text"
-									value={manualPaymentForm.loanId}
-									readOnly
-									className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-gray-300 cursor-not-allowed"
-									placeholder="Loan ID will be auto-filled"
-								/>
-								<p className="text-xs text-gray-400 mt-1">
-									Auto-filled from selected loan
-								</p>
+				<div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+					<div className="min-h-screen flex items-center justify-center p-1 xs:p-2 sm:p-4 lg:p-6">
+						<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg sm:rounded-xl w-full max-w-xs xs:max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl border border-gray-700/30 my-2 sm:my-4 max-h-[98vh] flex flex-col">
+							{/* Header */}
+							<div className="flex-shrink-0 p-3 xs:p-4 sm:p-6 border-b border-gray-700/30">
+								<h3 className="text-base xs:text-lg sm:text-xl font-medium text-white mb-1 sm:mb-2">
+									Create Manual Payment
+								</h3>
+								<div className="text-gray-300 text-xs xs:text-sm sm:text-base">
+									<p>Create a manual payment for direct bank transfers or other offline payments.</p>
+									{selectedLoan && (
+										<p className="mt-2 text-purple-300">
+											For: {selectedLoan.user.fullName} (Loan ID: {selectedLoan.id.substring(0, 8)})
+										</p>
+									)}
+								</div>
+							</div>
+							
+							{/* Scrollable Content */}
+							<div className="flex-1 overflow-y-auto p-3 xs:p-4 sm:p-6">
+								<div className="space-y-3 xs:space-y-4">
+									{/* Loan ID - Pre-filled and read-only */}
+									<div>
+										<label className="block text-xs xs:text-sm font-medium text-gray-300 mb-1 xs:mb-2">
+											Loan ID *
+										</label>
+										<input
+											type="text"
+											value={manualPaymentForm.loanId}
+											readOnly
+											className="w-full px-2 xs:px-3 py-1.5 xs:py-2 bg-gray-700/50 border border-gray-600/50 rounded-md xs:rounded-lg text-gray-300 cursor-not-allowed text-xs xs:text-sm sm:text-base"
+											placeholder="Loan ID will be auto-filled"
+										/>
+										<p className="text-xs text-gray-400 mt-1">
+											Auto-filled from selected loan
+										</p>
+									</div>
+
+									{/* Amount */}
+									<div>
+										<label className="block text-xs xs:text-sm font-medium text-gray-300 mb-1 xs:mb-2">
+											Payment Amount (RM) *
+										</label>
+										<input
+											type="number"
+											step="0.01"
+											min="0"
+											value={manualPaymentForm.amount}
+											onChange={(e) =>
+												setManualPaymentForm(prev => ({ ...prev, amount: e.target.value }))
+											}
+											placeholder="0.00"
+											className="w-full px-2 xs:px-3 py-1.5 xs:py-2 bg-gray-800/50 border border-gray-700/30 rounded-md xs:rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 text-xs xs:text-sm sm:text-base"
+										/>
+										{selectedLoan && selectedLoan.outstandingBalance > 0 && (
+											<p className="text-xs text-purple-400 mt-1">
+												Outstanding balance: {formatCurrency(selectedLoan.outstandingBalance)}
+											</p>
+										)}
+									</div>
+
+									{/* Payment Method */}
+									<div>
+										<label className="block text-xs xs:text-sm font-medium text-gray-300 mb-1 xs:mb-2">
+											Payment Method *
+										</label>
+										<select
+											value={manualPaymentForm.paymentMethod}
+											onChange={(e) =>
+												setManualPaymentForm(prev => ({ ...prev, paymentMethod: e.target.value }))
+											}
+											className="w-full px-2 xs:px-3 py-1.5 xs:py-2 bg-gray-800/50 border border-gray-700/30 rounded-md xs:rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 text-xs xs:text-sm sm:text-base"
+										>
+											<option value="bank_transfer">Bank Transfer</option>
+											<option value="cash">Cash</option>
+											<option value="cheque">Cheque</option>
+											<option value="online_banking">Online Banking</option>
+											<option value="other">Other</option>
+										</select>
+									</div>
+
+									{/* Reference */}
+									<div>
+										<label className="block text-xs xs:text-sm font-medium text-gray-300 mb-1 xs:mb-2">
+											Reference/Transaction ID *
+										</label>
+										<input
+											type="text"
+											value={manualPaymentForm.reference}
+											onChange={(e) =>
+												setManualPaymentForm(prev => ({ ...prev, reference: e.target.value }))
+											}
+											placeholder="Enter reference or transaction ID"
+											className="w-full px-2 xs:px-3 py-1.5 xs:py-2 bg-gray-800/50 border border-gray-700/30 rounded-md xs:rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 text-xs xs:text-sm sm:text-base"
+										/>
+									</div>
+
+									{/* Payment Date */}
+									<div>
+										<label className="block text-xs xs:text-sm font-medium text-gray-300 mb-1 xs:mb-2">
+											Payment Date (Optional)
+										</label>
+										<input
+											type="date"
+											value={manualPaymentForm.paymentDate}
+											onChange={(e) =>
+												setManualPaymentForm(prev => ({ ...prev, paymentDate: e.target.value }))
+											}
+											className="w-full px-2 xs:px-3 py-1.5 xs:py-2 bg-gray-800/50 border border-gray-700/30 rounded-md xs:rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 text-xs xs:text-sm sm:text-base"
+										/>
+										<p className="text-xs text-gray-400 mt-1">
+											Leave empty to use current date/time
+										</p>
+									</div>
+
+									{/* Notes */}
+									<div>
+										<label className="block text-xs xs:text-sm font-medium text-gray-300 mb-1 xs:mb-2">
+											Admin Notes (Optional)
+										</label>
+										<textarea
+											value={manualPaymentForm.notes}
+											onChange={(e) =>
+												setManualPaymentForm(prev => ({ ...prev, notes: e.target.value }))
+											}
+											placeholder="Add any notes about this payment..."
+											className="w-full px-2 xs:px-3 py-1.5 xs:py-2 bg-gray-800/50 border border-gray-700/30 rounded-md xs:rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 text-xs xs:text-sm sm:text-base resize-none"
+											rows={2}
+										/>
+									</div>
+								</div>
 							</div>
 
-							{/* Amount */}
-							<div>
-								<label className="block text-sm font-medium text-gray-300 mb-2">
-									Payment Amount (RM) *
-								</label>
-								<input
-									type="number"
-									step="0.01"
-									min="0"
-									value={manualPaymentForm.amount}
-									onChange={(e) =>
-										setManualPaymentForm(prev => ({ ...prev, amount: e.target.value }))
-									}
-									placeholder="0.00"
-									className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50"
-								/>
-								{selectedLoan && selectedLoan.outstandingBalance > 0 && (
-									<p className="text-xs text-purple-400 mt-1">
-										Outstanding balance: {formatCurrency(selectedLoan.outstandingBalance)}
-									</p>
-								)}
+							{/* Footer */}
+							<div className="flex-shrink-0 p-3 xs:p-4 sm:p-6 border-t border-gray-700/30">
+								<div className="flex flex-col xs:flex-row gap-2 xs:gap-3">
+									<button
+										onClick={handleManualPaymentSubmit}
+										disabled={processingManualPayment || !manualPaymentForm.loanId || !manualPaymentForm.amount || !manualPaymentForm.reference}
+										className="flex-1 px-3 xs:px-4 py-2 bg-purple-500/20 text-purple-200 rounded-md xs:rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs xs:text-sm sm:text-base font-medium"
+									>
+										{processingManualPayment ? "Creating..." : "Create Payment"}
+									</button>
+									<button
+										onClick={() => {
+											setShowManualPaymentModal(false);
+											setManualPaymentForm({
+												loanId: "",
+												amount: "",
+												paymentMethod: "bank_transfer",
+												reference: "",
+												notes: "",
+												paymentDate: "",
+											});
+										}}
+										disabled={processingManualPayment}
+										className="flex-1 px-3 xs:px-4 py-2 bg-gray-500/20 text-gray-200 rounded-md xs:rounded-lg border border-gray-400/20 hover:bg-gray-500/30 transition-colors disabled:opacity-50 text-xs xs:text-sm sm:text-base font-medium"
+									>
+										Cancel
+									</button>
+								</div>
 							</div>
-
-							{/* Payment Method */}
-							<div>
-								<label className="block text-sm font-medium text-gray-300 mb-2">
-									Payment Method *
-								</label>
-								<select
-									value={manualPaymentForm.paymentMethod}
-									onChange={(e) =>
-										setManualPaymentForm(prev => ({ ...prev, paymentMethod: e.target.value }))
-									}
-									className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50"
-								>
-									<option value="bank_transfer">Bank Transfer</option>
-									<option value="cash">Cash</option>
-									<option value="cheque">Cheque</option>
-									<option value="online_banking">Online Banking</option>
-									<option value="other">Other</option>
-								</select>
-							</div>
-
-							{/* Reference */}
-							<div>
-								<label className="block text-sm font-medium text-gray-300 mb-2">
-									Reference/Transaction ID *
-								</label>
-								<input
-									type="text"
-									value={manualPaymentForm.reference}
-									onChange={(e) =>
-										setManualPaymentForm(prev => ({ ...prev, reference: e.target.value }))
-									}
-									placeholder="Enter reference or transaction ID"
-									className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50"
-								/>
-							</div>
-
-							{/* Payment Date */}
-							<div>
-								<label className="block text-sm font-medium text-gray-300 mb-2">
-									Payment Date (Optional)
-								</label>
-								<input
-									type="date"
-									value={manualPaymentForm.paymentDate}
-									onChange={(e) =>
-										setManualPaymentForm(prev => ({ ...prev, paymentDate: e.target.value }))
-									}
-									className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50"
-								/>
-								<p className="text-xs text-gray-400 mt-1">
-									Leave empty to use current date/time
-								</p>
-							</div>
-
-							{/* Notes */}
-							<div>
-								<label className="block text-sm font-medium text-gray-300 mb-2">
-									Admin Notes (Optional)
-								</label>
-								<textarea
-									value={manualPaymentForm.notes}
-									onChange={(e) =>
-										setManualPaymentForm(prev => ({ ...prev, notes: e.target.value }))
-									}
-									placeholder="Add any notes about this payment..."
-									className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50"
-									rows={3}
-								/>
-							</div>
-						</div>
-
-						<div className="flex gap-3 mt-6">
-							<button
-								onClick={handleManualPaymentSubmit}
-								disabled={processingManualPayment || !manualPaymentForm.loanId || !manualPaymentForm.amount || !manualPaymentForm.reference}
-								className="flex-1 px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								{processingManualPayment ? "Creating Payment..." : "Create Payment"}
-							</button>
-							<button
-								onClick={() => {
-									setShowManualPaymentModal(false);
-									setManualPaymentForm({
-										loanId: "",
-										amount: "",
-										paymentMethod: "bank_transfer",
-										reference: "",
-										notes: "",
-										paymentDate: "",
-									});
-								}}
-								disabled={processingManualPayment}
-								className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-200 rounded-lg border border-gray-400/20 hover:bg-gray-500/30 transition-colors disabled:opacity-50"
-							>
-								Cancel
-							</button>
 						</div>
 					</div>
 				</div>

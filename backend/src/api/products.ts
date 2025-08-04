@@ -345,8 +345,16 @@ const deleteProduct: RequestHandler<ProductParams> = async (req, res) => {
 		});
 
 		return res.json({ message: "Product deleted successfully" });
-	} catch (error) {
+	} catch (error: any) {
 		console.error("Error deleting product:", error);
+		
+		// Handle foreign key constraint violations
+		if (error.code === 'P2003' || error.message?.includes('foreign key constraint')) {
+			return res.status(409).json({ 
+				message: "Cannot delete product because it has existing loan applications. Please remove all associated loan applications first." 
+			});
+		}
+		
 		return res.status(500).json({ message: "Failed to delete product" });
 	}
 };

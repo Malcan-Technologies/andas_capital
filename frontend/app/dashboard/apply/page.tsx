@@ -129,7 +129,7 @@ function ApplyPageContent() {
 	const [applicationData, setApplicationData] = useState<{
 		productId: string;
 		loanAmount: string;
-		loanPurpose: string;
+		loanPurpose: string | null;
 		loanTerm: string;
 		monthlyRepayment: string;
 		interestRate: string;
@@ -174,7 +174,7 @@ function ApplyPageContent() {
 				setApplicationData({
 					productId: data.productId,
 					loanAmount: data.amount?.toString() || "",
-					loanPurpose: data.purpose || "",
+					loanPurpose: data.purpose && data.purpose.trim() !== "" ? data.purpose : null,
 					loanTerm: data.term?.toString() || "",
 					monthlyRepayment: data.monthlyRepayment?.toString() || "",
 					interestRate: data.interestRate?.toString() || "",
@@ -482,7 +482,7 @@ function ApplyPageContent() {
 
 	const handleApplicationDetails = async (details: {
 		loanAmount: string;
-		loanPurpose: string;
+		loanPurpose: string | null;
 		loanTerm: string;
 		monthlyRepayment: string;
 		interestRate: string;

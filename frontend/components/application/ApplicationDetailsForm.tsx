@@ -18,7 +18,7 @@ interface Product {
 
 interface ApplicationDetails {
 	loanAmount: string;
-	loanPurpose: string;
+	loanPurpose: string | null;
 	loanTerm: string;
 	monthlyRepayment: string;
 	interestRate: string;
@@ -53,6 +53,11 @@ function ApplicationDetailsFormContent({
 	const [errors, setErrors] = useState<Partial<ApplicationDetails>>({});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+
+	// Helper function to get valid loan types (non-empty strings)
+	const getValidLoanTypes = () => {
+		return (selectedProduct.loanTypes ?? []).filter(type => type && type.trim() !== "");
+	};
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -94,7 +99,7 @@ function ApplicationDetailsFormContent({
 				if (applicationData) {
 					setFormValues({
 						loanAmount: applicationData.amount?.toString() || "",
-						loanPurpose: applicationData.purpose || "",
+						loanPurpose: applicationData.purpose && applicationData.purpose.trim() !== "" ? applicationData.purpose : "",
 						loanTerm: applicationData.term?.toString() || "",
 						monthlyRepayment:
 							applicationData.monthlyRepayment?.toString() || "",
@@ -156,8 +161,8 @@ function ApplicationDetailsFormContent({
 		}
 
 		if (
-			(selectedProduct.loanTypes ?? []).length > 0 &&
-			!formValues.loanPurpose
+			getValidLoanTypes().length > 0 &&
+			(!formValues.loanPurpose || formValues.loanPurpose.trim() === "")
 		) {
 			newErrors.loanPurpose = "Loan purpose is required";
 			isValid = false;
@@ -203,9 +208,9 @@ function ApplicationDetailsFormContent({
 				originationFee: originationFeeValue.toFixed(2),
 				netDisbursement: netDisbursementValue.toFixed(2),
 				loanPurpose:
-					(selectedProduct.loanTypes ?? []).length > 0
-						? formValues.loanPurpose
-						: "",
+					getValidLoanTypes().length > 0
+						? (formValues.loanPurpose && formValues.loanPurpose.trim() !== "" ? formValues.loanPurpose : null)
+						: null,
 			};
 			onSubmit(submissionValues);
 		}
@@ -329,25 +334,23 @@ function ApplicationDetailsFormContent({
 						)}
 					</div>
 
-					{(selectedProduct.loanTypes ?? []).length > 0 && (
+					{getValidLoanTypes().length > 0 && (
 						<div>
 							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
 								Loan Purpose
 							</label>
 							<select
 								name="loanPurpose"
-								value={formValues.loanPurpose}
+								value={formValues.loanPurpose || ""}
 								onChange={handleSelectChange}
 								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
 							>
 								<option value="">Select loan purpose</option>
-								{(selectedProduct.loanTypes ?? []).map(
-									(type) => (
-										<option key={type} value={type}>
-											{type}
-										</option>
-									)
-								)}
+								{getValidLoanTypes().map((type) => (
+									<option key={type} value={type}>
+										{type}
+									</option>
+								))}
 							</select>
 							{errors.loanPurpose && (
 								<p className="mt-1 text-sm text-red-600 font-body">
