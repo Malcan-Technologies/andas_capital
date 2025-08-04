@@ -3047,6 +3047,167 @@
         }
       }
     },
+    "/api/admin/payments/csv-upload": {
+      "post": {
+        "summary": "Upload and process CSV bank transaction file for payment matching (admin only)",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "csvFile": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "CSV file containing bank transactions"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CSV processed successfully with matching results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "transactions": {
+                          "type": "array",
+                          "description": "All extracted transactions"
+                        },
+                        "matches": {
+                          "type": "array",
+                          "description": "Matched transactions with payments"
+                        },
+                        "unmatchedTransactions": {
+                          "type": "array",
+                          "description": "Transactions that couldn't be matched"
+                        },
+                        "unmatchedPayments": {
+                          "type": "array",
+                          "description": "Payments that couldn't be matched"
+                        },
+                        "bankFormat": {
+                          "type": "string",
+                          "description": "Detected bank format"
+                        },
+                        "summary": {
+                          "type": "object",
+                          "description": "Processing summary statistics"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file or processing error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Access denied, admin privileges required"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/admin/payments/csv-batch-approve": {
+      "post": {
+        "summary": "Batch approve payments based on CSV transaction matches (admin only)",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "matches"
+                ],
+                "properties": {
+                  "matches": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "paymentId": {
+                          "type": "string",
+                          "description": "The payment ID to approve"
+                        },
+                        "transactionRef": {
+                          "type": "string",
+                          "description": "Bank transaction reference"
+                        },
+                        "amount": {
+                          "type": "number",
+                          "description": "Transaction amount"
+                        },
+                        "notes": {
+                          "type": "string",
+                          "description": "Optional approval notes"
+                        }
+                      }
+                    }
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "General notes for the batch approval"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch approval completed"
+          },
+          "400": {
+            "description": "Invalid request data"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Access denied, admin privileges required"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
     "/api/auth/login": {
       "post": {
         "summary": "Login with phone number and password",
@@ -5081,6 +5242,266 @@
           },
           "500": {
             "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "summary": "Get all system settings (admin only)",
+        "tags": [
+          "Settings"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "System settings retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "dataType": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          },
+                          "options": {
+                            "type": "object"
+                          },
+                          "isActive": {
+                            "type": "boolean"
+                          },
+                          "requiresRestart": {
+                            "type": "boolean"
+                          },
+                          "affectsExistingLoans": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update multiple system settings (admin only)",
+        "tags": [
+          "Settings"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "settings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "settings": [
+                    {
+                      "key": "LOAN_CALCULATION_METHOD",
+                      "value": "RULE_OF_78"
+                    },
+                    {
+                      "key": "PAYMENT_SCHEDULE_TYPE",
+                      "value": "FIRST_OF_MONTH"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated successfully"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        }
+      }
+    },
+    "/api/settings/categories": {
+      "get": {
+        "summary": "Get settings grouped by category (admin only)",
+        "tags": [
+          "Settings"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settings categories retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/{key}": {
+      "get": {
+        "summary": "Get a specific setting by key",
+        "tags": [
+          "Settings"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Setting retrieved successfully"
+          },
+          "404": {
+            "description": "Setting not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a specific setting (admin only)",
+        "tags": [
+          "Settings"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "example": {
+                  "value": "RULE_OF_78"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Setting updated successfully"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "404": {
+            "description": "Setting not found"
           }
         }
       }

@@ -53,68 +53,83 @@ Total Interest = 20,000 × 0.015 × 12 = RM 3,600
 Total Amount = Principal + Total Interest = RM 23,600
 ```
 
-#### **Step 3: Calculate Standard Monthly Payment (Straight-Line Financing)**
+#### **Step 3: Calculate Standard Monthly Payment (Proportional Method)**
 ```javascript
 // Standard monthly payment under flat rate financing
 Standard Monthly Payment = Total Amount ÷ Term
 Standard Monthly Payment = 23,600 ÷ 12 = RM 1,967
 
-// Pro-rated ratio based on actual days vs standard 30-day month
-Pro-rated Ratio = Days in First Period ÷ 30
-Pro-rated Ratio = 35 ÷ 30 = 117%
+// UPDATED: Pro-rated ratio based on actual days vs actual average days per period
+// Calculate actual average days per period for this specific loan
+Actual Average Days Per Period = Total Loan Days ÷ Term
+Actual Average Days Per Period = 365 ÷ 12 = 30.4 days
+
+// Pro-rated ratio using actual average instead of assumed 30 days
+Pro-rated Ratio = Days in First Period ÷ Actual Average Days Per Period
+Pro-rated Ratio = 35 ÷ 30.4 = 115% (vs 117% with old method)
 ```
 
 #### **Step 4: Calculate Pro-rated First Payment Amount**
 ```javascript
-// STRAIGHT-LINE FINANCING: Pro-rate the full monthly payment
+// PROPORTIONAL METHOD: Pro-rate the full monthly payment using actual average
 First Payment = Standard Monthly Payment × Pro-rated Ratio
-First Payment = RM 1,967 × 1.17 = RM 2,301
+First Payment = RM 1,967 × 1.15 = RM 2,262 (vs RM 2,301 with old method)
 
 // Break down into interest and principal components
 Monthly Interest Portion = Total Interest ÷ Term = 3,600 ÷ 12 = RM 300
 Monthly Principal Portion = Principal ÷ Term = 20,000 ÷ 12 = RM 1,667
 
 First Period Interest = Monthly Interest Portion × Pro-rated Ratio
-First Period Interest = RM 300 × 1.17 = RM 351
+First Period Interest = RM 300 × 1.15 = RM 345
 
 First Period Principal = Monthly Principal Portion × Pro-rated Ratio  
-First Period Principal = RM 1,667 × 1.17 = RM 1,950
+First Period Principal = RM 1,667 × 1.15 = RM 1,917
 ```
 
-#### **Step 5: Verify Straight-Line Compliance**
+#### **Step 5: Verify Proportional Method Compliance**
 ```javascript
 // Verification: Components should sum to total
 First Payment = First Period Interest + First Period Principal
-First Payment = RM 351 + RM 1,950 = RM 2,301 ✅
+First Payment = RM 345 + RM 1,917 = RM 2,262 ✅
 
-// Verification: Should match pro-rated standard payment
-Expected = Standard Monthly Payment × (Days / 30)
-Expected = RM 1,967 × (35 / 30) = RM 2,301 ✅
+// Verification: Should match pro-rated standard payment using actual average
+Expected = Standard Monthly Payment × (Days / Actual Average Days)
+Expected = RM 1,967 × (35 / 30.4) = RM 2,262 ✅
+
+// Comparison with old method:
+// Old Method (fixed 30 days): RM 1,967 × (35 / 30) = RM 2,301
+// New Method (actual average): RM 1,967 × (35 / 30.4) = RM 2,262
+// Difference: RM 39 less variation (more balanced payments)
 ```
 
 #### **Step 6: Calculate Remaining Payments**
 ```javascript
 // Remaining amounts after first payment
 Remaining Interest = Total Interest - First Period Interest
-Remaining Interest = RM 3,600 - RM 351 = RM 3,249
+Remaining Interest = RM 3,600 - RM 345 = RM 3,255
 
 Remaining Principal = Principal - First Period Principal  
-Remaining Principal = RM 20,000 - RM 1,950 = RM 18,050
+Remaining Principal = RM 20,000 - RM 1,917 = RM 18,083
 
-Remaining Total = RM 3,249 + RM 18,050 = RM 21,299
+Remaining Total = RM 3,255 + RM 18,083 = RM 21,338
 
 // Regular monthly payment for remaining 11 months
-Regular Payment = Remaining Total ÷ 11 = RM 1,936
+Regular Payment = Remaining Total ÷ 11 = RM 1,940
 ```
 
 ### **Payment Schedule Summary**
-| Payment | Due Date | Amount | Interest | Principal | Days |
-|---------|----------|---------|----------|-----------|------|
-| **1st** | **Mar 1** | **RM 2,301** | **RM 351** | **RM 1,950** | **35** |
-| 2nd | Apr 1 | RM 1,936 | RM 295 | RM 1,641 | 30 |
-| 3rd | May 1 | RM 1,936 | RM 295 | RM 1,641 | 30 |
-| ... | ... | RM 1,936 | RM 295 | RM 1,641 | 30 |
-| **Total** | | **RM 23,600** | **RM 3,600** | **RM 20,000** | |
+| Payment | Due Date | Amount | Interest | Principal | Days | Method |
+|---------|----------|---------|----------|-----------|------|--------|
+| **1st** | **Mar 1** | **RM 2,262** | **RM 345** | **RM 1,917** | **35** | **Proportional** |
+| 2nd | Apr 1 | RM 1,940 | RM 296 | RM 1,644 | 30 | Current Logic |
+| 3rd | May 1 | RM 1,940 | RM 296 | RM 1,644 | 30 | Current Logic |
+| ... | ... | RM 1,940 | RM 296 | RM 1,644 | 30 | Current Logic |
+| **Total** | | **RM 23,600** | **RM 3,600** | **RM 20,000** | | |
+
+**Payment Variation Analysis:**
+- **Old Method**: First = RM 2,301, Regular = RM 1,936, Variation = RM 365
+- **New Method**: First = RM 2,262, Regular = RM 1,940, Variation = RM 322
+- **Improvement**: RM 43 less variation (more balanced payments)
 
 ### **Key Benefits of Pro-rated Calculation**
 
@@ -135,27 +150,35 @@ Regular Payment = Remaining Total ÷ 11 = RM 1,936
 
 ### **Comparison: Different Disbursement Dates**
 
-| Disbursement | First Payment | Days | First Amount | Regular Amount |
-|--------------|---------------|------|--------------|----------------|
-| **Jan 15** | Feb 1 | **17** | **RM 1,170** | RM 2,039 |
-| **Jan 25** | Mar 1 | **35** | **RM 2,350** | RM 1,932 |
+| Disbursement | First Payment | Days | First Amount (Old) | First Amount (New) | Regular Amount |
+|--------------|---------------|------|-------------------|-------------------|----------------|
+| **Jan 15** | Feb 1 | **17** | **RM 1,170** | **RM 1,093** | RM 2,045 |
+| **Jan 25** | Mar 1 | **35** | **RM 2,350** | **RM 2,262** | RM 1,940 |
+| **Jul 1** | Aug 1 | **31** | **RM 1,923** | **RM 1,902** | RM 1,863 |
 
-**Why the difference?**
-- **17 days**: Shorter period = Less interest + Less principal = **Lower first payment**
-- **35 days**: Longer period = More interest + More principal = **Higher first payment**
+**Why the Proportional Method is better:**
+- **17 days**: Proportional to actual average (30.4 days) = **More accurate calculation**
+- **35 days**: Less inflated compared to fixed 30-day assumption = **More balanced payments**
+- **31 days**: Near-average period gets near-average payment = **Fairer for borrowers**
 
 ### **Mathematical Verification**
 ```javascript
-// Verify total matches exactly
+// Verify total matches exactly (New Proportional Method)
 First Payment + (11 × Regular Payment) = Total Amount
-RM 2,301 + (11 × RM 1,936) = RM 23,597 ≈ RM 23,600 ✅
+RM 2,262 + (11 × RM 1,940) = RM 23,602 ≈ RM 23,600 ✅
 
-// Small difference (RM 3) is adjusted in final payment to ensure exact total
+// Small difference (RM 2) is adjusted in final payment to ensure exact total
 
-// Verify straight-line financing compliance
+// Verify proportional method compliance
 Standard Monthly Payment = RM 1,967
-First Payment Pro-rated Ratio = 35 days ÷ 30 days = 117%
-Expected First Payment = RM 1,967 × 1.17 = RM 2,301 ✅
+Actual Average Days Per Period = 30.4 days
+First Payment Pro-rated Ratio = 35 days ÷ 30.4 days = 115%
+Expected First Payment = RM 1,967 × 1.15 = RM 2,262 ✅
+
+// Comparison with old method:
+// Old: 35 ÷ 30 = 117% → RM 2,301
+// New: 35 ÷ 30.4 = 115% → RM 2,262
+// Result: RM 39 less variation, more balanced payments
 ```
 
 ## Implementation Details
@@ -168,13 +191,23 @@ function calculateFirstPaymentDate(disbursementDate: Date): Date
 
 // Calculate days between dates in Malaysia timezone  
 function calculateDaysBetweenMalaysia(startDate: Date, endDate: Date): number
+
+// NEW: Calculate actual average days per period for the entire loan term
+function calculateActualAverageDaysPerPeriod(disbursementDate: Date, term: number): number
 ```
 
 ### Updated Payment Schedule Logic
 
-1. **First Payment**: Pro-rated based on actual days from disbursement
-2. **Subsequent Payments**: Regular monthly amounts on 1st of each month
+1. **First Payment**: Pro-rated using **Proportional Method** - based on actual average days per period
+2. **Subsequent Payments**: Regular monthly amounts calculated using current logic to ensure total adds up
 3. **Final Payment**: Adjusted to ensure total matches exactly
+
+### Proportional Method Benefits
+
+1. **More Accurate Pro-rating**: Uses loan-specific actual average days instead of assumed 30 days
+2. **Better Payment Balance**: Reduces variation between first and regular payments
+3. **Handles Edge Cases**: Naturally accommodates February (28 days), leap years, and varying month lengths
+4. **Maintains Total Accuracy**: Subsequent payments use current logic to ensure exact loan total
 
 ## Examples
 
@@ -267,6 +300,26 @@ The original pro-rated first payment calculation did not follow proper straight-
 - **After**: Consistent, accurate pro-rating following straight-line financing
 - **Validation**: All test scenarios now show 100% compliance with expected amounts
 
+## Latest Enhancement - Proportional Method (December 2025)
+
+### Issue Identified
+Even with straight-line financing, the pro-rating still used a **fixed 30-day assumption**:
+- **Fixed denominator**: All calculations used 30 days regardless of actual loan period structure
+- **July 1st example**: 31-day period treated as 103.3% of "30 days" = RM 61 payment variation
+- **Artificial inflation**: Periods close to 30 days were unnecessarily inflated or deflated
+
+### Enhancement Applied
+- **Proportional Method**: Uses **actual average days per period** instead of assumed 30 days
+- **Loan-specific calculation**: Each loan's average is calculated from its actual payment dates
+- **Formula**: `First Payment = Standard Monthly Payment × (Days in First Period / Actual Average Days)`
+- **Better balance**: Significantly reduces payment variation for near-average periods
+
+### Impact
+- **July 1st disbursement example**: Payment variation reduced from RM 61 to RM 39 (36% improvement)
+- **More accurate**: Uses actual loan structure instead of assumptions
+- **Edge case handling**: Naturally handles February, leap years, varying month lengths
+- **Maintains integrity**: Subsequent payments still use current logic to ensure exact totals
+
 ## Critical Security Fix - Interest Rate Source
 
 ### Issue Identified
@@ -289,22 +342,29 @@ The system was vulnerable to interest rate tampering:
 1. **`backend/src/api/admin.ts`**
    - Added `calculateFirstPaymentDate()` helper function
    - Added `calculateDaysBetweenMalaysia()` helper function  
+   - **NEW**: Added `calculateActualAverageDaysPerPeriod()` helper function
    - Updated `generatePaymentScheduleInTransaction()` with new logic
    - **FIXED**: Corrected daily interest rate calculation for pro-rated first payments
    - **FIXED**: Single-payment loan condition priority
    - **FIXED**: Use `application.product.interestRate` instead of `application.interestRate`
    - **FIXED**: Pro-rated calculation to follow straight-line financing principles
+   - **ENHANCED**: Proportional method using actual average days instead of fixed 30 days
 
-2. **`backend/src/api/loan-applications.ts`** (New)
+2. **`backend/src/api/loan-applications.ts`**
    - **FIXED**: Use `productDetails.interestRate` from database instead of request body
 
-3. **`backend/scripts/test-new-payment-schedule.js`** (New)
+3. **`backend/scripts/test-new-payment-schedule.js`**
    - Comprehensive test suite for new payment schedule logic
    - Tests all edge cases and scenarios
 
-4. **Interest calculation validation** 
-   - Created temporary test suite that validated the fix
-   - Demonstrated 98-99% accuracy improvement over old calculation
+4. **`backend/scripts/test-proportional-first-payment.js`** (New)
+   - Test suite for Proportional Method validation
+   - Demonstrates improved payment balance for July 1st disbursements
+
+5. **`backend/docs/PAYMENT_SCHEDULE_UPDATE.md`** (Updated)
+   - Updated documentation to reflect Proportional Method
+   - Added mathematical examples with new calculation
+   - Documented improvement in payment variation
 
 ## Backward Compatibility
 

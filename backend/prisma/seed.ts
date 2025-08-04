@@ -168,6 +168,168 @@ async function main() {
 		console.log("Products table is not empty, skipping product creation");
 	}
 
+	// Check if system settings table is empty
+	const settingsCount = await prisma.systemSettings.count();
+	if (settingsCount === 0) {
+		console.log("Creating default system settings...");
+		
+		// Default system settings
+		await prisma.systemSettings.createMany({
+			data: [
+				{
+					key: "LOAN_CALCULATION_METHOD",
+					category: "LOAN_CALCULATION",
+					name: "Loan Calculation Method",
+					description: "Method used for calculating loan payment schedules and pro-rated amounts",
+					dataType: "ENUM",
+					value: JSON.stringify("PROPORTIONAL"),
+					options: {
+						PROPORTIONAL: {
+							label: "Proportional Method",
+							description: "Uses actual average days per period for pro-rating (current method)"
+						},
+						RULE_OF_78: {
+							label: "Rule of 78",
+							description: "Uses Rule of 78 calculation for front-loaded interest"
+						},
+						FIXED_30_DAY: {
+							label: "Fixed 30-Day",
+							description: "Uses fixed 30-day assumption (legacy method)"
+						}
+					},
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "PAYMENT_SCHEDULE_TYPE",
+					category: "PAYMENT_SCHEDULE",
+					name: "Payment Schedule Type",
+					description: "How payment due dates are calculated and scheduled",
+					dataType: "ENUM",
+					value: JSON.stringify("FIRST_OF_MONTH"),
+					options: {
+						FIRST_OF_MONTH: {
+							label: "1st of Month",
+							description: "Payments due on 1st of each month with 20th cutoff rule (current)"
+						},
+						EXACT_MONTHLY: {
+							label: "Exact Monthly",
+							description: "Payments due on exact monthly intervals from disbursement (legacy)"
+						},
+						CUSTOM_DAY: {
+							label: "Custom Day",
+							description: "Payments due on a custom day of each month (future feature)"
+						}
+					},
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "ENABLE_LATE_FEE_GRACE_PERIOD",
+					category: "LATE_FEES",
+					name: "Late Fee Grace Period",
+					description: "Enable grace period before late fees are applied",
+					dataType: "BOOLEAN",
+					value: JSON.stringify(true),
+					options: undefined,
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "LATE_FEE_GRACE_DAYS",
+					category: "LATE_FEES",
+					name: "Late Fee Grace Days",
+					description: "Number of days grace period before late fees are applied",
+					dataType: "NUMBER",
+					value: JSON.stringify(3),
+					options: {
+						min: 0,
+						max: 30,
+						step: 1,
+						unit: "days"
+					},
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "ENABLE_WHATSAPP_NOTIFICATIONS",
+					category: "NOTIFICATIONS",
+					name: "WhatsApp Notifications",
+					description: "Enable automatic WhatsApp notifications for loan events",
+					dataType: "BOOLEAN",
+					value: JSON.stringify(true),
+					options: undefined,
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "MINIMUM_LOAN_AMOUNT",
+					category: "LOAN_LIMITS",
+					name: "Minimum Loan Amount",
+					description: "Global minimum loan amount across all products",
+					dataType: "NUMBER",
+					value: JSON.stringify(500),
+					options: {
+						min: 100,
+						max: 10000,
+						step: 100,
+						unit: "RM"
+					},
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "MAXIMUM_ACTIVE_LOANS_PER_USER",
+					category: "LOAN_LIMITS",
+					name: "Maximum Active Loans Per User",
+					description: "Maximum number of active loans a user can have simultaneously",
+					dataType: "NUMBER",
+					value: JSON.stringify(3),
+					options: {
+						min: 1,
+						max: 10,
+						step: 1,
+						unit: "loans"
+					},
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				}
+			],
+		});
+		
+		console.log("Default system settings created successfully");
+	} else {
+		console.log("System settings table is not empty, skipping default settings creation");
+	}
+
+	// Check if bank accounts table is empty
+	const bankAccountsCount = await prisma.bankAccount.count();
+	if (bankAccountsCount === 0) {
+		console.log("Creating default bank account...");
+		
+		// Default bank account (from the current hardcoded values)
+		await prisma.bankAccount.create({
+			data: {
+				bankName: "HSBC Bank Malaysia Berhad",
+				accountName: "OPG Capital Holdings Sdn. Bhd.",
+				accountNumber: "001866001878013",
+				isActive: true,
+				isDefault: true
+			}
+		});
+		
+		console.log("Default bank account created successfully");
+	} else {
+		console.log("Bank accounts table is not empty, skipping default bank account creation");
+	}
+
 	console.log("Seed completed successfully");
 }
 

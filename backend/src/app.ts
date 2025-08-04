@@ -12,6 +12,8 @@ import loanRoutes from "./api/loans";
 import adminRoutes from "./api/admin";
 import walletRoutes from "./api/wallet";
 import notificationsRoutes from "./api/notifications";
+import settingsRoutes from "./api/settings";
+import bankAccountsRoutes from "./api/bank-accounts";
 import fs from "fs";
 import path from "path";
 import prisma from "../lib/prisma";
@@ -53,7 +55,13 @@ app.use(
 		exposedHeaders: ["Authorization"],
 	})
 );
-app.use(express.json({ limit: "50mb" }));
+// Skip JSON parsing for file upload routes
+app.use((req, res, next) => {
+	if (req.path.includes('/csv-upload')) {
+		return next();
+	}
+	express.json({ limit: "50mb" })(req, res, next);
+});
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Log all requests in development mode
@@ -99,6 +107,8 @@ app.use("/api/loans", loanRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/bank-accounts", bankAccountsRoutes);
 
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));

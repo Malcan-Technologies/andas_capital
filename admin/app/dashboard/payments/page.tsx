@@ -16,6 +16,9 @@ import {
 	UserCircleIcon,
 	DocumentTextIcon,
 	XMarkIcon,
+	CloudArrowUpIcon,
+	DocumentChartBarIcon,
+	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -135,10 +138,18 @@ function PaymentsContent() {
 	const [showApprovalModal, setShowApprovalModal] = useState(false);
 	const [showRejectionModal, setShowRejectionModal] = useState(false);
 	const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
+	const [showCSVModal, setShowCSVModal] = useState(false);
 	const [approvalNotes, setApprovalNotes] = useState("");
 	const [rejectionReason, setRejectionReason] = useState("");
 	const [rejectionNotes, setRejectionNotes] = useState("");
 	const [processing, setProcessing] = useState(false);
+
+	// CSV processing states
+	const [csvFile, setCSVFile] = useState<File | null>(null);
+	const [csvProcessing, setCSVProcessing] = useState(false);
+	const [csvResults, setCSVResults] = useState<any>(null);
+	const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
+	const [showMatchingResults, setShowMatchingResults] = useState(false);
 
 	// Manual payment form states
 	const [manualPaymentForm, setManualPaymentForm] = useState({
@@ -491,6 +502,155 @@ function PaymentsContent() {
 		}
 	};
 
+	// CSV handling functions
+	const handleCSVFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		if (file) {
+			if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+				alert("Please select a CSV file");
+				return;
+			}
+			if (file.size > 10 * 1024 * 1024) { // 10MB limit
+				alert("File size must be less than 10MB");
+				return;
+			}
+			setCSVFile(file);
+			setCSVResults(null);
+			setSelectedMatches(new Set());
+			setShowMatchingResults(false);
+		}
+	};
+
+	const handleCSVUpload = async () => {
+		if (!csvFile) {
+			alert("Please select a CSV file first");
+			return;
+		}
+
+		setCSVProcessing(true);
+		try {
+			const formData = new FormData();
+			formData.append('csvFile', csvFile);
+
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data?: any;
+				message?: string;
+			}>(`/api/admin/payments/csv-upload`, {
+				method: "POST",
+				body: formData,
+			});
+
+			if (data.success && data.data) {
+				setCSVResults(data.data);
+				setShowMatchingResults(true);
+				
+				// Auto-select high-confidence matches (score >= 70)
+				const highConfidenceMatches = new Set<string>();
+				data.data.matches?.forEach((match: any) => {
+					if (match.matchScore >= 70) {
+						highConfidenceMatches.add(match.payment.id);
+					}
+				});
+				setSelectedMatches(highConfidenceMatches);
+			} else {
+				throw new Error(data.message || "Failed to process CSV file");
+			}
+		} catch (error) {
+			console.error("Error processing CSV file:", error);
+			alert(`Failed to process CSV file: ${error instanceof Error ? error.message : "Unknown error"}`);
+		} finally {
+			setCSVProcessing(false);
+		}
+	};
+
+	const handleToggleMatch = (paymentId: string) => {
+		const newSelected = new Set(selectedMatches);
+		if (newSelected.has(paymentId)) {
+			newSelected.delete(paymentId);
+		} else {
+			newSelected.add(paymentId);
+		}
+		setSelectedMatches(newSelected);
+	};
+
+	const handleBatchApprove = async () => {
+		if (selectedMatches.size === 0) {
+			alert("Please select at least one match to approve");
+			return;
+		}
+
+		if (!csvResults?.matches) {
+			alert("No matches available for approval");
+			return;
+		}
+
+		const matchesToApprove = csvResults.matches
+			.filter((match: any) => selectedMatches.has(match.payment.id))
+			.map((match: any) => ({
+				paymentId: match.payment.id,
+				transactionRef: match.transaction.refCode,
+				amount: match.transaction.amount,
+				notes: `CSV batch approval - Match score: ${match.matchScore}% - ${match.matchReasons.join(', ')}`
+			}));
+
+		setProcessing(true);
+		try {
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data?: any;
+				message?: string;
+			}>(`/api/admin/payments/csv-batch-approve`, {
+				method: "POST",
+				body: JSON.stringify({
+					matches: matchesToApprove,
+					notes: `CSV batch approval from ${csvFile?.name || 'uploaded file'} - ${csvResults.bankFormat} format detected`
+				}),
+			});
+
+			if (data.success && data.data) {
+				const { approved, failed, summary } = data.data;
+				
+				let message = `Batch approval completed!\n\n`;
+				message += `✅ Successfully approved: ${summary.successful} payments\n`;
+				if (summary.failed > 0) {
+					message += `❌ Failed: ${summary.failed} payments\n\n`;
+					message += `Failed payments:\n`;
+					failed.forEach((fail: any) => {
+						message += `- ${fail.paymentId}: ${fail.error}\n`;
+					});
+				}
+				
+				alert(message);
+				
+				// Close modal and refresh payments
+				setShowCSVModal(false);
+				setCSVFile(null);
+				setCSVResults(null);
+				setSelectedMatches(new Set());
+				setShowMatchingResults(false);
+				
+				// Refresh payments list
+				await fetchPayments(false, true);
+			} else {
+				throw new Error(data.message || "Failed to process batch approval");
+			}
+		} catch (error) {
+			console.error("Error processing batch approval:", error);
+			alert(`Failed to process batch approval: ${error instanceof Error ? error.message : "Unknown error"}`);
+		} finally {
+			setProcessing(false);
+		}
+	};
+
+	const resetCSVModal = () => {
+		setCSVFile(null);
+		setCSVResults(null);
+		setSelectedMatches(new Set());
+		setShowMatchingResults(false);
+		setCSVProcessing(false);
+	};
+
 	if (loading) {
 		return (
 			<AdminLayout>
@@ -519,6 +679,13 @@ function PaymentsContent() {
 						</p>
 					</div>
 					<div className="flex gap-3">
+						<button
+							onClick={() => setShowCSVModal(true)}
+							className="px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors flex items-center"
+						>
+							<CloudArrowUpIcon className="h-5 w-5 mr-2" />
+							Upload CSV
+						</button>
 						<button
 							onClick={() => setShowManualPaymentModal(true)}
 							className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
@@ -1244,6 +1411,302 @@ function PaymentsContent() {
 								Cancel
 							</button>
 						</div>
+					</div>
+				</div>
+			)}
+
+			{/* CSV Upload Modal */}
+			{showCSVModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+					<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 w-full max-w-6xl border border-gray-700/30 max-h-[90vh] overflow-y-auto">
+						<div className="flex justify-between items-center mb-6">
+							<h3 className="text-xl font-medium text-white flex items-center">
+								<CloudArrowUpIcon className="h-6 w-6 mr-2 text-purple-400" />
+								CSV Bank Transaction Upload
+							</h3>
+							<button
+								onClick={() => {
+									setShowCSVModal(false);
+									resetCSVModal();
+								}}
+								className="text-gray-400 hover:text-gray-300 transition-colors"
+							>
+								<XMarkIcon className="h-6 w-6" />
+							</button>
+						</div>
+
+						{!showMatchingResults ? (
+							// File Upload Section
+							<div className="space-y-6">
+								<div className="text-gray-300 space-y-2">
+									<p>Upload a CSV file containing bank transactions to automatically match and process payments.</p>
+									<p className="text-sm text-gray-400">
+										<strong>Expected format:</strong> Standardized CSV with headers: <code>transaction_date, description_1, description_2, beneficiary, account, cash_in, cash_out</code>
+									</p>
+									<div className="flex items-center justify-between">
+										<p className="text-xs text-gray-500">
+											Legacy formats (Maybank, CIMB, Public Bank) are still supported for backward compatibility.
+										</p>
+										<a
+											href="/Cleaned_Bank_CSV_Data_Example.csv"
+											download="CSV_Template_Example.csv"
+											className="text-xs text-purple-400 hover:text-purple-300 underline flex items-center"
+										>
+											<DocumentChartBarIcon className="h-3 w-3 mr-1" />
+											Download CSV Template
+										</a>
+									</div>
+								</div>
+
+								{/* File Upload */}
+								<div className="border-2 border-dashed border-purple-400/30 rounded-lg p-8 text-center">
+									<CloudArrowUpIcon className="mx-auto h-12 w-12 text-purple-400 mb-4" />
+									<div className="space-y-2">
+										<input
+											type="file"
+											accept=".csv"
+											onChange={handleCSVFileChange}
+											className="hidden"
+											id="csvFileInput"
+										/>
+										<label
+											htmlFor="csvFileInput"
+											className="cursor-pointer inline-flex items-center px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors"
+										>
+											<DocumentChartBarIcon className="h-5 w-5 mr-2" />
+											Select CSV File
+										</label>
+										<p className="text-sm text-gray-400">
+											Maximum file size: 10MB
+										</p>
+									</div>
+								</div>
+
+								{csvFile && (
+									<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
+										<div className="flex items-center justify-between">
+											<div className="flex items-center">
+												<DocumentChartBarIcon className="h-5 w-5 text-purple-400 mr-2" />
+												<span className="text-white font-medium">{csvFile.name}</span>
+												<span className="text-gray-400 text-sm ml-2">
+													({(csvFile.size / 1024).toFixed(1)} KB)
+												</span>
+											</div>
+											<button
+												onClick={handleCSVUpload}
+												disabled={csvProcessing}
+												className="px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors disabled:opacity-50 flex items-center"
+											>
+												{csvProcessing ? (
+													<>
+														<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+														Processing...
+													</>
+												) : (
+													<>
+														<CloudArrowUpIcon className="h-4 w-4 mr-2" />
+														Process File
+													</>
+												)}
+											</button>
+										</div>
+									</div>
+								)}
+							</div>
+						) : (
+							// Results Section
+							<div className="space-y-6">
+								{/* Summary Cards */}
+								<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+									<div className="bg-blue-500/10 p-4 rounded-lg border border-blue-400/20">
+										<p className="text-blue-400 text-sm font-medium">Bank Format</p>
+										<p className="text-white text-lg font-bold">{csvResults?.bankFormat}</p>
+									</div>
+									<div className="bg-green-500/10 p-4 rounded-lg border border-green-400/20">
+										<p className="text-green-400 text-sm font-medium">Total Transactions</p>
+										<p className="text-white text-lg font-bold">{csvResults?.summary?.totalTransactions || 0}</p>
+									</div>
+									<div className="bg-purple-500/10 p-4 rounded-lg border border-purple-400/20">
+										<p className="text-purple-400 text-sm font-medium">Matches Found</p>
+										<p className="text-white text-lg font-bold">{csvResults?.matches?.length || 0}</p>
+									</div>
+									<div className="bg-yellow-500/10 p-4 rounded-lg border border-yellow-400/20">
+										<p className="text-yellow-400 text-sm font-medium">Total Amount</p>
+										<p className="text-white text-lg font-bold">
+											{formatCurrency(csvResults?.summary?.totalAmount || 0)}
+										</p>
+									</div>
+								</div>
+
+								{/* Processing Errors */}
+								{csvResults?.processingErrors?.length > 0 && (
+									<div className="bg-red-500/10 p-4 rounded-lg border border-red-400/20">
+										<div className="flex items-center mb-2">
+											<ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2" />
+											<h4 className="text-red-400 font-medium">Processing Warnings</h4>
+										</div>
+										<ul className="text-red-300 text-sm space-y-1">
+											{csvResults.processingErrors.map((error: string, index: number) => (
+												<li key={index}>• {error}</li>
+											))}
+										</ul>
+									</div>
+								)}
+
+								{/* Matches Table */}
+								{csvResults?.matches?.length > 0 && (
+									<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 overflow-hidden">
+										<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
+											<h4 className="text-white font-medium">Transaction Matches</h4>
+											<div className="flex items-center gap-4">
+												<span className="text-gray-400 text-sm">
+													{selectedMatches.size} of {csvResults.matches.length} selected
+												</span>
+												<button
+													onClick={handleBatchApprove}
+													disabled={processing || selectedMatches.size === 0}
+													className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors disabled:opacity-50 flex items-center"
+												>
+													<CheckCircleIcon className="h-4 w-4 mr-2" />
+													Approve Selected ({selectedMatches.size})
+												</button>
+											</div>
+										</div>
+										<div className="overflow-x-auto">
+											<table className="w-full">
+												<thead className="bg-gray-900/50">
+													<tr>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Select
+														</th>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Match Score
+														</th>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Bank Transaction
+														</th>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Pending Payment
+														</th>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Match Reasons
+														</th>
+													</tr>
+												</thead>
+												<tbody className="divide-y divide-gray-700/30">
+													{csvResults.matches.map((match: any, index: number) => (
+														<tr 
+															key={index} 
+															className={`hover:bg-gray-800/20 ${selectedMatches.has(match.payment.id) ? 'bg-purple-500/10' : ''}`}
+														>
+															<td className="px-4 py-3">
+																<input
+																	type="checkbox"
+																	checked={selectedMatches.has(match.payment.id)}
+																	onChange={() => handleToggleMatch(match.payment.id)}
+																	className="h-4 w-4 text-purple-400 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+																/>
+															</td>
+															<td className="px-4 py-3">
+																<div className="flex items-center">
+																	<span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+																		match.matchScore >= 80 ? 'bg-green-500/20 text-green-200 border border-green-400/20' :
+																		match.matchScore >= 60 ? 'bg-yellow-500/20 text-yellow-200 border border-yellow-400/20' :
+																		'bg-red-500/20 text-red-200 border border-red-400/20'
+																	}`}>
+																		{match.matchScore}%
+																	</span>
+																</div>
+															</td>
+															<td className="px-4 py-3">
+																<div className="text-white text-sm">
+																	<div className="font-medium">{match.transaction.refCode}</div>
+																	<div className="text-gray-400 text-xs">{match.transaction.beneficiary}</div>
+																	<div className="text-green-400 font-medium">{formatCurrency(match.transaction.amount)}</div>
+																</div>
+															</td>
+															<td className="px-4 py-3">
+																<div className="text-white text-sm">
+																	<div className="font-medium">{match.payment.user?.fullName}</div>
+																	<div className="text-gray-400 text-xs">{match.payment.reference || match.payment.id}</div>
+																	<div className="text-blue-400 font-medium">{formatCurrency(Math.abs(match.payment.amount))}</div>
+																</div>
+															</td>
+															<td className="px-4 py-3">
+																<div className="text-gray-300 text-xs">
+																	{match.matchReasons.map((reason: string, i: number) => (
+																		<div key={i} className="mb-1">• {reason}</div>
+																	))}
+																</div>
+															</td>
+														</tr>
+													))}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								)}
+
+								{/* Unmatched Transactions */}
+								{csvResults?.unmatchedTransactions?.length > 0 && (
+									<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 overflow-hidden">
+										<div className="p-4 border-b border-gray-700/30">
+											<h4 className="text-white font-medium">Unmatched Transactions ({csvResults.unmatchedTransactions.length})</h4>
+											<p className="text-gray-400 text-sm">These transactions could not be matched to pending payments</p>
+										</div>
+										<div className="overflow-x-auto max-h-64">
+											<table className="w-full">
+												<thead className="bg-gray-900/50">
+													<tr>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Reference
+														</th>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Beneficiary
+														</th>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Amount
+														</th>
+													</tr>
+												</thead>
+												<tbody className="divide-y divide-gray-700/30">
+													{csvResults.unmatchedTransactions.map((transaction: any, index: number) => (
+														<tr key={index} className="hover:bg-gray-800/20">
+															<td className="px-4 py-3 text-white text-sm">{transaction.refCode}</td>
+															<td className="px-4 py-3 text-gray-300 text-sm">{transaction.beneficiary}</td>
+															<td className="px-4 py-3 text-green-400 text-sm font-medium">{formatCurrency(transaction.amount)}</td>
+														</tr>
+													))}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								)}
+
+								{/* Action Buttons */}
+								<div className="flex gap-3 pt-4 border-t border-gray-700/30">
+									<button
+										onClick={() => {
+											setShowMatchingResults(false);
+											setCSVResults(null);
+											setSelectedMatches(new Set());
+										}}
+										className="px-4 py-2 bg-gray-500/20 text-gray-200 rounded-lg border border-gray-400/20 hover:bg-gray-500/30 transition-colors"
+									>
+										Upload Another File
+									</button>
+									<button
+										onClick={() => {
+											setShowCSVModal(false);
+											resetCSVModal();
+										}}
+										className="px-4 py-2 bg-gray-500/20 text-gray-200 rounded-lg border border-gray-400/20 hover:bg-gray-500/30 transition-colors"
+									>
+										Close
+									</button>
+								</div>
+							</div>
+						)}
 					</div>
 				</div>
 			)}

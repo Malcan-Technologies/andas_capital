@@ -1,3 +1,15 @@
+import { useState, useEffect } from "react";
+import { fetchDefaultBankAccount, getFallbackBankAccount } from "../../lib/bankAccountUtils";
+
+interface BankAccount {
+	id: string;
+	bankName: string;
+	accountName: string;
+	accountNumber: string;
+	isActive: boolean;
+	isDefault: boolean;
+}
+
 interface BankTransferModalProps {
 	onClose: () => void;
 	onConfirm: () => void;
@@ -13,6 +25,33 @@ export default function BankTransferModal({
 	reference,
 	userName,
 }: BankTransferModalProps) {
+	const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		const loadBankAccount = async () => {
+			try {
+				setLoading(true);
+				const account = await fetchDefaultBankAccount();
+				
+				if (account) {
+					setBankAccount(account);
+				} else {
+					// Fallback to hardcoded values if API fails
+					setBankAccount(getFallbackBankAccount());
+				}
+			} catch (error) {
+				console.error("Error loading bank account:", error);
+				// Use fallback account on error
+				setBankAccount(getFallbackBankAccount());
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		loadBankAccount();
+	}, []);
+
 	const copyToClipboard = (text: string) => {
 		navigator.clipboard.writeText(text);
 	};
@@ -57,65 +96,76 @@ export default function BankTransferModal({
 
 					{/* Bank Details */}
 					<div className="bg-blue-tertiary/5 rounded-xl p-4 mb-6 space-y-4 border border-blue-tertiary/20">
-						<div>
-							<p className="text-sm text-gray-500 mb-1 font-body">
-								Beneficiary Account Number
-							</p>
-							<div className="flex items-center justify-between">
-								<p className="font-mono font-semibold text-gray-700">
-									001866001878013
-								</p>
-								<button
-									onClick={() =>
-										copyToClipboard("001866001878013")
-									}
-									className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
-								>
-									Copy
-								</button>
+						{loading ? (
+							<div className="flex items-center justify-center py-8">
+								<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+								<span className="ml-3 text-gray-500">Loading bank details...</span>
 							</div>
-					
-						</div>
+						) : bankAccount ? (
+							<>
+								<div>
+									<p className="text-sm text-gray-500 mb-1 font-body">
+										Beneficiary Account Number
+									</p>
+									<div className="flex items-center justify-between">
+										<p className="font-mono font-semibold text-gray-700">
+											{bankAccount.accountNumber}
+										</p>
+										<button
+											onClick={() =>
+												copyToClipboard(bankAccount.accountNumber)
+											}
+											className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
+										>
+											Copy
+										</button>
+									</div>
+								</div>
 
-						<div>
-							<p className="text-sm text-gray-500 mb-1 font-body">
-								Beneficiary Name
-							</p>
-							<div className="flex items-center justify-between">
-								<p className="font-mono font-semibold text-gray-700">
-									OPG Capital Holdings Sdn. Bhd.
-								</p>
-								<button
-									onClick={() =>
-										copyToClipboard("GROWKAPITAL187813")
-									}
-									className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
-								>
-									Copy
-								</button>
-							</div>
-						</div>
+								<div>
+									<p className="text-sm text-gray-500 mb-1 font-body">
+										Beneficiary Name
+									</p>
+									<div className="flex items-center justify-between">
+										<p className="font-mono font-semibold text-gray-700">
+											{bankAccount.accountName}
+										</p>
+										<button
+											onClick={() =>
+												copyToClipboard(bankAccount.accountName)
+											}
+											className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
+										>
+											Copy
+										</button>
+									</div>
+								</div>
 
-						<div>
-							<p className="text-sm text-gray-500 mb-1 font-body">
-								Beneficiary Bank
-							</p>
-							<div className="flex items-center justify-between">
-								<p className="font-mono font-semibold text-gray-700 font-heading">
-									HSBC Bank Malaysia Berhad
-								</p>
-								<button
-									onClick={() =>
-										copyToClipboard(
-											"HSBC Bank Malaysia Berhad"
-										)
-									}
-									className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
-								>
-									Copy
-								</button>
+								<div>
+									<p className="text-sm text-gray-500 mb-1 font-body">
+										Beneficiary Bank
+									</p>
+									<div className="flex items-center justify-between">
+										<p className="font-mono font-semibold text-gray-700 font-heading">
+											{bankAccount.bankName}
+										</p>
+										<button
+											onClick={() =>
+												copyToClipboard(bankAccount.bankName)
+											}
+											className="text-blue-600 hover:text-blue-700 text-sm font-medium font-body transition-colors"
+										>
+											Copy
+										</button>
+									</div>
+								</div>
+							</>
+						) : (
+							<div className="text-center py-8">
+								<p className="text-red-500">Unable to load bank details</p>
+								<p className="text-sm text-gray-500 mt-1">Please contact support</p>
 							</div>
-						</div>
+						)}
 
 						<div>
 							<p className="text-sm text-gray-500 mb-1 font-heading">

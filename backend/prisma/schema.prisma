@@ -398,3 +398,49 @@ enum NotificationPriority {
   MEDIUM
   HIGH
 }
+
+enum LoanCalculationMethod {
+  PROPORTIONAL  // Use actual average days per period (current method)
+  RULE_OF_78    // Use Rule of 78 calculation
+  FIXED_30_DAY  // Use fixed 30-day assumption (legacy)
+}
+
+enum PaymentScheduleType {
+  FIRST_OF_MONTH     // Current: 1st of month with 20th cutoff
+  EXACT_MONTHLY      // Legacy: Exact monthly intervals from disbursement
+  CUSTOM_DAY         // Future: Custom day of month
+}
+
+model SystemSettings {
+  id                    String                @id @default(cuid())
+  key                   String                @unique
+  category              String                // e.g., "LOAN_CALCULATION", "PAYMENT_SCHEDULE", "GENERAL"
+  name                  String                // Human-readable name
+  description           String                // Description of what this setting does
+  dataType              String                // "ENUM", "BOOLEAN", "STRING", "NUMBER"
+  value                 String                // JSON-serialized value
+  options               Json?                 // Available options for enum types
+  isActive              Boolean               @default(true)
+  requiresRestart       Boolean               @default(false)  // If changing requires system restart
+  affectsExistingLoans  Boolean               @default(false)  // If this affects existing loans
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  lastChangedBy         String?               // Admin user who last changed this
+  lastChangedAt         DateTime?             // When it was last changed
+
+  @@map("system_settings")
+}
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  bankName      String   // e.g., "HSBC Bank Malaysia Berhad"
+  accountName   String   // e.g., "OPG Capital Holdings Sdn. Bhd."
+  accountNumber String   // e.g., "001866001878013"
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false) // For primary bank account
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?  // Admin user who created this
+  
+  @@map("bank_accounts")
+}

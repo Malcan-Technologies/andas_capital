@@ -7,10 +7,12 @@ import express, {
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import multer from "multer";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import lateFeeRoutes from "./admin/late-fees";
 import whatsappService from "../lib/whatsappService";
+import { processCSVFile } from "../lib/csvProcessor";
 
 import { CronScheduler } from "../lib/cronScheduler";
 import { TimeUtils } from "../lib/precisionUtils";
@@ -8978,6 +8980,430 @@ router.post(
 			return res.status(500).json({
 				success: false,
 				message: "Failed to create manual payment",
+				error: error instanceof Error ? error.message : "Unknown error"
+			});
+		}
+	}
+);
+
+// Configure multer for CSV uploads
+const csvUpload = multer({
+	storage: (multer as any).memoryStorage(),
+	limits: {
+		fileSize: 10 * 1024 * 1024, // 10MB max file size
+	},
+	fileFilter: (
+		_req: Request,
+		file: Express.Multer.File,
+		cb: (error: Error | null, acceptFile: boolean) => void
+	) => {
+		if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+			cb(null, true);
+		} else {
+			cb(new Error('Only CSV files are allowed'), false);
+		}
+	}
+});
+
+/**
+ * @swagger
+ * /api/admin/payments/csv-upload:
+ *   post:
+ *     summary: Upload and process CSV bank transaction file for payment matching (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               csvFile:
+ *                 type: string
+ *                 format: binary
+ *                 description: CSV file containing bank transactions
+ *     responses:
+ *       200:
+ *         description: CSV processed successfully with matching results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     transactions:
+ *                       type: array
+ *                       description: All extracted transactions
+ *                     matches:
+ *                       type: array
+ *                       description: Matched transactions with payments
+ *                     unmatchedTransactions:
+ *                       type: array
+ *                       description: Transactions that couldn't be matched
+ *                     unmatchedPayments:
+ *                       type: array
+ *                       description: Payments that couldn't be matched
+ *                     bankFormat:
+ *                       type: string
+ *                       description: Detected bank format
+ *                     summary:
+ *                       type: object
+ *                       description: Processing summary statistics
+ *       400:
+ *         description: Invalid file or processing error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/payments/csv-upload",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	csvUpload.single('csvFile'),
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const file = req.file;
+			
+			if (!file) {
+				return res.status(400).json({
+					success: false,
+					message: "No CSV file uploaded"
+				});
+			}
+
+			// Convert buffer to string
+			const csvContent = file.buffer.toString('utf-8');
+			
+			if (!csvContent.trim()) {
+				return res.status(400).json({
+					success: false,
+					message: "CSV file is empty"
+				});
+			}
+
+			// Get pending payments for matching
+			const pendingPayments = await prisma.walletTransaction.findMany({
+				where: {
+					status: "PENDING",
+					type: "LOAN_REPAYMENT"
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							phoneNumber: true
+						}
+					},
+					loan: {
+						include: {
+							application: {
+								include: {
+									product: {
+										select: {
+											name: true
+										}
+									}
+								}
+							}
+						}
+					}
+				},
+				orderBy: {
+					createdAt: 'desc'
+				}
+			});
+
+			// Process CSV file
+			const result = processCSVFile(csvContent, pendingPayments);
+
+			return res.json({
+				success: true,
+				data: result
+			});
+
+		} catch (error) {
+			console.error("Error processing CSV file:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to process CSV file",
+				error: error instanceof Error ? error.message : "Unknown error"
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/payments/csv-batch-approve:
+ *   post:
+ *     summary: Batch approve payments based on CSV transaction matches (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - matches
+ *             properties:
+ *               matches:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     paymentId:
+ *                       type: string
+ *                       description: The payment ID to approve
+ *                     transactionRef:
+ *                       type: string
+ *                       description: Bank transaction reference
+ *                     amount:
+ *                       type: number
+ *                       description: Transaction amount
+ *                     notes:
+ *                       type: string
+ *                       description: Optional approval notes
+ *               notes:
+ *                 type: string
+ *                 description: General notes for the batch approval
+ *     responses:
+ *       200:
+ *         description: Batch approval completed
+ *       400:
+ *         description: Invalid request data
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/payments/csv-batch-approve",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { matches, notes } = req.body;
+			const adminUserId = req.user?.userId;
+
+			if (!matches || !Array.isArray(matches) || matches.length === 0) {
+				return res.status(400).json({
+					success: false,
+					message: "No matches provided for batch approval"
+				});
+			}
+
+			const results = {
+				approved: [] as string[],
+				failed: [] as { paymentId: string; error: string }[],
+				summary: {
+					total: matches.length,
+					successful: 0,
+					failed: 0
+				}
+			};
+
+			// Process each match in sequence to avoid race conditions
+			for (const match of matches) {
+				try {
+					const { paymentId, transactionRef, amount, notes: matchNotes } = match;
+
+					if (!paymentId) {
+						results.failed.push({
+							paymentId: 'unknown',
+							error: 'Missing payment ID'
+						});
+						continue;
+					}
+
+					// Get the payment to verify it exists and is still pending
+					const payment = await prisma.walletTransaction.findUnique({
+						where: { id: paymentId },
+						include: {
+							user: {
+								select: {
+									id: true,
+									fullName: true,
+									phoneNumber: true
+								}
+							},
+							loan: {
+								include: {
+									application: {
+										include: {
+											product: {
+												select: {
+													name: true
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					});
+
+					if (!payment) {
+						results.failed.push({
+							paymentId,
+							error: 'Payment not found'
+						});
+						continue;
+					}
+
+					if (payment.status !== "PENDING") {
+						results.failed.push({
+							paymentId,
+							error: `Payment is ${payment.status}, not pending`
+						});
+						continue;
+					}
+
+					// Use a transaction to approve the payment
+					await prisma.$transaction(async (tx) => {
+						// Update payment status
+						await tx.walletTransaction.update({
+							where: { id: paymentId },
+							data: {
+								status: "APPROVED",
+								processedAt: new Date(),
+								metadata: Object.assign(
+									payment.metadata || {},
+									{
+										csvBatchApproval: true,
+										bankTransactionRef: transactionRef,
+										bankAmount: amount,
+										approvedBy: adminUserId,
+										approvalNotes: matchNotes || notes,
+										approvalDate: new Date().toISOString()
+									}
+								)
+							}
+						});
+
+						// Handle loan repayment allocation using existing LateFeeProcessor
+						if (payment.loanId) {
+							const { LateFeeProcessor } = await import("../lib/lateFeeProcessor");
+							await LateFeeProcessor.handlePaymentAllocation(
+								payment.loanId,
+								Math.abs(payment.amount),
+								new Date(),
+								tx
+							);
+						}
+
+						// Create admin notification
+						await tx.notification.create({
+							data: {
+								userId: payment.userId,
+								title: "Payment Approved",
+								message: `Your payment of ${new Intl.NumberFormat("en-MY", {
+									style: "currency",
+									currency: "MYR",
+								}).format(Math.abs(payment.amount))} has been approved via CSV batch processing.`,
+								type: "SYSTEM",
+								isRead: false
+							}
+						});
+
+						console.log(`Payment ${paymentId} approved via CSV batch processing`);
+					});
+
+					// Send WhatsApp notification for approved payment
+					try {
+						if (payment.user?.phoneNumber && payment.user?.fullName && payment.loan) {
+							// Get updated loan details for notification
+							const updatedLoan = await prisma.loan.findUnique({
+								where: { id: payment.loanId! },
+								include: {
+									repayments: {
+										where: { status: "PAID" },
+										orderBy: { dueDate: 'asc' }
+									},
+									application: {
+										include: {
+											product: { select: { name: true } }
+										}
+									}
+								}
+							});
+
+							if (updatedLoan) {
+								// Get next payment info
+								const nextPayment = await prisma.loanRepayment.findFirst({
+									where: {
+										loanId: payment.loanId!,
+										status: { not: "PAID" }
+									},
+									orderBy: { dueDate: 'asc' }
+								});
+
+								const completedPayments = updatedLoan.repayments.length;
+								const totalPayments = updatedLoan.term || updatedLoan.application.term || 12;
+
+								const whatsappResult = await whatsappService.sendPaymentApprovedNotification({
+									to: payment.user.phoneNumber,
+									fullName: payment.user.fullName,
+									paymentAmount: Math.abs(payment.amount).toFixed(2),
+									loanName: updatedLoan.application.product.name,
+									nextPaymentAmount: nextPayment?.amount?.toFixed(2) || "0.00",
+									nextDueDate: nextPayment ? formatDateForWhatsApp(nextPayment.dueDate) : "N/A",
+									completedPayments: completedPayments.toString(),
+									totalPayments: totalPayments.toString()
+								});
+
+								if (whatsappResult.success) {
+									console.log("WhatsApp payment approval notification sent:", whatsappResult.messageId);
+								} else {
+									console.error("WhatsApp payment approval notification failed:", whatsappResult.error);
+								}
+							}
+						}
+					} catch (whatsappError) {
+						console.error("Error sending WhatsApp payment approval notification:", whatsappError);
+						// Continue without failing the approval
+					}
+
+					results.approved.push(paymentId);
+					results.summary.successful++;
+
+				} catch (error) {
+					console.error(`Error approving payment ${match.paymentId}:`, error);
+					results.failed.push({
+						paymentId: match.paymentId || 'unknown',
+						error: error instanceof Error ? error.message : 'Unknown error'
+					});
+					results.summary.failed++;
+				}
+			}
+
+			return res.json({
+				success: true,
+				data: results
+			});
+
+		} catch (error) {
+			console.error("Error in batch payment approval:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to process batch approval",
 				error: error instanceof Error ? error.message : "Unknown error"
 			});
 		}

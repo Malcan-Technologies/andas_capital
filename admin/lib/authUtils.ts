@@ -162,11 +162,15 @@ export const fetchWithAdminTokenRefresh = async <T>(
 	}
 
 	// Set up headers with authorization
-	const headers = {
-		...options.headers,
+	const headers: Record<string, string> = {
+		...(options.headers as Record<string, string> || {}),
 		Authorization: `Bearer ${accessToken}`,
-		"Content-Type": "application/json",
 	};
+
+	// Only set Content-Type for non-FormData requests
+	if (!(options.body instanceof FormData)) {
+		headers["Content-Type"] = "application/json";
+	}
 
 	// Determine the full URL to use
 	let fullUrl = url;
@@ -180,7 +184,8 @@ export const fetchWithAdminTokenRefresh = async <T>(
 		!url.startsWith("/api/admin/login") &&
 		!url.startsWith("/api/admin/logout") &&
 		!url.startsWith("/api/admin/daily-stats") &&
-		!url.startsWith("/api/admin/monthly-stats")
+		!url.startsWith("/api/admin/monthly-stats") &&
+		!url.startsWith("/api/admin/settings")
 	) {
 		// For API calls to admin endpoints, route them to the backend
 		const isAdminEndpoint = url.includes("/api/admin/");
