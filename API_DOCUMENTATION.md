@@ -2,9 +2,10 @@
 
 Welcome to the Kapital API documentation! This guide provides comprehensive information about all available endpoints for app developers building on the Kapital platform.
 
-## Base URL
+## Base URL & Swagger
 
 **Local Development:** `http://localhost:4001`
+**Swagger UI:** `http://localhost:4001/api-docs`
 
 ## Authentication
 

@@ -42,6 +42,34 @@ Notes
 - Admin API calls must include Authorization headers (JWT with refresh tokens)
  - Daily late-fee processing cron runs at 1:00 AM MYT (UTC+8) via node-cron; see `backend/src/lib/cronScheduler.ts` (scheduling) and `backend/src/lib/lateFeeProcessor.ts` (processing)
 
+### Start Apps with PM2 (local)
+
+Frontend (port 3002)
+```bash
+cd frontend
+npm install
+npm run build
+pm2 start npm --name "growkapital-frontend" -- start -- --port 3002 --hostname 0.0.0.0
+pm2 save
+```
+
+Admin (port 3003)
+```bash
+cd admin
+npm install
+npm run build
+PORT=3003 pm2 start npm --name "growkapital-admin" -- start -- --hostname 0.0.0.0
+pm2 save
+```
+
+PM2 basics
+```bash
+pm2 ls
+pm2 restart growkapital-frontend
+pm2 restart growkapital-admin
+pm2 logs growkapital-frontend --lines 50 --nostream
+```
+
 ### Environment Variables (essentials)
 Backend (`backend/.env`):
 ```
@@ -60,10 +88,19 @@ NEXT_PUBLIC_API_URL=http://localhost:4001
 Use fallback in code: `process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"`.
 
 ### Docs & Guides
-- **API guide**: `backend/docs/admin-api-guide.md`
+- **API guide (canonical)**: `API_DOCUMENTATION.md`
 - **System docs**: `backend/docs/*`
 - **Swagger**: `backend/swagger/swagger.json`
 - **Brand style**: `BRAND_STYLE_GUIDE.md`
+
+### Documentation Index
+- API reference and auth flows: `API_DOCUMENTATION.md`
+- Backend overview: `backend/README.md`
+- Admin API details: `backend/docs/admin-api-guide.md`
+- Late fee system and cron: `backend/docs/LATE_FEE_PAYMENT_HANDLING.md`
+- Admin dashboard metrics: `backend/docs/ADMIN_DASHBOARD_METRICS.md`
+- Payment schedule logic: `backend/docs/PAYMENT_SCHEDULE_UPDATE.md`
+- Migrations: `backend/docs/MIGRATION_BEST_PRACTICES.md`, `backend/docs/MIGRATION_RECOVERY_SYSTEM.md`
 
 ### Contributing
 - Keep TS strict & functional; avoid classes
