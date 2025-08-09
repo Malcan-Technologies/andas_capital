@@ -23,10 +23,12 @@ The Late Fee Payment Handling System processes payments for overdue loan repayme
 - Requires a mandatory reason for audit trail
 - All waive actions are logged for compliance
 
-### 🔄 **Automatic Integration**
-- Triggered automatically when repayment status changes to `COMPLETED`
+### 🔄 **Automatic & Scheduled Integration**
+- Triggered automatically when repayments are processed (wallet or admin)
 - Integrated with both admin payment processing and wallet payment systems
 - Handles both manual admin payments and customer wallet payments
+- Scheduled daily processing at 1:00 AM MYT (UTC+8) via node-cron
+- Scheduler: `backend/src/lib/cronScheduler.ts`, processor: `backend/src/lib/lateFeeProcessor.ts`
 
 ### 📊 **Payment Priority Logic**
 1. **Original Repayment Amount** (principal + interest)

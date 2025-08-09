@@ -1111,6 +1111,21 @@ POST /api/admin/ensure-wallets
 
 **Description**: Create wallets for all users who don't have one
 
+### Late Fees (Admin)
+
+All endpoints require admin role. See `backend/src/api/admin/late-fees.ts`.
+
+- GET `/api/admin/late-fees` — repayments with assessed late fees
+- GET `/api/admin/late-fees/status` — latest processing status + alerts
+- POST `/api/admin/late-fees/process` — manual processing (force mode)
+- GET `/api/admin/late-fees/repayment/{repaymentId}` — fee summary
+- GET `/api/admin/late-fees/repayment/{repaymentId}/total-due` — original + fees
+- POST `/api/admin/late-fees/repayment/{repaymentId}/handle-payment` — allocate payment
+- POST `/api/admin/late-fees/repayment/{repaymentId}/waive` — manual waive
+- GET `/api/admin/late-fees/logs?limit=10` — recent logs
+
+Scheduling: Daily late-fee processing cron at 1:00 AM MYT (UTC+8) via node-cron. See `backend/src/lib/cronScheduler.ts` and `backend/src/lib/lateFeeProcessor.ts`.
+
 ---
 
 ## Response Codes
