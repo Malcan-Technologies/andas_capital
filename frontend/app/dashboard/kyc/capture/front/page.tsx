@@ -33,12 +33,15 @@ function CaptureFrontContent() {
       setIsSubmitting(true);
       setError(null);
       const token = TokenStorage.getAccessToken();
-      if (!token) throw new Error("Unauthorized");
+      if (!token && !kycToken) throw new Error("Unauthorized");
       const form = new FormData();
       form.append("front", await dataUrlToFile(preview, "mykad-front.png"));
       const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}),
+        },
         body: form
       });
       if (!uploadRes.ok) {
@@ -48,7 +51,10 @@ function CaptureFrontContent() {
       // Validate front immediately
       const validateRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/validate/front`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}),
+        },
       });
       const v = await validateRes.json().catch(() => ({}));
       if (!validateRes.ok) throw new Error(v?.message || "Front validation failed");
@@ -94,13 +100,8 @@ function CaptureFrontContent() {
                     audio={false}
                     screenshotFormat="image/jpeg"
                     screenshotQuality={0.92}
-                    videoConstraints={{
-                      facingMode: { ideal: "environment" },
-                      width: { ideal: 1920 },
-                      height: { ideal: 1080 },
-                      aspectRatio: 16 / 9,
-                    }}
-                    className="w-full h-full object-contain"
+                    videoConstraints={{ facingMode: { ideal: "environment" } }}
+                    className="w-full h-full object-cover"
                   />
                   <div className="pointer-events-none absolute inset-0 border-2 border-white/60 rounded-xl" />
                 </div>

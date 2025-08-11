@@ -38,12 +38,15 @@ function CaptureSelfieContent() {
       setIsSubmitting(true);
       setError(null);
       const token = TokenStorage.getAccessToken();
-      if (!token) throw new Error("Unauthorized");
+      if (!token && !kycToken) throw new Error("Unauthorized");
       const form = new FormData();
       form.append("selfie", await dataUrlToFile(preview, "selfie.png"));
       const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}),
+        },
         body: form
       });
       if (!uploadRes.ok) {
@@ -53,7 +56,10 @@ function CaptureSelfieContent() {
       // Validate selfie immediately
       const validateRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/validate/selfie`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}),
+        },
       });
       const v = await validateRes.json().catch(() => ({}));
       if (!validateRes.ok) throw new Error(v?.message || "Selfie validation failed");
@@ -61,7 +67,10 @@ function CaptureSelfieContent() {
       // Trigger processing only after pass
       const procRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/process`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}),
+        },
       });
       const proc = await procRes.json().catch(() => ({}));
       if (!procRes.ok) {
