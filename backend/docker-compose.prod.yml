@@ -50,7 +50,7 @@ services:
             - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
             - WHATSAPP_USE_OTP_TEMPLATE=${WHATSAPP_USE_OTP_TEMPLATE:-true}
             # KYC settings
-            - KYC_DOCKER=${KYC_DOCKER:-false}
+            - KYC_DOCKER=${KYC_DOCKER:-true}
             - KYC_JWT_SECRET=${KYC_JWT_SECRET:-${JWT_SECRET}}
             - KYC_TOKEN_TTL_MINUTES=${KYC_TOKEN_TTL_MINUTES:-15}
             # Optional: point to external OCR/Face/Liveness endpoints if available
@@ -60,6 +60,12 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
+            ocr:
+                condition: service_started
+            face:
+                condition: service_started
+            liveness:
+                condition: service_started
         healthcheck:
             test:
                 [
@@ -81,6 +87,45 @@ services:
                 limits:
                     cpus: "1"
                     memory: 1G
+
+    ocr:
+        image: python:3.11-slim
+        restart: always
+        working_dir: /srv
+        volumes:
+            - ./python/ocr:/srv
+            - /var/www/uploads:/srv/uploads:ro
+        command: bash -lc "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7001"
+        expose:
+            - "7001"
+        networks:
+            - app_network
+
+    face:
+        image: python:3.11-slim
+        restart: always
+        working_dir: /srv
+        volumes:
+            - ./python/face:/srv
+            - /var/www/uploads:/srv/uploads:ro
+        command: bash -lc "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7002"
+        expose:
+            - "7002"
+        networks:
+            - app_network
+
+    liveness:
+        image: python:3.11-slim
+        restart: always
+        working_dir: /srv
+        volumes:
+            - ./python/liveness:/srv
+            - /var/www/uploads:/srv/uploads:ro
+        command: bash -lc "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7003"
+        expose:
+            - "7003"
+        networks:
+            - app_network
 
 networks:
     app_network:

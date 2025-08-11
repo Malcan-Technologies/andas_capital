@@ -66,8 +66,16 @@ function sha256(buffer: Buffer): string {
 // Start or reuse a KYC session (optionally tied to an application)
 router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
   try {
-    const { applicationId } = (req.body || {}) as { applicationId?: string };
+    let { applicationId, loanId } = (req.body || {}) as { applicationId?: string, loanId?: string };
     if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
+    // If loanId is provided, resolve its applicationId
+    if (!applicationId && loanId) {
+      const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+      if (!loan || loan.userId !== req.user.userId) {
+        return res.status(404).json({ message: "Loan not found" });
+      }
+      applicationId = loan.applicationId;
+    }
     
     // If KYC already approved before, handle reuse
     const existingApproved = await db.kycSession.findFirst({ where: { userId: req.user.userId, status: { in: ["APPROVED"] } } });
