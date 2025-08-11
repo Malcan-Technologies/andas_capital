@@ -95,13 +95,14 @@ function CaptureBackContent() {
                 </ul>
               </div>
               <div className="rounded-2xl p-3 bg-gradient-to-br from-purple-primary/5 to-blue-tertiary/5 border border-gray-100">
-                <div className="relative aspect-[4/3] bg-black/5 rounded-xl overflow-hidden">
+                <div className="relative aspect-[16/9] bg-black/5 rounded-xl overflow-hidden">
                   <Webcam
                     ref={cardCamRef as any}
                     audio={false}
-                    screenshotFormat="image/png"
-                    videoConstraints={{ facingMode: { ideal: "environment" } }}
-                    className="w-full h-full object-cover"
+                    screenshotFormat="image/jpeg"
+                    screenshotQuality={0.92}
+                    videoConstraints={{ width: 1280, height: 720, facingMode: { ideal: "environment" } }}
+                    className="w-full h-full object-contain"
                   />
                   <div className="pointer-events-none absolute inset-0 border-2 border-white/60 rounded-xl" />
                 </div>
@@ -114,7 +115,9 @@ function CaptureBackContent() {
           ) : (
             <>
               <div className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
-                <img src={preview} alt="back" className="w-full object-contain" />
+                <div className="relative aspect-[16/9]">
+                  <img src={preview} alt="back" className="absolute inset-0 w-full h-full object-contain" />
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <button onClick={retake} className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700">Retake</button>

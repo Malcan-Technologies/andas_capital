@@ -122,9 +122,10 @@ function CaptureSelfieContent() {
                   <Webcam
                     ref={selfieRef as any}
                     audio={false}
-                    screenshotFormat="image/png"
-                    videoConstraints={{ facingMode: { ideal: "user" } }}
-                    className="w-full h-full object-cover"
+                    screenshotFormat="image/jpeg"
+                    screenshotQuality={0.92}
+                    videoConstraints={{ width: 1024, height: 1024, facingMode: { ideal: "user" } }}
+                    className="w-full h-full object-contain"
                   />
                   <div className="pointer-events-none absolute inset-0 ring-2 ring-white/70 rounded-full" />
                 </div>
