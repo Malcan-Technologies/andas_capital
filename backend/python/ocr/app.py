@@ -64,11 +64,24 @@ def read_image_bytes(url_path: str) -> bytes:
         r = requests.get(url_path, timeout=10)
         r.raise_for_status()
         return r.content
-    fs_path = url_path
-    if not os.path.isabs(fs_path):
-        fs_path = os.path.join("/app", url_path)
-    with open(fs_path, "rb") as f:
-        return f.read()
+    # Map storageUrl to container FS
+    candidates = []
+    if os.path.isabs(url_path):
+        candidates.append(url_path)
+        # If path begins with /uploads, try /srv/uploads too (sidecars mount /srv/uploads)
+        if url_path.startswith("/uploads"):
+            candidates.append(os.path.join("/srv", url_path.lstrip("/")))
+            candidates.append(os.path.join("/app", url_path.lstrip("/")))
+    else:
+        candidates.append(os.path.join("/srv", url_path))
+        candidates.append(os.path.join("/app", url_path))
+    for p in candidates:
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except Exception:
+            continue
+    raise FileNotFoundError(f"Image not found for {url_path} (tried: {candidates})")
 
 
 def ocr_image_to_text(img_bytes: bytes) -> str:

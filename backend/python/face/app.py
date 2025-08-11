@@ -31,13 +31,24 @@ def read_image(url_path: str) -> Optional[np.ndarray]:
         r = requests.get(url_path, timeout=10)
         r.raise_for_status()
         data = np.frombuffer(r.content, np.uint8)
-        img = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        return img
-    path = url_path if os.path.isabs(url_path) else os.path.join("/app", url_path)
-    with open(path, "rb") as f:
-        data = np.frombuffer(f.read(), np.uint8)
-        img = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        return img
+        return cv2.imdecode(data, cv2.IMREAD_COLOR)
+    candidates = []
+    if os.path.isabs(url_path):
+        candidates.append(url_path)
+        if url_path.startswith("/uploads"):
+            candidates.append(os.path.join("/srv", url_path.lstrip("/")))
+            candidates.append(os.path.join("/app", url_path.lstrip("/")))
+    else:
+        candidates.append(os.path.join("/srv", url_path))
+        candidates.append(os.path.join("/app", url_path))
+    for p in candidates:
+        try:
+            with open(p, "rb") as f:
+                data = np.frombuffer(f.read(), np.uint8)
+                return cv2.imdecode(data, cv2.IMREAD_COLOR)
+        except Exception:
+            continue
+    return None
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

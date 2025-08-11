@@ -11,19 +11,7 @@ import { prisma } from "../lib/prisma";
 const router = Router();
 const db: any = prisma as any;
 
-function isLikelyPlaceholderOcr(ocr: any): boolean {
-  if (!ocr) return true;
-  const name = String(ocr.name || ocr.fullName || "").trim().toUpperCase();
-  const ic = String(ocr.icNumber || ocr.ic_number || ocr.nric || "").trim();
-  const dob = String(ocr.dateOfBirth || ocr.dob || "").trim();
-  const address = String(ocr.address || ocr.address1 || ocr.addressRaw || "").trim().toUpperCase();
-  if (!name || !dob || !address) return true;
-  if (name === "JOHN DOE") return true;
-  if (ic === "900101-14-1234") return true;
-  if (dob === "1990-01-01") return true;
-  if (address.includes("JALAN ABC")) return true;
-  return false;
-}
+// Placeholder detection removed per product requirement; rely on readability checks only
 
 function isValidMalaysianNric(nric: string): boolean {
   return /^\d{6}-\d{2}-\d{4}$/.test(nric);
@@ -203,15 +191,6 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
           const derived = deriveDobFromNric(normalized.icNumber);
           if (derived) normalized.dateOfBirth = derived;
         }
-        // If stub/placeholder detected, fail fast so frontend asks user to retake
-        if (isLikelyPlaceholderOcr({
-          name: normalized.name,
-          icNumber: normalized.icNumber,
-          dob: normalized.dateOfBirth,
-          address: normalized.address,
-        })) {
-          throw new Error('Placeholder OCR detected');
-        }
         ocrData = normalized;
       }
     } catch (e) {
@@ -227,12 +206,17 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
       return res.status(400).json({ message: "Face match could not be completed. Please retake your selfie in good lighting.", code: "FACE_SERVICE_FAIL", nextStep: "retake_selfie" });
     }
 
-    try {
-      const liveRes = await axios.post(liveUrl, { selfieUrl: selfie.storageUrl });
-      livenessScore = Number(liveRes.data?.score ?? 0);
-    } catch (e) {
-      await db.kycSession.update({ where: { id: kycId }, data: { status: "FAILED", retryCount: { increment: 1 } } });
-      return res.status(400).json({ message: "Liveness check failed. Please retake your selfie without glare and keep still.", code: "LIVENESS_SERVICE_FAIL", nextStep: "retake_selfie" });
+    const disableLiveness = (process.env.KYC_DISABLE_LIVENESS === 'true');
+    if (!disableLiveness) {
+      try {
+        const liveRes = await axios.post(liveUrl, { selfieUrl: selfie.storageUrl });
+        livenessScore = Number(liveRes.data?.score ?? 0);
+      } catch (e) {
+        await db.kycSession.update({ where: { id: kycId }, data: { status: "FAILED", retryCount: { increment: 1 } } });
+        return res.status(400).json({ message: "Liveness check failed. Please retake your selfie without glare and keep still.", code: "LIVENESS_SERVICE_FAIL", nextStep: "retake_selfie" });
+      }
+    } else {
+      livenessScore = 1.0;
     }
 
     const threshold = Number(process.env.KYC_FACE_THRESHOLD || 0.75);
@@ -240,7 +224,7 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
 
     // Simple rules for status
     let finalStatus: "APPROVED" | "MANUAL_REVIEW" | "REJECTED" = "APPROVED";
-    if (faceMatchScore < threshold || livenessScore < liveThreshold) {
+    if (faceMatchScore < threshold || (!disableLiveness && livenessScore < liveThreshold)) {
       finalStatus = faceMatchScore < threshold && livenessScore < liveThreshold ? "REJECTED" : "MANUAL_REVIEW";
     }
 
@@ -378,8 +362,15 @@ router.post("/:kycId/validate/front", authenticateKycOrAuth, async (req: AuthReq
         const derived = deriveDobFromNric(normalized.icNumber);
         if (derived) normalized.dateOfBirth = derived;
       }
-      if (isLikelyPlaceholderOcr({ name: normalized.name, icNumber: normalized.icNumber, dob: normalized.dateOfBirth, address: normalized.address })) {
-        return res.status(400).json({ message: "Front photo looks like a placeholder. Please retake with clearer lighting.", code: "OCR_PLACEHOLDER", nextStep: "retake_front" });
+      // Front step: require key fields from front side
+      if (!normalized.icNumber || !isValidMalaysianNric(normalized.icNumber)) {
+        return res.status(400).json({ message: "We couldn't read your IC number. Please retake the front photo with better lighting.", code: "OCR_FAIL", nextStep: "retake_front" });
+      }
+      if (!normalized.name || String(normalized.name).trim().length < 2) {
+        return res.status(400).json({ message: "We couldn't read your name. The photo may be blurry or cropped. Please retake the front photo.", code: "OCR_BLUR", nextStep: "retake_front" });
+      }
+      if (!normalized.address || String(normalized.address).trim().length < 8) {
+        return res.status(400).json({ message: "We couldn't read your address. The photo may be blurry or too dark. Please retake the front photo with better lighting and avoid glare.", code: "OCR_BLUR", nextStep: "retake_front" });
       }
       const merged = { ...(session.ocrData as any || {}), front: normalized };
       await db.kycSession.update({ where: { id: kycId }, data: { ocrData: merged } });
@@ -426,9 +417,7 @@ router.post("/:kycId/validate/back", authenticateKycOrAuth, async (req: AuthRequ
         const derived = deriveDobFromNric(normalized.icNumber);
         if (derived) normalized.dateOfBirth = derived;
       }
-      if (isLikelyPlaceholderOcr({ name: normalized.name, icNumber: normalized.icNumber, dob: normalized.dateOfBirth, address: normalized.address })) {
-        return res.status(400).json({ message: "Back photo looks like a placeholder. Please retake with clearer lighting.", code: "OCR_PLACEHOLDER", nextStep: "retake_back" });
-      }
+      // No placeholder block; rely on readability and cross-check
       const merged = { ...(session.ocrData as any || {}), back: normalized };
       await db.kycSession.update({ where: { id: kycId }, data: { ocrData: merged } });
       return res.json({ ok: true, ocr: normalized });
