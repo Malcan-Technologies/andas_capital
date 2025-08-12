@@ -3,7 +3,7 @@ import multer from "multer";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
-import axios from "axios";
+
 import * as jwt from "jsonwebtoken";
 import { authenticateAndVerifyPhone, authenticateKycOrAuth, AuthRequest, FileAuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
@@ -13,20 +13,35 @@ const db: any = prisma as any;
 
 // Placeholder detection removed per product requirement; rely on readability checks only
 
-function isValidMalaysianNric(nric: string): boolean {
-  return /^\d{6}-\d{2}-\d{4}$/.test(nric);
-}
+// NRIC validation functions removed - no longer needed without OCR validation
 
-function deriveDobFromNric(nric: string): string | null {
-  // YYMMDD-##-#### → return YYYY-MM-DD (assume 1900-1999 for YY >= 40 else 2000-2039 heuristic)
-  if (!isValidMalaysianNric(nric)) return null;
-  const [ymd] = nric.split("-");
-  const yy = parseInt(ymd.slice(0, 2), 10);
-  const mm = ymd.slice(2, 4);
-  const dd = ymd.slice(4, 6);
-  const century = yy >= 40 ? 1900 : 2000;
-  const yyyy = century + yy;
-  return `${yyyy}-${mm}-${dd}`;
+// Helper function to check if user has uploaded all required KYC documents (front, back, selfie)
+async function userHasAllKycDocuments(userId: string): Promise<boolean> {
+  try {
+    // Check if user has a KYC session with all 3 document types (status doesn't matter since verification is handled later)
+    const kycSession = await db.kycSession.findFirst({
+      where: {
+        userId,
+        status: "APPROVED" // Still check for approved since that means documents were uploaded and processed
+      },
+      include: {
+        documents: true
+      }
+    });
+
+    if (!kycSession) {
+      return false;
+    }
+
+    // Check if all 3 required document types are present
+    const documentTypes = kycSession.documents.map((doc: any) => doc.type);
+    const requiredTypes = ["front", "back", "selfie"];
+    
+    return requiredTypes.every(type => documentTypes.includes(type));
+  } catch (error) {
+    console.error("Error checking KYC documents:", error);
+    return false;
+  }
 }
 
 // Local disk storage (can be swapped for S3/MinIO integration)
@@ -166,67 +181,13 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
     const selfie = session.documents.find((d: any) => d.type === "selfie");
     if (!front || !back || !selfie) return res.status(400).json({ message: "Missing required images" });
 
-    // Call Python microservices with error handling
-    const ocrUrl = process.env.KYC_OCR_URL || (process.env.KYC_DOCKER === 'true' ? 'http://ocr:7001/ocr' : 'http://localhost:7001/ocr');
-    const faceUrl = process.env.KYC_FACE_URL || (process.env.KYC_DOCKER === 'true' ? 'http://face:7002/face-match' : 'http://localhost:7002/face-match');
-    const liveUrl = process.env.KYC_LIVENESS_URL || (process.env.KYC_DOCKER === 'true' ? 'http://liveness:7003/liveness' : 'http://localhost:7003/liveness');
-
+    // OCR and validation disabled - automatically approve KYC with image upload
     let ocrData: any = null;
-    let faceMatchScore = 0;
-    let livenessScore = 0;
-
-    try {
-      const ocrRes = await axios.post(ocrUrl, { frontUrl: front.storageUrl, backUrl: back.storageUrl });
-      ocrData = ocrRes.data;
-      // Normalize keys
-      if (ocrData && typeof ocrData === 'object') {
-        const normalized = {
-          name: ocrData.name || ocrData.fullName || undefined,
-          icNumber: ocrData.icNumber || ocrData.ic_number || ocrData.nric || undefined,
-          dateOfBirth: ocrData.dateOfBirth || ocrData.dob || undefined,
-          address: ocrData.address || ocrData.address1 || ocrData.addressRaw || undefined,
-        };
-        // If DOB missing but NRIC is valid, derive DOB
-        if (!normalized.dateOfBirth && normalized.icNumber && isValidMalaysianNric(normalized.icNumber)) {
-          const derived = deriveDobFromNric(normalized.icNumber);
-          if (derived) normalized.dateOfBirth = derived;
-        }
-        ocrData = normalized;
-      }
-    } catch (e) {
-      await db.kycSession.update({ where: { id: kycId }, data: { status: "FAILED", retryCount: { increment: 1 } } });
-      return res.status(400).json({ message: "Unable to read MyKad details. Please retake a clearer photo of your card.", code: "OCR_FAIL", nextStep: "retake_front" });
-    }
-
-    try {
-      const faceRes = await axios.post(faceUrl, { icFrontUrl: front.storageUrl, selfieUrl: selfie.storageUrl });
-      faceMatchScore = Number(faceRes.data?.score ?? 0);
-    } catch (e) {
-      await db.kycSession.update({ where: { id: kycId }, data: { status: "FAILED", retryCount: { increment: 1 } } });
-      return res.status(400).json({ message: "Face match could not be completed. Please retake your selfie in good lighting.", code: "FACE_SERVICE_FAIL", nextStep: "retake_selfie" });
-    }
-
-    const disableLiveness = (process.env.KYC_DISABLE_LIVENESS === 'true');
-    if (!disableLiveness) {
-      try {
-        const liveRes = await axios.post(liveUrl, { selfieUrl: selfie.storageUrl });
-        livenessScore = Number(liveRes.data?.score ?? 0);
-      } catch (e) {
-        await db.kycSession.update({ where: { id: kycId }, data: { status: "FAILED", retryCount: { increment: 1 } } });
-        return res.status(400).json({ message: "Liveness check failed. Please retake your selfie without glare and keep still.", code: "LIVENESS_SERVICE_FAIL", nextStep: "retake_selfie" });
-      }
-    } else {
-      livenessScore = 1.0;
-    }
-
-    const threshold = Number(process.env.KYC_FACE_THRESHOLD || 0.75);
-    const liveThreshold = Number(process.env.KYC_LIVENESS_THRESHOLD || 0.5);
-
-    // Simple rules for status
+    let faceMatchScore = 1.0; // Default pass score
+    let livenessScore = 1.0; // Default pass score
+    
+    // Skip all processing and approve automatically
     let finalStatus: "APPROVED" | "MANUAL_REVIEW" | "REJECTED" = "APPROVED";
-    if (faceMatchScore < threshold || (!disableLiveness && livenessScore < liveThreshold)) {
-      finalStatus = faceMatchScore < threshold && livenessScore < liveThreshold ? "REJECTED" : "MANUAL_REVIEW";
-    }
 
     const updated = await db.kycSession.update({
       where: { id: kycId },
@@ -241,8 +202,13 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
 
     // If approved and tied to an application, update application status to PENDING_APPROVAL
     if (finalStatus === "APPROVED" && session.applicationId) {
-      await db.loanApplication.update({ where: { id: session.applicationId }, data: { status: "PENDING_APPROVAL" } });
+      await db.loanApplication.update({ 
+        where: { id: session.applicationId }, 
+        data: { status: "PENDING_APPROVAL" } 
+      });
     }
+    
+    // Note: User KYC status is not automatically set to verified - this will be handled in a later verification step
 
     return res.json({
       kycId,
@@ -295,6 +261,100 @@ router.get("/:kycId/details", authenticateKycOrAuth, async (req: AuthRequest, re
   }
 });
 
+// Get user's KYC images for profile page
+router.get("/images", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
+    
+    // Find the most recent KYC session with documents for this user (any status)
+    const session = await db.kycSession.findFirst({
+      where: { 
+        userId: req.user.userId
+      },
+      include: { documents: true },
+      orderBy: { createdAt: "desc" }
+    });
+    
+    if (!session || session.documents.length === 0) {
+      const debugInfo = session 
+        ? `Found session with status: ${session.status}, documents: ${session.documents.length}`
+        : "No KYC sessions found";
+        
+      return res.status(404).json({ 
+        message: "No KYC documents found", 
+        debug: debugInfo 
+      });
+    }
+    
+    const front = session.documents.find((d: any) => d.type === "front");
+    const back = session.documents.find((d: any) => d.type === "back");
+    const selfie = session.documents.find((d: any) => d.type === "selfie");
+    
+    return res.json({
+      kycId: session.id,
+      completedAt: session.completedAt,
+      images: {
+        front: front ? {
+          id: front.id,
+          url: front.storageUrl,
+          type: "IC Front"
+        } : null,
+        back: back ? {
+          id: back.id,
+          url: back.storageUrl,
+          type: "IC Back"
+        } : null,
+        selfie: selfie ? {
+          id: selfie.id,
+          url: selfie.storageUrl,
+          type: "Selfie"
+        } : null
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching KYC images:", err);
+    return res.status(500).json({ message: "Failed to fetch KYC images" });
+  }
+});
+
+// Get individual KYC image file
+router.get("/images/:imageId", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
+    
+    const { imageId } = req.params;
+    
+    // Find the document and verify ownership
+    const document = await db.kycDocument.findUnique({
+      where: { id: imageId },
+      include: { 
+        kycSession: { 
+          select: { userId: true, status: true } 
+        } 
+      }
+    });
+    
+    if (!document) {
+      return res.status(404).json({ message: "Image not found" });
+    }
+    
+    if (document.kycSession.userId !== req.user.userId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    
+    // Serve the file
+    const filePath = path.join(process.cwd(), document.storageUrl);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "File not found on disk" });
+    }
+    
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error("Error serving KYC image:", err);
+    return res.status(500).json({ message: "Failed to serve image" });
+  }
+});
+
 // Accept KYC results and update user profile
 router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -323,7 +383,7 @@ router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, re
         icType: icNumber ? "IC" : undefined,
         dateOfBirth: dob ? new Date(dob) : undefined,
         address1: addressRaw ?? undefined,
-        kycStatus: true,
+        // kycStatus: true, // Removed - KYC status will be set manually in later verification step
       }
     });
 
@@ -334,132 +394,10 @@ router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, re
   }
 });
 
-// Step-wise validation: front (OCR readability)
-router.post("/:kycId/validate/front", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { kycId } = req.params as any;
-    const session = await db.kycSession.findUnique({ where: { id: kycId }, include: { documents: true } });
-    if (!session) return res.status(404).json({ message: "KYC session not found" });
-    if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
+// OCR validation endpoints removed - KYC now uses simplified image upload only
 
-    const front = session.documents.find((d: any) => d.type === "front");
-    if (!front) return res.status(400).json({ message: "Front image missing. Please capture the front side." });
-
-    const ocrUrl = process.env.KYC_OCR_URL || (process.env.KYC_DOCKER === 'true' ? 'http://ocr:7001/ocr' : 'http://localhost:7001/ocr');
-    try {
-      const ocrRes = await axios.post(ocrUrl, { frontUrl: front.storageUrl });
-      let o = ocrRes.data || {};
-      const normalized = {
-        name: o.name || o.fullName || undefined,
-        icNumber: o.icNumber || o.ic_number || o.nric || undefined,
-        dateOfBirth: o.dateOfBirth || o.dob || undefined,
-        address: o.address || o.address1 || o.addressRaw || undefined,
-      } as any;
-      if (!normalized.icNumber || !isValidMalaysianNric(normalized.icNumber)) {
-        return res.status(400).json({ message: "Unable to read your IC number. Please recapture the front side.", code: "OCR_FAIL", nextStep: "retake_front" });
-      }
-      if (!normalized.dateOfBirth) {
-        const derived = deriveDobFromNric(normalized.icNumber);
-        if (derived) normalized.dateOfBirth = derived;
-      }
-      // Front step: require key fields from front side
-      if (!normalized.icNumber || !isValidMalaysianNric(normalized.icNumber)) {
-        return res.status(400).json({ message: "We couldn't read your IC number. Please retake the front photo with better lighting.", code: "OCR_FAIL", nextStep: "retake_front" });
-      }
-      if (!normalized.name || String(normalized.name).trim().length < 2) {
-        return res.status(400).json({ message: "We couldn't read your name. The photo may be blurry or cropped. Please retake the front photo.", code: "OCR_BLUR", nextStep: "retake_front" });
-      }
-      if (!normalized.address || String(normalized.address).trim().length < 8) {
-        return res.status(400).json({ message: "We couldn't read your address. The photo may be blurry or too dark. Please retake the front photo with better lighting and avoid glare.", code: "OCR_BLUR", nextStep: "retake_front" });
-      }
-      const merged = { ...(session.ocrData as any || {}), front: normalized };
-      await db.kycSession.update({ where: { id: kycId }, data: { ocrData: merged } });
-      return res.json({ ok: true, ocr: normalized });
-    } catch (e) {
-      return res.status(400).json({ message: "We couldn't read your card. Please retake the front photo with less glare and better focus.", code: "OCR_FAIL", nextStep: "retake_front" });
-    }
-  } catch (err) {
-    return res.status(500).json({ message: "Validation failed" });
-  }
-});
-
-// Step-wise validation: back (OCR both sides)
-router.post("/:kycId/validate/back", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { kycId } = req.params as any;
-    const session = await db.kycSession.findUnique({ where: { id: kycId }, include: { documents: true } });
-    if (!session) return res.status(404).json({ message: "KYC session not found" });
-    if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
-
-    const front = session.documents.find((d: any) => d.type === "front");
-    const back = session.documents.find((d: any) => d.type === "back");
-    if (!front || !back) return res.status(400).json({ message: "Both front and back images are required." });
-
-    const ocrUrl = process.env.KYC_OCR_URL || (process.env.KYC_DOCKER === 'true' ? 'http://ocr:7001/ocr' : 'http://localhost:7001/ocr');
-    try {
-      const ocrRes = await axios.post(ocrUrl, { frontUrl: front.storageUrl, backUrl: back.storageUrl });
-      let o = ocrRes.data || {};
-      const normalized = {
-        name: o.name || o.fullName || undefined,
-        icNumber: o.icNumber || o.ic_number || o.nric || undefined,
-        dateOfBirth: o.dateOfBirth || o.dob || undefined,
-        address: o.address || o.address1 || o.addressRaw || undefined,
-      } as any;
-      if (!normalized.icNumber || !isValidMalaysianNric(normalized.icNumber)) {
-        return res.status(400).json({ message: "Unable to read your IC number from back. Please recapture the back side.", code: "OCR_FAIL", nextStep: "retake_back" });
-      }
-      // Compare against front OCR if available
-      const frontIc = (session.ocrData as any)?.front?.icNumber as string | undefined;
-      if (frontIc && frontIc !== normalized.icNumber) {
-        return res.status(400).json({ message: "IC numbers on front and back do not match.", code: "IC_MISMATCH", nextStep: "retake_front" });
-      }
-      if (!normalized.dateOfBirth) {
-        const derived = deriveDobFromNric(normalized.icNumber);
-        if (derived) normalized.dateOfBirth = derived;
-      }
-      // No placeholder block; rely on readability and cross-check
-      const merged = { ...(session.ocrData as any || {}), back: normalized };
-      await db.kycSession.update({ where: { id: kycId }, data: { ocrData: merged } });
-      return res.json({ ok: true, ocr: normalized });
-    } catch (e) {
-      return res.status(400).json({ message: "We couldn't read the back side. Please retake the back photo with better lighting.", code: "OCR_FAIL", nextStep: "retake_back" });
-    }
-  } catch (err) {
-    return res.status(500).json({ message: "Validation failed" });
-  }
-});
-
-// Step-wise validation: selfie (face match + liveness)
-router.post("/:kycId/validate/selfie", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { kycId } = req.params as any;
-    const session = await db.kycSession.findUnique({ where: { id: kycId }, include: { documents: true } });
-    if (!session) return res.status(404).json({ message: "KYC session not found" });
-    if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
-
-    const front = session.documents.find((d: any) => d.type === "front");
-    const selfie = session.documents.find((d: any) => d.type === "selfie");
-    if (!front || !selfie) return res.status(400).json({ message: "Front and selfie images are required." });
-
-    const faceUrl = process.env.KYC_FACE_URL || (process.env.KYC_DOCKER === 'true' ? 'http://face:7002/face-match' : 'http://localhost:7002/face-match');
-    const liveUrl = process.env.KYC_LIVENESS_URL || (process.env.KYC_DOCKER === 'true' ? 'http://liveness:7003/liveness' : 'http://localhost:7003/liveness');
-    const threshold = Number(process.env.KYC_FACE_THRESHOLD || 0.75);
-    const liveThreshold = Number(process.env.KYC_LIVENESS_THRESHOLD || 0.5);
-    try {
-      const faceRes = await axios.post(faceUrl, { icFrontUrl: front.storageUrl, selfieUrl: selfie.storageUrl });
-      const liveRes = await axios.post(liveUrl, { selfieUrl: selfie.storageUrl });
-      const faceMatchScore = Number(faceRes.data?.score ?? 0);
-      const livenessScore = Number(liveRes.data?.score ?? 0);
-      if (faceMatchScore < threshold) return res.status(400).json({ message: "Face did not match the card. Please retake your selfie in good lighting.", nextStep: "retake_selfie" });
-      if (livenessScore < liveThreshold) return res.status(400).json({ message: "Liveness check failed. Please retake your selfie without glare and keep still.", nextStep: "retake_selfie" });
-      return res.json({ ok: true });
-    } catch {
-      return res.status(400).json({ message: "Selfie validation failed. Please retake your selfie.", nextStep: "retake_selfie" });
-    }
-  } catch (err) {
-    return res.status(500).json({ message: "Validation failed" });
-  }
-});
+// Export the helper function for use in other API files
+export { userHasAllKycDocuments };
 
 export default router;
 

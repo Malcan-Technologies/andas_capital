@@ -48,16 +48,7 @@ function CaptureFrontContent() {
         const upData = await uploadRes.json().catch(() => ({}));
         throw new Error(upData?.message || "Upload failed");
       }
-      // Validate front immediately
-      const validateRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/validate/front`, {
-        method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}),
-        },
-      });
-      const v = await validateRes.json().catch(() => ({}));
-      if (!validateRes.ok) throw new Error(v?.message || "Front validation failed");
+      // OCR validation disabled - proceed directly to next step
       router.replace(`/dashboard/kyc/capture/back?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
     } catch (e: any) {
       setError(e.message || "Failed to upload front image");

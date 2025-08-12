@@ -53,18 +53,7 @@ function CaptureSelfieContent() {
         const upData = await uploadRes.json().catch(() => ({}));
         throw new Error(upData?.message || "Upload failed");
       }
-      // Validate selfie immediately
-      const validateRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/validate/selfie`, {
-        method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}),
-        },
-      });
-      const v = await validateRes.json().catch(() => ({}));
-      if (!validateRes.ok) throw new Error(v?.message || "Selfie validation failed");
-
-      // Trigger processing only after pass
+      // OCR and face validation disabled - proceed directly to processing
       const procRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/process`, {
         method: "POST",
         headers: {

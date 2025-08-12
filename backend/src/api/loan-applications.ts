@@ -11,6 +11,7 @@ import path from "path";
 import fs from "fs";
 import { RequestHandler } from "express";
 import { trackApplicationStatusChange } from "./admin";
+import { userHasAllKycDocuments } from "./kyc";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -2097,5 +2098,105 @@ router.post(
 		}
 	}
 );
+
+/**
+ * @swagger
+ * /api/loan-applications/{id}/kyc-status:
+ *   get:
+ *     summary: Check KYC requirements for a loan application
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan application ID
+ *     responses:
+ *       200:
+ *         description: KYC status information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 requiresKyc:
+ *                   type: boolean
+ *                   description: Whether KYC is required
+ *                 hasDocuments:
+ *                   type: boolean
+ *                   description: Whether user has uploaded all KYC documents
+ *                 isKycVerified:
+ *                   type: boolean
+ *                   description: Whether user is KYC verified
+ *                 canProceed:
+ *                   type: boolean
+ *                   description: Whether application can proceed to approval
+ *                 nextStep:
+ *                   type: string
+ *                   description: Next step for the application
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+router.get("/:id/kyc-status", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+	try {
+		const { id } = req.params;
+		const userId = req.user!.userId;
+
+		// Get the application and user details
+		const application = await prisma.loanApplication.findFirst({
+			where: {
+				OR: [{ id }, { urlLink: id }],
+				userId,
+			},
+			include: {
+				user: {
+					select: {
+						kycStatus: true,
+					},
+				},
+			},
+		});
+
+		if (!application) {
+			return res.status(404).json({ message: "Application not found" });
+		}
+
+		// Check if user has uploaded all required KYC documents
+		const hasDocuments = await userHasAllKycDocuments(userId);
+		
+		// Check if user is KYC verified
+		const isKycVerified = application.user.kycStatus || false;
+		
+		// Determine if KYC is required - if user doesn't have documents AND is not verified
+		const requiresKyc = !hasDocuments && !isKycVerified;
+		
+		// Can proceed if user has documents OR is verified
+		const canProceed = hasDocuments || isKycVerified;
+		
+		// Determine next step
+		let nextStep = "unknown";
+		if (requiresKyc) {
+			nextStep = "kyc_documents";
+		} else if (canProceed) {
+			nextStep = "pending_approval";
+		}
+
+		return res.json({
+			requiresKyc,
+			hasDocuments,
+			isKycVerified,
+			canProceed,
+			nextStep,
+		});
+	} catch (error) {
+		console.error("Error checking KYC status:", error);
+		return res.status(500).json({ message: "Server error" });
+	}
+});
 
 export default router;

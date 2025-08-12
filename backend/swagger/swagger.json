@@ -4849,6 +4849,70 @@
         }
       }
     },
+    "/api/loan-applications/{id}/kyc-status": {
+      "get": {
+        "summary": "Check KYC requirements for a loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "KYC status information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requiresKyc": {
+                      "type": "boolean",
+                      "description": "Whether KYC is required"
+                    },
+                    "hasDocuments": {
+                      "type": "boolean",
+                      "description": "Whether user has uploaded all KYC documents"
+                    },
+                    "isKycVerified": {
+                      "type": "boolean",
+                      "description": "Whether user is KYC verified"
+                    },
+                    "canProceed": {
+                      "type": "boolean",
+                      "description": "Whether application can proceed to approval"
+                    },
+                    "nextStep": {
+                      "type": "string",
+                      "description": "Next step for the application"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
     "/api/loans": {
       "get": {
         "summary": "Get user's loans",
