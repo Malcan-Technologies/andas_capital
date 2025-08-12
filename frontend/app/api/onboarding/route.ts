@@ -97,6 +97,10 @@ export async function POST(request: Request) {
 		nextResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 		nextResponse.headers.set('Pragma', 'no-cache');
 		nextResponse.headers.set('Expires', '0');
+		
+		// Add custom header to trigger cross-device sync
+		nextResponse.headers.set('X-Profile-Updated', 'true');
+		
 		return nextResponse;
 	} catch (error) {
 		console.error("Onboarding POST error:", error);

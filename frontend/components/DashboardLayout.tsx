@@ -41,6 +41,25 @@ export default function DashboardLayout({
 
 		verifyAuth();
 
+		// Add storage event listener for cross-device mobile updates
+		const handleStorageChange = (e: StorageEvent) => {
+			// Handle mobile profile update redirect
+			if (e.key === 'mobile_profile_update' && e.newValue) {
+				try {
+					const updateData = JSON.parse(e.newValue);
+					if (updateData.action === 'redirect_to_profile' && updateData.url) {
+						console.log('DashboardLayout: Redirecting to profile page due to mobile update');
+						// Clear the flag
+						localStorage.removeItem('mobile_profile_update');
+						// Redirect to profile page
+						router.push(updateData.url);
+					}
+				} catch (error) {
+					console.warn('DashboardLayout: Failed to parse mobile profile update data:', error);
+				}
+			}
+		};
+
 		// Set up periodic token refresh (every 10 minutes)
 		const refreshInterval = setInterval(async () => {
 			const isAuthenticated = await checkAuth();
@@ -50,7 +69,13 @@ export default function DashboardLayout({
 			}
 		}, 10 * 60 * 1000); // 10 minutes
 
-		return () => clearInterval(refreshInterval);
+		// Add storage event listener
+		window.addEventListener('storage', handleStorageChange);
+
+		return () => {
+			clearInterval(refreshInterval);
+			window.removeEventListener('storage', handleStorageChange);
+		};
 	}, [router]);
 
 	// Update document title when title prop changes

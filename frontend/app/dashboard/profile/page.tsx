@@ -290,6 +290,22 @@ export default function ProfilePage() {
 				// Clear the flag
 				localStorage.removeItem('profile_updated');
 			}
+			
+			// Handle mobile profile update redirect
+			if (e.key === 'mobile_profile_update' && e.newValue) {
+				try {
+					const updateData = JSON.parse(e.newValue);
+					if (updateData.action === 'redirect_to_profile' && updateData.url) {
+						console.log('Redirecting to profile page due to mobile update');
+						// Clear the flag
+						localStorage.removeItem('mobile_profile_update');
+						// Redirect to profile page
+						router.push(updateData.url);
+					}
+				} catch (error) {
+					console.warn('Failed to parse mobile profile update data:', error);
+				}
+			}
 		};
 
 		document.addEventListener('visibilitychange', handleVisibilityChange);

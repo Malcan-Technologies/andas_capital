@@ -1,6 +1,16 @@
 import Cookies from "js-cookie";
 
 /**
+ * Utility function to detect if user is on mobile device
+ */
+function isMobileDevice(): boolean {
+	if (typeof navigator === 'undefined') return false;
+	
+	return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+		   (window.innerWidth <= 768);
+}
+
+/**
  * Token storage utility functions to handle both localStorage and cookies
  */
 export const TokenStorage = {
@@ -193,6 +203,27 @@ export const fetchWithTokenRefresh = async <T>(
 			// Keep the default errorMessage
 		}
 		throw new Error(errorMessage);
+	}
+
+	// Check for cross-device sync trigger header
+	const profileUpdated = response.headers.get('X-Profile-Updated');
+	if (profileUpdated === 'true') {
+		console.log("fetchWithTokenRefresh - Profile updated, triggering cross-device sync");
+		// Set localStorage flag to trigger cross-tab/cross-device updates
+		try {
+			localStorage.setItem('profile_updated', Date.now().toString());
+			
+			// If user is on mobile, also set a flag for web redirect
+			if (isMobileDevice()) {
+				localStorage.setItem('mobile_profile_update', JSON.stringify({
+					timestamp: Date.now(),
+					action: 'redirect_to_profile',
+					url: '/dashboard/profile'
+				}));
+			}
+		} catch (e) {
+			console.warn("Failed to set profile update flags:", e);
+		}
 	}
 
 	return response.json();

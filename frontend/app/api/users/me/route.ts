@@ -126,6 +126,10 @@ export async function PUT(request: Request) {
 		response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 		response.headers.set('Pragma', 'no-cache');
 		response.headers.set('Expires', '0');
+		
+		// Add custom header to trigger cross-device sync
+		response.headers.set('X-Profile-Updated', 'true');
+		
 		return response;
 	} catch (error) {
 		console.error("Users/me PUT error:", error);
