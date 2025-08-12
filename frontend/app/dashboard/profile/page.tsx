@@ -438,15 +438,19 @@ export default function ProfilePage() {
 		</span>
 	);
 
-  const handleStartKyc = async () => {
+  const handleStartKyc = async (isRedo: boolean = false) => {
     try {
       const token = TokenStorage.getAccessToken();
       if (!token) {
         router.push("/login");
         return;
       }
+      
+      // Add redo parameter if user is redoing KYC
+      const redoParam = isRedo ? '?redo=true' : '';
+      
       // Start a profile-only KYC session (no applicationId)
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/kyc/start`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/kyc/start${redoParam}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({})
@@ -1078,7 +1082,7 @@ export default function ProfilePage() {
 												{/* Action button for non-verified users */}
 												{!profile?.kycStatus && (
 													<button
-														onClick={handleStartKyc}
+														onClick={() => handleStartKyc(!!kycImages)}
 														className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-purple-primary hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors border border-purple-200 hover:border-purple-300"
 													>
 														{kycImages ? 'Redo KYC' : 'Start KYC'}
@@ -1202,7 +1206,7 @@ export default function ProfilePage() {
 													Complete your identity verification to see your uploaded images here.
 												</p>
 												<button
-													onClick={handleStartKyc}
+													onClick={() => handleStartKyc(false)}
 													className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-primary hover:bg-purple-600 rounded-lg transition-colors"
 												>
 													Start KYC Verification

@@ -80,9 +80,13 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
       applicationId = loan.applicationId;
     }
     
-    // If KYC already approved before, handle reuse
+    // Check for existing approved KYC session
     const existingApproved = await db.kycSession.findFirst({ where: { userId: req.user.userId, status: { in: ["APPROVED"] } } });
-    if (existingApproved) {
+    
+    // If user wants to redo KYC (indicated by query param ?redo=true), allow starting fresh
+    const redoKyc = req.query?.redo === 'true';
+    
+    if (existingApproved && !redoKyc) {
       if (applicationId) {
         // If tied to an application, advance it
         const application = await prisma.loanApplication.findUnique({ where: { id: applicationId } });
@@ -90,7 +94,7 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
           await prisma.loanApplication.update({ where: { id: applicationId }, data: { status: "PENDING_APPROVAL" } });
         }
       }
-      // Return approved session
+      // Return approved session (existing behavior when not redoing)
       const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
       const kycToken = jwt.sign(
         { userId: req.user.userId, kycId: existingApproved.id },
@@ -143,19 +147,57 @@ router.post("/:kycId/upload", authenticateKycOrAuth, upload.fields([
 ]), async (req: FileAuthRequest, res: Response) => {
   try {
     const { kycId } = req.params;
-    const session = await db.kycSession.findUnique({ where: { id: kycId } });
+    const session = await db.kycSession.findUnique({ 
+      where: { id: kycId },
+      include: { documents: true }
+    });
     if (!session) return res.status(404).json({ message: "KYC session not found" });
     if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
 
     const filesMap = req.files as { [fieldname: string]: Express.Multer.File[] };
     const required = ["front", "back", "selfie"] as const;
+    
     for (const key of required) {
       const file = filesMap?.[key]?.[0];
       if (!file) continue; // allow partial upload & retry
+      
       const buffer = fs.readFileSync(file.path);
       const hash = sha256(buffer);
       const storageUrl = `/uploads/kyc/${file.filename}`;
-      await db.kycDocument.create({ data: { kycId, type: key, storageUrl, hashSha256: hash } });
+      
+      // Check if document of this type already exists for this KYC session
+      const existingDoc = session.documents.find((doc: any) => doc.type === key);
+      
+      if (existingDoc) {
+        console.log(`Overwriting existing ${key} image for KYC session ${kycId}`);
+        
+        // Delete the old file from disk to save space
+        const oldFilePath = path.join(process.cwd(), existingDoc.storageUrl);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+            console.log(`Deleted old file: ${oldFilePath}`);
+          } catch (deleteErr) {
+            console.warn(`Failed to delete old file ${oldFilePath}:`, deleteErr);
+            // Continue anyway - we'll update the database record
+          }
+        }
+        
+        // Update existing document record
+        await db.kycDocument.update({
+          where: { id: existingDoc.id },
+          data: { 
+            storageUrl, 
+            hashSha256: hash,
+            createdAt: new Date() // Update timestamp to reflect when it was overwritten
+          }
+        });
+      } else {
+        // Create new document record
+        await db.kycDocument.create({ 
+          data: { kycId, type: key, storageUrl, hashSha256: hash } 
+        });
+      }
     }
 
     return res.json({ message: "Uploaded", kycId });
