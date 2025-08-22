@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { LateFeeProcessor } from "./lateFeeProcessor";
-import { PaymentNotificationProcessor, UpcomingPaymentProcessor } from "./upcomingPaymentProcessor";
+import { PaymentNotificationProcessor } from "./upcomingPaymentProcessor";
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -235,7 +235,7 @@ export class CronScheduler {
 		);
 
 		try {
-			const result = await UpcomingPaymentProcessor.processUpcomingPayments();
+			const result = await PaymentNotificationProcessor.processUpcomingPayments();
 			console.log(
 				`[${new Date().toISOString()}] Manual upcoming payment notification processing completed successfully:`,
 				result
