@@ -37,6 +37,7 @@ services:
             - "4001:4001"
         volumes:
             - /var/www/uploads:/app/uploads
+            - /var/www/receipts:/app/receipts
         environment:
             - NODE_ENV=${NODE_ENV:-production}
             - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}

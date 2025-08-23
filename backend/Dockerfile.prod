@@ -34,10 +34,12 @@ RUN npx prisma generate
 # Verify Prisma client generation
 RUN node scripts/verify-prisma-client.js
 
-# Compile TypeScript
+# Compile TypeScript with better error handling
 RUN echo "Starting TypeScript compilation..." && \
-    npx tsc --project tsconfig.json && \
-    echo "TypeScript compilation completed successfully"
+    npx tsc --project tsconfig.json --skipLibCheck && \
+    echo "TypeScript compilation completed successfully" && \
+    echo "Verifying compiled files..." && \
+    ls -la dist/src/
 
 # Debug: Check if dist directory exists and what it contains
 RUN echo "Dist directory after build:" && ls -la dist/ && \

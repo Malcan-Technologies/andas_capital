@@ -516,9 +516,38 @@ jobs:
               
               echo "✅ Prisma client verified successfully"
               
+              # Check if containers are actually running
+              echo "🔍 Checking container status..."
+              docker compose -f docker-compose.prod.yml ps
+              
+              # Wait for backend to be ready
+              echo "⏳ Waiting for backend to be ready..."
+              MAX_WAIT=60
+              WAIT_COUNT=0
+              while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+                if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
+                  echo "✅ Backend is ready"
+                  break
+                fi
+                sleep 2
+                WAIT_COUNT=$((WAIT_COUNT + 2))
+                if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
+                  echo "❌ Backend failed to start within $MAX_WAIT seconds"
+                  echo "Container logs:"
+                  docker compose -f docker-compose.prod.yml logs backend --tail 50
+                  exit 1
+                fi
+              done
+              
               # Run database migrations
-              chmod +x scripts/run-migrations.sh
-              ./scripts/run-migrations.sh
+              echo "🗄️ Running database migrations..."
+              if [ -f "./scripts/run-migrations.sh" ]; then
+                chmod +x ./scripts/run-migrations.sh
+                ./scripts/run-migrations.sh
+              else
+                echo "⚠️ Migration script not found, running migrations directly..."
+                docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+              fi
               
               # Ensure receipts directory exists with proper permissions
               echo "📁 Setting up receipts directory..."
@@ -554,15 +583,33 @@ jobs:
               
               # Test receipt generation functionality
               echo "🧾 Testing receipt generation functionality..."
-              if ! docker compose -f docker-compose.prod.yml exec backend node -e "
-                const { prisma } = require('./dist/src/lib/prisma');
-                const ReceiptService = require('./dist/src/lib/receiptService').default;
-                console.log('Receipt service loaded successfully');
-                process.exit(0);
-              " 2>/dev/null; then
-                echo "⚠️ Receipt service test failed, but continuing deployment..."
-              else
+              if docker compose -f docker-compose.prod.yml exec backend node -e "
+                try {
+                  console.log('Testing Prisma client...');
+                  const { prisma } = require('./dist/src/lib/prisma');
+                  console.log('✅ Prisma client loaded');
+                  
+                  console.log('Testing Receipt service...');
+                  const ReceiptService = require('./dist/src/lib/receiptService');
+                  console.log('✅ Receipt service loaded');
+                  
+                  console.log('Testing ReactPDF template...');
+                  const receiptTemplate = require('./dist/src/lib/receiptTemplate');
+                  console.log('✅ Receipt template loaded');
+                  
+                  console.log('✅ All receipt components loaded successfully');
+                  process.exit(0);
+                } catch (error) {
+                  console.log('❌ Receipt component test failed:', error.message);
+                  console.log('Stack:', error.stack);
+                  process.exit(1);
+                }
+              "; then
                 echo "✅ Receipt service test passed"
+              else
+                echo "⚠️ Receipt service test failed, checking build artifacts..."
+                docker compose -f docker-compose.prod.yml exec backend ls -la dist/src/lib/
+                echo "Continuing deployment despite test failure..."
               fi
               
               # Cron jobs are now handled by node-cron within the application
