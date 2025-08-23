@@ -560,14 +560,30 @@ jobs:
                 echo "⚠️ ReactPDF verification failed. Checking system dependencies..."
                 
                 # Check if font packages are installed
-                docker compose -f docker-compose.prod.yml exec backend sh -c "apk list --installed | grep -E 'fontconfig|ttf-dejavu' || echo 'Font packages missing'"
+                docker compose -f docker-compose.prod.yml exec backend sh -c "apk list --installed | grep -E \"fontconfig|ttf-dejavu\" || echo \"Font packages missing\""
                 
                 echo "🔄 Rebuilding container with fresh dependencies..."
                 docker compose -f docker-compose.prod.yml down
                 docker compose -f docker-compose.prod.yml up -d --build --no-cache
                 
-                # Wait for container to be ready
-                sleep 10
+                # Wait for container to be ready after rebuild
+                echo "⏳ Waiting for rebuilt backend to be ready..."
+                REBUILD_WAIT=0
+                MAX_REBUILD_WAIT=120
+                while [ $REBUILD_WAIT -lt $MAX_REBUILD_WAIT ]; do
+                  if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
+                    echo "✅ Rebuilt backend is ready"
+                    break
+                  fi
+                  sleep 3
+                  REBUILD_WAIT=$((REBUILD_WAIT + 3))
+                  if [ $REBUILD_WAIT -ge $MAX_REBUILD_WAIT ]; then
+                    echo "❌ Rebuilt backend failed to start within $MAX_REBUILD_WAIT seconds"
+                    echo "Container logs:"
+                    docker compose -f docker-compose.prod.yml logs backend --tail 50
+                    exit 1
+                  fi
+                done
                 
                 # Retry verification
                 if ! docker compose -f docker-compose.prod.yml exec backend node -e "require('@react-pdf/renderer'); console.log('ReactPDF loaded successfully')"; then
@@ -575,7 +591,7 @@ jobs:
                   echo "📋 Container logs:"
                   docker compose -f docker-compose.prod.yml logs backend --tail 50
                   echo "📋 System info:"
-                  docker compose -f docker-compose.prod.yml exec backend sh -c "node --version && npm --version && ls -la node_modules/@react-pdf/ || echo 'ReactPDF not found'"
+                  docker compose -f docker-compose.prod.yml exec backend sh -c "node --version && npm --version && ls -la node_modules/@react-pdf/ || echo \"ReactPDF not found\""
                   exit 1
                 fi
               fi
@@ -614,6 +630,19 @@ jobs:
               
               # Cron jobs are now handled by node-cron within the application
               echo "✅ Cron jobs are now built into the application using node-cron"
+              
+              # Final verification that containers are running
+              echo "🔍 Final container status check..."
+              docker compose -f docker-compose.prod.yml ps
+              
+              # Verify backend is still responsive
+              if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
+                echo "✅ Backend is healthy and ready"
+              else
+                echo "❌ Backend health check failed at end of deployment"
+                docker compose -f docker-compose.prod.yml logs backend --tail 20
+                exit 1
+              fi
             '
             echo "✅ Backend deployment completed"
           else
