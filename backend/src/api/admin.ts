@@ -6562,69 +6562,60 @@ router.post(
 							console.log(`  ${i + 1}. Installment ${r.installmentNumber || 'N/A'}: ${r.status}, actualAmount: ${r.actualAmount || 0}, amount: ${r.amount}, paidAt: ${r.paidAt}`);
 						});
 
-						// Find the repayment that was most recently affected by this payment
-						// Strategy: Look for the repayment with the most recent paidAt timestamp
-						// that matches when this transaction was processed, or the first appropriate status
+						// IMPROVED: Find the most recent repayment that was affected by payments
+						// Strategy: Find the repayment that was last modified or has the latest payment activity
 						
 						let affectedRepayment = null;
-						const transactionTime = new Date(transaction.processedAt || transaction.createdAt);
 						
-						console.log(`🧾 Transaction processed at: ${transactionTime.toISOString()}`);
+						console.log(`🧾 Finding repayment for receipt generation...`);
 						
-						// First, try to find PARTIAL repayments (ongoing payments)
+						// Strategy 1: Look for PARTIAL repayments first (these are currently being paid)
 						affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
-						console.log(`🧾 Found PARTIAL repayment: ${affectedRepayment ? 'Yes' : 'No'}`);
+						if (affectedRepayment) {
+							console.log(`🧾 ✅ Found PARTIAL repayment: Installment ${affectedRepayment.installmentNumber}`);
+						}
 						
-						// If no PARTIAL found, look for recently COMPLETED repayments
-						// Use a more generous time window (5 minutes) and also check against transaction time
+						// Strategy 2: If no PARTIAL, find the most recently completed repayment
+						// This is more reliable than time-based matching
 						if (!affectedRepayment) {
-							const now = new Date();
-							const recentlyCompleted = allRepayments.filter(r => {
-								if (r.status !== 'COMPLETED' || !r.paidAt) return false;
-								
-								const paidTime = new Date(r.paidAt);
-								const timeSincePaid = now.getTime() - paidTime.getTime();
-								const timeSinceTransaction = Math.abs(paidTime.getTime() - transactionTime.getTime());
-								
-								// Recently completed (within 5 minutes) OR close to transaction time (within 2 minutes)
-								return timeSincePaid < 300000 || timeSinceTransaction < 120000;
-							});
+							const completedRepayments = allRepayments.filter(r => r.status === 'COMPLETED' && (r.actualAmount || 0) > 0);
 							
-							console.log(`🧾 Recently completed repayments found: ${recentlyCompleted.length}`);
-							recentlyCompleted.forEach((r, i) => {
-								console.log(`  ${i + 1}. Installment ${r.installmentNumber}: paidAt ${r.paidAt}`);
-							});
-							
-							// Pick the most recently completed one
-							if (recentlyCompleted.length > 0) {
-								affectedRepayment = recentlyCompleted.sort((a, b) => 
-									new Date(b.paidAt!).getTime() - new Date(a.paidAt!).getTime()
-								)[0];
+							if (completedRepayments.length > 0) {
+								// Sort by: 1) updatedAt (most recent update), 2) paidAt (most recent payment), 3) installmentNumber (latest installment)
+								affectedRepayment = completedRepayments.sort((a, b) => {
+									// First compare updatedAt
+									const aUpdated = new Date(a.updatedAt).getTime();
+									const bUpdated = new Date(b.updatedAt).getTime();
+									if (aUpdated !== bUpdated) return bUpdated - aUpdated;
+									
+									// Then compare paidAt
+									if (a.paidAt && b.paidAt) {
+										const aPaid = new Date(a.paidAt).getTime();
+										const bPaid = new Date(b.paidAt).getTime();
+										if (aPaid !== bPaid) return bPaid - aPaid;
+									}
+									
+									// Finally compare installment number (higher = more recent)
+									return (b.installmentNumber || 0) - (a.installmentNumber || 0);
+								})[0];
+								
+								console.log(`🧾 ✅ Found most recent COMPLETED repayment: Installment ${affectedRepayment.installmentNumber}, updatedAt: ${affectedRepayment.updatedAt}`);
 							}
 						}
 						
-						// If still no match, look for the first PENDING (fallback)
+						// Strategy 3: If still no match, get the first PENDING repayment (next in line)
 						if (!affectedRepayment) {
 							affectedRepayment = allRepayments.find(r => r.status === 'PENDING');
-							console.log(`🧾 Using PENDING fallback: ${affectedRepayment ? 'Yes' : 'No'}`);
-						}
-						
-						// Final fallback: most recent COMPLETED repayment
-						if (!affectedRepayment) {
-							const completedRepayments = allRepayments.filter(r => r.status === 'COMPLETED');
-							if (completedRepayments.length > 0) {
-								// Sort by paidAt descending to get the most recent
-								affectedRepayment = completedRepayments.sort((a, b) => {
-									if (!a.paidAt && !b.paidAt) return 0;
-									if (!a.paidAt) return 1;
-									if (!b.paidAt) return -1;
-									return new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime();
-								})[0];
+							if (affectedRepayment) {
+								console.log(`🧾 ⚠️ Using next PENDING repayment: Installment ${affectedRepayment.installmentNumber}`);
 							}
-							console.log(`🧾 Using most recent COMPLETED fallback: ${affectedRepayment ? 'Yes' : 'No'}`);
 						}
 						
-						console.log(`🧾 Selected repayment for receipt: Installment ${affectedRepayment?.installmentNumber || 'N/A'}, status: ${affectedRepayment?.status}, paidAt: ${affectedRepayment?.paidAt}`);
+						// Strategy 4: Final fallback - most recent repayment by installment number
+						if (!affectedRepayment && allRepayments.length > 0) {
+							affectedRepayment = allRepayments.sort((a, b) => (b.installmentNumber || 0) - (a.installmentNumber || 0))[0];
+							console.log(`🧾 ⚠️ Using latest installment fallback: Installment ${affectedRepayment.installmentNumber}`);
+						}
 
 						if (affectedRepayment) {
 							const receiptResult = await ReceiptService.generateReceipt({
@@ -9817,69 +9808,59 @@ router.post(
 						console.log(`  ${i + 1}. Installment ${r.installmentNumber || 'N/A'}: ${r.status}, actualAmount: ${r.actualAmount || 0}, amount: ${r.amount}, paidAt: ${r.paidAt}`);
 					});
 
-					// Find the repayment that was most recently affected by this payment
-					// Strategy: Look for the repayment with the most recent paidAt timestamp
-					// that matches when this transaction was processed, or the first appropriate status
+					// IMPROVED: Find the most recent repayment that was affected by this manual payment
+					// Use the same reliable strategy as automated payments
 					
 					let primaryRepayment = null;
-					const transactionTime = new Date(result.walletTransaction.processedAt || result.walletTransaction.createdAt);
 					
-					console.log(`🧾 Manual payment transaction processed at: ${transactionTime.toISOString()}`);
+					console.log(`🧾 Finding repayment for manual payment receipt generation...`);
 					
-					// First, try to find PARTIAL repayments (ongoing payments)
+					// Strategy 1: Look for PARTIAL repayments first (these are currently being paid)
 					primaryRepayment = allRepayments.find(r => r.status === 'PARTIAL');
-					console.log(`🧾 Found PARTIAL repayment: ${primaryRepayment ? 'Yes' : 'No'}`);
+					if (primaryRepayment) {
+						console.log(`🧾 ✅ Found PARTIAL repayment: Installment ${primaryRepayment.installmentNumber}`);
+					}
 					
-					// If no PARTIAL found, look for recently COMPLETED repayments
-					// Use a more generous time window (5 minutes) and also check against transaction time
+					// Strategy 2: If no PARTIAL, find the most recently completed repayment
 					if (!primaryRepayment) {
-						const now = new Date();
-						const recentlyCompleted = allRepayments.filter(r => {
-							if (r.status !== 'COMPLETED' || !r.paidAt) return false;
-							
-							const paidTime = new Date(r.paidAt);
-							const timeSincePaid = now.getTime() - paidTime.getTime();
-							const timeSinceTransaction = Math.abs(paidTime.getTime() - transactionTime.getTime());
-							
-							// Recently completed (within 5 minutes) OR close to transaction time (within 2 minutes)
-							return timeSincePaid < 300000 || timeSinceTransaction < 120000;
-						});
+						const completedRepayments = allRepayments.filter(r => r.status === 'COMPLETED' && (r.actualAmount || 0) > 0);
 						
-						console.log(`🧾 Recently completed repayments found: ${recentlyCompleted.length}`);
-						recentlyCompleted.forEach((r, i) => {
-							console.log(`  ${i + 1}. Installment ${r.installmentNumber}: paidAt ${r.paidAt}`);
-						});
-						
-						// Pick the most recently completed one
-						if (recentlyCompleted.length > 0) {
-							primaryRepayment = recentlyCompleted.sort((a, b) => 
-								new Date(b.paidAt!).getTime() - new Date(a.paidAt!).getTime()
-							)[0];
+						if (completedRepayments.length > 0) {
+							// Sort by: 1) updatedAt (most recent update), 2) paidAt (most recent payment), 3) installmentNumber (latest installment)
+							primaryRepayment = completedRepayments.sort((a, b) => {
+								// First compare updatedAt
+								const aUpdated = new Date(a.updatedAt).getTime();
+								const bUpdated = new Date(b.updatedAt).getTime();
+								if (aUpdated !== bUpdated) return bUpdated - aUpdated;
+								
+								// Then compare paidAt
+								if (a.paidAt && b.paidAt) {
+									const aPaid = new Date(a.paidAt).getTime();
+									const bPaid = new Date(b.paidAt).getTime();
+									if (aPaid !== bPaid) return bPaid - aPaid;
+								}
+								
+								// Finally compare installment number (higher = more recent)
+								return (b.installmentNumber || 0) - (a.installmentNumber || 0);
+							})[0];
+							
+							console.log(`🧾 ✅ Found most recent COMPLETED repayment: Installment ${primaryRepayment.installmentNumber}, updatedAt: ${primaryRepayment.updatedAt}`);
 						}
 					}
 					
-					// If still no match, look for the first PENDING (fallback)
+					// Strategy 3: If still no match, get the first PENDING repayment (next in line)
 					if (!primaryRepayment) {
 						primaryRepayment = allRepayments.find(r => r.status === 'PENDING');
-						console.log(`🧾 Using PENDING fallback: ${primaryRepayment ? 'Yes' : 'No'}`);
-					}
-					
-					// Final fallback: most recent COMPLETED repayment
-					if (!primaryRepayment) {
-						const completedRepayments = allRepayments.filter(r => r.status === 'COMPLETED');
-						if (completedRepayments.length > 0) {
-							// Sort by paidAt descending to get the most recent
-							primaryRepayment = completedRepayments.sort((a, b) => {
-								if (!a.paidAt && !b.paidAt) return 0;
-								if (!a.paidAt) return 1;
-								if (!b.paidAt) return -1;
-								return new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime();
-							})[0];
+						if (primaryRepayment) {
+							console.log(`🧾 ⚠️ Using next PENDING repayment: Installment ${primaryRepayment.installmentNumber}`);
 						}
-						console.log(`🧾 Using most recent COMPLETED fallback: ${primaryRepayment ? 'Yes' : 'No'}`);
 					}
 					
-					console.log(`🧾 Selected repayment for manual payment receipt: Installment ${primaryRepayment?.installmentNumber || 'N/A'}, status: ${primaryRepayment?.status}, paidAt: ${primaryRepayment?.paidAt}`);
+					// Strategy 4: Final fallback - most recent repayment by installment number
+					if (!primaryRepayment && allRepayments.length > 0) {
+						primaryRepayment = allRepayments.sort((a, b) => (b.installmentNumber || 0) - (a.installmentNumber || 0))[0];
+						console.log(`🧾 ⚠️ Using latest installment fallback: Installment ${primaryRepayment.installmentNumber}`);
+					}
 
 					if (primaryRepayment) {
 						const ReceiptService = await import("../lib/receiptService");
@@ -10266,6 +10247,65 @@ router.post(
 						console.log(`Payment ${paymentId} approved via CSV batch processing`);
 					});
 
+					// Generate receipt for bulk approved payment (using same logic as individual approval)
+					try {
+						if (payment.loanId) {
+							const existingReceipt = await prisma.paymentReceipt.findFirst({
+								where: {
+									metadata: {
+										path: ['transactionId'],
+										equals: paymentId
+									}
+								}
+							});
+
+							if (!existingReceipt) {
+								const allRepayments = await prisma.loanRepayment.findMany({
+									where: { loanId: payment.loanId },
+									orderBy: { dueDate: 'asc' }
+								});
+								
+								// Use improved strategy to find affected repayment
+								let affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+								
+								if (!affectedRepayment) {
+									const completedRepayments = allRepayments.filter(r => r.status === 'COMPLETED' && (r.actualAmount || 0) > 0);
+									if (completedRepayments.length > 0) {
+										affectedRepayment = completedRepayments.sort((a, b) => {
+											const aUpdated = new Date(a.updatedAt).getTime();
+											const bUpdated = new Date(b.updatedAt).getTime();
+											return bUpdated - aUpdated;
+										})[0];
+									}
+								}
+								
+								if (!affectedRepayment) {
+									affectedRepayment = allRepayments.find(r => r.status === 'PENDING');
+								}
+								
+								if (!affectedRepayment && allRepayments.length > 0) {
+									affectedRepayment = allRepayments.sort((a, b) => (b.installmentNumber || 0) - (a.installmentNumber || 0))[0];
+								}
+
+								if (affectedRepayment) {
+									const ReceiptService = await import("../lib/receiptService");
+									const receiptResult = await ReceiptService.default.generateReceipt({
+										repaymentId: affectedRepayment.id,
+										generatedBy: adminUserId || 'admin',
+										paymentMethod: 'CSV Batch Processing',
+										reference: transactionRef || paymentId,
+										actualPaymentAmount: Math.abs(payment.amount),
+										transactionId: paymentId
+									});
+									
+									console.log(`Receipt generated for bulk payment ${paymentId}: ${receiptResult.receiptNumber}`);
+								}
+							}
+						}
+					} catch (receiptError) {
+						console.error("Error generating receipt for bulk payment:", receiptError);
+					}
+
 					// Send WhatsApp notification for approved payment
 					try {
 						if (payment.user?.phoneNumber && payment.user?.fullName && payment.loan) {
@@ -10298,6 +10338,26 @@ router.post(
 								const completedPayments = updatedLoan.repayments.length;
 								const totalPayments = updatedLoan.term || updatedLoan.application.term || 12;
 
+								// Find receipt for this transaction
+								let receiptUrl: string | undefined;
+								try {
+									const receipt = await prisma.paymentReceipt.findFirst({
+										where: {
+											metadata: {
+												path: ['transactionId'],
+												equals: paymentId
+											}
+										}
+									});
+									
+									if (receipt) {
+										receiptUrl = receipt.id;
+										console.log(`🔗 Found receipt for bulk WhatsApp notification: ${receipt.id}`);
+									}
+								} catch (receiptError) {
+									console.error("Error getting receipt for bulk WhatsApp notification:", receiptError);
+								}
+
 								const whatsappResult = await whatsappService.sendPaymentApprovedNotification({
 									to: payment.user.phoneNumber,
 									fullName: payment.user.fullName,
@@ -10307,7 +10367,7 @@ router.post(
 									nextDueDate: nextPayment ? formatDateForWhatsApp(nextPayment.dueDate) : "N/A",
 									completedPayments: completedPayments.toString(),
 									totalPayments: totalPayments.toString(),
-									receiptUrl: undefined // No receipt URL for wallet transactions
+									receiptUrl: receiptUrl // Include receipt URL for bulk payments
 								});
 
 								if (whatsappResult.success) {
