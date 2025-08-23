@@ -18,6 +18,7 @@ interface WhatsAppUtilityRequest {
 	templateName: string;
 	language?: string;
 	parameters: string[];
+	buttonUrl?: string;
 }
 
 interface WhatsAppResponse {
@@ -162,7 +163,7 @@ class WhatsAppService {
 		}
 	}
 
-	async sendUtilityNotification({ to, templateName, language = 'en', parameters }: WhatsAppUtilityRequest): Promise<WhatsAppResponse> {
+	async sendUtilityNotification({ to, templateName, language = 'en', parameters, buttonUrl }: WhatsAppUtilityRequest): Promise<WhatsAppResponse> {
 		try {
 			if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
 				console.error('WhatsApp credentials not configured');
@@ -183,6 +184,32 @@ class WhatsAppService {
 				text: param
 			}));
 
+			// Build template components
+			const components = [
+				{
+					type: 'body',
+					parameters: templateParameters
+				}
+			];
+
+			// Add button component if URL is provided
+			if (buttonUrl) {
+				console.log(`🔗 Adding button component with URL: ${buttonUrl}`);
+				(components as any).push({
+					type: 'button',
+					sub_type: 'url',
+					index: 0,
+					parameters: [
+						{
+							type: 'text',
+							text: buttonUrl
+						}
+					]
+				});
+			} else {
+				console.log(`🔗 No button URL provided for template: ${templateName}`);
+			}
+
 			const payload = {
 				messaging_product: 'whatsapp',
 				recipient_type: 'individual',
@@ -193,12 +220,7 @@ class WhatsAppService {
 					language: {
 						code: language
 					},
-					components: [
-						{
-							type: 'body',
-							parameters: templateParameters
-						}
-					]
+					components: components
 				}
 			};
 
@@ -336,7 +358,8 @@ class WhatsAppService {
 		nextPaymentAmount,
 		nextDueDate,
 		completedPayments,
-		totalPayments
+		totalPayments,
+		receiptUrl
 	}: {
 		to: string;
 		fullName: string;
@@ -346,6 +369,7 @@ class WhatsAppService {
 		nextDueDate: string;
 		completedPayments: string;
 		totalPayments: string;
+		receiptUrl?: string;
 	}): Promise<WhatsAppResponse> {
 		// Check if WhatsApp payment approved notifications are enabled
 		const isGlobalEnabled = await this.isWhatsAppEnabled();
@@ -359,10 +383,16 @@ class WhatsAppService {
 			};
 		}
 
+		// Build parameters array (7 text parameters for the message body)
+		const parameters = [fullName, paymentAmount, loanName, nextPaymentAmount, nextDueDate, completedPayments, totalPayments];
+
+		console.log(`🔗 WhatsApp Payment Approved Notification - Receipt URL: ${receiptUrl || 'NOT PROVIDED'}`);
+
 		return this.sendUtilityNotification({
 			to,
 			templateName: 'payment_approved',
-			parameters: [fullName, paymentAmount, loanName, nextPaymentAmount, nextDueDate, completedPayments, totalPayments]
+			parameters: parameters,
+			buttonUrl: receiptUrl // Pass receipt URL as button parameter
 		});
 	}
 

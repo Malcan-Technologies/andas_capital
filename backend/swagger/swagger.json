@@ -5113,6 +5113,53 @@
         }
       }
     },
+    "/api/loans/receipt/{receiptId}": {
+      "get": {
+        "summary": "Download receipt PDF by receipt ID (public endpoint for WhatsApp)",
+        "tags": [
+          "Loans"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "receiptId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Receipt ID"
+          },
+          {
+            "in": "query",
+            "name": "phone",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User's phone number for validation (optional)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt PDF file",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Receipt not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/loans/{loanId}/receipts/{receiptId}/download": {
       "get": {
         "summary": "Download receipt PDF for a loan repayment",

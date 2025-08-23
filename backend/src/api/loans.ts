@@ -529,6 +529,91 @@ router.get(
 
 /**
  * @swagger
+ * /api/loans/receipt/{receiptId}:
+ *   get:
+ *     summary: Download receipt PDF by receipt ID (public endpoint for WhatsApp)
+ *     tags: [Loans]
+ *     parameters:
+ *       - in: path
+ *         name: receiptId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Receipt ID
+ *       - in: query
+ *         name: phone
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: User's phone number for validation (optional)
+ *     responses:
+ *       200:
+ *         description: Receipt PDF file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Receipt not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+	"/receipt/:receiptId",
+	async (req: any, res: any) => {
+		try {
+			const { receiptId } = req.params;
+			const { phone } = req.query;
+
+			// Get the receipt with user and loan information
+			const receipt = await prisma.paymentReceipt.findFirst({
+				where: {
+					id: receiptId,
+				},
+				include: {
+					repayment: {
+						include: {
+							loan: {
+								include: {
+									user: {
+										select: {
+											phoneNumber: true,
+											fullName: true,
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			});
+
+			if (!receipt) {
+				return res.status(404).json({ error: "Receipt not found" });
+			}
+
+			// Optional phone number validation for extra security
+			if (phone && receipt.repayment.loan.user.phoneNumber !== phone) {
+				return res.status(403).json({ error: "Access denied" });
+			}
+
+			// Import the receipt service dynamically
+			const ReceiptService = await import("../lib/receiptService");
+			const buffer = await ReceiptService.default.getReceiptBuffer(receiptId);
+
+			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="${receipt.receiptNumber}.pdf"`);
+			return res.send(buffer);
+		} catch (error) {
+			console.error("Error downloading receipt:", error);
+			return res.status(500).json({ error: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
  * /api/loans/{loanId}/receipts/{receiptId}/download:
  *   get:
  *     summary: Download receipt PDF for a loan repayment
