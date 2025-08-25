@@ -383,16 +383,12 @@ class WhatsAppService {
 			};
 		}
 
-		// Build parameters array (7 text parameters for the message body + 1 for URL button)
+		// Build parameters array (exactly 7 text parameters for the message body)
+		// URL button parameter is handled separately by buttonUrl
 		const parameters = [fullName, paymentAmount, loanName, nextPaymentAmount, nextDueDate, completedPayments, totalPayments];
-		
-		// Add receipt ID as 8th parameter for URL button if available
-		if (receiptUrl) {
-			parameters.push(receiptUrl);
-		}
 
 		console.log(`🔗 WhatsApp Payment Approved Notification - Receipt URL: ${receiptUrl || 'NOT PROVIDED'}`);
-		console.log(`🔗 Total parameters being sent: ${parameters.length}`, parameters);
+		console.log(`🔗 Body parameters being sent: ${parameters.length}`, parameters);
 
 		return this.sendUtilityNotification({
 			to,
