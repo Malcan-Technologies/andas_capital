@@ -2614,7 +2614,7 @@ function ActiveLoansContent() {
 													{selectedLoan.agreementStatus === 'SIGNED' && selectedLoan.docusealSignUrl && (
 														<div className="pt-3 border-t border-gray-700/30">
 															<a
-																href={`http://localhost:3001/s/${selectedLoan.docusealSignUrl}`}
+																href={`${process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'http://localhost:3001'}/s/${selectedLoan.docusealSignUrl}`}
 																target="_blank"
 																rel="noopener noreferrer"
 																className="inline-flex items-center px-3 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-sm"

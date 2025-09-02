@@ -856,9 +856,10 @@ function LoansPageContent() {
 				throw new Error('No signed document available for this loan');
 			}
 
-			// Open DocuSeal signed document directly using the slug from loans table
-			const docusealUrl = `http://localhost:3001/s/${loan.docusealSignUrl}`;
-			window.open(docusealUrl, '_blank', 'noopener,noreferrer');
+					// Open DocuSeal signed document directly using the slug from loans table
+		const docusealBaseUrl = process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'http://localhost:3001';
+		const docusealUrl = `${docusealBaseUrl}/s/${loan.docusealSignUrl}`;
+		window.open(docusealUrl, '_blank', 'noopener,noreferrer');
 			
 		} catch (error) {
 			console.error('Error accessing signed agreement:', error);
