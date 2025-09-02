@@ -142,13 +142,19 @@ model Loan {
   totalAmount        Float
   calculationMethod  String?             // RULE_OF_78 or STRAIGHT_LINE
   scheduleType       String?             // EXACT_MONTHLY or CUSTOM_DATE  
-  customDueDate      Int?                // For CUSTOM_DATE schedule type
-  prorationCutoffDate Int?               // For CUSTOM_DATE proration
-  lateFee            LateFee?
-  repayments         LoanRepayment[]
-  application        LoanApplication     @relation(fields: [applicationId], references: [id])
-  user               User                @relation(fields: [userId], references: [id])
-  walletTransactions WalletTransaction[]
+  customDueDate         Int?                // For CUSTOM_DATE schedule type
+  prorationCutoffDate   Int?                // For CUSTOM_DATE proration
+  // DocuSeal Integration Fields
+  docusealSubmissionId  String?             // DocuSeal submission ID for tracking
+  agreementStatus       String?             // PENDING_SIGNATURE, COMPANY_SIGNED, BORROWER_SIGNED, WITNESS_SIGNED, SIGNED, SIGNATURE_EXPIRED, SIGNATURE_DECLINED, SIGNATURE_FAILED
+  agreementSignedAt     DateTime?           // When the loan agreement was signed
+  docusealSignUrl       String?             // DocuSeal signing slug for returning users
+  lateFee               LateFee?
+  repayments            LoanRepayment[]
+  signatories           LoanSignatory[]     // Individual signatory tracking
+  application           LoanApplication     @relation(fields: [applicationId], references: [id])
+  user                  User                @relation(fields: [userId], references: [id])
+  walletTransactions    WalletTransaction[]
 
   @@map("loans")
 }
@@ -221,6 +227,9 @@ model LoanApplication {
   freshOfferInterestRate   Float?
   freshOfferMonthlyRepayment Float?
   freshOfferNetDisbursement Float?
+  freshOfferOriginationFee Float?
+  freshOfferLegalFee       Float?
+  freshOfferApplicationFee Float?
   freshOfferNotes          String?
   freshOfferSubmittedAt    DateTime?
   freshOfferSubmittedBy    String?
@@ -548,6 +557,7 @@ model CompanySettings {
   companyName   String   @default("Kredit.my")
   companyAddress String  @default("Kuala Lumpur, Malaysia")
   companyRegNo  String?  // Company registration number
+  licenseNo     String?  // Company license number
   contactPhone  String?  // Contact phone number
   contactEmail  String?  // Contact email
   footerNote    String?  // Footer note for receipts
@@ -559,4 +569,30 @@ model CompanySettings {
   createdBy     String?  // Admin user who created/updated settings
   
   @@map("company_settings")
+}
+
+/// Individual loan signatory tracking
+model LoanSignatory {
+  id                  String    @id @default(cuid())
+  loanId              String
+  signatoryType       String    // 'USER', 'COMPANY', 'WITNESS'
+  name                String
+  email               String
+  role                String    // DocuSeal role (e.g., 'Borrower', 'Company', 'Witness')
+  status              String    @default("PENDING") // 'PENDING', 'SIGNED', 'DECLINED', 'EXPIRED'
+  signedAt            DateTime?
+  docusealSubmitterId String?   // DocuSeal submitter ID
+  docusealUuid        String?   // DocuSeal submitter UUID
+  signingUrl          String?   // Direct signing URL for this signatory (deprecated)
+  signingSlug         String?   // DocuSeal slug for generating URLs dynamically
+  slug                String?   // DocuSeal slug for this signatory
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  loan                Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, signatoryType])
+  @@index([loanId])
+  @@index([status])
+  @@index([signatoryType])
+  @@map("loan_signatories")
 }

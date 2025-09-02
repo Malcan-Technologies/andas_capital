@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Trash2, Check, ExternalLink } from "lucide-react";
+import { Bell, Trash2, Check, ExternalLink, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import {
 	DropdownMenu,
@@ -225,22 +225,33 @@ export function NotificationsDropdown() {
 					<h2 className="font-semibold text-gray-700 font-heading">
 						Notifications
 					</h2>
-					{unreadCount > 0 && (
+					<div className="flex items-center gap-2">
 						<Button
 							variant="ghost"
 							size="sm"
-							onClick={() =>
-								markAsRead(
-									notifications
-										.filter((n) => !n.isRead)
-										.map((n) => n.id)
-								)
-							}
+							onClick={() => fetchNotifications()}
 							className="text-xs text-gray-500 hover:text-purple-primary hover:bg-purple-primary/5 font-body"
+							disabled={loading}
 						>
-							Mark all as read
+							<RotateCcw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
 						</Button>
-					)}
+						{unreadCount > 0 && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() =>
+									markAsRead(
+										notifications
+											.filter((n) => !n.isRead)
+											.map((n) => n.id)
+									)
+								}
+								className="text-xs text-gray-500 hover:text-purple-primary hover:bg-purple-primary/5 font-body"
+							>
+								Mark all as read
+							</Button>
+						)}
+					</div>
 				</div>
 				<ScrollArea className="h-[400px]">
 					{loading ? (

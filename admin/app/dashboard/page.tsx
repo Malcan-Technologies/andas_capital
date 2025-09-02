@@ -26,6 +26,9 @@ import {
 	ReceiptPercentIcon,
 	VideoCameraIcon,
 	InformationCircleIcon,
+	ClipboardDocumentCheckIcon,
+	UserCircleIcon,
+	ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../lib/authUtils";
 import Link from "next/link";
@@ -214,431 +217,502 @@ export default function AdminDashboardPage() {
 		PENDING_DISCHARGE: 0,
 		PENDING_PAYMENTS: 0,
 		LIVE_ATTESTATIONS: 0,
+		PENDING_SIGNATURE: 0,
 	});
+	const [refreshing, setRefreshing] = useState(false);
 
-	useEffect(() => {
-		const fetchDashboardData = async () => {
+	const fetchDashboardData = async () => {
+		try {
+			// Fetch user data with token refresh
 			try {
-				// Fetch user data with token refresh
-				try {
-					const userData = await fetchWithAdminTokenRefresh<any>(
-						"/api/users/me"
-					);
-					if (userData.fullName) {
-						setUserName(userData.fullName);
-					}
-				} catch (error) {
-					console.error("Error fetching user data:", error);
-				}
-
-				// Fetch dashboard stats with token refresh
-				const data = await fetchWithAdminTokenRefresh<DashboardStats>(
-					"/api/admin/dashboard"
+				const userData = await fetchWithAdminTokenRefresh<any>(
+					"/api/users/me"
 				);
-
-				// Total late fees collected is now included in dashboard API response
-				const totalLateFeesCollected = data.totalLateFeesCollected || 0;
-
-				// Fetch monthly statistics
-				let monthlyStats = [];
-				try {
-					const monthlyData = await fetchWithAdminTokenRefresh<{
-						monthlyStats: {
-							month: string;
-							applications: number;
-							approvals: number;
-							disbursements: number;
-							revenue: number;
-							fees_earned: number;
-							accrued_interest: number;
-							disbursement_amount: number;
-							disbursement_count: number;
-							users: number;
-							kyc_users: number;
-							actual_repayments: number;
-							scheduled_repayments: number;
-							total_loan_value: number;
-							current_loan_value: number;
-							repayment_count: number;
-							scheduled_count: number;
-						}[];
-					}>("/api/admin/monthly-stats");
-					monthlyStats = monthlyData.monthlyStats;
-				} catch (error) {
-					console.error("Error fetching monthly stats:", error);
-					console.log("Using fallback mock data for monthly stats");
-					// Fallback to mock data if API fails
-					monthlyStats = [
-						{
-							month: "Jan",
-							applications: 45,
-							approvals: 32,
-							disbursements: 28,
-							revenue: 14000,
-							fees_earned: 4700,
-							accrued_interest: 2800,
-							disbursement_amount: 280000,
-							disbursement_count: 28,
-							users: 12,
-							kyc_users: 8,
-							actual_repayments: 14000,
-							scheduled_repayments: 15000,
-							total_loan_value: 320000,
-							current_loan_value: 306000,
-							repayment_count: 25,
-							scheduled_count: 30,
-						},
-						{
-							month: "Feb",
-							applications: 52,
-							approvals: 38,
-							disbursements: 35,
-							revenue: 17500,
-							fees_earned: 5800,
-							accrued_interest: 3500,
-							disbursement_amount: 350000,
-							disbursement_count: 35,
-							users: 15,
-							kyc_users: 11,
-							actual_repayments: 17500,
-							scheduled_repayments: 18500,
-							total_loan_value: 400000,
-							current_loan_value: 688500,
-							repayment_count: 32,
-							scheduled_count: 38,
-						},
-						{
-							month: "Mar",
-							applications: 48,
-							approvals: 35,
-							disbursements: 32,
-							revenue: 16000,
-							fees_earned: 5300,
-							accrued_interest: 3200,
-							disbursement_amount: 320000,
-							disbursement_count: 32,
-							users: 18,
-							kyc_users: 14,
-							actual_repayments: 16000,
-							scheduled_repayments: 17200,
-							total_loan_value: 365000,
-							current_loan_value: 1037500,
-							repayment_count: 28,
-							scheduled_count: 35,
-						},
-						{
-							month: "Apr",
-							applications: 61,
-							approvals: 44,
-							disbursements: 40,
-							revenue: 20000,
-							fees_earned: 6700,
-							accrued_interest: 4000,
-							disbursement_amount: 400000,
-							disbursement_count: 40,
-							users: 22,
-							kyc_users: 18,
-							actual_repayments: 20000,
-							scheduled_repayments: 21000,
-							total_loan_value: 456000,
-							current_loan_value: 1473500,
-							repayment_count: 38,
-							scheduled_count: 42,
-						},
-						{
-							month: "May",
-							applications: 58,
-							approvals: 42,
-							disbursements: 38,
-							revenue: 19000,
-							fees_earned: 6300,
-							accrued_interest: 3800,
-							disbursement_amount: 380000,
-							disbursement_count: 38,
-							users: 19,
-							kyc_users: 15,
-							actual_repayments: 19000,
-							scheduled_repayments: 20500,
-							total_loan_value: 432000,
-							current_loan_value: 1886500,
-							repayment_count: 35,
-							scheduled_count: 40,
-						},
-						{
-							month: "Jun",
-							applications: 67,
-							approvals: 49,
-							disbursements: 45,
-							revenue: 22500,
-							fees_earned: 7500,
-							accrued_interest: 4500,
-							disbursement_amount: 450000,
-							disbursement_count: 45,
-							users: 25,
-							kyc_users: 20,
-							actual_repayments: 22500,
-							scheduled_repayments: 24000,
-							total_loan_value: 513000,
-							current_loan_value: 2377000,
-							repayment_count: 42,
-							scheduled_count: 48,
-						},
-					];
-				}
-
-				// Fetch daily statistics
-				let dailyStats = [];
-				try {
-					const dailyData = await fetchWithAdminTokenRefresh<{
-						dailyStats: {
-							date: string;
-							applications: number;
-							approvals: number;
-							disbursements: number;
-							revenue: number;
-							fees_earned: number;
-							accrued_interest: number;
-							disbursement_amount: number;
-							disbursement_count: number;
-							users: number;
-							kyc_users: number;
-							actual_repayments: number;
-							scheduled_repayments: number;
-							total_loan_value: number;
-							current_loan_value: number;
-							repayment_count: number;
-							scheduled_count: number;
-						}[];
-					}>("/api/admin/daily-stats");
-					dailyStats = dailyData.dailyStats;
-				} catch (error) {
-					console.error("Error fetching daily stats:", error);
-					console.log("Using fallback mock data for daily stats");
-					// Generate mock daily data for last 30 days if API fails
-					const mockDailyStats = [];
-					const now = new Date();
-					for (let i = 29; i >= 0; i--) {
-						const date = new Date(now);
-						date.setDate(date.getDate() - i);
-						mockDailyStats.push({
-							date: date.toISOString().split('T')[0],
-							applications: Math.floor(Math.random() * 8) + 1,
-							approvals: Math.floor(Math.random() * 6) + 1,
-							disbursements: Math.floor(Math.random() * 4) + 1,
-							revenue: Math.floor(Math.random() * 3000) + 500,
-							fees_earned: Math.floor(Math.random() * 1000) + 200,
-							accrued_interest: Math.floor(Math.random() * 800) + 100,
-							disbursement_amount: Math.floor(Math.random() * 50000) + 10000,
-							disbursement_count: Math.floor(Math.random() * 3) + 1,
-							users: Math.floor(Math.random() * 5) + 1,
-							kyc_users: Math.floor(Math.random() * 3) + 1,
-							actual_repayments: Math.floor(Math.random() * 2500) + 500,
-							scheduled_repayments: Math.floor(Math.random() * 3000) + 600,
-							total_loan_value: Math.floor(Math.random() * 100000) + 20000,
-							current_loan_value: Math.floor(Math.random() * 80000) + 15000,
-							repayment_count: Math.floor(Math.random() * 4) + 1,
-							scheduled_count: Math.floor(Math.random() * 5) + 1,
-						});
-					}
-					dailyStats = mockDailyStats;
-				}
-
-				// Use totalApplications from API instead of calculating
-				const totalApplications = data.totalApplications || 0;
-
-				// Calculate monthly growth from real data
-				const currentMonth = monthlyStats[monthlyStats.length - 1];
-				const previousMonth = monthlyStats[monthlyStats.length - 2];
-				const monthlyGrowth =
-					previousMonth && currentMonth
-						? ((currentMonth.applications -
-								previousMonth.applications) /
-								previousMonth.applications) *
-						  100
-						: 0;
-
-				// Enhance monthlyStats with missing fields if they don't exist
-				const enhancedMonthlyStats = monthlyStats.map((stat: any) => ({
-					...stat,
-					fees_earned: stat.fees_earned || 0,
-					accrued_interest: stat.accrued_interest || 0,
-					actual_repayments: stat.actual_repayments || 0,
-					scheduled_repayments: stat.scheduled_repayments || 0,
-					total_loan_value: stat.total_loan_value || 0,
-					current_loan_value: stat.current_loan_value || 0,
-					repayment_count: stat.repayment_count || 0,
-					scheduled_count: stat.scheduled_count || 0,
-				}));
-
-				// Enhance dailyStats with missing fields if they don't exist
-				const enhancedDailyStats = dailyStats.map((stat: any) => ({
-					...stat,
-					fees_earned: stat.fees_earned || 0,
-					accrued_interest: stat.accrued_interest || 0,
-					actual_repayments: stat.actual_repayments || 0,
-					scheduled_repayments: stat.scheduled_repayments || 0,
-					total_loan_value: stat.total_loan_value || 0,
-					current_loan_value: stat.current_loan_value || 0,
-					repayment_count: stat.repayment_count || 0,
-					scheduled_count: stat.scheduled_count || 0,
-				}));
-
-				const enhancedData = {
-					...data,
-					totalApplications,
-					totalLateFeesCollected,
-					averageLoanAmount:
-						data.disbursedLoans > 0
-							? (data.totalLoanValue ||
-									data.totalDisbursedAmount ||
-									0) / data.disbursedLoans
-							: 0,
-					conversionRate:
-						totalApplications > 0
-							? ((data.approvedLoans || 0) / totalApplications) *
-							  100
-							: 0,
-					monthlyGrowth,
-					activeUsers: Math.floor((data.totalUsers || 0) * 0.7), // Mock data
-					totalRevenue: (data.totalDisbursedAmount || 0) * 0.05, // Assuming 5% fee
-					monthlyStats: enhancedMonthlyStats,
-					dailyStats: enhancedDailyStats,
-					statusBreakdown: [
-						{
-							status: "Disbursed",
-							count: data.disbursedLoans || 0,
-							percentage: 0,
-						},
-						{
-							status: "Pending Disbursement",
-							count: data.pendingDisbursementCount || 0,
-							percentage: 0,
-						},
-						{
-							status: "Pending Review",
-							count: data.pendingReviewApplications || 0,
-							percentage: 0,
-						},
-						{
-							status: "Rejected",
-							count: data.rejectedApplications || 0,
-							percentage: 0,
-						},
-					],
-				};
-
-				// Calculate percentages for status breakdown
-				const total = enhancedData.totalApplications || 1;
-				enhancedData.statusBreakdown = enhancedData.statusBreakdown.map(
-					(item) => ({
-						...item,
-						percentage: (item.count / total) * 100,
-					})
-				);
-
-				setStats(enhancedData);
-
-				// Try to fetch application counts for workflow
-				try {
-					const countsData = await fetchWithAdminTokenRefresh<any>(
-						"/api/admin/applications/counts"
-					);
-
-					// Fetch pending discharge loans count
-					let pendingDischargeCount = 0;
-					try {
-						const loansResponse = await fetchWithAdminTokenRefresh<{
-							success: boolean;
-							data: any[];
-						}>("/api/admin/loans");
-
-						if (loansResponse.success && loansResponse.data) {
-							pendingDischargeCount = loansResponse.data.filter(
-								(loan: any) =>
-									loan.status === "PENDING_DISCHARGE"
-							).length;
-						}
-					} catch (loansError) {
-						console.error(
-							"Error fetching loans for discharge count:",
-							loansError
-						);
-					}
-
-					// Fetch pending payments count
-					let pendingPaymentsCount = 0;
-					try {
-						const paymentsResponse =
-							await fetchWithAdminTokenRefresh<{
-								success: boolean;
-								data: any[];
-							}>("/api/admin/repayments/pending");
-
-						if (paymentsResponse.success && paymentsResponse.data) {
-							pendingPaymentsCount = paymentsResponse.data.length;
-						}
-					} catch (paymentsError) {
-						console.error(
-							"Error fetching pending payments count:",
-							paymentsError
-						);
-					}
-
-					// Fetch live attestation requests count
-					let liveAttestationsCount = 0;
-					try {
-						const attestationsResponse =
-							await fetchWithAdminTokenRefresh<any[]>(
-								"/api/admin/applications/live-attestations"
-							);
-
-						if (attestationsResponse) {
-							liveAttestationsCount = attestationsResponse.filter(
-								(app: any) => !app.attestationCompleted
-							).length;
-						}
-					} catch (attestationsError) {
-						console.error(
-							"Error fetching live attestations count:",
-							attestationsError
-						);
-					}
-
-					setWorkflowCounts({
-						PENDING_DECISION:
-							(countsData.PENDING_APPROVAL || 0) + 
-							(countsData.COLLATERAL_REVIEW || 0),
-						PENDING_DISBURSEMENT:
-							countsData.PENDING_DISBURSEMENT ||
-							data.pendingDisbursementCount ||
-							0,
-						PENDING_DISCHARGE: pendingDischargeCount,
-						PENDING_PAYMENTS: pendingPaymentsCount,
-						LIVE_ATTESTATIONS: liveAttestationsCount,
-					});
-				} catch (countsError) {
-					console.error(
-						"Error fetching application counts, using dashboard stats:",
-						countsError
-					);
-
-					setWorkflowCounts({
-						PENDING_DECISION: data.pendingReviewApplications || 0,
-						PENDING_DISBURSEMENT:
-							data.pendingDisbursementCount || 0,
-						PENDING_DISCHARGE: 0,
-						PENDING_PAYMENTS: 0,
-						LIVE_ATTESTATIONS: 0, // Will be fetched separately
-					});
+				if (userData.fullName) {
+					setUserName(userData.fullName);
 				}
 			} catch (error) {
-				console.error("Error fetching dashboard data:", error);
+				console.error("Error fetching user data:", error);
+			}
+
+			// Fetch dashboard stats with token refresh
+			const data = await fetchWithAdminTokenRefresh<DashboardStats>(
+				"/api/admin/dashboard"
+			);
+
+			// Total late fees collected is now included in dashboard API response
+			const totalLateFeesCollected = data.totalLateFeesCollected || 0;
+
+			// Fetch monthly statistics
+			let monthlyStats = [];
+			try {
+				const monthlyData = await fetchWithAdminTokenRefresh<{
+					monthlyStats: {
+						month: string;
+						applications: number;
+						approvals: number;
+						disbursements: number;
+						revenue: number;
+						fees_earned: number;
+						accrued_interest: number;
+						disbursement_amount: number;
+						disbursement_count: number;
+						users: number;
+						kyc_users: number;
+						actual_repayments: number;
+						scheduled_repayments: number;
+						total_loan_value: number;
+						current_loan_value: number;
+						repayment_count: number;
+						scheduled_count: number;
+					}[];
+				}>("/api/admin/monthly-stats");
+				monthlyStats = monthlyData.monthlyStats;
+			} catch (error) {
+				console.error("Error fetching monthly stats:", error);
+				console.log("Using fallback mock data for monthly stats");
+				// Fallback to mock data if API fails
+				monthlyStats = [
+					{
+						month: "Jan",
+						applications: 45,
+						approvals: 32,
+						disbursements: 28,
+						revenue: 14000,
+						fees_earned: 4700,
+						accrued_interest: 2800,
+						disbursement_amount: 280000,
+						disbursement_count: 28,
+						users: 12,
+						kyc_users: 8,
+						actual_repayments: 14000,
+						scheduled_repayments: 15000,
+						total_loan_value: 320000,
+						current_loan_value: 306000,
+						repayment_count: 25,
+						scheduled_count: 30,
+					},
+					{
+						month: "Feb",
+						applications: 52,
+						approvals: 38,
+						disbursements: 35,
+						revenue: 17500,
+						fees_earned: 5800,
+						accrued_interest: 3500,
+						disbursement_amount: 350000,
+						disbursement_count: 35,
+						users: 15,
+						kyc_users: 11,
+						actual_repayments: 17500,
+						scheduled_repayments: 18500,
+						total_loan_value: 400000,
+						current_loan_value: 688500,
+						repayment_count: 32,
+						scheduled_count: 38,
+					},
+					{
+						month: "Mar",
+						applications: 48,
+						approvals: 35,
+						disbursements: 32,
+						revenue: 16000,
+						fees_earned: 5300,
+						accrued_interest: 3200,
+						disbursement_amount: 320000,
+						disbursement_count: 32,
+						users: 18,
+						kyc_users: 14,
+						actual_repayments: 16000,
+						scheduled_repayments: 17200,
+						total_loan_value: 365000,
+						current_loan_value: 1037500,
+						repayment_count: 28,
+						scheduled_count: 35,
+					},
+					{
+						month: "Apr",
+						applications: 61,
+						approvals: 44,
+						disbursements: 40,
+						revenue: 20000,
+						fees_earned: 6700,
+						accrued_interest: 4000,
+						disbursement_amount: 400000,
+						disbursement_count: 40,
+						users: 22,
+						kyc_users: 18,
+						actual_repayments: 20000,
+						scheduled_repayments: 21000,
+						total_loan_value: 456000,
+						current_loan_value: 1473500,
+						repayment_count: 38,
+						scheduled_count: 42,
+					},
+					{
+						month: "May",
+						applications: 58,
+						approvals: 42,
+						disbursements: 38,
+						revenue: 19000,
+						fees_earned: 6300,
+						accrued_interest: 3800,
+						disbursement_amount: 380000,
+						disbursement_count: 38,
+						users: 19,
+						kyc_users: 15,
+						actual_repayments: 19000,
+						scheduled_repayments: 20500,
+						total_loan_value: 432000,
+						current_loan_value: 1886500,
+						repayment_count: 35,
+						scheduled_count: 40,
+					},
+					{
+						month: "Jun",
+						applications: 67,
+						approvals: 49,
+						disbursements: 45,
+						revenue: 22500,
+						fees_earned: 7500,
+						accrued_interest: 4500,
+						disbursement_amount: 450000,
+						disbursement_count: 45,
+						users: 25,
+						kyc_users: 20,
+						actual_repayments: 22500,
+						scheduled_repayments: 24000,
+						total_loan_value: 513000,
+						current_loan_value: 2377000,
+						repayment_count: 42,
+						scheduled_count: 48,
+					},
+				];
+			}
+
+			// Fetch daily statistics
+			let dailyStats = [];
+			try {
+				const dailyData = await fetchWithAdminTokenRefresh<{
+					dailyStats: {
+						date: string;
+						applications: number;
+						approvals: number;
+						disbursements: number;
+						revenue: number;
+						fees_earned: number;
+						accrued_interest: number;
+						disbursement_amount: number;
+						disbursement_count: number;
+						users: number;
+						kyc_users: number;
+						actual_repayments: number;
+						scheduled_repayments: number;
+						total_loan_value: number;
+						current_loan_value: number;
+						repayment_count: number;
+						scheduled_count: number;
+					}[];
+				}>("/api/admin/daily-stats");
+				dailyStats = dailyData.dailyStats;
+			} catch (error) {
+				console.error("Error fetching daily stats:", error);
+				console.log("Using fallback mock data for daily stats");
+				// Generate mock daily data for last 30 days if API fails
+				const mockDailyStats = [];
+				const now = new Date();
+				for (let i = 29; i >= 0; i--) {
+					const date = new Date(now);
+					date.setDate(date.getDate() - i);
+					mockDailyStats.push({
+						date: date.toISOString().split('T')[0],
+						applications: Math.floor(Math.random() * 8) + 1,
+						approvals: Math.floor(Math.random() * 6) + 1,
+						disbursements: Math.floor(Math.random() * 4) + 1,
+						revenue: Math.floor(Math.random() * 3000) + 500,
+						fees_earned: Math.floor(Math.random() * 1000) + 200,
+						accrued_interest: Math.floor(Math.random() * 800) + 100,
+						disbursement_amount: Math.floor(Math.random() * 50000) + 10000,
+						disbursement_count: Math.floor(Math.random() * 3) + 1,
+						users: Math.floor(Math.random() * 5) + 1,
+						kyc_users: Math.floor(Math.random() * 3) + 1,
+						actual_repayments: Math.floor(Math.random() * 2500) + 500,
+						scheduled_repayments: Math.floor(Math.random() * 3000) + 600,
+						total_loan_value: Math.floor(Math.random() * 100000) + 20000,
+						current_loan_value: Math.floor(Math.random() * 80000) + 15000,
+						repayment_count: Math.floor(Math.random() * 4) + 1,
+						scheduled_count: Math.floor(Math.random() * 5) + 1,
+					});
+				}
+				dailyStats = mockDailyStats;
+			}
+
+			// Use totalApplications from API instead of calculating
+			const totalApplications = data.totalApplications || 0;
+
+			// Calculate monthly growth from real data
+			const currentMonth = monthlyStats[monthlyStats.length - 1];
+			const previousMonth = monthlyStats[monthlyStats.length - 2];
+			const monthlyGrowth =
+				previousMonth && currentMonth
+					? ((currentMonth.applications -
+							previousMonth.applications) /
+							previousMonth.applications) *
+					  100
+					: 0;
+
+			// Enhance monthlyStats with missing fields if they don't exist
+			const enhancedMonthlyStats = monthlyStats.map((stat: any) => ({
+				...stat,
+				fees_earned: stat.fees_earned || 0,
+				accrued_interest: stat.accrued_interest || 0,
+				actual_repayments: stat.actual_repayments || 0,
+				scheduled_repayments: stat.scheduled_repayments || 0,
+				total_loan_value: stat.total_loan_value || 0,
+				current_loan_value: stat.current_loan_value || 0,
+				repayment_count: stat.repayment_count || 0,
+				scheduled_count: stat.scheduled_count || 0,
+			}));
+
+			// Enhance dailyStats with missing fields if they don't exist
+			const enhancedDailyStats = dailyStats.map((stat: any) => ({
+				...stat,
+				fees_earned: stat.fees_earned || 0,
+				accrued_interest: stat.accrued_interest || 0,
+				actual_repayments: stat.actual_repayments || 0,
+				scheduled_repayments: stat.scheduled_repayments || 0,
+				total_loan_value: stat.total_loan_value || 0,
+				current_loan_value: stat.current_loan_value || 0,
+				repayment_count: stat.repayment_count || 0,
+				scheduled_count: stat.scheduled_count || 0,
+			}));
+
+			const enhancedData = {
+				...data,
+				totalApplications,
+				totalLateFeesCollected,
+				averageLoanAmount:
+					data.disbursedLoans > 0
+						? (data.totalLoanValue ||
+								data.totalDisbursedAmount ||
+								0) / data.disbursedLoans
+						: 0,
+				conversionRate:
+					totalApplications > 0
+						? ((data.approvedLoans || 0) / totalApplications) *
+						  100
+						: 0,
+				monthlyGrowth,
+				activeUsers: Math.floor((data.totalUsers || 0) * 0.7), // Mock data
+				totalRevenue: (data.totalDisbursedAmount || 0) * 0.05, // Assuming 5% fee
+				monthlyStats: enhancedMonthlyStats,
+				dailyStats: enhancedDailyStats,
+				statusBreakdown: [
+					{
+						status: "Incomplete",
+						count: 0, // Will be updated below
+						percentage: 0,
+					},
+					{
+						status: "Pending KYC",
+						count: 0, // Will be updated below
+						percentage: 0,
+					},
+					{
+						status: "Pending Review",
+						count: data.pendingReviewApplications || 0,
+						percentage: 0,
+					},
+					{
+						status: "Collateral Review",
+						count: 0, // Will be updated below
+						percentage: 0,
+					},
+					{
+						status: "Pending Attestation",
+						count: 0, // Will be updated below
+						percentage: 0,
+					},
+					{
+						status: "Pending Signature",
+						count: 0, // Will be updated below
+						percentage: 0,
+					},
+					{
+						status: "Pending Disbursement",
+						count: data.pendingDisbursementCount || 0,
+						percentage: 0,
+					},
+					{
+						status: "Disbursed",
+						count: data.disbursedLoans || 0,
+						percentage: 0,
+					},
+					{
+						status: "Rejected",
+						count: data.rejectedApplications || 0,
+						percentage: 0,
+					},
+				],
+			};
+
+			// Calculate percentages for status breakdown
+			const total = enhancedData.totalApplications || 1;
+			enhancedData.statusBreakdown = enhancedData.statusBreakdown.map(
+				(item) => ({
+					...item,
+					percentage: (item.count / total) * 100,
+				})
+			);
+
+			setStats(enhancedData);
+
+			// Try to fetch application counts for workflow
+			try {
+				const countsData = await fetchWithAdminTokenRefresh<any>(
+					"/api/admin/applications/counts"
+				);
+
+				// Fetch pending discharge loans count
+				let pendingDischargeCount = 0;
+				try {
+					const loansResponse = await fetchWithAdminTokenRefresh<{
+						success: boolean;
+						data: any[];
+					}>("/api/admin/loans");
+
+					if (loansResponse.success && loansResponse.data) {
+						pendingDischargeCount = loansResponse.data.filter(
+							(loan: any) =>
+								loan.status === "PENDING_DISCHARGE"
+						).length;
+					}
+				} catch (loansError) {
+					console.error(
+						"Error fetching loans for discharge count:",
+						loansError
+					);
+				}
+
+				// Fetch pending payments count
+				let pendingPaymentsCount = 0;
+				try {
+					const paymentsResponse =
+						await fetchWithAdminTokenRefresh<{
+							success: boolean;
+							data: any[];
+						}>("/api/admin/repayments/pending");
+
+					if (paymentsResponse.success && paymentsResponse.data) {
+						pendingPaymentsCount = paymentsResponse.data.length;
+					}
+				} catch (paymentsError) {
+					console.error(
+						"Error fetching pending payments count:",
+						paymentsError
+					);
+				}
+
+				// Fetch live attestation requests count
+				let liveAttestationsCount = 0;
+				try {
+					const attestationsResponse =
+						await fetchWithAdminTokenRefresh<any[]>(
+							"/api/admin/applications/live-attestations"
+						);
+
+					if (attestationsResponse) {
+						liveAttestationsCount = attestationsResponse.filter(
+							(app: any) => !app.attestationCompleted
+						).length;
+					}
+				} catch (attestationsError) {
+					console.error(
+						"Error fetching live attestations count:",
+						attestationsError
+					);
+				}
+
+				// Get pending signature count from the counts data we already fetched
+				const pendingSignatureCount = countsData.PENDING_SIGNATURE || 0;
+
+				setWorkflowCounts({
+					PENDING_DECISION:
+						(countsData.PENDING_APPROVAL || 0) + 
+						(countsData.COLLATERAL_REVIEW || 0),
+					PENDING_DISBURSEMENT:
+						countsData.PENDING_DISBURSEMENT ||
+						data.pendingDisbursementCount ||
+						0,
+					PENDING_DISCHARGE: pendingDischargeCount,
+					PENDING_PAYMENTS: pendingPaymentsCount,
+					LIVE_ATTESTATIONS: liveAttestationsCount,
+					PENDING_SIGNATURE: pendingSignatureCount,
+				});
+
+				// Update the status breakdown with workflow counts
+				setStats(prevStats => ({
+					...prevStats,
+					statusBreakdown: prevStats.statusBreakdown?.map(item => {
+						if (item.status === "Pending Signature") {
+							return { ...item, count: pendingSignatureCount };
+						} else if (item.status === "Pending Attestation") {
+							return { ...item, count: countsData.PENDING_ATTESTATION || 0 };
+						} else if (item.status === "Pending KYC") {
+							return { ...item, count: countsData.PENDING_KYC || 0 };
+						} else if (item.status === "Collateral Review") {
+							return { ...item, count: countsData.COLLATERAL_REVIEW || 0 };
+						} else if (item.status === "Incomplete") {
+							return { ...item, count: countsData.INCOMPLETE || 0 };
+						}
+						return item;
+					}) || []
+				}));
+			} catch (countsError) {
+				console.error(
+					"Error fetching application counts, using dashboard stats:",
+					countsError
+				);
+
+				setWorkflowCounts({
+					PENDING_DECISION: data.pendingReviewApplications || 0,
+					PENDING_DISBURSEMENT:
+						data.pendingDisbursementCount || 0,
+					PENDING_DISCHARGE: 0,
+					PENDING_PAYMENTS: 0,
+					LIVE_ATTESTATIONS: 0, // Will be fetched separately
+					PENDING_SIGNATURE: 0,
+				});
+			}
+		} catch (error) {
+			console.error("Error fetching dashboard data:", error);
+		}
+	};
+
+	const handleRefresh = async () => {
+		setRefreshing(true);
+		try {
+			await fetchDashboardData();
+		} catch (error) {
+			console.error("Error refreshing dashboard data:", error);
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
+	useEffect(() => {
+		const initialLoad = async () => {
+			setLoading(true);
+			try {
+				await fetchDashboardData();
+			} catch (error) {
+				console.error("Error loading dashboard:", error);
 			} finally {
 				setLoading(false);
 			}
 		};
 
-		fetchDashboardData();
+		initialLoad();
 	}, []);
 
 	const formatCurrency = (amount: number) => {
@@ -788,11 +862,25 @@ export default function AdminDashboardPage() {
 		>
 			{/* Quick Actions */}
 			<div className="mb-8">
-				<h2 className="text-lg font-medium text-white mb-5 flex items-center">
-					<ClockIcon className="h-6 w-6 mr-2 text-amber-400" />
-					Quick Actions
-				</h2>
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+				<div className="flex items-center justify-between mb-5">
+					<h2 className="text-lg font-medium text-white flex items-center">
+						<ClockIcon className="h-6 w-6 mr-2 text-amber-400" />
+						Quick Actions
+					</h2>
+					<button
+						onClick={handleRefresh}
+						disabled={refreshing}
+						className="group bg-gradient-to-br from-slate-600/20 to-slate-800/20 backdrop-blur-md border border-slate-500/30 rounded-xl shadow-lg px-4 py-2 transition-all hover:scale-[1.02] hover:border-slate-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						<div className="flex items-center gap-2">
+							<ArrowPathIcon className={`h-5 w-5 text-slate-300 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
+							<span className="text-sm font-medium text-slate-300 group-hover:text-slate-200">
+								{refreshing ? 'Refreshing...' : 'Refresh All Data'}
+							</span>
+						</div>
+					</button>
+				</div>
+				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
 					{/* Pending Decisions */}
 					<Link
 						href="/dashboard/applications/pending-decision"
@@ -821,6 +909,39 @@ export default function AdminDashboardPage() {
 								: "No pending applications"}
 						</p>
 						<div className="flex items-center text-amber-300 text-sm font-medium group-hover:text-amber-200">
+							Review now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+
+					{/* Pending Signatures */}
+					<Link
+						href="/dashboard/applications?tab=signatures&filter=pending_signature"
+						className="group bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 backdrop-blur-md border border-cyan-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-cyan-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-cyan-500/30 rounded-lg">
+								<DocumentTextIcon className="h-6 w-6 text-cyan-300" />
+							</div>
+							{workflowCounts.PENDING_SIGNATURE > 0 && (
+								<span className="bg-cyan-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.PENDING_SIGNATURE
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Document Signing
+						</h3>
+						<p className="text-sm text-cyan-200 mb-3">
+							{workflowCounts.PENDING_SIGNATURE > 0
+								? `${formatNumber(
+										workflowCounts.PENDING_SIGNATURE
+								  )} applications need signatures`
+								: "No pending signatures"}
+						</p>
+						<div className="flex items-center text-cyan-300 text-sm font-medium group-hover:text-cyan-200">
 							Review now
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
@@ -957,6 +1078,289 @@ export default function AdminDashboardPage() {
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</Link>
+
+				</div>
+			</div>
+
+			{/* Application Status Summary - Moved here from below */}
+			<div className="mb-8">
+				<div className="flex items-center justify-between mb-6">
+					<div>
+						<h2 className="text-lg font-medium text-white flex items-center">
+							<ChartBarIcon className="h-6 w-6 mr-2 text-purple-400" />
+							Application Pipeline
+						</h2>
+						<p className="text-sm text-gray-400 mt-1">
+							Total Applications: {formatNumber(stats.totalApplications || 0)}
+						</p>
+					</div>
+				</div>
+				{/* Application Status Overview - Grid Layout */}
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+					{/* Pie Chart */}
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
+						<div className="flex items-center justify-between mb-4">
+							<h3 className="text-lg font-medium text-white">
+								Application Status Distribution
+							</h3>
+							<ChartBarIcon className="h-6 w-6 text-purple-400" />
+						</div>
+
+						<div className="h-80">
+							<ResponsiveContainer width="100%" height="100%">
+								<PieChart>
+									<Pie
+										data={stats.statusBreakdown}
+										cx="50%"
+										cy="50%"
+										innerRadius={60}
+										outerRadius={120}
+										paddingAngle={5}
+										dataKey="count"
+										nameKey="status"
+									>
+										{stats.statusBreakdown?.map(
+											(entry, index) => {
+												const colors = [
+													"#6B7280", // Gray for Incomplete
+													"#6366F1", // Indigo for Pending KYC
+													"#F59E0B", // Yellow/Amber for Pending Review
+													"#F97316", // Orange for Collateral Review
+													"#06B6D4", // Cyan for Pending Attestation
+													"#8B5CF6", // Purple for Pending Signature
+													"#3B82F6", // Blue for Pending Disbursement
+													"#10B981", // Green for Disbursed
+													"#EF4444", // Red for Rejected
+												];
+												return (
+													<Cell
+														key={`cell-${index}`}
+														fill={
+															colors[
+																index %
+																	colors.length
+															]
+														}
+													/>
+												);
+											}
+										)}
+									</Pie>
+									<Tooltip
+										contentStyle={{
+											backgroundColor: "#1F2937",
+											border: "1px solid #374151",
+											borderRadius: "8px",
+											color: "#F9FAFB",
+										}}
+										labelStyle={{ color: "#F9FAFB" }}
+										itemStyle={{ color: "#F9FAFB" }}
+									/>
+								</PieChart>
+						</ResponsiveContainer>
+						</div>
+					</div>
+
+					{/* Status Cards Grid */}
+					<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+						{/* Incomplete */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Incomplete
+										</p>
+										<p className="text-2xl font-bold text-gray-400">
+											{formatNumber(stats.statusBreakdown?.find(item => item.status === "Incomplete")?.count || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<ClockIcon className="h-4 w-4 text-gray-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Partial applications
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Pending KYC */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Pending KYC
+										</p>
+										<p className="text-2xl font-bold text-indigo-400">
+											{formatNumber(stats.statusBreakdown?.find(item => item.status === "Pending KYC")?.count || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<UserCircleIcon className="h-4 w-4 text-indigo-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Identity verification
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Pending Review */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Pending Review
+										</p>
+										<p className="text-2xl font-bold text-yellow-400">
+											{formatNumber(stats.pendingReviewApplications || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<ClockIcon className="h-4 w-4 text-yellow-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Awaiting decision
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Collateral Review */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Collateral Review
+										</p>
+										<p className="text-2xl font-bold text-orange-400">
+											{formatNumber(stats.statusBreakdown?.find(item => item.status === "Collateral Review")?.count || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<BanknotesIcon className="h-4 w-4 text-orange-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Asset evaluation
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Pending Attestation */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Pending Attestation
+										</p>
+										<p className="text-2xl font-bold text-cyan-400">
+											{formatNumber(stats.statusBreakdown?.find(item => item.status === "Pending Attestation")?.count || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<ClipboardDocumentCheckIcon className="h-4 w-4 text-cyan-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Terms attestation
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Pending Signature */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Pending Signature
+										</p>
+										<p className="text-2xl font-bold text-purple-400">
+											{formatNumber(workflowCounts.PENDING_SIGNATURE || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<DocumentTextIcon className="h-4 w-4 text-purple-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Awaiting signatures
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Pending Disbursement */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Pending Disbursement
+										</p>
+										<p className="text-2xl font-bold text-blue-400">
+											{formatNumber(stats.pendingDisbursementCount || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<CurrencyDollarIcon className="h-4 w-4 text-blue-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Ready to fund
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Total Disbursed */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Total Disbursed
+										</p>
+										<p className="text-2xl font-bold text-green-400">
+											{formatNumber(stats.disbursedLoans || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<CheckCircleIcon className="h-4 w-4 text-green-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Successfully funded
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Rejected */}
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
+							<div className="p-4">
+								<div className="flex items-center justify-between">
+									<div>
+										<p className="text-sm font-medium text-gray-300">
+											Rejected
+										</p>
+										<p className="text-2xl font-bold text-red-400">
+											{formatNumber(stats.rejectedApplications || 0)}
+										</p>
+										<div className="flex items-center mt-2">
+											<XCircleIcon className="h-4 w-4 text-red-400 mr-1" />
+											<span className="text-xs text-gray-400">
+												Declined applications
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 
@@ -2195,177 +2599,7 @@ export default function AdminDashboardPage() {
 				</div>
 			</div>
 
-			{/* Summary Analytics - Full Width */}
-			<div className="mt-12 mb-8">
-				<h2 className="text-lg font-medium text-white mb-6 flex items-center">
-					<ChartBarIcon className="h-6 w-6 mr-2 text-purple-400" />
-					Application Status Summary
-				</h2>
-				{/* Application Status Overview - Grid Layout */}
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-					{/* Pie Chart */}
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-6">
-						<div className="flex items-center justify-between mb-4">
-							<h3 className="text-lg font-medium text-white">
-								Application Status Distribution
-							</h3>
-							<ChartBarIcon className="h-6 w-6 text-purple-400" />
-						</div>
 
-						<div className="h-80">
-							<ResponsiveContainer width="100%" height="100%">
-								<PieChart>
-									<Pie
-										data={stats.statusBreakdown}
-										cx="50%"
-										cy="50%"
-										innerRadius={60}
-										outerRadius={120}
-										paddingAngle={5}
-										dataKey="count"
-										nameKey="status"
-									>
-										{stats.statusBreakdown?.map(
-											(entry, index) => {
-												const colors = [
-													"#10B981", // Green for Disbursed
-													"#3B82F6", // Blue for Pending Disbursement
-													"#F59E0B", // Yellow/Amber for Pending Review
-													"#EF4444", // Red for Rejected
-												];
-												return (
-													<Cell
-														key={`cell-${index}`}
-														fill={
-															colors[
-																index %
-																	colors.length
-															]
-														}
-													/>
-												);
-											}
-										)}
-									</Pie>
-									<Tooltip
-										contentStyle={{
-											backgroundColor: "#1F2937",
-											border: "1px solid #374151",
-											borderRadius: "8px",
-											color: "#F9FAFB",
-										}}
-										labelStyle={{ color: "#F9FAFB" }}
-										itemStyle={{ color: "#F9FAFB" }}
-									/>
-								</PieChart>
-						</ResponsiveContainer>
-						</div>
-					</div>
-
-					{/* Status Cards Grid */}
-					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-						{/* Total Disbursed */}
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
-							<div className="p-6">
-								<div className="flex items-center justify-between">
-									<div>
-										<p className="text-sm font-medium text-gray-300">
-											Total Disbursed
-										</p>
-										<p className="text-3xl font-bold text-green-400">
-											{formatNumber(stats.disbursedLoans || 0)}
-										</p>
-										<div className="flex items-center mt-2">
-											<CheckCircleIcon className="h-4 w-4 text-green-400 mr-1" />
-											<span className="text-xs text-gray-400">
-												Successfully funded
-											</span>
-										</div>
-									</div>
-									<div className="p-3 bg-gray-700/50 rounded-xl">
-										<BanknotesIcon className="h-8 w-8 text-gray-400" />
-									</div>
-								</div>
-							</div>
-						</div>
-
-						{/* Pending Review */}
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
-							<div className="p-6">
-								<div className="flex items-center justify-between">
-									<div>
-										<p className="text-sm font-medium text-gray-300">
-											Pending Review
-										</p>
-										<p className="text-3xl font-bold text-yellow-400">
-											{formatNumber(stats.pendingReviewApplications || 0)}
-										</p>
-										<div className="flex items-center mt-2">
-											<ClockIcon className="h-4 w-4 text-yellow-400 mr-1" />
-											<span className="text-xs text-gray-400">
-												Awaiting decision
-											</span>
-										</div>
-									</div>
-									<div className="p-3 bg-gray-700/50 rounded-xl">
-										<DocumentTextIcon className="h-8 w-8 text-gray-400" />
-									</div>
-								</div>
-							</div>
-						</div>
-
-						{/* Pending Disbursement */}
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
-							<div className="p-6">
-								<div className="flex items-center justify-between">
-									<div>
-										<p className="text-sm font-medium text-gray-300">
-											Pending Disbursement
-										</p>
-										<p className="text-3xl font-bold text-blue-400">
-											{formatNumber(stats.pendingDisbursementCount || 0)}
-										</p>
-										<div className="flex items-center mt-2">
-											<CurrencyDollarIcon className="h-4 w-4 text-blue-400 mr-1" />
-											<span className="text-xs text-gray-400">
-												Ready to fund
-											</span>
-										</div>
-									</div>
-									<div className="p-3 bg-gray-700/50 rounded-xl">
-										<CreditCardIcon className="h-8 w-8 text-gray-400" />
-									</div>
-								</div>
-							</div>
-						</div>
-
-						{/* Total Applications */}
-						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 overflow-hidden shadow-lg rounded-xl">
-							<div className="p-6">
-								<div className="flex items-center justify-between">
-									<div>
-										<p className="text-sm font-medium text-gray-300">
-											Total Applications
-										</p>
-										<p className="text-3xl font-bold text-purple-400">
-											{formatNumber(stats.totalApplications || 0)}
-										</p>
-										<div className="flex items-center mt-2">
-											<UserGroupIcon className="h-4 w-4 text-purple-400 mr-1" />
-											<span className="text-xs text-gray-400">
-												All time submissions
-											</span>
-										</div>
-									</div>
-									<div className="p-3 bg-gray-700/50 rounded-xl">
-										<DocumentTextIcon className="h-8 w-8 text-gray-400" />
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
 
 
 		</AdminLayout>

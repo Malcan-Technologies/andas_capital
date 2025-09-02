@@ -10,6 +10,7 @@ import {
 	CheckCircleIcon,
 	ClockIcon,
 	ExclamationTriangleIcon,
+	ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
@@ -29,6 +30,7 @@ export default function TransactionsPage() {
 	const [transactions, setTransactions] = useState<Transaction[]>([]);
 	const [transactionFilter, setTransactionFilter] = useState<string>("ALL");
 	const [loading, setLoading] = useState<boolean>(true);
+	const [refreshing, setRefreshing] = useState<boolean>(false);
 
 	// Set filter from URL parameter on component mount
 	useEffect(() => {
@@ -244,6 +246,26 @@ export default function TransactionsPage() {
 										</p>
 									</div>
 								</div>
+								<button
+									onClick={async () => {
+										setRefreshing(true);
+										try {
+											await fetchTransactions();
+										} catch (error) {
+											console.error("Error refreshing transactions:", error);
+										} finally {
+											setRefreshing(false);
+										}
+									}}
+									disabled={refreshing}
+									className="group inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 bg-white hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 rounded-lg shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
+									title="Refresh transaction data"
+								>
+									<ArrowPathIcon className={`h-4 w-4 mr-2 text-gray-500 group-hover:text-blue-600 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
+									<span className="group-hover:text-blue-700 transition-colors">
+										{refreshing ? 'Refreshing...' : 'Refresh All Data'}
+									</span>
+								</button>
 							</div>
 
 							{/* Transaction Type Filter */}

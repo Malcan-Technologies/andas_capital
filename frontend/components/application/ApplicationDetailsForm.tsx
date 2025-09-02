@@ -14,6 +14,7 @@ interface Product {
 	interestRate: number; // Monthly interest rate in percentage
 	legalFee: number; // Legal fee in percentage
 	originationFee: number; // Origination fee in percentage
+	applicationFee: number; // Application fee as fixed amount
 }
 
 interface ApplicationDetails {
@@ -196,9 +197,10 @@ function ApplicationDetailsFormContent({
 			const originationFeeValue =
 				(loanAmount * selectedProduct.originationFee) / 100;
 
-			// Calculate net disbursement
+			// Calculate net disbursement (including application fee)
+			const applicationFeeValue = selectedProduct.applicationFee;
 			const netDisbursementValue =
-				loanAmount - legalFeeValue - originationFeeValue;
+				loanAmount - legalFeeValue - originationFeeValue - applicationFeeValue;
 
 			const submissionValues = {
 				...formValues,

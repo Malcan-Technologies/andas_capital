@@ -37,6 +37,17 @@ services:
             - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
             - WHATSAPP_USE_OTP_TEMPLATE=true
             - KYC_JWT_SECRET=kapital_nextauth_secret_key_2024_03_secure_789!@#
+            # DocuSeal Configuration - On-Premises Server
+            - DOCUSEAL_BASE_URL=http://192.168.0.100:3001
+            - DOCUSEAL_API_URL=http://192.168.0.100:3001
+            - DOCUSEAL_API_TOKEN=NwPkizAUEfShnc4meN1m3N38DG8ZNEyRmWPMjq8BXv8
+            - DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID=2
+            - FRONTEND_URL=http://localhost:3000
+            - COMPANY_SIGNING_EMAIL=admin@kredit.my
+            - WITNESS_EMAIL=legal@kredit.my
+            - WITNESS_NAME=Legal Representative
+            - COMPANY_SIGNATURE_IMAGE_URL=http://host.docker.internal:8080/signature.png
+            - COMPANY_STAMP_IMAGE_URL=http://host.docker.internal:8080/stamp.png
             - KYC_TOKEN_TTL_MINUTES=15
         depends_on:
             postgres:

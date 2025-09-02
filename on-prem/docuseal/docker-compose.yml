@@ -1,0 +1,124 @@
+services:
+  # PostgreSQL database for DocuSeal
+  docuseal-postgres:
+    image: postgres:15-alpine
+    container_name: docuseal-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: docuseal
+      POSTGRES_USER: docuseal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docuseal_secure_password_2024}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+      - ./postgres/backups:/backups
+    networks:
+      - docuseal-network
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with your main backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docuseal -d docuseal"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # DocuSeal application
+  docuseal:
+    image: docuseal/docuseal:latest
+    container_name: docuseal-app
+    restart: unless-stopped
+    depends_on:
+      docuseal-postgres:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://docuseal:${POSTGRES_PASSWORD:-docuseal_secure_password_2024}@docuseal-postgres:5432/docuseal
+      
+      # Application settings
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-your_secret_key_base_change_this_in_production}
+      HOST: ${DOCUSEAL_HOST:-localhost}
+      PORT: 3000
+      
+      # URL configuration for file serving
+      RAILS_FORCE_SSL: ${FORCE_SSL:-false}
+      RAILS_RELATIVE_URL_ROOT: ""
+      # Set host and port for URL generation
+      DEFAULT_URL_HOST: ${DEFAULT_URL_HOST:-192.168.0.100}
+      DEFAULT_URL_PORT: ${DEFAULT_URL_PORT:-3001}
+      
+      # File storage
+      STORAGE: local
+      STORAGE_PATH: /data/storage
+      WORKDIR: /data/storage
+      
+      # SMTP configuration (optional for now)
+      SMTP_ADDRESS: ${SMTP_ADDRESS:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_DOMAIN: ${SMTP_DOMAIN:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@yourdomain.com}
+      SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-plain}
+      SMTP_ENABLE_STARTTLS_AUTO: ${SMTP_ENABLE_STARTTLS_AUTO:-true}
+      
+      # Webhook configuration (for future use)
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://host.docker.internal:4001/api/docuseal/webhook}
+      
+      # Security settings
+      FORCE_SSL: ${FORCE_SSL:-false}
+      
+      # Time zone
+      TZ: Asia/Kuala_Lumpur
+    volumes:
+      - docuseal_storage:/data/storage
+      - docuseal_uploads:/data/uploads
+      - ./storage/documents:/data/documents
+      - ./storage/signed-agreements:/data/signed
+      - ./public:/data/public
+    networks:
+      - docuseal-network
+    ports:
+      - "3001:3000"  # Different port to avoid conflicts
+    # healthcheck:
+    #   test: ["CMD-SHELL", "curl -s http://localhost:3000/ > /dev/null || exit 1"]
+    #   interval: 60s
+    #   timeout: 30s
+    #   retries: 5
+    #   start_period: 60s
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: docuseal-nginx
+    restart: unless-stopped
+    depends_on:
+      - docuseal
+    ports:
+      - "80:80"     # HTTP access (redirects to HTTPS)
+      - "443:443"   # HTTPS access with SSL certificates
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/ssl/certs
+      - ./logs/nginx:/var/log/nginx
+      - ./public:/data/public
+    networks:
+      - docuseal-network
+    # healthcheck:
+    #   test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/ > /dev/null 2>&1 || exit 1"]
+    #   interval: 60s
+    #   timeout: 30s
+    #   retries: 5
+    #   start_period: 60s
+
+volumes:
+  postgres_data:
+    driver: local
+  docuseal_storage:
+    driver: local
+  docuseal_uploads:
+    driver: local
+
+networks:
+  docuseal-network:
+    driver: bridge

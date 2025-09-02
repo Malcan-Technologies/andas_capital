@@ -12,6 +12,7 @@ import fs from "fs";
 import { RequestHandler } from "express";
 import { trackApplicationStatusChange } from "./admin";
 import { userHasAllKycDocuments } from "./kyc";
+import { docusealService } from "../lib/docusealService";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -236,15 +237,49 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 	try {
 		const userId = req.user!.userId;
 
+
 		const loanApplications = await prisma.loanApplication.findMany({
 			where: { userId },
 			include: {
 				product: true,
+				loan: {
+					select: {
+						id: true,
+						docusealSubmissionId: true,
+						agreementStatus: true,
+						agreementSignedAt: true,
+						docusealSignUrl: true,
+					},
+				},
 			},
 			orderBy: { createdAt: "desc" },
 		});
 
-		return res.json(loanApplications);
+		// Calculate agreement status from signatory table for each application with a loan
+		const applicationsWithCalculatedStatus = await Promise.all(
+			loanApplications.map(async (app) => {
+				if (app.loan?.id) {
+					try {
+						// Get calculated agreement status from signatory records
+						const calculatedAgreementStatus = await docusealService.calculateAgreementStatus(app.loan.id);
+						return {
+							...app,
+							loan: {
+								...app.loan,
+								agreementStatus: calculatedAgreementStatus, // Use calculated status instead of stored one
+							},
+						};
+					} catch (error) {
+						console.error(`Error calculating agreement status for loan ${app.loan.id}:`, error);
+						// Fall back to stored status if calculation fails
+						return app;
+					}
+				}
+				return app;
+			})
+		);
+
+		return res.json(applicationsWithCalculatedStatus);
 	} catch (error) {
 		console.error("Error retrieving loan applications:", error);
 		return res.status(500).json({
@@ -1352,34 +1387,49 @@ router.post(
 				});
 			}
 
-			// Update the application with attestation completion
-			const updatedApplication = await prisma.loanApplication.update({
-				where: { id },
-				data: {
-					status: "PENDING_SIGNATURE",
-					attestationType: "IMMEDIATE",
-					attestationCompleted: true,
-					attestationDate: new Date(),
-					attestationVideoWatched: true,
-					attestationTermsAccepted: true,
-				},
-				include: {
-					user: {
-						select: {
-							id: true,
-							fullName: true,
-							phoneNumber: true,
-							email: true,
+			// Process the status change in a transaction to ensure loan creation
+			const updatedApplication = await prisma.$transaction(async (tx) => {
+				// Update the application with attestation completion
+				const updated = await tx.loanApplication.update({
+					where: { id },
+					data: {
+						status: "PENDING_SIGNATURE",
+						attestationType: "IMMEDIATE",
+						attestationCompleted: true,
+						attestationDate: new Date(),
+						attestationVideoWatched: true,
+						attestationTermsAccepted: true,
+					},
+					include: {
+						user: {
+							select: {
+								id: true,
+								fullName: true,
+								phoneNumber: true,
+								email: true,
+							},
+						},
+						product: {
+							select: {
+								id: true,
+								name: true,
+								code: true,
+							},
 						},
 					},
-					product: {
-						select: {
-							id: true,
-							name: true,
-							code: true,
-						},
-					},
-				},
+				});
+
+				// Create loan and repayment schedule when moving to PENDING_SIGNATURE
+				try {
+					const { createLoanOnPendingSignature } = require('../lib/loanCreationUtils');
+					await createLoanOnPendingSignature(id, tx);
+					console.log(`Loan and repayment schedule created for application ${id} during user attestation completion`);
+				} catch (error) {
+					console.error(`Failed to create loan for application ${id}:`, error);
+					// Don't fail the transaction, just log the error
+				}
+
+				return updated;
 			});
 
 			// Track the status change in history
@@ -1953,12 +2003,18 @@ router.post(
 						interestRate: existingApplication.freshOfferInterestRate,
 						monthlyRepayment: existingApplication.freshOfferMonthlyRepayment,
 						netDisbursement: existingApplication.freshOfferNetDisbursement,
+						originationFee: existingApplication.freshOfferOriginationFee,
+						legalFee: existingApplication.freshOfferLegalFee,
+						applicationFee: existingApplication.freshOfferApplicationFee,
 						// Clear fresh offer fields since they're now accepted
 						freshOfferAmount: null,
 						freshOfferTerm: null,
 						freshOfferInterestRate: null,
 						freshOfferMonthlyRepayment: null,
 						freshOfferNetDisbursement: null,
+						freshOfferOriginationFee: null,
+						freshOfferLegalFee: null,
+						freshOfferApplicationFee: null,
 						freshOfferNotes: null,
 						freshOfferSubmittedAt: null,
 						freshOfferSubmittedBy: null,
@@ -2197,6 +2253,140 @@ router.get("/:id/kyc-status", authenticateAndVerifyPhone, async (req: AuthReques
 		console.error("Error checking KYC status:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
+});
+
+/**
+ * GET /api/loan-applications/:applicationId/signing-url
+ * Get signing URL for loan application (user-facing)
+ */
+router.get("/:applicationId/signing-url", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+    try {
+        const { applicationId } = req.params;
+        const userId = req.user!.userId;
+
+        // Verify the application belongs to the authenticated user
+        const application = await prisma.loanApplication.findFirst({
+            where: { 
+                id: applicationId,
+                userId: userId
+            }
+        });
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Application not found'
+            });
+        }
+
+        // Find the loan associated with this application
+        const loan = await prisma.loan.findFirst({
+            where: { applicationId: applicationId }
+        });
+
+        if (!loan) {
+            return res.status(404).json({
+                success: false,
+                message: 'No loan found for this application'
+            });
+        }
+
+        // Get the user's signing URL from loan_signatories table
+        const userSignatory = await prisma.loanSignatory.findFirst({
+            where: { 
+                loanId: loan.id,
+                signatoryType: 'USER',
+                status: 'PENDING'
+            }
+        });
+
+        if (!userSignatory?.signingUrl) {
+            return res.status(400).json({
+                success: false,
+                message: 'No signing URL available for this application'
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: {
+                signingUrl: userSignatory.signingSlug 
+                    ? `${process.env.DOCUSEAL_BASE_URL || 'http://192.168.0.100:3001'}/s/${userSignatory.signingSlug}`
+                    : userSignatory.signingUrl,
+                applicationId,
+                loanId: loan.id
+            }
+        });
+
+    } catch (error: any) {
+        console.error('Error getting signing URL:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+});
+
+/**
+ * GET /api/loan-applications/:loanId/agreement-download
+ * Get download URL for signed loan agreement (user-facing)
+ */
+router.get("/:loanId/agreement-download", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+    try {
+        const { loanId } = req.params;
+        const userId = req.user!.userId;
+
+        // Verify the loan belongs to the authenticated user
+        const loan = await prisma.loan.findFirst({
+            where: { 
+                id: loanId,
+                userId: userId
+            }
+        });
+
+        if (!loan) {
+            return res.status(404).json({
+                success: false,
+                message: 'Loan not found'
+            });
+        }
+
+        // Check if the agreement is signed
+        const { docusealService } = await import('../lib/docusealService');
+        const agreementStatus = await docusealService.calculateAgreementStatus(loanId);
+
+        if (agreementStatus !== 'SIGNED') {
+            return res.status(400).json({
+                success: false,
+                message: 'Agreement is not yet fully signed'
+            });
+        }
+
+        // Get download URL from DocuSeal service
+        if (!loan.docusealSubmissionId) {
+            return res.status(400).json({
+                success: false,
+                message: 'No DocuSeal submission found for this loan'
+            });
+        }
+
+        const downloadUrl = await docusealService.getSignedDocumentDownloadUrl(loan.docusealSubmissionId);
+
+        return res.json({
+            success: true,
+            data: {
+                downloadUrl,
+                loanId
+            }
+        });
+
+    } catch (error: any) {
+        console.error('Error getting agreement download URL:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
 });
 
 export default router;

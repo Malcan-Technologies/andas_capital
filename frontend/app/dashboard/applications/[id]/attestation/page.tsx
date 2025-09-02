@@ -19,6 +19,8 @@ interface LoanApplication {
 	interestRate: number;
 	legalFee: number;
 	netDisbursement: number;
+	applicationFee?: number;
+	originationFee?: number;
 	product: {
 		name: string;
 		code: string;
@@ -87,6 +89,7 @@ export default function AttestationPage() {
 
 	const handleAttestationComplete = async () => {
 		try {
+			// Complete the attestation first
 			await fetchWithTokenRefresh(
 				`${
 					process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"
@@ -104,10 +107,44 @@ export default function AttestationPage() {
 				}
 			);
 
-			// Redirect to loans page with success message
-			router.push(
-				"/dashboard/loans?tab=applications&success=attestation_completed"
-			);
+			// After successful attestation, directly initiate document signing
+			try {
+				const signingResponse = await fetchWithTokenRefresh<{
+					success: boolean;
+					message: string;
+					data?: {
+						submissionId: string;
+						signUrl: string;
+						status: string;
+					};
+				}>('/api/docuseal/initiate-application-signing', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						applicationId: applicationId,
+					}),
+				});
+
+				if (signingResponse?.success && signingResponse?.data?.signUrl) {
+					// Open DocuSeal signing URL in a new tab
+					window.open(signingResponse.data.signUrl, '_blank');
+					
+					// Redirect to loans page with success message about both attestation and signing
+					router.push(
+						"/dashboard/loans?tab=applications&success=attestation_completed_signing_initiated"
+					);
+				} else {
+					throw new Error(signingResponse?.message || 'Failed to initiate document signing');
+				}
+			} catch (signingError) {
+				console.error("Error initiating signing after attestation:", signingError);
+				// Even if signing fails, attestation was successful, so redirect with partial success
+				router.push(
+					"/dashboard/loans?tab=applications&success=attestation_completed&warning=signing_initiation_failed"
+				);
+			}
 		} catch (error) {
 			console.error("Error completing attestation:", error);
 			throw error;
@@ -139,11 +176,11 @@ export default function AttestationPage() {
 	};
 
 	const calculateFees = (application: LoanApplication) => {
-		const amount = application.amount;
+		// Use the fees stored in the database instead of calculating them
 		const legalFee = application.legalFee;
 		const netDisbursement = application.netDisbursement;
-		const originationFee = amount - netDisbursement - legalFee;
-		const applicationFee = Number(application.product.applicationFee) || 0;
+		const applicationFee = application.applicationFee || 0;
+		const originationFee = application.originationFee || 0;
 
 		return {
 			interestRate: application.interestRate,

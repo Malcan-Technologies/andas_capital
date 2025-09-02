@@ -19,6 +19,24 @@ frontend/  # Customer app (Next.js)
 admin/     # Admin dashboard (Next.js)
 config/    # Nginx and infra config
 scripts/   # Deployment & helper scripts
+on-prem/   # On-premises DocuSeal & signing services
+```
+
+### Network Architecture
+```
+Digital Ocean VPS (Cloud)           On-Premises Server
+┌─────────────────────┐            ┌──────────────────────┐
+│ nginx (reverse proxy)│◄─Tailscale─►│ DocuSeal + Orchestrator│
+│ SSL: *.kredit.my    │   VPN       │ IP: 100.81.21.118    │
+│ Ports: 80, 443      │            │ Services: 80, 4010   │
+└─────────────────────┘            └──────────────────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ sign.kredit.my      │
+│ → DocuSeal (on-prem)│
+│ → Signing API       │
+└─────────────────────┘
 ```
 
 ### Quick Start (Docker)

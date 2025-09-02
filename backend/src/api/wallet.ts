@@ -828,7 +828,7 @@ router.post(
 								paymentAmount
 							)} has been processed successfully.`,
 							type: "SYSTEM",
-							priority: "MEDIUM",
+							priority: "HIGH",
 							metadata: {
 								transactionId: transaction.id,
 								loanId,
@@ -848,7 +848,7 @@ router.post(
 							paymentAmount
 						)} has been submitted and is awaiting approval.`,
 						type: "SYSTEM",
-						priority: "MEDIUM",
+						priority: "HIGH",
 						metadata: {
 							transactionId: transaction.id,
 							loanId,
@@ -861,12 +861,10 @@ router.post(
 
 			// Helper function to format currency
 			function formatCurrency(amount: number): string {
-				return new Intl.NumberFormat("en-MY", {
-					style: "currency",
-					currency: "MYR",
-					minimumFractionDigits: 0,
-					maximumFractionDigits: 0,
-				}).format(amount);
+				return `RM ${new Intl.NumberFormat("en-MY", {
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2,
+				}).format(amount)}`;
 			}
 
 			res.status(201).json({

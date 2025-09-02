@@ -21,6 +21,7 @@ import {
 	CurrencyDollarIcon,
 	DocumentArrowDownIcon,
 	ReceiptPercentIcon,
+	PencilIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -111,10 +112,16 @@ interface LoanData {
 	scheduleType?: string | null; // EXACT_MONTHLY or CUSTOM_DATE
 	customDueDate?: number | null; // For CUSTOM_DATE schedule type
 	prorationCutoffDate?: number | null; // For CUSTOM_DATE proration
+	// DocuSeal Agreement fields
+	docusealSubmissionId?: string | null;
+	agreementStatus?: string | null; // PENDING_SIGNATURE, SIGNED, SIGNATURE_EXPIRED, SIGNATURE_DECLINED, SIGNATURE_FAILED
+	agreementSignedAt?: string | null;
+	docusealSignUrl?: string | null;
 	application?: {
 		id: string;
 		amount: number;
 		purpose: string;
+		status?: string;
 		product: {
 			name: string;
 			code: string;
@@ -173,6 +180,8 @@ function ActiveLoansContent() {
 		WalletTransaction[]
 	>([]);
 	const [loadingTransactions, setLoadingTransactions] = useState(false);
+	const [signaturesData, setSignaturesData] = useState<any>(null);
+	const [loadingSignatures, setLoadingSignatures] = useState(false);
 	const [applicationHistory, setApplicationHistory] = useState<
 		LoanApplicationHistory[]
 	>([]);
@@ -232,6 +241,18 @@ function ActiveLoansContent() {
 			}
 		}
 	}, [selectedTab, selectedLoan?.id, selectedLoan?.applicationId]);
+
+	// Fetch signature status when signatures tab is selected
+	useEffect(() => {
+		if (
+			selectedTab === "signatures" &&
+			selectedLoan
+		) {
+			fetchSignatureStatus(selectedLoan.id);
+		}
+	}, [selectedTab, selectedLoan?.id]);
+
+
 
 	const fetchActiveLoans = async () => {
 		try {
@@ -426,6 +447,28 @@ function ActiveLoansContent() {
 		}
 	};
 
+	const fetchSignatureStatus = async (loanId: string) => {
+		if (!loanId) return;
+		
+		setLoadingSignatures(true);
+		try {
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data: any;
+			}>(`/api/admin/loans/${loanId}/signatures`);
+			
+			if (data.success) {
+				setSignaturesData(data.data);
+			} else {
+				console.error("Failed to fetch signature status");
+			}
+		} catch (error) {
+			console.error("Error fetching signature status:", error);
+		} finally {
+			setLoadingSignatures(false);
+		}
+	};
+
 	const filterLoans = useCallback(() => {
 		let filtered = [...loans];
 
@@ -587,6 +630,7 @@ function ActiveLoansContent() {
 					// Clear existing data
 					setWalletTransactions([]);
 					setApplicationHistory([]);
+					setSignaturesData(null);
 					// Fetch fresh detailed data
 					fetchLoanRepayments(currentSelectedLoanId);
 					if (selectedTab === "audit") {
@@ -594,6 +638,9 @@ function ActiveLoansContent() {
 						if (updatedSelectedLoan && updatedSelectedLoan.applicationId) {
 							fetchApplicationHistory(updatedSelectedLoan.applicationId);
 						}
+					}
+					if (selectedTab === "signatures") {
+						fetchSignatureStatus(currentSelectedLoanId);
 					}
 				}
 			} else {
@@ -1935,6 +1982,18 @@ function ActiveLoansContent() {
 										<DocumentTextIcon className="inline h-4 w-4 mr-1" />
 										Audit Trail
 									</div>
+									<div
+										className={`px-4 py-2 cursor-pointer transition-colors ${
+											selectedTab === "signatures"
+												? "border-b-2 border-blue-400 font-medium text-white"
+												: "text-gray-400 hover:text-gray-200"
+										}`}
+										onClick={() => setSelectedTab("signatures")}
+									>
+										<PencilIcon className="inline h-4 w-4 mr-1" />
+										Signatures
+									</div>
+
 								</div>
 
 								{/* Tab Content */}
@@ -2500,6 +2559,71 @@ function ActiveLoansContent() {
 															}
 														})()}
 													</div>
+												</div>
+											</div>
+
+											{/* Agreement Information */}
+											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
+												<h4 className="text-white font-medium mb-3 flex items-center">
+													<DocumentTextIcon className="h-5 w-5 mr-2 text-blue-400" />
+													Loan Agreement
+												</h4>
+												<div className="space-y-3">
+													<div>
+														<p className="text-gray-400 text-sm">
+															Agreement Status
+														</p>
+														<p className="text-white">
+															{selectedLoan.agreementStatus ? (
+																<span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border ${
+																	selectedLoan.agreementStatus === 'SIGNED' 
+																		? 'bg-green-500/20 text-green-200 border-green-400/20'
+																		: selectedLoan.agreementStatus === 'PENDING_SIGNATURE'
+																		? 'bg-yellow-500/20 text-yellow-200 border-yellow-400/20'
+																		: 'bg-gray-500/20 text-gray-200 border-gray-400/20'
+																}`}>
+																	{selectedLoan.agreementStatus === 'SIGNED' ? 'Signed' :
+																	 selectedLoan.agreementStatus === 'PENDING_SIGNATURE' ? 'Pending Signature' :
+																	 selectedLoan.agreementStatus}
+																</span>
+															) : (
+																<span className="text-gray-500">N/A</span>
+															)}
+														</p>
+													</div>
+													{selectedLoan.agreementSignedAt && (
+														<div>
+															<p className="text-gray-400 text-sm">
+																Agreement Signed Date
+															</p>
+															<p className="text-white">
+																{formatDateTime(selectedLoan.agreementSignedAt)}
+															</p>
+														</div>
+													)}
+													{selectedLoan.docusealSubmissionId && (
+														<div>
+															<p className="text-gray-400 text-sm">
+																DocuSeal Submission ID
+															</p>
+															<p className="text-white font-mono text-sm">
+																{selectedLoan.docusealSubmissionId}
+															</p>
+														</div>
+													)}
+													{selectedLoan.agreementStatus === 'SIGNED' && selectedLoan.docusealSignUrl && (
+														<div className="pt-3 border-t border-gray-700/30">
+															<a
+																href={`http://localhost:3001/s/${selectedLoan.docusealSignUrl}`}
+																target="_blank"
+																rel="noopener noreferrer"
+																className="inline-flex items-center px-3 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-sm"
+															>
+																<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+																Download Signed Agreement
+															</a>
+														</div>
+													)}
 												</div>
 											</div>
 										</div>
@@ -3392,6 +3516,160 @@ function ActiveLoansContent() {
 													Repayment schedule not
 													available for this loan
 												</p>
+											</div>
+										)}
+									</div>
+								)}
+
+								{/* Signatures Tab */}
+								{selectedTab === "signatures" && (
+									<div>
+										{loadingSignatures ? (
+											<div className="flex items-center justify-center py-8">
+												<ArrowPathIcon className="h-6 w-6 animate-spin text-blue-400 mr-2" />
+												<span className="text-gray-400">Loading signature status...</span>
+											</div>
+										) : signaturesData ? (
+											<div>
+												<div className="mb-6">
+													<div className="flex items-center justify-between mb-4">
+														<h4 className="text-white font-medium flex items-center">
+															<PencilIcon className="h-5 w-5 mr-2 text-purple-400" />
+															Document Signature Status
+														</h4>
+														{/* Download Loan Agreement Button */}
+														{selectedLoan?.docusealSignUrl && (
+															<a
+																href={`http://localhost:3001/s/${selectedLoan.docusealSignUrl}`}
+																target="_blank"
+																rel="noopener noreferrer"
+																className="inline-flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+																title="Download signed loan agreement"
+															>
+																<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+																Download Agreement
+															</a>
+														)}
+													</div>
+													<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4 mb-4">
+														<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+															<div>
+																<span className="text-gray-400">Borrower:</span>
+																<span className="text-white ml-2">{signaturesData.borrowerName}</span>
+															</div>
+															<div>
+																<span className="text-gray-400">Email:</span>
+																<span className="text-white ml-2">{signaturesData.borrowerEmail}</span>
+															</div>
+															<div>
+																<span className="text-gray-400">Loan Status:</span>
+																<span className="text-white ml-2">{signaturesData.loanStatus}</span>
+															</div>
+															<div>
+																<span className="text-gray-400">Agreement Status:</span>
+																<span className="text-white ml-2">{signaturesData.agreementStatus}</span>
+															</div>
+														</div>
+													</div>
+												</div>
+
+												<div className="space-y-4">
+													{signaturesData.signatures && signaturesData.signatures.length > 0 ? (
+														signaturesData.signatures.map((signature: any) => (
+															<div
+																key={signature.id}
+																className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4"
+															>
+																<div className="flex items-center justify-between">
+																	<div className="flex-1">
+																		<div className="flex items-center mb-2">
+																			<div className="flex-1">
+																				<h5 className="text-white font-medium">
+																					{signature.type === 'USER' && '👤 Borrower'}
+																					{signature.type === 'COMPANY' && '🏢 Company'}
+																					{signature.type === 'WITNESS' && '⚖️ Witness'}
+																				</h5>
+																				<p className="text-gray-400 text-sm">
+																					{signature.name} ({signature.email})
+																				</p>
+																			</div>
+																			<div className="flex items-center">
+																				{signature.status === 'SIGNED' ? (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-800/20 text-green-400 border border-green-800/30">
+																						<CheckCircleIcon className="h-3 w-3 mr-1" />
+																						Signed
+																					</span>
+																				) : signature.status === 'PENDING' ? (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-800/20 text-yellow-400 border border-yellow-800/30">
+																						<ClockIcon className="h-3 w-3 mr-1" />
+																						Pending
+																					</span>
+																				) : (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-800/20 text-red-400 border border-red-800/30">
+																						<XMarkIcon className="h-3 w-3 mr-1" />
+																						{signature.status}
+																					</span>
+																				)}
+																			</div>
+																		</div>
+																		{signature.signedAt && (
+																			<p className="text-gray-400 text-xs">
+																				Signed: {new Date(signature.signedAt).toLocaleString()}
+																			</p>
+																		)}
+																	</div>
+																	<div className="ml-4">
+																		{/* Hide signing actions for active loans - this is for audit purposes only */}
+																		{selectedLoan?.status === 'ACTIVE' ? (
+																			signature.status === 'SIGNED' ? (
+																				<span className="text-gray-500 text-xs">
+																					{/* Status already shown above */}
+																				</span>
+																			) : (
+																				<span className="text-gray-500 text-xs">
+																					Audit Only
+																				</span>
+																			)
+																		) : (
+																			/* Show signing actions for non-active loans */
+																			signature.canSign && signature.signingUrl ? (
+																				<a
+																					href={signature.signingUrl}
+																					target="_blank"
+																					rel="noopener noreferrer"
+																					className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+																				>
+																					<PencilIcon className="h-3 w-3 mr-1" />
+																					Sign Document
+																				</a>
+																			) : signature.status === 'SIGNED' ? (
+																				<span className="text-gray-500 text-xs">
+																					{/* Status already shown above */}
+																				</span>
+																			) : (
+																				<span className="text-gray-500 text-xs">
+																					No action available
+																				</span>
+																			)
+																		)}
+																	</div>
+																</div>
+															</div>
+														))
+													) : (
+														<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-8 text-center">
+															<PencilIcon className="h-12 w-12 text-gray-600 mx-auto mb-3" />
+															<p className="text-gray-400">No signature records found for this loan.</p>
+															<p className="text-gray-500 text-sm mt-1">Signature tracking may not be enabled for this loan.</p>
+														</div>
+													)}
+												</div>
+											</div>
+										) : (
+											<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-8 text-center">
+												<ExclamationTriangleIcon className="h-12 w-12 text-yellow-500 mx-auto mb-3" />
+												<p className="text-gray-400">Unable to load signature status.</p>
+												<p className="text-gray-500 text-sm mt-1">Please try refreshing the page.</p>
 											</div>
 										)}
 									</div>

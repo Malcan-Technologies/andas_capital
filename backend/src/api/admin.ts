@@ -18,6 +18,7 @@ import { processCSVFile } from "../lib/csvProcessor";
 import ReceiptService from "../lib/receiptService";
 
 import { CronScheduler } from "../lib/cronScheduler";
+import { createLoanOnPendingSignature } from "../lib/loanCreationUtils";
 import { TimeUtils } from "../lib/precisionUtils";
 
 // Helper function to get late fee grace period settings from database
@@ -2852,8 +2853,10 @@ router.post(
 				});
 			}
 
+			// Process the status change in a transaction to ensure loan creation
+			const updatedApplication = await prisma.$transaction(async (tx) => {
 			// Update the application to complete the live attestation
-			const updatedApplication = await prisma.loanApplication.update({
+				const updated = await tx.loanApplication.update({
 				where: { id },
 				data: {
 					attestationCompleted: true,
@@ -2882,6 +2885,19 @@ router.post(
 						},
 					},
 				},
+				});
+
+				// Create loan and repayment schedule when moving to PENDING_SIGNATURE
+				try {
+					await createLoanOnPendingSignature(id, tx);
+					console.log(`Loan and repayment schedule created for application ${id} during live attestation completion`);
+				} catch (error) {
+					console.error(`Failed to create loan for application ${id}:`, error);
+					// Don't fail the transaction, just log the error
+					// The loan can still be created later if needed
+				}
+
+				return updated;
 			});
 
 			// Track the status change in history
@@ -3507,7 +3523,10 @@ router.patch(
 											data: {
 												userId: application.userId,
 												title: "Loan Activated",
-												message: `Your loan of ${disbursementAmount} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
+												message: `Your loan of RM ${new Intl.NumberFormat("en-MY", {
+													minimumFractionDigits: 2,
+													maximumFractionDigits: 2,
+												}).format(disbursementAmount)} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
 												type: "SYSTEM",
 												priority: "HIGH",
 												metadata: {
@@ -3819,6 +3838,9 @@ router.patch(
  *               - interestRate
  *               - monthlyRepayment
  *               - netDisbursement
+ *               - originationFee
+ *               - legalFee
+ *               - applicationFee
  *             properties:
  *               amount:
  *                 type: number
@@ -3835,6 +3857,15 @@ router.patch(
  *               netDisbursement:
  *                 type: number
  *                 description: Fresh offer net disbursement amount
+ *               originationFee:
+ *                 type: number
+ *                 description: Fresh offer origination fee amount
+ *               legalFee:
+ *                 type: number
+ *                 description: Fresh offer legal fee amount
+ *               applicationFee:
+ *                 type: number
+ *                 description: Fresh offer application fee amount
  *               notes:
  *                 type: string
  *                 description: Admin notes for the fresh offer
@@ -3866,13 +3897,13 @@ router.post(
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
-			const { amount, term, interestRate, monthlyRepayment, netDisbursement, productId, notes } = req.body;
+			const { amount, term, interestRate, monthlyRepayment, netDisbursement, originationFee, legalFee, applicationFee, productId, notes } = req.body;
 			const adminUserId = req.user?.userId;
 
 			// Validate required fields
-			if (!amount || !term || !interestRate || !monthlyRepayment || !netDisbursement) {
+			if (!amount || !term || !interestRate || !monthlyRepayment || !netDisbursement || originationFee === undefined || legalFee === undefined || applicationFee === undefined) {
 				return res.status(400).json({ 
-					message: "All offer fields are required: amount, term, interestRate, monthlyRepayment, netDisbursement" 
+					message: "All offer fields are required: amount, term, interestRate, monthlyRepayment, netDisbursement, originationFee, legalFee, applicationFee" 
 				});
 			}
 
@@ -3924,6 +3955,9 @@ router.post(
 				freshOfferInterestRate: interestRate,
 				freshOfferMonthlyRepayment: monthlyRepayment,
 				freshOfferNetDisbursement: netDisbursement,
+				freshOfferOriginationFee: originationFee,
+				freshOfferLegalFee: legalFee,
+				freshOfferApplicationFee: applicationFee,
 				freshOfferNotes: notes,
 				freshOfferSubmittedAt: new Date(),
 				freshOfferSubmittedBy: adminUserId,
@@ -3978,6 +4012,9 @@ router.post(
 						interestRate,
 						monthlyRepayment,
 						netDisbursement,
+						originationFee,
+						legalFee,
+						applicationFee,
 					},
 					originalOffer: {
 						amount: originalOfferAmount,
@@ -4008,6 +4045,9 @@ router.post(
 								interestRate,
 								monthlyRepayment,
 								netDisbursement,
+								originationFee,
+								legalFee,
+								applicationFee,
 							},
 							originalOffer: {
 								amount: originalOfferAmount,
@@ -4541,7 +4581,7 @@ router.post(
 						let updatedLoan = null;
 						if (application.loan) {
 							console.log(
-								"Updating existing loan status to ACTIVE"
+								"Updating existing loan status to ACTIVE and setting disbursement date"
 							);
 							updatedLoan = await prismaTransaction.loan.update({
 								where: { applicationId: id },
@@ -4550,12 +4590,25 @@ router.post(
 									disbursedAt: new Date(),
 								},
 							});
+
+							// Calculate and set nextPaymentDue after loan becomes ACTIVE
+							const nextPaymentDue = await calculateNextPaymentDue(application.loan.id, prismaTransaction);
+							await prismaTransaction.loan.update({
+								where: { id: application.loan.id },
+								data: {
+									nextPaymentDue: nextPaymentDue,
+								},
+							});
+							console.log(`Set nextPaymentDue for loan ${application.loan.id}: ${nextPaymentDue}`);
 						} else {
-							// Create a new loan record since it doesn't exist
+							// Create a new loan record since it doesn't exist (fallback case)
 							console.log(
-								"Creating new loan record for disbursement"
+								"Creating new loan record for disbursement (fallback)"
 							);
 							try {
+								// This should rarely happen now since loans are created during PENDING_SIGNATURE
+								// But keeping as fallback for robustness
+								
 								// Ensure we have all required values
 								if (!application.amount) {
 									throw new Error(
@@ -4604,7 +4657,7 @@ router.post(
 											prorationCutoffDate: calculationSettings.prorationCutoffDate,
 										},
 									});
-								console.log("Loan record created successfully");
+								console.log("Loan record created successfully (fallback)");
 							} catch (loanError) {
 								console.error(
 									"Failed to create loan record:",
@@ -4632,13 +4685,10 @@ router.post(
 							notes
 						);
 
-						// Auto-generate payment schedule when loan is disbursed
+						// Payment schedule dates are already calculated correctly during loan creation
+						// No need to recalculate during disbursement
 						console.log(
-							`Auto-generating payment schedule for loan ${updatedLoan.id}`
-						);
-						await generatePaymentScheduleInTransaction(
-							updatedLoan.id,
-							prismaTransaction
+							`Payment schedule for loan ${updatedLoan.id} already calculated during loan creation - no recalculation needed`
 						);
 
 						// Create a wallet transaction record if possible
@@ -4767,7 +4817,10 @@ router.post(
 									data: {
 										userId: application.userId,
 										title: "Loan Activated",
-										message: `Your loan of ${disbursementAmount} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
+										message: `Your loan of RM ${new Intl.NumberFormat("en-MY", {
+											minimumFractionDigits: 2,
+											maximumFractionDigits: 2,
+										}).format(disbursementAmount)} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
 										type: "SYSTEM",
 										priority: "HIGH",
 										metadata: {
@@ -6489,7 +6542,7 @@ router.post(
 						);
 
 					console.log(`Payment approved for loan ${loan.id}:`);
-					console.log(`  • Payment amount: ${paymentAmount}`);
+					console.log(`  • Payment amount: RM ${paymentAmount}`);
 					console.log(
 						`  • Principal paid: ${
 							scheduleUpdate?.totalPrincipalPaid || 0
@@ -6511,11 +6564,12 @@ router.post(
 						data: {
 							userId: transaction.userId,
 							title: "Payment Approved",
-							message: `Your loan repayment of MYR ${paymentAmount.toFixed(
-								2
-							)} has been approved and processed successfully.`,
+							message: `Your loan repayment of RM ${new Intl.NumberFormat("en-MY", {
+								minimumFractionDigits: 2,
+								maximumFractionDigits: 2,
+							}).format(paymentAmount)} has been approved and processed successfully.`,
 							type: "SYSTEM",
-							priority: "MEDIUM",
+							priority: "HIGH",
 							metadata: {
 								transactionId: id,
 								loanId: loan.id,
@@ -6892,9 +6946,10 @@ router.post(
 					data: {
 						userId: transaction.userId,
 						title: "Payment Rejected",
-						message: `Your loan repayment of KES ${paymentAmount.toFixed(
-							0
-						)} has been rejected. Reason: ${reason}`,
+						message: `Your loan repayment of RM ${new Intl.NumberFormat("en-MY", {
+							minimumFractionDigits: 2,
+							maximumFractionDigits: 2,
+						}).format(paymentAmount)} has been rejected. Reason: ${reason}`,
 						type: "SYSTEM",
 						priority: "HIGH",
 						metadata: {
@@ -6953,145 +7008,8 @@ router.post(
 
 // Enhanced helper functions for robust payment schedule tracking
 
-// Transaction-aware version for use during loan disbursement
-async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
-	const loan = await tx.loan.findUnique({
-		where: { id: loanId },
-	});
 
-	if (!loan || !loan.disbursedAt) {
-		throw new Error("Loan not found or not disbursed");
-	}
 
-	// Fetch loan calculation and payment schedule settings
-	const calculationSettings = await getLoanCalculationSettings(tx);
-	console.log(`🧮 Using loan calculation settings:`, calculationSettings);
-
-	// Clear any existing schedule first
-	await tx.loanRepayment.deleteMany({
-		where: { loanId: loan.id },
-	});
-
-	const repayments = [];
-
-	// Import SafeMath for precise calculations
-	const { SafeMath } = require("../lib/precisionUtils");
-
-	// Flat rate calculation: (Principal + Total Interest) / Term
-	const monthlyInterestRate = SafeMath.toNumber(loan.interestRate) / 100;
-	const principal = SafeMath.toNumber(loan.principalAmount);
-	const term = loan.term;
-	
-	// Calculate total interest with precision
-	const totalInterest = SafeMath.multiply(
-		SafeMath.multiply(principal, monthlyInterestRate), 
-		term
-	);
-	
-	// Total amount to be paid (principal + interest)
-	const totalAmountToPay = SafeMath.add(principal, totalInterest);
-
-	console.log(`Generating payment schedule for loan ${loanId}:`);
-	console.log(`Principal: ${principal}, Interest Rate: ${loan.interestRate}%, Term: ${term} months`);
-	console.log(`Total Interest: ${totalInterest}, Total Amount: ${totalAmountToPay}`);
-
-	const disbursementDate = new Date(loan.disbursedAt);
-	
-	// Calculate first payment date based on schedule type
-	const firstPaymentDate = calculateFirstPaymentDateDynamic(disbursementDate, calculationSettings);
-	
-	// Calculate pro-rated first payment for actual period from disbursement to first payment
-	const daysInFirstPeriod = calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
-	
-	// Calculate interest and principal allocations based on calculation method
-	console.log(`💰 Using allocation method: ${calculationSettings.calculationMethod}`);
-	const allPaymentAllocations = calculateAllPaymentAllocations(
-		principal, 
-		totalInterest, 
-		term, 
-		daysInFirstPeriod, 
-		calculationSettings
-	);
-
-	// Store calculation method metadata in console for debugging
-	console.log(`🏦 Loan calculation metadata:`);
-	console.log(`  Calculation Method: ${calculationSettings.calculationMethod}`);
-	console.log(`  Schedule Type: ${calculationSettings.scheduleType}`);
-	console.log(`  Custom Due Date: ${calculationSettings.customDueDate}`);
-	console.log(`  Proration Cutoff: ${calculationSettings.prorationCutoffDate}`);
-
-	// Generate all installments with dynamic logic
-	let totalScheduled = 0;
-	let totalInterestScheduled = 0;
-	let totalPrincipalScheduled = 0;
-
-	for (let month = 1; month <= term; month++) {
-		let dueDate: Date;
-		
-		if (month === 1) {
-			// First payment uses calculated first payment date
-			dueDate = firstPaymentDate;
-		} else {
-			// Subsequent payments calculated based on schedule type
-			dueDate = calculateSubsequentPaymentDate(disbursementDate, firstPaymentDate, month, calculationSettings);
-		}
-
-		// Get payment allocation for this month from pre-calculated allocations
-		const paymentAllocation = allPaymentAllocations.find(p => p.month === month);
-		if (!paymentAllocation) {
-			throw new Error(`Payment allocation not found for month ${month}`);
-		}
-		
-		const installmentAmount = paymentAllocation.totalPayment;
-		const interestAmount = paymentAllocation.interestAmount;
-		const principalAmount = paymentAllocation.principalAmount;
-		
-		// Track running totals for verification
-			totalScheduled = SafeMath.add(totalScheduled, installmentAmount);
-			totalInterestScheduled = SafeMath.add(totalInterestScheduled, interestAmount);
-			totalPrincipalScheduled = SafeMath.add(totalPrincipalScheduled, principalAmount);
-
-		repayments.push({
-			loanId: loan.id,
-			amount: installmentAmount,
-			principalAmount: principalAmount,
-			interestAmount: interestAmount,
-			status: "PENDING",
-			dueDate: dueDate,
-			installmentNumber: month,
-			scheduledAmount: installmentAmount,
-		});
-	}
-
-	// Verify total matches exactly
-	const calculatedTotal = repayments.reduce((sum, r) => SafeMath.add(sum, r.amount), 0);
-	console.log(`Verification: Calculated total ${calculatedTotal} vs Expected ${totalAmountToPay}`);
-	if (Math.abs(calculatedTotal - totalAmountToPay) > 0.01) {
-		throw new Error(`Payment schedule total mismatch: ${calculatedTotal} vs ${totalAmountToPay}`);
-	}
-
-	// Create all repayment records
-	await tx.loanRepayment.createMany({
-		data: repayments,
-	});
-
-	// Update loan with next payment due date and correct monthly payment
-	if (repayments.length > 0) {
-		// For monthly payment, use the most common payment amount (usually the 2nd payment for variable first payments)
-		const monthlyPayment = repayments.length > 1 ? repayments[1].amount : repayments[0].amount;
-		
-		await tx.loan.update({
-			where: { id: loanId },
-			data: {
-				monthlyPayment: monthlyPayment,
-				nextPaymentDue: repayments[0].dueDate,
-			},
-		});
-	}
-
-	console.log(`Created ${repayments.length} payment records`);
-	return repayments;
-}
 
 async function generatePaymentSchedule(loanId: string) {
 	const loan = await prisma.loan.findUnique({
@@ -7144,13 +7062,13 @@ async function generatePaymentSchedule(loanId: string) {
 	let totalPrincipalScheduled = 0;
 
 	for (let month = 1; month <= term; month++) {
-		// Set due date to end of day exactly 1 month from disbursement
-		const disbursementDate = new Date(loan.disbursedAt);
+		// Set due date to end of day exactly 1 month from loan creation
+		const loanCreationDate = new Date(loan.createdAt);
 		const dueDate = new Date(
 			Date.UTC(
-				disbursementDate.getUTCFullYear(),
-				disbursementDate.getUTCMonth() + month,
-				disbursementDate.getUTCDate(),
+				loanCreationDate.getUTCFullYear(),
+				loanCreationDate.getUTCMonth() + month,
+				loanCreationDate.getUTCDate(),
 				15,
 				59,
 				59,
@@ -8988,8 +8906,10 @@ router.post(
 				});
 			}
 
+			// Process the status change in a transaction to ensure loan creation
+			const updatedApplication = await prisma.$transaction(async (tx) => {
 			// Update the application with attestation completion
-			const updatedApplication = await prisma.loanApplication.update({
+				const updated = await tx.loanApplication.update({
 				where: { id },
 				data: {
 					status: "PENDING_SIGNATURE",
@@ -9027,6 +8947,18 @@ router.post(
 						},
 					},
 				},
+				});
+
+				// Create loan and repayment schedule when moving to PENDING_SIGNATURE
+				try {
+					await createLoanOnPendingSignature(id, tx);
+					console.log(`Loan and repayment schedule created for application ${id} during attestation completion`);
+				} catch (error) {
+					console.error(`Failed to create loan for application ${id}:`, error);
+					// Don't fail the transaction, just log the error
+				}
+
+				return updated;
 			});
 
 			// Track the status change in history
@@ -9122,30 +9054,7 @@ router.post(
 
 
 
-// Helper function to calculate days between two dates in Malaysia timezone
-function calculateDaysBetweenMalaysia(startDate: Date, endDate: Date): number {
-	// Convert both dates to Malaysia timezone for accurate day calculation
-	const startMalaysia = new Date(startDate.getTime() + (8 * 60 * 60 * 1000));
-	const endMalaysia = new Date(endDate.getTime() + (8 * 60 * 60 * 1000));
-	
-	// Get start of day for both dates
-	const startDay = new Date(Date.UTC(
-		startMalaysia.getUTCFullYear(),
-		startMalaysia.getUTCMonth(),
-		startMalaysia.getUTCDate(),
-		0, 0, 0, 0
-	));
-	
-	const endDay = new Date(Date.UTC(
-		endMalaysia.getUTCFullYear(),
-		endMalaysia.getUTCMonth(),
-		endMalaysia.getUTCDate(),
-		0, 0, 0, 0
-	));
-	
-	const diffMs = endDay.getTime() - startDay.getTime();
-	return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-}
+
 
 
 
@@ -9184,364 +9093,7 @@ async function getLoanCalculationSettings(tx: any) {
 	}
 }
 
-// Helper function to calculate all payment allocations based on calculation method
-function calculateAllPaymentAllocations(principal: number, totalInterest: number, term: number, daysInFirstPeriod: number, calculationSettings: any) {
-	console.log(`📊 Calculating payment allocations with ${calculationSettings.calculationMethod} method`);
-	
-	if (calculationSettings.calculationMethod === 'RULE_OF_78') {
-		return calculateRuleOf78Allocations(principal, totalInterest, term, daysInFirstPeriod, calculationSettings);
-	} else {
-		// Default to STRAIGHT_LINE method
-		return calculateStraightLineAllocations(principal, totalInterest, term, daysInFirstPeriod, calculationSettings);
-	}
-}
 
-// Helper function to calculate Rule of 78 allocations
-function calculateRuleOf78Allocations(principal: number, totalInterest: number, term: number, daysInFirstPeriod: number, calculationSettings: any) {
-	const { SafeMath } = require("../lib/precisionUtils");
-	const payments = [];
-	
-	// Calculate sum of digits (1 + 2 + 3 + ... + n)
-	const sumOfDigits = (term * (term + 1)) / 2;
-	
-	console.log(`🎯 Rule of 78 calculation:`);
-	console.log(`  Term: ${term} months`);
-	console.log(`  Sum of digits: ${sumOfDigits}`);
-	console.log(`  Total amount: ${SafeMath.add(principal, totalInterest)}`);
-	
-	// Calculate equal payment amount (same for all months in Rule of 78)
-	const equalPaymentAmount = SafeMath.divide(SafeMath.add(principal, totalInterest), term);
-	console.log(`  Equal monthly payment: ${equalPaymentAmount.toFixed(2)}`);
-	
-	let totalInterestAllocated = 0;
-	let totalPrincipalAllocated = 0;
-	
-	for (let month = 1; month <= term; month++) {
-		// Rule of 78: Higher weights for earlier payments (front-loaded interest)
-		const interestWeight = (term - month + 1) / sumOfDigits;
-		let interestAmount = SafeMath.multiply(totalInterest, interestWeight);
-		
-		// Principal amount = Equal payment - Interest amount
-		let principalAmount = SafeMath.subtract(equalPaymentAmount, interestAmount);
-		
-		// Handle pro-rating for first payment in CUSTOM_DATE
-		if (month === 1 && calculationSettings.scheduleType === 'CUSTOM_DATE') {
-			// Apply pro-rating to the entire first payment, then recalculate interest/principal split
-			const actualAverageDaysPerPeriod = calculateActualAverageDaysPerPeriodDynamic(new Date(), term, calculationSettings);
-			const proRatedRatio = SafeMath.divide(daysInFirstPeriod, actualAverageDaysPerPeriod);
-			
-			// Pro-rate the total payment amount
-			const proRatedTotalPayment = SafeMath.multiply(equalPaymentAmount, proRatedRatio);
-			
-			// Keep the same interest weight but apply to pro-rated total
-			const proRatedInterestAmount = SafeMath.multiply(totalInterest, interestWeight);
-			const adjustedInterestAmount = SafeMath.multiply(proRatedInterestAmount, proRatedRatio);
-			const adjustedPrincipalAmount = SafeMath.subtract(proRatedTotalPayment, adjustedInterestAmount);
-			
-			interestAmount = adjustedInterestAmount;
-			principalAmount = adjustedPrincipalAmount;
-			
-			console.log(`  Month ${month}: Pro-rated payment ${proRatedTotalPayment.toFixed(2)} (${(proRatedRatio * 100).toFixed(2)}% of ${equalPaymentAmount.toFixed(2)})`);
-			console.log(`    Interest: ${interestAmount.toFixed(2)}, Principal: ${principalAmount.toFixed(2)}`);
-		} else {
-			console.log(`  Month ${month}: Interest weight ${(interestWeight * 100).toFixed(2)}% = ${interestAmount.toFixed(2)}, Principal = ${principalAmount.toFixed(2)}`);
-		}
-		
-		totalInterestAllocated = SafeMath.add(totalInterestAllocated, interestAmount);
-		totalPrincipalAllocated = SafeMath.add(totalPrincipalAllocated, principalAmount);
-		
-		// For final payment, adjust to ensure exact totals
-		if (month === term) {
-			const interestAdjustment = SafeMath.subtract(totalInterest, SafeMath.subtract(totalInterestAllocated, interestAmount));
-			const principalAdjustment = SafeMath.subtract(principal, SafeMath.subtract(totalPrincipalAllocated, principalAmount));
-			
-			// Apply adjustments to final payment
-			interestAmount = interestAdjustment;
-			principalAmount = principalAdjustment;
-			
-			console.log(`  Final payment adjustment: Interest = ${interestAmount.toFixed(2)}, Principal = ${principalAmount.toFixed(2)}`);
-		}
-		
-		const totalPayment = SafeMath.add(interestAmount, principalAmount);
-		
-		payments.push({
-			month: month,
-			interestAmount: interestAmount,
-			principalAmount: principalAmount,
-			totalPayment: totalPayment
-		});
-		
-		console.log(`  Month ${month} final: Payment = ${totalPayment.toFixed(2)} (Interest: ${interestAmount.toFixed(2)}, Principal: ${principalAmount.toFixed(2)})`);
-	}
-	
-	return payments;
-}
-
-// Helper function to calculate Straight Line allocations (current method)
-function calculateStraightLineAllocations(principal: number, totalInterest: number, term: number, daysInFirstPeriod: number, calculationSettings: any) {
-	const { SafeMath } = require("../lib/precisionUtils");
-	const payments = [];
-	
-	console.log(`📐 Straight Line calculation:`);
-	
-	if (calculationSettings.scheduleType === 'EXACT_MONTHLY') {
-		// For same day each month: equal payments with equal interest/principal allocation
-		const monthlyInterest = SafeMath.divide(totalInterest, term);
-		const monthlyPrincipal = SafeMath.divide(principal, term);
-		const monthlyPayment = SafeMath.add(monthlyInterest, monthlyPrincipal);
-		
-		console.log(`  Same day each month: Equal ${monthlyPayment.toFixed(2)} (${monthlyInterest.toFixed(2)} interest + ${monthlyPrincipal.toFixed(2)} principal)`);
-		
-		for (let month = 1; month <= term; month++) {
-			payments.push({
-				month: month,
-				interestAmount: monthlyInterest,
-				principalAmount: monthlyPrincipal,
-				totalPayment: monthlyPayment
-			});
-		}
-	} else {
-		// For CUSTOM_DATE: pro-rated first payment, then equal remaining payments
-		const actualAverageDaysPerPeriod = calculateActualAverageDaysPerPeriodDynamic(new Date(), term, calculationSettings);
-		const proRatedRatio = SafeMath.divide(daysInFirstPeriod, actualAverageDaysPerPeriod);
-		
-		// Calculate pro-rated first payment
-		const monthlyInterestPortion = SafeMath.divide(totalInterest, term);
-		const monthlyPrincipalPortion = SafeMath.divide(principal, term);
-		
-		const firstPeriodInterest = SafeMath.multiply(monthlyInterestPortion, proRatedRatio);
-		const firstPeriodPrincipal = SafeMath.multiply(monthlyPrincipalPortion, proRatedRatio);
-		const firstPayment = SafeMath.add(firstPeriodInterest, firstPeriodPrincipal);
-		
-		console.log(`  Pro-rated first payment: ${firstPayment.toFixed(2)} (${firstPeriodInterest.toFixed(2)} interest + ${firstPeriodPrincipal.toFixed(2)} principal)`);
-		
-		// Add first payment
-		payments.push({
-			month: 1,
-			interestAmount: firstPeriodInterest,
-			principalAmount: firstPeriodPrincipal,
-			totalPayment: firstPayment
-		});
-		
-		// Calculate remaining payments
-		const remainingTerm = term - 1;
-		if (remainingTerm > 0) {
-			const remainingInterest = SafeMath.subtract(totalInterest, firstPeriodInterest);
-			const remainingPrincipal = SafeMath.subtract(principal, firstPeriodPrincipal);
-			const remainingTotal = SafeMath.add(remainingInterest, remainingPrincipal);
-			
-			const baseMonthlyPayment = SafeMath.divide(remainingTotal, remainingTerm);
-			const baseMonthlyInterest = SafeMath.divide(remainingInterest, remainingTerm);
-			const baseMonthlyPrincipal = SafeMath.divide(remainingPrincipal, remainingTerm);
-			
-			console.log(`  Remaining ${remainingTerm} payments: ${baseMonthlyPayment.toFixed(2)} each (${baseMonthlyInterest.toFixed(2)} interest + ${baseMonthlyPrincipal.toFixed(2)} principal)`);
-			
-			for (let month = 2; month <= term; month++) {
-				payments.push({
-					month: month,
-					interestAmount: baseMonthlyInterest,
-					principalAmount: baseMonthlyPrincipal,
-					totalPayment: baseMonthlyPayment
-				});
-			}
-		}
-		
-		// Final payment adjustment to ensure exact totals
-		if (payments.length > 0) {
-			const totalAllocatedInterest = payments.reduce((sum, p) => SafeMath.add(sum, p.interestAmount), 0);
-			const totalAllocatedPrincipal = payments.reduce((sum, p) => SafeMath.add(sum, p.principalAmount), 0);
-			const totalAllocatedPayments = payments.reduce((sum, p) => SafeMath.add(sum, p.totalPayment), 0);
-			
-			const interestAdjustment = SafeMath.subtract(totalInterest, totalAllocatedInterest);
-			const principalAdjustment = SafeMath.subtract(principal, totalAllocatedPrincipal);
-			const expectedTotal = SafeMath.add(totalInterest, principal);
-			const totalAdjustment = SafeMath.subtract(expectedTotal, totalAllocatedPayments);
-			
-			// Apply adjustment if there's any discrepancy (even small ones due to rounding)
-			if (Math.abs(interestAdjustment) > 0.001 || Math.abs(principalAdjustment) > 0.001 || Math.abs(totalAdjustment) > 0.001) {
-				const finalPayment = payments[payments.length - 1];
-				finalPayment.interestAmount = SafeMath.add(finalPayment.interestAmount, interestAdjustment);
-				finalPayment.principalAmount = SafeMath.add(finalPayment.principalAmount, principalAdjustment);
-				finalPayment.totalPayment = SafeMath.add(finalPayment.interestAmount, finalPayment.principalAmount);
-				
-				console.log(`  Final adjustment: Interest ${interestAdjustment >= 0 ? '+' : ''}${interestAdjustment.toFixed(2)}, Principal ${principalAdjustment >= 0 ? '+' : ''}${principalAdjustment.toFixed(2)}, Total ${totalAdjustment >= 0 ? '+' : ''}${totalAdjustment.toFixed(2)}`);
-				
-				// Double-check the total after adjustment
-				const finalTotalCheck = payments.reduce((sum, p) => SafeMath.add(sum, p.totalPayment), 0);
-				if (Math.abs(finalTotalCheck - expectedTotal) > 0.01) {
-					console.error(`Final total still mismatched after adjustment: ${finalTotalCheck} vs ${expectedTotal}`);
-					// Force the final payment to match exactly
-					const finalPayment = payments[payments.length - 1];
-					const remainingTotal = SafeMath.subtract(expectedTotal, payments.slice(0, -1).reduce((sum, p) => SafeMath.add(sum, p.totalPayment), 0));
-					finalPayment.totalPayment = remainingTotal;
-					console.log(`  Forced final payment adjustment to: ${remainingTotal.toFixed(2)}`);
-				}
-			}
-		}
-	}
-	
-	return payments;
-}
-
-// Helper function to calculate first payment date based on schedule type and settings
-function calculateFirstPaymentDateDynamic(disbursementDate: Date, scheduleSettings: any): Date {
-	if (scheduleSettings.scheduleType === 'EXACT_MONTHLY') {
-		// For 30-day intervals: same day of next month (e.g., 18th → 18th next month)
-		const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
-		const day = malaysiaTime.getUTCDate();
-		const month = malaysiaTime.getUTCMonth();
-		const year = malaysiaTime.getUTCFullYear();
-		
-		// First payment is same day of next month
-		let firstPaymentMonth = month + 1;
-		let firstPaymentYear = year;
-		
-		// Handle year rollover
-		if (firstPaymentMonth > 11) {
-			firstPaymentMonth = 0;
-			firstPaymentYear++;
-		}
-		
-		// Create first payment date as same day of next month at end of day (Malaysia timezone)
-		// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
-		const firstPaymentDate = new Date(
-			Date.UTC(firstPaymentYear, firstPaymentMonth, day, 15, 59, 59, 999)
-		);
-		
-		return firstPaymentDate;
-	} else {
-		// For CUSTOM_DATE: use cutoff logic with configurable date
-	const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
-	
-	const day = malaysiaTime.getUTCDate();
-	const month = malaysiaTime.getUTCMonth();
-	const year = malaysiaTime.getUTCFullYear();
-	
-	let firstPaymentMonth: number;
-	let firstPaymentYear: number;
-	
-		if (day < scheduleSettings.prorationCutoffDate) {
-			// If disbursed before cutoff, first payment is custom date of next month
-		firstPaymentMonth = month + 1;
-		firstPaymentYear = year;
-		
-		// Handle year rollover
-		if (firstPaymentMonth > 11) {
-			firstPaymentMonth = 0;
-			firstPaymentYear++;
-		}
-	} else {
-			// If disbursed on or after cutoff, first payment is custom date of month after next
-		firstPaymentMonth = month + 2;
-		firstPaymentYear = year;
-		
-		// Handle year rollover
-		if (firstPaymentMonth > 11) {
-			firstPaymentMonth = firstPaymentMonth - 12;
-			firstPaymentYear++;
-		}
-	}
-	
-		// Create first payment date as custom date of target month at end of day (Malaysia timezone)
-	// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
-	const firstPaymentDate = new Date(
-			Date.UTC(firstPaymentYear, firstPaymentMonth, scheduleSettings.customDueDate, 15, 59, 59, 999)
-	);
-	
-	return firstPaymentDate;
-	}
-}
-
-// Helper function to calculate subsequent payment dates based on schedule type
-function calculateSubsequentPaymentDate(disbursementDate: Date, firstPaymentDate: Date, month: number, scheduleSettings: any): Date {
-	if (scheduleSettings.scheduleType === 'EXACT_MONTHLY') {
-		// For 30-day intervals: same day of each subsequent month
-		const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
-		const day = malaysiaTime.getUTCDate();
-		const originalMonth = malaysiaTime.getUTCMonth();
-		const originalYear = malaysiaTime.getUTCFullYear();
-		
-		// Calculate target month and year
-		const targetMonth = originalMonth + month;
-		let targetYear = originalYear;
-		let actualMonth = targetMonth;
-		
-		// Handle year rollover
-		if (targetMonth > 11) {
-			actualMonth = targetMonth % 12;
-			targetYear += Math.floor(targetMonth / 12);
-		}
-		
-		// Create payment date as same day of target month at end of day (Malaysia timezone)
-		const subsequentDate = new Date(
-			Date.UTC(targetYear, actualMonth, day, 15, 59, 59, 999)
-		);
-		
-		return subsequentDate;
-	} else {
-		// For CUSTOM_DATE: custom date of each following month
-		const firstPaymentMalaysia = new Date(firstPaymentDate.getTime() + (8 * 60 * 60 * 1000));
-		const targetMonth = firstPaymentMalaysia.getUTCMonth() + (month - 1);
-		let targetYear = firstPaymentMalaysia.getUTCFullYear();
-		
-		// Handle multiple year rollovers correctly
-		const actualMonth = targetMonth % 12;
-		targetYear += Math.floor(targetMonth / 12);
-		
-		const dueDate = new Date(
-			Date.UTC(targetYear, actualMonth, scheduleSettings.customDueDate, 15, 59, 59, 999)
-		);
-		
-		return dueDate;
-	}
-}
-
-// Dynamic version of calculateActualAverageDaysPerPeriod that uses schedule settings
-function calculateActualAverageDaysPerPeriodDynamic(disbursementDate: Date, term: number, scheduleSettings: any): number {
-	if (scheduleSettings.scheduleType === 'EXACT_MONTHLY') {
-		// For same-day-of-month intervals, calculate actual average based on calendar months
-		const firstPaymentDate = calculateFirstPaymentDateDynamic(disbursementDate, scheduleSettings);
-		let totalDays = 0;
-		
-		// Calculate days for the first period (disbursement to first payment)
-		totalDays += calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
-		
-		// Calculate days for subsequent periods (payment to payment)
-		let currentPaymentDate = firstPaymentDate;
-		for (let month = 2; month <= term; month++) {
-			const nextPaymentDate = calculateSubsequentPaymentDate(disbursementDate, firstPaymentDate, month, scheduleSettings);
-			
-			// Add days in this period
-			totalDays += calculateDaysBetweenMalaysia(currentPaymentDate, nextPaymentDate);
-			
-			// Move to next period
-			currentPaymentDate = nextPaymentDate;
-		}
-		
-		return totalDays / term;
-	} else {
-		// For CUSTOM_DATE, calculate actual average based on payment dates
-		const firstPaymentDate = calculateFirstPaymentDateDynamic(disbursementDate, scheduleSettings);
-		let totalDays = 0;
-		
-		// Calculate days for the first period (disbursement to first payment)
-		totalDays += calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
-		
-		// Calculate days for subsequent periods (payment to payment)
-		let currentPaymentDate = firstPaymentDate;
-		for (let month = 2; month <= term; month++) {
-			const nextPaymentDate = calculateSubsequentPaymentDate(disbursementDate, firstPaymentDate, month, scheduleSettings);
-			
-			// Add days in this period
-			totalDays += calculateDaysBetweenMalaysia(currentPaymentDate, nextPaymentDate);
-			
-			// Move to next period
-			currentPaymentDate = nextPaymentDate;
-		}
-		
-		return totalDays / term;
-	}
-}
 
 /**
  * @swagger
@@ -10302,11 +9854,12 @@ router.post(
 							data: {
 								userId: payment.userId,
 								title: "Payment Approved",
-								message: `Your payment of ${new Intl.NumberFormat("en-MY", {
-									style: "currency",
-									currency: "MYR",
+								message: `Your payment of RM ${new Intl.NumberFormat("en-MY", {
+									minimumFractionDigits: 2,
+									maximumFractionDigits: 2,
 								}).format(Math.abs(payment.amount))} has been approved via CSV batch processing.`,
 								type: "SYSTEM",
+								priority: "HIGH",
 								isRead: false
 							}
 						});
@@ -10626,6 +10179,145 @@ router.post("/trigger-payment-notifications", async (_req: any, res: any) => {
 			success: false,
 			message: "Failed to process payment notifications",
 			error: error.message
+		});
+	}
+});
+
+/**
+ * GET /api/admin/loans/:loanId/signatures
+ * Get signature status for a specific loan
+ */
+router.get('/loans/:loanId/signatures', authenticateToken, async (req, res) => {
+	try {
+		const { loanId } = req.params;
+
+		if (!loanId) {
+			return res.status(400).json({
+				success: false,
+				message: 'Loan ID is required'
+			});
+		}
+
+		// Verify loan exists
+		const loan = await prisma.loan.findUnique({
+			where: { id: loanId },
+			include: {
+				application: true,
+				user: true
+			}
+		});
+
+		if (!loan) {
+			return res.status(404).json({
+				success: false,
+				message: 'Loan not found'
+			});
+		}
+
+		// Get signature status using DocuSeal service
+		const { docusealService } = await import('../lib/docusealService');
+		const signatures = await docusealService.getSignatureStatus(loanId);
+
+		// Calculate current agreement status from signatory records
+		const currentAgreementStatus = await docusealService.calculateAgreementStatus(loanId);
+
+		return res.json({
+			success: true,
+			data: {
+				loanId,
+				loanStatus: loan.status,
+				agreementStatus: currentAgreementStatus, // Use calculated status from signatory records
+				legacyAgreementStatus: loan.agreementStatus, // Keep legacy field for backward compatibility
+				docusealSubmissionId: loan.docusealSubmissionId,
+				signatures,
+				borrowerName: loan.user.fullName,
+				borrowerEmail: loan.user.email
+			}
+		});
+
+	} catch (error: any) {
+		console.error('Error fetching signature status:', error);
+		return res.status(500).json({
+			success: false,
+			message: 'Failed to fetch signature status',
+			error: error.message
+		});
+	}
+});
+
+/**
+ * GET /api/admin/applications/:applicationId/signatures
+ * Get signature status for a specific loan application
+ */
+router.get('/applications/:applicationId/signatures', authenticateToken, async (req, res) => {
+	try {
+		const { applicationId } = req.params;
+
+		if (!applicationId) {
+			return res.status(400).json({
+				success: false,
+				message: 'Application ID is required'
+			});
+		}
+
+		// Find the application and its associated loan
+		const application = await prisma.loanApplication.findUnique({
+			where: { id: applicationId },
+			include: {
+				user: true,
+				product: true
+			}
+		});
+
+		if (!application) {
+			return res.status(404).json({
+				success: false,
+				message: 'Application not found'
+			});
+		}
+
+		// Find the loan associated with this application
+		const loan = await prisma.loan.findFirst({
+			where: { applicationId: applicationId },
+			include: {
+				user: true
+			}
+		});
+
+		if (!loan) {
+			return res.status(404).json({
+				success: false,
+				message: 'No loan found for this application'
+			});
+		}
+
+		// Get signature status using DocuSeal service
+		const { docusealService } = await import('../lib/docusealService');
+		const signatures = await docusealService.getSignatureStatus(loan.id);
+
+		// Calculate current agreement status from signatory records
+		const currentAgreementStatus = await docusealService.calculateAgreementStatus(loan.id);
+
+		return res.json({
+			success: true,
+			data: {
+				applicationId,
+				loanId: loan.id,
+				loanStatus: loan.status,
+				agreementStatus: currentAgreementStatus, // Use calculated status from signatory records
+				legacyAgreementStatus: loan.agreementStatus, // Keep legacy field for backward compatibility
+				docusealSubmissionId: loan.docusealSubmissionId,
+				signatures,
+				borrowerName: loan.user.fullName,
+				borrowerEmail: loan.user.email
+			}
+		});
+
+	} catch (error: any) {
+		console.error('Error fetching application signature status:', error);
+		return res.status(500).json({
+			success: false,
+			message: 'Internal server error'
 		});
 	}
 });

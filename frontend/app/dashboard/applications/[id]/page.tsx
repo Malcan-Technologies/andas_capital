@@ -23,6 +23,8 @@ interface LoanApplication {
 	interestRate: number;
 	legalFee: number;
 	netDisbursement: number;
+	applicationFee?: number;
+	originationFee?: number;
 	attestationType?: string;
 	attestationCompleted?: boolean;
 	attestationDate?: string;
@@ -207,11 +209,11 @@ export default function ApplicationDetails({
 	};
 
 	const calculateFees = (application: LoanApplication) => {
-		const amount = application.amount;
+		// Use the fees stored in the database instead of calculating them
 		const legalFee = application.legalFee;
 		const netDisbursement = application.netDisbursement;
-		const originationFee = amount - netDisbursement - legalFee;
-		const applicationFee = Number(application.product.applicationFee) || 0;
+		const applicationFee = application.applicationFee || 0;
+		const originationFee = application.originationFee || 0;
 
 		return {
 			interestRate: application.interestRate,

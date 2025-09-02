@@ -8,6 +8,7 @@ import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
 import DescriptionIcon from "@mui/icons-material/Description";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import VideoCameraIcon from "@mui/icons-material/VideoCall";
+import * as Tooltip from "@radix-ui/react-tooltip";
 
 interface LoanApplication {
 	id: string;
@@ -21,6 +22,8 @@ interface LoanApplication {
 	interestRate: number;
 	legalFee: number;
 	netDisbursement: number;
+	applicationFee?: number;
+	originationFee?: number;
 	product: {
 		name: string;
 		code: string;
@@ -74,6 +77,7 @@ export default function AttestationForm({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [videoStarted, setVideoStarted] = useState(false);
+	const [openTooltip, setOpenTooltip] = useState<string | null>(null);
 
 	const fees = calculateFees(application);
 
@@ -83,6 +87,10 @@ export default function AttestationForm({
 
 	const handleVideoComplete = () => {
 		setVideoWatched(true);
+	};
+
+	const handleTooltipClick = (tooltipId: string) => {
+		setOpenTooltip(openTooltip === tooltipId ? null : tooltipId);
 	};
 
 	const handleTermsChange = (accepted: boolean) => {
@@ -247,81 +255,194 @@ export default function AttestationForm({
 					</div>
 
 					{/* Key Loan Information */}
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+					<div className="space-y-6">
 						<div className="space-y-4">
-							<div className="bg-purple-primary/5 rounded-xl p-4 border border-purple-primary/20">
-								<p className="text-sm text-gray-600 font-body mb-1">Loan Amount</p>
-								<p className="text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
-									{formatCurrency(application.amount)}
-								</p>
+							<div className="flex justify-between">
+								<span className="text-gray-600 font-body">Product</span>
+								<span className="text-gray-900 font-medium font-body">{application.product.name}</span>
 							</div>
-							<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-								<p className="text-sm text-gray-600 font-body mb-1">Monthly Repayment</p>
-								<p className="text-2xl lg:text-3xl font-heading font-bold text-blue-tertiary">
-									{formatCurrency(application.monthlyRepayment)}
-								</p>
+							<div className="flex justify-between">
+								<span className="text-gray-600 font-body">Loan Amount</span>
+								<span className="text-gray-900 font-medium font-body">{formatCurrency(application.amount)}</span>
+							</div>
+							<div className="flex justify-between">
+								<span className="text-gray-600 font-body">Loan Term</span>
+								<span className="text-gray-900 font-medium font-body">{application.term} months</span>
+							</div>
+							<div className="flex justify-between">
+								<span className="text-gray-600 font-body">Interest Rate</span>
+								<span className="text-gray-900 font-medium font-body">{application.product.interestRate}% monthly</span>
 							</div>
 						</div>
-						
-						<div className="space-y-4">
-							<div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-								<p className="text-sm text-gray-600 font-body mb-1">Loan Term</p>
-								<p className="text-2xl lg:text-3xl font-heading font-bold text-gray-700">
-									{application.term} months
-								</p>
-							</div>
-							<div className="bg-green-50 rounded-xl p-4 border border-green-200">
-								<p className="text-sm text-gray-600 font-body mb-1">Net Disbursement</p>
-								<p className="text-2xl lg:text-3xl font-heading font-bold text-green-600">
-									{formatCurrency(fees.netDisbursement)}
-								</p>
+
+						{/* Fee Breakdown */}
+						<div className="pt-4 border-t border-gray-200">
+							<div className="space-y-4">
+								<div className="flex justify-between">
+									<div className="flex items-center gap-1">
+										<span className="text-gray-600 font-body">Origination Fee</span>
+										<Tooltip.Provider>
+											<Tooltip.Root
+												open={openTooltip === "origination"}
+												onOpenChange={() => handleTooltipClick("origination")}
+											>
+												<Tooltip.Trigger asChild>
+													<InfoIcon
+														className="text-gray-400 cursor-pointer"
+														fontSize="small"
+														onClick={() => handleTooltipClick("origination")}
+													/>
+												</Tooltip.Trigger>
+												<Tooltip.Portal>
+													<Tooltip.Content
+														className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+														sideOffset={5}
+													>
+														A one-time fee charged by the lender for processing your loan application.
+														<Tooltip.Arrow className="fill-gray-800" />
+													</Tooltip.Content>
+												</Tooltip.Portal>
+											</Tooltip.Root>
+										</Tooltip.Provider>
+									</div>
+									<span className="text-red-600 font-body">({formatCurrency(fees.originationFee)})</span>
+								</div>
+								<div className="flex justify-between">
+									<div className="flex items-center gap-1">
+										<span className="text-gray-600 font-body">Legal Fee</span>
+										<Tooltip.Provider>
+											<Tooltip.Root
+												open={openTooltip === "legal"}
+												onOpenChange={() => handleTooltipClick("legal")}
+											>
+												<Tooltip.Trigger asChild>
+													<InfoIcon
+														className="text-gray-400 cursor-pointer"
+														fontSize="small"
+														onClick={() => handleTooltipClick("legal")}
+													/>
+												</Tooltip.Trigger>
+												<Tooltip.Portal>
+													<Tooltip.Content
+														className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+														sideOffset={5}
+													>
+														A fee charged to cover the legal costs associated with preparing and processing your loan documents.
+														<Tooltip.Arrow className="fill-gray-800" />
+													</Tooltip.Content>
+												</Tooltip.Portal>
+											</Tooltip.Root>
+										</Tooltip.Provider>
+									</div>
+									<span className="text-red-600 font-body">({formatCurrency(fees.legalFee)})</span>
+								</div>
+								<div className="flex justify-between">
+									<div className="flex items-center gap-1">
+										<span className="text-gray-600 font-body">Application Fee</span>
+										<Tooltip.Provider>
+											<Tooltip.Root
+												open={openTooltip === "application"}
+												onOpenChange={() => handleTooltipClick("application")}
+											>
+												<Tooltip.Trigger asChild>
+													<InfoIcon
+														className="text-gray-400 cursor-pointer"
+														fontSize="small"
+														onClick={() => handleTooltipClick("application")}
+													/>
+												</Tooltip.Trigger>
+												<Tooltip.Portal>
+													<Tooltip.Content
+														className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+														sideOffset={5}
+													>
+														A non-refundable fee charged when you submit your loan application. This fee is deducted from your loan disbursement.
+														<Tooltip.Arrow className="fill-gray-800" />
+													</Tooltip.Content>
+												</Tooltip.Portal>
+											</Tooltip.Root>
+										</Tooltip.Provider>
+									</div>
+									<span className="text-red-600 font-body">({formatCurrency(fees.applicationFee)})</span>
+								</div>
 							</div>
 						</div>
-					</div>
 
-					{/* Separator */}
-					<div className="border-t border-gray-100 my-6"></div>
+						{/* Highlighted Values */}
+						<div className="pt-4 border-t border-gray-200">
+							<div className="space-y-4">
+								{/* Net Loan Disbursement - Highlighted */}
+								<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+									<div className="flex justify-between items-center">
+										<div className="flex items-center gap-1">
+											<span className="text-blue-tertiary font-normal text-lg font-body">
+												Net Loan Disbursement
+											</span>
+											<Tooltip.Provider>
+												<Tooltip.Root
+													open={openTooltip === "disbursement"}
+													onOpenChange={() => handleTooltipClick("disbursement")}
+												>
+													<Tooltip.Trigger asChild>
+														<InfoIcon
+															className="text-gray-400 cursor-pointer"
+															fontSize="small"
+															onClick={() => handleTooltipClick("disbursement")}
+														/>
+													</Tooltip.Trigger>
+													<Tooltip.Portal>
+														<Tooltip.Content
+															className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+															sideOffset={5}
+														>
+															The actual amount you will receive after deducting the origination fee, legal fee, and application fee from your loan amount.
+															<Tooltip.Arrow className="fill-gray-800" />
+														</Tooltip.Content>
+													</Tooltip.Portal>
+												</Tooltip.Root>
+											</Tooltip.Provider>
+										</div>
+										<span className="text-blue-tertiary font-normal text-xl font-heading">
+											{formatCurrency(fees.netDisbursement)}
+										</span>
+									</div>
+								</div>
 
-					{/* Fee Breakdown */}
-					<div className="space-y-4">
-						<h4 className="text-lg font-heading font-semibold text-gray-700">
-							Fee Breakdown
-						</h4>
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							<div className="space-y-3">
-								<div className="flex justify-between items-center">
-									<span className="text-sm text-gray-600 font-body">
-										Interest Rate (Monthly)
-									</span>
-									<span className="text-sm font-semibold text-gray-700">
-										{application.product.interestRate}%
-									</span>
-								</div>
-								<div className="flex justify-between items-center">
-									<span className="text-sm text-gray-600 font-body">
-										Origination Fee ({application.product.originationFee}%)
-									</span>
-									<span className="text-sm font-semibold text-red-500">
-										{formatCurrency(fees.originationFee)}
-									</span>
-								</div>
-							</div>
-							<div className="space-y-3">
-								<div className="flex justify-between items-center">
-									<span className="text-sm text-gray-600 font-body">
-										Legal Fee ({application.product.legalFee}%)
-									</span>
-									<span className="text-sm font-semibold text-red-500">
-										{formatCurrency(fees.legalFee)}
-									</span>
-								</div>
-								<div className="flex justify-between items-center">
-									<span className="text-sm text-gray-600 font-body">
-										Application Fee
-									</span>
-									<span className="text-sm font-semibold text-red-500">
-										{formatCurrency(fees.applicationFee)}
-									</span>
+								{/* Monthly Repayment - Highlighted */}
+								<div className="bg-purple-primary/5 rounded-xl p-4 border border-purple-primary/20">
+									<div className="flex justify-between items-center">
+										<div className="flex items-center gap-1">
+											<span className="text-purple-primary font-normal text-lg font-body">
+												Monthly Repayment
+											</span>
+											<Tooltip.Provider>
+												<Tooltip.Root
+													open={openTooltip === "repayment"}
+													onOpenChange={() => handleTooltipClick("repayment")}
+												>
+													<Tooltip.Trigger asChild>
+														<InfoIcon
+															className="text-gray-400 cursor-pointer"
+															fontSize="small"
+															onClick={() => handleTooltipClick("repayment")}
+														/>
+													</Tooltip.Trigger>
+													<Tooltip.Portal>
+														<Tooltip.Content
+															className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+															sideOffset={5}
+														>
+															The amount you need to pay each month, which includes both principal and interest.
+															<Tooltip.Arrow className="fill-gray-800" />
+														</Tooltip.Content>
+													</Tooltip.Portal>
+												</Tooltip.Root>
+											</Tooltip.Provider>
+										</div>
+										<span className="text-purple-primary font-normal text-xl font-heading">
+											{formatCurrency(application.monthlyRepayment)}
+										</span>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -335,31 +456,31 @@ export default function AttestationForm({
 								<h4 className="text-lg font-heading font-semibold text-gray-700">
 									Borrower Information
 								</h4>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div className="space-y-3">
-										<div className="flex justify-between items-center">
-											<span className="text-sm text-gray-600 font-body">Full Name</span>
-											<span className="text-sm font-semibold text-gray-700">
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+									<div className="space-y-4">
+										<div className="flex justify-between">
+											<span className="text-gray-600 font-body">Full Name</span>
+											<span className="text-gray-900 font-medium font-body">
 												{application.user.fullName}
 											</span>
 										</div>
-										<div className="flex justify-between items-center">
-											<span className="text-sm text-gray-600 font-body">Email</span>
-											<span className="text-sm font-semibold text-gray-700">
+										<div className="flex justify-between">
+											<span className="text-gray-600 font-body">Email</span>
+											<span className="text-gray-900 font-medium font-body">
 												{application.user.email}
 											</span>
 										</div>
 									</div>
-									<div className="space-y-3">
-										<div className="flex justify-between items-center">
-											<span className="text-sm text-gray-600 font-body">Phone</span>
-											<span className="text-sm font-semibold text-gray-700">
+									<div className="space-y-4">
+										<div className="flex justify-between">
+											<span className="text-gray-600 font-body">Phone</span>
+											<span className="text-gray-900 font-medium font-body">
 												{application.user.phoneNumber}
 											</span>
 										</div>
-										<div className="flex justify-between items-center">
-											<span className="text-sm text-gray-600 font-body">Employment</span>
-											<span className="text-sm font-semibold text-gray-700">
+										<div className="flex justify-between">
+											<span className="text-gray-600 font-body">Employment</span>
+											<span className="text-gray-900 font-medium font-body">
 												{application.user.employmentStatus}
 											</span>
 										</div>
@@ -397,14 +518,26 @@ export default function AttestationForm({
 						)}
 					</div>
 
+					{/* Video Info */}
+					<div className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-200">
+						<div className="flex items-start">
+							<InfoIcon className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+							<div>
+								<p className="text-sm text-blue-800 font-body">
+									<strong>Important:</strong> This video explains your loan terms, repayment schedule, and your rights and obligations as a borrower. Please watch it completely before proceeding.
+								</p>
+							</div>
+						</div>
+					</div>
+
 					{/* Video Player */}
 					<div className="bg-gray-50 rounded-xl overflow-hidden mb-6">
 						{!videoStarted ? (
 							<div className="aspect-video flex items-center justify-center p-8">
 								<div className="text-center">
-									<div className="w-20 h-20 bg-purple-primary rounded-full flex items-center justify-center mx-auto mb-4">
+									{/* <div className="w-20 h-20 bg-purple-primary rounded-full flex items-center justify-center mx-auto mb-4">
 										<PlayArrowIcon className="text-white" style={{ fontSize: 32 }} />
-									</div>
+									</div> */}
 									<h4 className="text-lg font-heading font-semibold text-gray-700 mb-2">
 										Ready to Watch?
 									</h4>
@@ -481,17 +614,7 @@ export default function AttestationForm({
 						)}
 					</div>
 
-					{/* Video Info */}
-					<div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-						<div className="flex items-start">
-							<InfoIcon className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
-							<div>
-								<p className="text-sm text-blue-800 font-body">
-									<strong>Important:</strong> This video explains your loan terms, repayment schedule, and your rights and obligations as a borrower. Please watch it completely before proceeding.
-								</p>
-							</div>
-						</div>
-					</div>
+					
 				</div>
 			</div>
 

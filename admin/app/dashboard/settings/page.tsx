@@ -62,6 +62,7 @@ interface CompanySettings {
 	companyName: string;
 	companyAddress: string;
 	companyRegNo?: string;
+	licenseNo?: string;
 	contactPhone?: string;
 	contactEmail?: string;
 	footerNote?: string;
@@ -106,6 +107,7 @@ function SettingsPageContent() {
 		companyName: "Kredit.my",
 		companyAddress: "Kuala Lumpur, Malaysia",
 		companyRegNo: "",
+		licenseNo: "",
 		contactPhone: "",
 		contactEmail: "",
 		footerNote: "",
@@ -720,7 +722,7 @@ function SettingsPageContent() {
 			id: "company-settings",
 			label: "Company Settings",
 			icon: BuildingOfficeIcon,
-			description: "Configure company information for receipts and documents",
+			description: "Configure company information for receipts and loan documents",
 		},
 		{
 			id: "notifications",
@@ -747,7 +749,7 @@ function SettingsPageContent() {
 						<div>
 							<h3 className="text-lg font-medium text-white mb-2">Company Information</h3>
 							<p className="text-gray-400 text-sm">
-								Configure company details that will appear on payment receipts and documents.
+								Configure company details that will appear on payment receipts and loan documents.
 							</p>
 						</div>
 						<button
@@ -799,6 +801,20 @@ function SettingsPageContent() {
 								onChange={(e) => setCompanySettings(prev => ({ ...prev, companyRegNo: e.target.value }))}
 								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
 								placeholder="Enter registration number"
+							/>
+						</div>
+
+						{/* License Number */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								License Number
+							</label>
+							<input
+								type="text"
+								value={companySettings.licenseNo || ""}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, licenseNo: e.target.value }))}
+								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="Enter license number"
 							/>
 						</div>
 
@@ -873,6 +889,9 @@ function SettingsPageContent() {
 								<p className="text-xs text-gray-600">{companySettings.companyAddress}</p>
 								{companySettings.companyRegNo && (
 									<p className="text-xs text-gray-600">Registration No: {companySettings.companyRegNo}</p>
+								)}
+								{companySettings.licenseNo && (
+									<p className="text-xs text-gray-600">License No: {companySettings.licenseNo}</p>
 								)}
 								{companySettings.contactPhone && (
 									<p className="text-xs text-gray-600">Phone: {companySettings.contactPhone}</p>
@@ -1089,34 +1108,58 @@ function SettingsPageContent() {
 										))}
 										
 										{/* Custom date configuration (conditional) */}
-										<div className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-4">
-											<h4 className="text-sm font-semibold text-white mb-3 flex items-center">
-												⚙️ Custom Date Configuration
-												<span className="ml-2 text-xs text-gray-400 font-normal">(Only applies to Custom Date of Month)</span>
-											</h4>
-											<div className="grid md:grid-cols-2 gap-6">
-												{categorySettings.filter(s => s.key === "CUSTOM_DUE_DATE" || s.key === "PRORATION_CUTOFF_DATE").map((setting) => (
-													<div key={setting.key}>
-														<div className="flex items-center space-x-2 mb-2">
-															<h5 className="text-sm font-medium text-white">
-																{setting.name}
-															</h5>
-														</div>
-														<p className="text-xs text-gray-400 mb-3">
-															{setting.description}
-														</p>
-														<div className="w-full">
-															{renderSettingInput(setting)}
-															{setting.options && setting.dataType === "NUMBER" && (
-																<div className="mt-1 text-xs text-gray-500">
-																	Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+										{(() => {
+											const scheduleTypeSetting = Object.values(settings).flat().find(s => s.key === "PAYMENT_SCHEDULE_TYPE");
+											const isCustomDate = scheduleTypeSetting?.value === "CUSTOM_DATE";
+											
+											if (isCustomDate) {
+												return (
+													<div className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-4">
+														<h4 className="text-sm font-semibold text-white mb-3 flex items-center">
+															⚙️ Custom Date Configuration
+															<span className="ml-2 text-xs text-gray-400 font-normal">(Only applies to Custom Date of Month)</span>
+														</h4>
+														<div className="grid md:grid-cols-2 gap-6">
+															{categorySettings.filter(s => s.key === "CUSTOM_DUE_DATE" || s.key === "PRORATION_CUTOFF_DATE").map((setting) => (
+																<div key={setting.key}>
+																	<div className="flex items-center space-x-2 mb-2">
+																		<h5 className="text-sm font-medium text-white">
+																			{setting.name}
+																		</h5>
+																	</div>
+																	<p className="text-xs text-gray-400 mb-3">
+																		{setting.description}
+																	</p>
+																	<div className="w-full">
+																		{renderSettingInput(setting)}
+																		{setting.options && setting.dataType === "NUMBER" && (
+																			<div className="mt-1 text-xs text-gray-500">
+																				Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+																			</div>
+																		)}
+																	</div>
 																</div>
-															)}
+															))}
 														</div>
 													</div>
-												))}
-											</div>
-										</div>
+												);
+											} else {
+												return (
+													<div className="bg-blue-800/20 border border-blue-700/30 rounded-lg p-4">
+														<h4 className="text-sm font-semibold text-white mb-3 flex items-center">
+															ℹ️ Same Day Each Month Configuration
+														</h4>
+														<div className="text-sm text-blue-300">
+															When "Same Day Each Month" is selected, all payments are due on the same day of each month as the loan disbursement date (in Malaysia timezone). 
+															<br /><br />
+															<strong>Example:</strong> If a loan is disbursed on January 15th, all payments will be due on the 15th of each subsequent month.
+															<br /><br />
+															No additional configuration is needed - the system automatically uses the disbursement day for all payment schedules.
+														</div>
+													</div>
+												);
+											}
+										})()}
 									</div>
 								) : category === "LATE_FEES" ? (
 									/* Special handling for Late Fee category to ensure enabled setting comes first */
@@ -1513,19 +1556,27 @@ function SettingsPageContent() {
 
 		// Separate WhatsApp settings from general notification settings
 		const whatsappSettings = notificationSettings[0]?.[1]?.filter(setting => 
-			setting.key.startsWith('WHATSAPP_') || setting.key === 'ENABLE_WHATSAPP_NOTIFICATIONS'
+			setting.key.startsWith('WHATSAPP_') || 
+			setting.key === 'ENABLE_WHATSAPP_NOTIFICATIONS' ||
+			setting.key === 'UPCOMING_PAYMENT_REMINDER_DAYS' ||
+			setting.key === 'LATE_PAYMENT_REMINDER_DAYS' ||
+			setting.key === 'UPCOMING_PAYMENT_CHECK_TIME'
 		) || [];
 		
 		const generalSettings = notificationSettings[0]?.[1]?.filter(setting => 
-			!setting.key.startsWith('WHATSAPP_') && setting.key !== 'ENABLE_WHATSAPP_NOTIFICATIONS'
+			!setting.key.startsWith('WHATSAPP_') && 
+			setting.key !== 'ENABLE_WHATSAPP_NOTIFICATIONS' &&
+			setting.key !== 'UPCOMING_PAYMENT_REMINDER_DAYS' &&
+			setting.key !== 'LATE_PAYMENT_REMINDER_DAYS' &&
+			setting.key !== 'UPCOMING_PAYMENT_CHECK_TIME'
 		) || [];
 
 		return (
 			<div className="space-y-6">
 				{/* WhatsApp Notifications Card */}
 				{whatsappSettings.length > 0 && (
-					<div className="bg-gradient-to-br from-green-800/20 to-green-900/20 backdrop-blur-md border border-green-700/30 rounded-xl shadow-lg overflow-hidden">
-						<div className="px-6 py-4 border-b border-green-700/30">
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+						<div className="px-6 py-4 border-b border-gray-700/30">
 							<div className="flex items-center">
 								<div className="w-12 h-12 bg-green-600/20 rounded-xl flex items-center justify-center mr-4">
 									<svg className="w-6 h-6 text-green-400" fill="currentColor" viewBox="0 0 24 24">
@@ -1579,10 +1630,12 @@ function SettingsPageContent() {
 							{/* Individual notification types */}
 							<div className="grid md:grid-cols-2 gap-6">
 								{whatsappSettings.filter(s => 
-																	s.key !== "ENABLE_WHATSAPP_NOTIFICATIONS" && 
-								s.key !== "UPCOMING_PAYMENT_REMINDER_DAYS" && 
-								s.key !== "UPCOMING_PAYMENT_CHECK_TIME" &&
-								s.key !== "LATE_PAYMENT_REMINDER_DAYS"
+									s.key !== "ENABLE_WHATSAPP_NOTIFICATIONS" && 
+									s.key !== "UPCOMING_PAYMENT_REMINDER_DAYS" && 
+									s.key !== "UPCOMING_PAYMENT_CHECK_TIME" &&
+									s.key !== "LATE_PAYMENT_REMINDER_DAYS" &&
+									s.key !== "WHATSAPP_UPCOMING_PAYMENT" &&
+									s.key !== "WHATSAPP_LATE_PAYMENT"
 								).map((setting) => {
 									const isMandatory = setting.key === "WHATSAPP_OTP_VERIFICATION";
 									const getNotificationIcon = (key: string) => {
@@ -1708,6 +1761,22 @@ function SettingsPageContent() {
 											</div>
 										))}
 
+										{/* Upcoming Payment Reminder Days */}
+										{whatsappSettings.filter(s => s.key === "UPCOMING_PAYMENT_REMINDER_DAYS").map((setting) => (
+											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4 mb-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">📅</span>
+													<h4 className="text-sm font-medium text-white">Reminder Days</h4>
+												</div>
+												<p className="text-xs text-gray-400 mb-4">
+													Days before payment due date to send reminders
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
+
 										{/* Example Configuration */}
 										<div className="text-xs text-orange-300 bg-orange-900/20 p-3 rounded border border-orange-700/30">
 											<strong>📋 Example:</strong><br/>
@@ -1745,6 +1814,22 @@ function SettingsPageContent() {
 											</div>
 										))}
 
+										{/* Late Payment Reminder Days */}
+										{whatsappSettings.filter(s => s.key === "LATE_PAYMENT_REMINDER_DAYS").map((setting) => (
+											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4 mb-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">📅</span>
+													<h4 className="text-sm font-medium text-white">Reminder Days</h4>
+												</div>
+												<p className="text-xs text-gray-400 mb-4">
+													Days after payment due date to send reminders
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
+
 										{/* Example Configuration */}
 										<div className="text-xs text-red-300 bg-red-900/20 p-3 rounded border border-red-700/30">
 											<strong>📋 Example:</strong><br/>
@@ -1755,35 +1840,17 @@ function SettingsPageContent() {
 								)}
 							</div>
 
-							{/* Shared Payment Reminder Configuration */}
+							{/* Manual Trigger Section */}
 							{(whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") || whatsappSettings.some(s => s.key === "WHATSAPP_LATE_PAYMENT")) && (
 								<div className="bg-gradient-to-r from-orange-900/20 to-red-900/20 border border-orange-700/30 rounded-xl p-6">
 									<div className="flex items-center mb-6">
 										<div className="w-12 h-12 bg-gradient-to-r from-orange-600/20 to-red-600/20 rounded-xl flex items-center justify-center mr-4">
-											<span className="text-2xl">⚙️</span>
+											<span className="text-2xl">🚀</span>
 										</div>
 										<div>
-											<h3 className="text-lg font-semibold text-white">Payment Reminder Configuration</h3>
-											<p className="text-sm text-gray-400">Configure reminder timing and manual triggers</p>
+											<h3 className="text-lg font-semibold text-white">Manual Trigger</h3>
+											<p className="text-sm text-gray-400">Run payment notifications immediately</p>
 										</div>
-									</div>
-
-									<div className="mb-6">
-										{/* Upcoming Payment Reminder Days */}
-										{whatsappSettings.filter(s => s.key === "UPCOMING_PAYMENT_REMINDER_DAYS").map((setting) => (
-											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">📅</span>
-													<h4 className="text-sm font-medium text-white">Upcoming Reminder Days</h4>
-												</div>
-												<p className="text-xs text-gray-400 mb-4">
-													Days before payment due date to send reminders
-												</p>
-												<div className="w-full">
-													{renderSettingInput(setting)}
-												</div>
-											</div>
-										))}
 									</div>
 
 									{/* Manual Trigger Section */}
@@ -1795,7 +1862,7 @@ function SettingsPageContent() {
 													Manual Trigger
 												</h4>
 												<p className="text-xs text-gray-400 mt-1">
-													Run both upcoming and late payment notifications immediately without waiting for the scheduled cron job
+													Run both upcoming and late payment notifications immediately without waiting for the scheduled trigger at 10AM (GMT+8) daily
 												</p>
 											</div>
 											<button

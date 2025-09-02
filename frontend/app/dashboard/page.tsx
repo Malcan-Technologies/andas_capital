@@ -196,6 +196,7 @@ export default function DashboardPage() {
 					"PENDING_FRESH_OFFER",
 					"APPROVED",
 					"PENDING_ATTESTATION",
+					"PENDING_SIGNATURE",
 					"REJECTED",
 				].includes(app.status)
 			);
@@ -505,7 +506,8 @@ export default function DashboardPage() {
                 "PENDING_KYC",
                 "APPROVED",
                 "PENDING_FRESH_OFFER",
-                "PENDING_ATTESTATION"
+                "PENDING_ATTESTATION",
+                "PENDING_SIGNATURE"
             ].includes(app.status)
         );
 
@@ -598,6 +600,26 @@ export default function DashboardPage() {
 							buttonHref: `/dashboard/loans?tab=applications&scroll=true`,
 							priority: 'HIGH' as const,
 						};
+					case "PENDING_SIGNATURE":
+						// Don't show notification if user has already signed (borrower signed)
+						if (app.loan?.agreementStatus === 'BORROWER_SIGNED' || 
+							app.loan?.agreementStatus === 'WITNESS_SIGNED') {
+							return null;
+						}
+						return {
+							type: 'PENDING_SIGNATURE' as const,
+							title: "📝 Document Signing Required",
+							description: `Your approved loan for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							} requires digital signature to proceed`,
+							buttonText: app.loan?.docusealSignUrl ? "Resume Signing" : "Sign Agreement",
+							buttonHref: `/dashboard/loans?tab=applications&scroll=true`,
+							priority: 'HIGH' as const,
+						};
 					default:
 						return {
 							type: 'INCOMPLETE_APPLICATION' as const,
@@ -612,6 +634,11 @@ export default function DashboardPage() {
 
 			const notificationData = getNotificationData(app.status);
 			
+			// Return null if notification should not be shown
+			if (!notificationData) {
+				return null;
+			}
+			
 			return {
 				id: app.id,
 				...notificationData,
@@ -622,14 +649,17 @@ export default function DashboardPage() {
 						? `Approved on ${formatDate(app.approvedAt || app.updatedAt)}`
 						: app.status === "PENDING_ATTESTATION"
 						? `Requires attestation since ${formatDate(app.approvedAt || app.updatedAt)}`
+						: app.status === "PENDING_SIGNATURE"
+						? `Requires signature since ${formatDate(app.approvedAt || app.updatedAt)}`
 						: `Started on ${formatDate(app.createdAt)}`,
 					applicationId: app.id,
 				},
 			};
 		});
 
-		// Combine profile and application notifications
-		return [...notifications, ...appNotifications];
+		// Filter out null notifications and combine profile and application notifications
+		const validAppNotifications = appNotifications.filter(notification => notification !== null);
+		return [...notifications, ...validAppNotifications];
 	};
 
 

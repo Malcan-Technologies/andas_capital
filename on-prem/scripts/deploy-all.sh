@@ -1,0 +1,673 @@
+#!/bin/bash
+
+# Unified Deployment Script for DocuSeal + Signing Orchestrator
+# Deploys both systems to on-premises server with proper environment management
+
+set -e
+
+# Configuration
+REMOTE_HOST="admin-kapital@100.81.21.118"  # Direct Tailscale connection to on-prem server
+REMOTE_PORT=""         # Port handled by SSH config
+REMOTE_USER=""         # User handled by SSH config
+REMOTE_BASE_DIR="/home/admin-kapital"
+LOCAL_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Remote directories
+REMOTE_DOCUSEAL_DIR="$REMOTE_BASE_DIR/docuseal-onprem"
+REMOTE_ORCHESTRATOR_DIR="$REMOTE_BASE_DIR/signing-orchestrator"
+
+# Local directories
+LOCAL_DOCUSEAL_DIR="$LOCAL_BASE_DIR/docuseal"
+LOCAL_ORCHESTRATOR_DIR="$LOCAL_BASE_DIR/signing-orchestrator"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_section() {
+    echo -e "${PURPLE}[SECTION]${NC} $1"
+}
+
+# Function to check if remote server is accessible
+check_remote_connection() {
+    print_status "Checking connection to remote server..."
+    if ssh -o ConnectTimeout=10 $REMOTE_HOST "echo 'Connection successful'" >/dev/null 2>&1; then
+        print_success "Remote server is accessible"
+        return 0
+    else
+        print_error "Cannot connect to remote server"
+        return 1
+    fi
+}
+
+# Function to create comprehensive backup including Docker volumes and database
+backup_deployments() {
+    print_section "Creating comprehensive data backup (NEVER LOSE DATA AGAIN!)"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        cd /home/admin-kapital
+        
+        # Create backup directories
+        mkdir -p backups/data backups/volumes
+        
+        # Create timestamped backup
+        BACKUP_NAME="full-backup-$(date +%Y%m%d_%H%M%S)"
+        echo "📦 Creating comprehensive backup: $BACKUP_NAME"
+        echo "🛡️  This backup will preserve ALL your data and configurations!"
+        
+        # 1. Backup application files
+        if [ -d "docuseal-onprem" ] || [ -d "signing-orchestrator" ]; then
+            echo "📁 Backing up application files..."
+            tar -czf "backups/${BACKUP_NAME}-files.tar.gz" \
+                $([ -d docuseal-onprem ] && echo "docuseal-onprem/") \
+                $([ -d signing-orchestrator ] && echo "signing-orchestrator/") \
+                2>/dev/null || true
+            echo "   ✅ Application files backed up"
+        fi
+        
+        # 2. Backup DocuSeal database (if running) - CRITICAL FOR USER DATA
+        if docker ps --format "table {{.Names}}" | grep -q "docuseal-postgres"; then
+            echo "🗄️  Backing up DocuSeal database (users, documents, configurations)..."
+            docker exec docuseal-postgres pg_dump -U docuseal -d docuseal > "backups/${BACKUP_NAME}-docuseal-db.sql" 2>/dev/null && echo "   ✅ Database backed up" || echo "   ⚠️  Database backup failed"
+        else
+            echo "   ℹ️  DocuSeal database not running - skipping DB backup"
+        fi
+        
+        # 3. Backup Docker volumes (if they exist) - PRESERVES ALL PERSISTENT DATA
+        echo "💾 Backing up Docker volumes (documents, uploads, storage)..."
+        volume_count=0
+        for volume in $(docker volume ls --format "{{.Name}}" | grep -E "(docuseal|signing-orchestrator)" 2>/dev/null || true); do
+            echo "  📦 Backing up volume: $volume"
+            docker run --rm -v "$volume":/source -v "$(pwd)/backups/volumes":/backup alpine tar czf "/backup/${BACKUP_NAME}-${volume}.tar.gz" -C /source . 2>/dev/null && echo "     ✅ Volume $volume backed up" || echo "     ⚠️  Volume $volume backup failed"
+            volume_count=$((volume_count + 1))
+        done
+        
+        if [ $volume_count -eq 0 ]; then
+            echo "   ℹ️  No Docker volumes found to backup"
+        fi
+        
+        # 4. Create backup manifest with restore instructions
+        cat > "backups/${BACKUP_NAME}-manifest.txt" << MANIFEST
+🛡️  COMPREHENSIVE BACKUP MANIFEST
+================================
+Backup Created: $(date)
+Backup Name: $BACKUP_NAME
+
+📦 Contents:
+- Application files: ${BACKUP_NAME}-files.tar.gz
+- DocuSeal database: ${BACKUP_NAME}-docuseal-db.sql
+- Docker volumes: ${BACKUP_NAME}-*.tar.gz (in volumes/ directory)
+
+🔧 Restore Instructions:
+========================
+1. Stop services: cd docuseal-onprem && docker-compose down
+2. Extract files: tar -xzf ${BACKUP_NAME}-files.tar.gz
+3. Start database: docker-compose up -d docuseal-postgres
+4. Restore database: docker exec -i docuseal-postgres psql -U docuseal -d docuseal < ${BACKUP_NAME}-docuseal-db.sql
+5. Restore volumes: 
+   For each volume backup file:
+   docker run --rm -v VOLUME_NAME:/target -v \$(pwd)/backups/volumes:/backup alpine tar xzf /backup/${BACKUP_NAME}-VOLUME_NAME.tar.gz -C /target
+6. Start all services: docker-compose up -d
+
+⚠️  IMPORTANT: This backup preserves ALL user data, configurations, documents, and settings!
+MANIFEST
+        
+        echo ""
+        echo "🎉 Comprehensive backup completed: $BACKUP_NAME"
+        echo "📄 Backup manifest: backups/${BACKUP_NAME}-manifest.txt"
+        echo ""
+        echo "📋 Recent backups:"
+        ls -la backups/full-backup-*-manifest.txt 2>/dev/null | head -5 || echo "No previous backups found"
+        
+        # Clean up old backups (keep last 10 to prevent disk space issues)
+        echo ""
+        echo "🧹 Cleaning up old backups (keeping last 10)..."
+        ls -t backups/full-backup-*-files.tar.gz 2>/dev/null | tail -n +11 | while read backup; do
+            backup_base=$(basename "$backup" "-files.tar.gz")
+            echo "   🗑️  Removing old backup: $backup_base"
+            rm -f "backups/${backup_base}"* "backups/volumes/${backup_base}"* 2>/dev/null || true
+        done
+EOF
+    
+    print_success "🛡️  COMPREHENSIVE BACKUP COMPLETED - Your data is safe!"
+}
+
+# Function to restore from backup
+restore_from_backup() {
+    if [ -z "$1" ]; then
+        print_error "Usage: $0 restore <backup-name>"
+        print_status "Available backups:"
+        ssh $REMOTE_HOST "cd /home/admin-kapital && ls -la backups/full-backup-*-manifest.txt 2>/dev/null | head -10" || echo "No backups found"
+        return 1
+    fi
+    
+    local backup_name="$1"
+    print_section "🔄 Restoring from backup: $backup_name"
+    print_warning "⚠️  This will STOP all services and restore data!"
+    
+    ssh $REMOTE_HOST << EOF
+        cd /home/admin-kapital
+        
+        # Check if backup exists
+        if [ ! -f "backups/${backup_name}-manifest.txt" ]; then
+            echo "❌ Backup not found: ${backup_name}"
+            echo "Available backups:"
+            ls -la backups/full-backup-*-manifest.txt 2>/dev/null | head -10
+            exit 1
+        fi
+        
+        echo "📋 Backup manifest:"
+        cat "backups/${backup_name}-manifest.txt"
+        echo ""
+        
+        # Stop services
+        echo "🛑 Stopping services..."
+        cd docuseal-onprem && docker-compose down 2>/dev/null || true
+        cd ../signing-orchestrator && docker-compose down 2>/dev/null || true
+        cd ..
+        
+        # Restore application files
+        if [ -f "backups/${backup_name}-files.tar.gz" ]; then
+            echo "📁 Restoring application files..."
+            tar -xzf "backups/${backup_name}-files.tar.gz"
+            echo "   ✅ Application files restored"
+        fi
+        
+        # Start database for restoration
+        echo "🗄️  Starting database for restoration..."
+        cd docuseal-onprem && docker-compose up -d docuseal-postgres
+        sleep 10
+        
+        # Restore database
+        if [ -f "../backups/${backup_name}-docuseal-db.sql" ]; then
+            echo "🗄️  Restoring DocuSeal database..."
+            docker exec -i docuseal-postgres psql -U docuseal -d docuseal < "../backups/${backup_name}-docuseal-db.sql" 2>/dev/null && echo "   ✅ Database restored" || echo "   ⚠️  Database restore failed"
+        fi
+        
+        # Restore volumes
+        echo "💾 Restoring Docker volumes..."
+        for volume_backup in ../backups/volumes/${backup_name}-*.tar.gz; do
+            if [ -f "\$volume_backup" ]; then
+                volume_name=\$(basename "\$volume_backup" .tar.gz | sed "s/${backup_name}-//")
+                echo "  📦 Restoring volume: \$volume_name"
+                docker run --rm -v "\$volume_name":/target -v "\$(pwd)/../backups/volumes":/backup alpine tar xzf "/backup/\$(basename "\$volume_backup")" -C /target 2>/dev/null && echo "     ✅ Volume \$volume_name restored" || echo "     ⚠️  Volume \$volume_name restore failed"
+            fi
+        done
+        
+        # Start all services
+        echo "🚀 Starting all services..."
+        docker-compose up -d
+        cd ../signing-orchestrator && docker-compose up -d 2>/dev/null || true
+        
+        echo ""
+        echo "🎉 Restore completed from backup: ${backup_name}"
+        echo "📋 Check service status with: ./deploy-all.sh status"
+EOF
+    
+    print_success "🔄 Restore completed!"
+}
+
+# Function to sync DocuSeal files
+sync_docuseal() {
+    print_section "Syncing DocuSeal files"
+    
+    if [ ! -d "$LOCAL_DOCUSEAL_DIR" ]; then
+        print_warning "Local DocuSeal directory not found: $LOCAL_DOCUSEAL_DIR"
+        return 0
+    fi
+    
+    print_status "Syncing DocuSeal files to remote server..."
+    
+    # Create remote directory
+    ssh $REMOTE_HOST "mkdir -p $REMOTE_DOCUSEAL_DIR"
+    
+    # Sync DocuSeal files
+    rsync -avz --delete \
+        --exclude 'storage/' \
+        --exclude 'postgres/data/' \
+        --exclude 'logs/' \
+        --exclude '.env' \
+        --exclude '*.log' \
+        --exclude '.DS_Store' \
+        --exclude 'node_modules/' \
+        -e "ssh" \
+        "$LOCAL_DOCUSEAL_DIR/" "$REMOTE_HOST:$REMOTE_DOCUSEAL_DIR/"
+    
+    print_success "DocuSeal files synced successfully"
+}
+
+# Function to sync Signing Orchestrator files
+sync_orchestrator() {
+    print_section "Syncing Signing Orchestrator files"
+    
+    if [ ! -d "$LOCAL_ORCHESTRATOR_DIR" ]; then
+        print_warning "Local Signing Orchestrator directory not found: $LOCAL_ORCHESTRATOR_DIR"
+        return 0
+    fi
+    
+    print_status "Syncing Signing Orchestrator files to remote server..."
+    
+    # Create remote directory
+    ssh $REMOTE_HOST "mkdir -p $REMOTE_ORCHESTRATOR_DIR"
+    
+    # Sync Orchestrator files
+    rsync -avz --delete \
+        --exclude 'node_modules/' \
+        --exclude 'dist/' \
+        --exclude 'logs/' \
+        --exclude 'data/' \
+        --exclude '.git/' \
+        --exclude '.env' \
+        --exclude '*.log' \
+        --exclude '.DS_Store' \
+        -e "ssh" \
+        "$LOCAL_ORCHESTRATOR_DIR/" "$REMOTE_HOST:$REMOTE_ORCHESTRATOR_DIR/"
+    
+    print_success "Signing Orchestrator files synced successfully"
+}
+
+# Function to setup environments
+setup_environments() {
+    print_section "Setting up environments"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        # Setup DocuSeal environment
+        if [ -d docuseal-onprem ]; then
+            cd docuseal-onprem
+            echo "🔧 Setting up DocuSeal environment..."
+            
+            # Use production environment if available, otherwise development
+            if [ -f env.production ]; then
+                echo "Using production environment for DocuSeal"
+                cp env.production .env
+            elif [ -f env.development ]; then
+                echo "Using development environment for DocuSeal"
+                cp env.development .env
+            elif [ ! -f .env ]; then
+                echo "⚠️  No .env file found for DocuSeal - please configure manually"
+            fi
+            
+            # Create necessary directories
+            mkdir -p storage postgres/data logs public
+            
+            echo "✅ DocuSeal environment setup completed"
+            cd ..
+        fi
+        
+        # Setup Signing Orchestrator environment
+        if [ -d signing-orchestrator ]; then
+            cd signing-orchestrator
+            echo "🔧 Setting up Signing Orchestrator environment..."
+            
+            # Use production environment if available, otherwise development
+            if [ -f env.production ]; then
+                echo "Using production environment for Signing Orchestrator"
+                cp env.production .env
+            elif [ -f env.development ]; then
+                echo "Using development environment for Signing Orchestrator"
+                cp env.development .env
+            elif [ -f env.example ]; then
+                echo "Using example environment for Signing Orchestrator"
+                cp env.example .env
+            elif [ ! -f .env ]; then
+                echo "⚠️  No .env file found for Signing Orchestrator - please configure manually"
+            fi
+            
+            # Create necessary directories
+            mkdir -p data/signed logs
+            
+            # Set proper permissions
+            chmod +x deploy.sh deploy-quick.sh scripts/*.sh 2>/dev/null || true
+            
+            echo "✅ Signing Orchestrator environment setup completed"
+            cd ..
+        fi
+EOF
+    
+    print_success "Environment setup completed"
+}
+
+# Function to deploy DocuSeal
+deploy_docuseal() {
+    print_section "Deploying DocuSeal"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        if [ -d docuseal-onprem ]; then
+            cd docuseal-onprem
+            
+            echo "🛑 Stopping existing DocuSeal containers..."
+            docker-compose down 2>/dev/null || true
+            
+            echo "🏗️  Building DocuSeal images..."
+            docker-compose build --no-cache 2>/dev/null || echo "No build required for DocuSeal"
+            
+            echo "🚀 Starting DocuSeal containers..."
+            docker-compose up -d
+            
+            echo "⏳ Waiting for DocuSeal to start..."
+            sleep 15
+            
+            echo "📊 DocuSeal container status:"
+            docker-compose ps
+            
+            echo "🧪 Testing DocuSeal health..."
+            if curl -f http://localhost/health >/dev/null 2>&1; then
+                echo "✅ DocuSeal health check passed"
+            else
+                echo "❌ DocuSeal health check failed"
+                echo "📋 DocuSeal logs:"
+                docker-compose logs --tail=10
+            fi
+            
+            cd ..
+        else
+            echo "⚠️  DocuSeal directory not found, skipping deployment"
+        fi
+EOF
+    
+    print_success "DocuSeal deployment completed"
+}
+
+# Function to deploy Signing Orchestrator
+deploy_orchestrator() {
+    print_section "Deploying Signing Orchestrator"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        if [ -d signing-orchestrator ]; then
+            cd signing-orchestrator
+            
+            echo "🛑 Stopping existing Signing Orchestrator containers..."
+            docker-compose down 2>/dev/null || true
+            
+            echo "🏗️  Building Signing Orchestrator images..."
+            docker-compose build --no-cache
+            
+            echo "🚀 Starting Signing Orchestrator containers..."
+            docker-compose up -d
+            
+            echo "⏳ Waiting for Signing Orchestrator to start..."
+            sleep 10
+            
+            echo "📊 Signing Orchestrator container status:"
+            docker-compose ps
+            
+            echo "🧪 Testing Signing Orchestrator health..."
+            if curl -f http://localhost:4010/health >/dev/null 2>&1; then
+                echo "✅ Signing Orchestrator health check passed"
+            else
+                echo "❌ Signing Orchestrator health check failed"
+                echo "📋 Signing Orchestrator logs:"
+                docker-compose logs --tail=10 signing-orchestrator
+            fi
+            
+            cd ..
+        else
+            echo "⚠️  Signing Orchestrator directory not found, skipping deployment"
+        fi
+EOF
+    
+    print_success "Signing Orchestrator deployment completed"
+}
+
+# Function to show overall status
+show_deployment_status() {
+    print_section "Deployment Status Overview"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        echo "🌐 Overall System Status"
+        echo "======================="
+        
+        echo ""
+        echo "📊 All Running Containers:"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+        
+        echo ""
+        echo "🔍 Service Health Checks:"
+        
+        # DocuSeal health
+        echo -n "DocuSeal (HTTP): "
+        if curl -f -s http://localhost/health >/dev/null 2>&1; then
+            echo "✅ Healthy"
+        else
+            echo "❌ Unhealthy"
+        fi
+        
+        # Signing Orchestrator health
+        echo -n "Signing Orchestrator: "
+        if curl -f -s http://localhost:4010/health >/dev/null 2>&1; then
+            echo "✅ Healthy"
+        else
+            echo "❌ Unhealthy"
+        fi
+        
+        echo ""
+        echo "📈 Resource Usage:"
+        docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" 2>/dev/null || echo "Resource stats unavailable"
+        
+        echo ""
+        echo "🌐 Service URLs:"
+        echo "   DocuSeal Web UI: http://sign.kredit.my"
+        echo "   DocuSeal Direct: http://sign.kredit.my:3001"
+        echo "   Orchestrator API: http://sign.kredit.my:4010"
+        echo "   Orchestrator Health: http://sign.kredit.my:4010/health"
+EOF
+    
+    print_success "Status overview completed"
+}
+
+# Function to show logs from both systems
+show_logs() {
+    local service="${1:-all}"
+    
+    print_section "Showing logs for: $service"
+    
+    case "$service" in
+        "docuseal")
+            ssh -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "cd docuseal-onprem && docker-compose logs -f"
+            ;;
+        "orchestrator")
+            ssh -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "cd signing-orchestrator && docker-compose logs -f signing-orchestrator"
+            ;;
+        "all"|*)
+            ssh $REMOTE_HOST << 'EOF'
+                echo "📋 Recent logs from all services:"
+                echo "================================="
+                
+                if [ -d docuseal-onprem ]; then
+                    echo ""
+                    echo "🔍 DocuSeal logs (last 10 lines):"
+                    cd docuseal-onprem && docker-compose logs --tail=10
+                    cd ..
+                fi
+                
+                if [ -d signing-orchestrator ]; then
+                    echo ""
+                    echo "🔍 Signing Orchestrator logs (last 10 lines):"
+                    cd signing-orchestrator && docker-compose logs --tail=10 signing-orchestrator
+                    cd ..
+                fi
+EOF
+            ;;
+    esac
+}
+
+# Function to restart services
+restart_services() {
+    local service="${1:-all}"
+    
+    print_section "Restarting services: $service"
+    
+    ssh -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST << EOF
+        case "$service" in
+            "docuseal")
+                if [ -d docuseal-onprem ]; then
+                    cd docuseal-onprem && docker-compose restart
+                    echo "✅ DocuSeal restarted"
+                fi
+                ;;
+            "orchestrator")
+                if [ -d signing-orchestrator ]; then
+                    cd signing-orchestrator && docker-compose restart
+                    echo "✅ Signing Orchestrator restarted"
+                fi
+                ;;
+            "all"|*)
+                if [ -d docuseal-onprem ]; then
+                    cd docuseal-onprem && docker-compose restart
+                    echo "✅ DocuSeal restarted"
+                    cd ..
+                fi
+                
+                if [ -d signing-orchestrator ]; then
+                    cd signing-orchestrator && docker-compose restart
+                    echo "✅ Signing Orchestrator restarted"
+                    cd ..
+                fi
+                ;;
+        esac
+        
+        sleep 5
+        echo "📊 Container status after restart:"
+        docker ps --format "table {{.Names}}\t{{.Status}}"
+EOF
+    
+    print_success "Service restart completed"
+}
+
+# Function to cleanup Docker resources
+cleanup_docker() {
+    print_section "Cleaning up Docker resources"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        echo "🧹 Removing unused Docker images..."
+        docker image prune -f
+        
+        echo "🧹 Removing unused Docker volumes..."
+        docker volume prune -f
+        
+        echo "🧹 Removing unused Docker networks..."
+        docker network prune -f
+        
+        echo "📊 Docker disk usage after cleanup:"
+        docker system df
+EOF
+    
+    print_success "Docker cleanup completed"
+}
+
+# Main deployment function
+deploy_all() {
+    echo "🚀 Starting Full Deployment: DocuSeal + Signing Orchestrator"
+    echo "============================================================"
+    echo "📍 Local base directory: $LOCAL_BASE_DIR"
+    echo "🌐 Remote server: $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT"
+    echo "📁 Remote base directory: $REMOTE_BASE_DIR"
+    echo ""
+    
+    # Check connection
+    if ! check_remote_connection; then
+        print_error "Deployment aborted due to connection failure"
+        exit 1
+    fi
+    
+    # Create backup
+    backup_deployments
+    
+    # Sync files
+    sync_docuseal
+    sync_orchestrator
+    
+    # Setup environments
+    setup_environments
+    
+    # Deploy services
+    deploy_docuseal
+    deploy_orchestrator
+    
+    # Show status
+    show_deployment_status
+    
+    echo ""
+    print_success "🎉 Full deployment completed successfully!"
+    echo ""
+    echo "📋 Next steps:"
+    echo "   1. Configure .env files if needed"
+    echo "   2. Set up DocuSeal webhook URL: http://sign.kredit.my:4010/webhooks/docuseal"
+    echo "   3. Test the complete signing workflow"
+    echo ""
+    echo "🔧 Useful commands:"
+    echo "   $0 status                    - Check deployment status"
+    echo "   $0 logs [docuseal|orchestrator] - View logs"
+    echo "   $0 restart [docuseal|orchestrator] - Restart services"
+    echo "   $0 cleanup                   - Clean up Docker resources"
+}
+
+# Parse command line arguments
+case "${1:-deploy}" in
+    "deploy")
+        deploy_all
+        ;;
+    "status")
+        check_remote_connection && show_deployment_status
+        ;;
+    "logs")
+        check_remote_connection && show_logs "${2:-all}"
+        ;;
+    "restart")
+        check_remote_connection && restart_services "${2:-all}"
+        ;;
+    "cleanup")
+        check_remote_connection && cleanup_docker
+        ;;
+    "backup")
+        check_remote_connection && backup_deployments
+        ;;
+    "restore")
+        check_remote_connection && restore_from_backup "$2"
+        ;;
+    "sync")
+        check_remote_connection && sync_docuseal && sync_orchestrator
+        ;;
+    *)
+        echo "Usage: $0 [deploy|status|logs|restart|cleanup|backup|restore|sync]"
+        echo ""
+        echo "Commands:"
+        echo "  deploy              - Full deployment (default)"
+        echo "  status              - Check deployment status"
+        echo "  logs [service]      - View logs (docuseal|orchestrator|all)"
+        echo "  restart [service]   - Restart services (docuseal|orchestrator|all)"
+        echo "  cleanup             - Clean up old Docker resources"
+        echo "  backup              - Create comprehensive backup (database + volumes + files)"
+        echo "  restore <name>      - Restore from backup (lists available if no name given)"
+        echo "  sync                - Sync files only (no Docker rebuild)"
+        echo ""
+        echo "Examples:"
+        echo "  $0 deploy           - Deploy both systems"
+        echo "  $0 backup           - Create comprehensive backup"
+        echo "  $0 restore full-backup-20250830_120000 - Restore from specific backup"
+        echo "  $0 logs docuseal    - Show DocuSeal logs"
+        echo "  $0 restart orchestrator - Restart only Signing Orchestrator"
+        exit 1
+        ;;
+esac

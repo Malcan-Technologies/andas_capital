@@ -118,6 +118,7 @@ interface DashboardStats {
 function AdminApplicationsPageContent() {
 	const searchParams = useSearchParams();
 	const filterParam = searchParams.get("filter");
+	const tabParam = searchParams.get("tab");
 
 	const [applications, setApplications] = useState<LoanApplication[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -132,8 +133,26 @@ function AdminApplicationsPageContent() {
 	const [selectedDocument, setSelectedDocument] = useState<Document | null>(
 		null
 	);
-	const [selectedTab, setSelectedTab] = useState<string>("details");
+	// Initialize tab based on URL parameters or filter type
+	const getInitialTab = () => {
+		if (tabParam) {
+			return tabParam;
+		}
+		// Auto-select relevant tab based on filter
+		if (filterParam === "pending-approval") {
+			return "approval";
+		} else if (filterParam === "pending-disbursement") {
+			return "disbursement";
+		} else if (filterParam === "pending_signature") {
+			return "signatures";
+		}
+		return "details";
+	};
+
+	const [selectedTab, setSelectedTab] = useState<string>(getInitialTab());
 	const [refreshing, setRefreshing] = useState(false);
+	const [signaturesData, setSignaturesData] = useState<any>(null);
+	const [loadingSignatures, setLoadingSignatures] = useState(false);
 
 	// Initialize filters based on URL parameter
 	const getInitialFilters = () => {
@@ -143,6 +162,8 @@ function AdminApplicationsPageContent() {
 			return ["PENDING_DISBURSEMENT"];
 		} else if (filterParam === "collateral-review") {
 			return ["COLLATERAL_REVIEW"];
+		} else if (filterParam === "pending_signature") {
+			return ["PENDING_SIGNATURE"];
 		} else {
 			// Default "All Applications" view - show active workflow statuses, exclude rejected/withdrawn/incomplete
 			return [
@@ -178,8 +199,13 @@ function AdminApplicationsPageContent() {
 	const [freshOfferInterestRate, setFreshOfferInterestRate] = useState("");
 	const [freshOfferMonthlyRepayment, setFreshOfferMonthlyRepayment] = useState("");
 	const [freshOfferNetDisbursement, setFreshOfferNetDisbursement] = useState("");
+	const [freshOfferOriginationFee, setFreshOfferOriginationFee] = useState("");
+	const [freshOfferLegalFee, setFreshOfferLegalFee] = useState("");
+	const [freshOfferApplicationFee, setFreshOfferApplicationFee] = useState("");
 	const [freshOfferNotes, setFreshOfferNotes] = useState("");
 	const [freshOfferProductId, setFreshOfferProductId] = useState("");
+	const [feeEditMode, setFeeEditMode] = useState(false);
+	const [feesSavedManually, setFeesSavedManually] = useState(false);
 	const [products, setProducts] = useState<any[]>([]);
 	const [processingFreshOffer, setProcessingFreshOffer] = useState(false);
 	const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
@@ -381,6 +407,11 @@ function AdminApplicationsPageContent() {
 					);
 					if (updatedApp) {
 						setSelectedApplication(updatedApp);
+						
+						// If we're currently on the signatures tab and the application has PENDING_SIGNATURE status, refresh signatures data
+						if (selectedTab === "signatures" && updatedApp.status === "PENDING_SIGNATURE") {
+							await fetchSignatureStatus(updatedApp.id);
+						}
 					}
 				}
 
@@ -514,6 +545,30 @@ function AdminApplicationsPageContent() {
 		}
 	};
 
+	const fetchSignatureStatus = async (applicationId: string) => {
+		if (!applicationId) return;
+		
+		setLoadingSignatures(true);
+		try {
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data: any;
+			}>(`/api/admin/applications/${applicationId}/signatures`);
+			
+			if (data.success) {
+				setSignaturesData(data.data);
+			} else {
+				console.error("Failed to fetch signature status");
+				setSignaturesData(null);
+			}
+		} catch (error) {
+			console.error("Error fetching signature status:", error);
+			setSignaturesData(null);
+		} finally {
+			setLoadingSignatures(false);
+		}
+	};
+
 	useEffect(() => {
 		fetchApplications();
 	}, []);
@@ -522,6 +577,22 @@ function AdminApplicationsPageContent() {
 	useEffect(() => {
 		setSelectedFilters(getInitialFilters());
 	}, [filterParam]);
+
+	// Update tab when URL parameter changes
+	useEffect(() => {
+		setSelectedTab(getInitialTab());
+	}, [tabParam, filterParam]);
+
+	// Fetch signature status when signatures tab is selected
+	useEffect(() => {
+		if (
+			selectedTab === "signatures" &&
+			selectedApplication &&
+			selectedApplication.status === "PENDING_SIGNATURE"
+		) {
+			fetchSignatureStatus(selectedApplication.id);
+		}
+	}, [selectedTab, selectedApplication?.id, selectedApplication?.status]);
 
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString("en-MY", {
@@ -567,7 +638,25 @@ function AdminApplicationsPageContent() {
 					(app) => app.id === selectedApplication.id
 				))
 		) {
-			setSelectedApplication(filteredApplications[0]);
+			const firstApp = filteredApplications[0];
+			setSelectedApplication(firstApp);
+			
+			// Auto-switch to appropriate tab based on status (unless tab is explicitly set via URL)
+			if (!tabParam) {
+				if (firstApp.status === "PENDING_APPROVAL") {
+					setSelectedTab("approval");
+				} else if (firstApp.status === "PENDING_ATTESTATION") {
+					setSelectedTab("attestation");
+				} else if (firstApp.status === "PENDING_SIGNATURE") {
+					setSelectedTab("signatures");
+				} else if (firstApp.status === "PENDING_DISBURSEMENT") {
+					setSelectedTab("disbursement");
+				} else if (firstApp.status === "COLLATERAL_REVIEW") {
+					setSelectedTab("collateral");
+				} else {
+					setSelectedTab(getInitialTab());
+				}
+			}
 		}
 		// Clear selection if no results
 		else if (filteredApplications.length === 0) {
@@ -588,15 +677,21 @@ function AdminApplicationsPageContent() {
 	const handleViewClick = (application: LoanApplication) => {
 		setSelectedApplication(application);
 
-		// Auto-switch to appropriate tab based on status
-		if (application.status === "PENDING_APPROVAL") {
-			setSelectedTab("approval");
-		} else if (application.status === "PENDING_ATTESTATION") {
-			setSelectedTab("attestation");
-		} else if (application.status === "PENDING_DISBURSEMENT") {
-			setSelectedTab("disbursement");
-		} else {
-			setSelectedTab("details");
+		// Auto-switch to appropriate tab based on status (unless tab is explicitly set via URL)
+		if (!tabParam) {
+			if (application.status === "PENDING_APPROVAL") {
+				setSelectedTab("approval");
+			} else if (application.status === "PENDING_ATTESTATION") {
+				setSelectedTab("attestation");
+			} else if (application.status === "PENDING_SIGNATURE") {
+				setSelectedTab("signatures");
+			} else if (application.status === "PENDING_DISBURSEMENT") {
+				setSelectedTab("disbursement");
+			} else if (application.status === "COLLATERAL_REVIEW") {
+				setSelectedTab("collateral");
+			} else {
+				setSelectedTab(getInitialTab());
+			}
 		}
 
 		fetchApplicationHistory(application.id);
@@ -1161,13 +1256,32 @@ function AdminApplicationsPageContent() {
 		if (!selectedApplication) return;
 
 		// Validate required fields
-		if (!freshOfferAmount || !freshOfferTerm || !freshOfferInterestRate || !freshOfferMonthlyRepayment || !freshOfferNetDisbursement || !freshOfferProductId) {
-			setError("All fresh offer fields are required, including product selection");
+		if (!freshOfferAmount || !freshOfferTerm || !freshOfferInterestRate || !freshOfferMonthlyRepayment || !freshOfferNetDisbursement || !freshOfferOriginationFee || !freshOfferLegalFee || !freshOfferApplicationFee || !freshOfferProductId) {
+			setError("All fresh offer fields are required, including product selection and fee amounts");
 			return;
 		}
 
-		// Show confirmation dialog
-		const confirmMessage = `Are you sure you want to submit a fresh offer to ${selectedApplication.user?.fullName}?\n\nNew Amount: RM${parseFloat(freshOfferAmount).toFixed(2)}\nNew Term: ${freshOfferTerm} months\nNew Interest Rate: ${freshOfferInterestRate}%`;
+		// Show confirmation dialog with fee breakdown
+		const legalFeeValue = parseFloat(freshOfferLegalFee) || 0;
+		const originationFeeValue = parseFloat(freshOfferOriginationFee) || 0;
+		const applicationFeeValue = parseFloat(freshOfferApplicationFee) || 0;
+		const totalFees = legalFeeValue + originationFeeValue + applicationFeeValue;
+		
+		const confirmMessage = `Are you sure you want to submit a fresh offer to ${selectedApplication.user?.fullName}?
+
+LOAN TERMS:
+• Loan Amount: RM${parseFloat(freshOfferAmount).toFixed(2)}
+• Term: ${freshOfferTerm} months
+• Interest Rate: ${freshOfferInterestRate}% monthly
+• Monthly Repayment: RM${parseFloat(freshOfferMonthlyRepayment).toFixed(2)}
+
+FEES:
+• Origination Fee: RM${originationFeeValue.toFixed(2)}
+• Legal Fee: RM${legalFeeValue.toFixed(2)}
+• Application Fee: RM${applicationFeeValue.toFixed(2)}
+• Total Fees: RM${totalFees.toFixed(2)}
+
+NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
 		if (!window.confirm(confirmMessage)) {
 			return;
@@ -1188,6 +1302,9 @@ function AdminApplicationsPageContent() {
 						interestRate: parseFloat(freshOfferInterestRate),
 						monthlyRepayment: parseFloat(freshOfferMonthlyRepayment),
 						netDisbursement: parseFloat(freshOfferNetDisbursement),
+						originationFee: parseFloat(freshOfferOriginationFee),
+						legalFee: parseFloat(freshOfferLegalFee),
+						applicationFee: parseFloat(freshOfferApplicationFee),
 						productId: freshOfferProductId,
 						notes: freshOfferNotes,
 					}),
@@ -1203,8 +1320,13 @@ function AdminApplicationsPageContent() {
 			setFreshOfferInterestRate("");
 			setFreshOfferMonthlyRepayment("");
 			setFreshOfferNetDisbursement("");
+			setFreshOfferOriginationFee("");
+			setFreshOfferLegalFee("");
+			setFreshOfferApplicationFee("");
 			setFreshOfferProductId("");
 			setFreshOfferNotes("");
+			setFeeEditMode(false); // Reset edit mode after successful submission
+			setFeesSavedManually(false); // Reset manual flag after successful submission
 			
 			await fetchApplications();
 			await fetchApplicationHistory(selectedApplication.id);
@@ -1262,25 +1384,95 @@ function AdminApplicationsPageContent() {
 			const monthlyRepayment = calculateMonthlyRepayment(amount, term, interestRate);
 			setFreshOfferMonthlyRepayment(monthlyRepayment.toFixed(2));
 
-			// Calculate net disbursement based on selected product fees
+			// Calculate fees based on selected product
 			const selectedProduct = products.find(p => p.id === freshOfferProductId);
 			if (selectedProduct) {
-				// Legal fee and origination fee are stored as percentages in the database
+				// Always auto-calculate fees (percentage is stored as whole number, e.g., 3 = 3%)
 				const legalFeeValue = (amount * selectedProduct.legalFee) / 100;
 				const originationFeeValue = (amount * selectedProduct.originationFee) / 100;
+				const applicationFeeValue = selectedProduct.applicationFee;
 				
-				// Net disbursement = loan amount - all fees
-				const netDisbursement = amount - legalFeeValue - originationFeeValue;
-				setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
-			} else {
-				// If no product selected, clear net disbursement
-				setFreshOfferNetDisbursement("");
+				// Only update fee inputs if not in edit mode and fees haven't been manually saved
+				if (!feeEditMode && !feesSavedManually) {
+					setFreshOfferLegalFee(legalFeeValue.toFixed(2));
+					setFreshOfferOriginationFee(originationFeeValue.toFixed(2));
+					setFreshOfferApplicationFee(applicationFeeValue.toFixed(2));
+					
+					// Calculate net disbursement with auto-calculated values
+					const netDisbursement = amount - legalFeeValue - originationFeeValue - applicationFeeValue;
+					setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
+				}
+				// If in edit mode or fees were manually saved, don't touch the net disbursement
+				// It will be calculated by handleFeeChange or handleSaveFees
 			}
-		} else {
-			// Clear calculated fields if required inputs are missing
+		} else if (!amount) {
+			// Clear all calculated fields if amount is empty
 			setFreshOfferMonthlyRepayment("");
 			setFreshOfferNetDisbursement("");
+			setFreshOfferLegalFee("");
+			setFreshOfferOriginationFee("");
+			setFreshOfferApplicationFee("");
+			setFeeEditMode(false); // Reset edit mode when clearing
+			setFeesSavedManually(false); // Reset manual flag when clearing
 		}
+	};
+
+	// Handle fee edit mode
+	const handleEditFees = () => {
+		setFeeEditMode(true);
+	};
+
+	// Handle manual fee changes during edit mode
+	const handleFeeChange = (feeType: 'legal' | 'origination' | 'application', value: string) => {
+		// Update the specific fee state
+		if (feeType === 'legal') {
+			setFreshOfferLegalFee(value);
+		} else if (feeType === 'origination') {
+			setFreshOfferOriginationFee(value);
+		} else if (feeType === 'application') {
+			setFreshOfferApplicationFee(value);
+		}
+
+		// Immediately update net disbursement if we have amount and are in edit mode
+		const amount = parseFloat(freshOfferAmount);
+		if (amount && feeEditMode) {
+			// Get current values, using the new value for the changed fee
+			// Handle empty strings and invalid numbers properly
+			const getValue = (currentValue: string) => {
+				const parsed = parseFloat(currentValue);
+				return isNaN(parsed) ? 0 : parsed;
+			};
+			
+			const legalFee = feeType === 'legal' ? getValue(value) : getValue(freshOfferLegalFee);
+			const originationFee = feeType === 'origination' ? getValue(value) : getValue(freshOfferOriginationFee);
+			const applicationFee = feeType === 'application' ? getValue(value) : getValue(freshOfferApplicationFee);
+			
+			const netDisbursement = amount - legalFee - originationFee - applicationFee;
+			setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
+		}
+	};
+
+	const handleSaveFees = () => {
+		// First calculate net disbursement with the manually entered fees
+		const amount = parseFloat(freshOfferAmount);
+		if (amount) {
+			// Handle empty strings and invalid numbers properly
+			const getValue = (currentValue: string) => {
+				const parsed = parseFloat(currentValue);
+				return isNaN(parsed) ? 0 : parsed;
+			};
+			
+			const legalFeeValue = getValue(freshOfferLegalFee);
+			const originationFeeValue = getValue(freshOfferOriginationFee);
+			const applicationFeeValue = getValue(freshOfferApplicationFee);
+			
+			const netDisbursement = amount - legalFeeValue - originationFeeValue - applicationFeeValue;
+			setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
+		}
+		
+		// Mark fees as manually saved and exit edit mode
+		setFeesSavedManually(true);
+		setFeeEditMode(false);
 	};
 
 	// Populate fresh offer form with current application data
@@ -1296,18 +1488,33 @@ function AdminApplicationsPageContent() {
 			setFreshOfferInterestRate(selectedApplication.interestRate?.toString() || "");
 			setFreshOfferMonthlyRepayment(selectedApplication.monthlyRepayment?.toString() || "");
 			setFreshOfferNetDisbursement(selectedApplication.netDisbursement?.toString() || "");
+			setFreshOfferOriginationFee((selectedApplication as any).originationFee?.toString() || "");
+			setFreshOfferLegalFee((selectedApplication as any).legalFee?.toString() || "");
+			setFreshOfferApplicationFee((selectedApplication as any).applicationFee?.toString() || "");
 			setFreshOfferProductId(selectedApplication.productId || "");
 			setFreshOfferNotes("");
+			setFeeEditMode(false); // Reset edit mode when populating form
+			setFeesSavedManually(false); // Reset manual flag when populating form
 			setShowFreshOfferForm(true);
 		}
 	};
 
-	// Auto-calculate when fresh offer values change
+	// Auto-calculate when fresh offer values change (exclude feeEditMode to prevent race conditions)
 	useEffect(() => {
 		if (showFreshOfferForm) {
 			updateCalculatedFields();
 		}
 	}, [freshOfferAmount, freshOfferTerm, freshOfferInterestRate, freshOfferProductId, products]);
+
+	// Reset edit mode and manual flag when amount changes, then recalculate
+	useEffect(() => {
+		if (freshOfferAmount && (feeEditMode || feesSavedManually)) {
+			setFeeEditMode(false);
+			setFeesSavedManually(false); // Reset manual flag to allow auto-calculation
+			// Trigger recalculation after resetting flags
+			setTimeout(() => updateCalculatedFields(), 0);
+		}
+	}, [freshOfferAmount]);
 
 	if (loading) {
 		return (
@@ -1326,6 +1533,8 @@ function AdminApplicationsPageContent() {
 			return "Pending Disbursement";
 		} else if (filterParam === "collateral-review") {
 			return "Collateral Review";
+		} else if (filterParam === "pending_signature") {
+			return "Pending Signature";
 		} else {
 			return "Loan Applications";
 		}
@@ -1338,6 +1547,8 @@ function AdminApplicationsPageContent() {
 			return "Process loan disbursements for approved applications";
 		} else if (filterParam === "collateral-review") {
 			return "Review collateral-based loan applications requiring asset evaluation";
+		} else if (filterParam === "pending_signature") {
+			return "Manage document signing process for approved loan applications";
 		} else {
 			return "Manage active loan applications in the workflow (excludes incomplete, rejected, and withdrawn)";
 		}
@@ -1479,6 +1690,16 @@ function AdminApplicationsPageContent() {
 							}`}
 						>
 							Fresh Offers
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_SIGNATURE"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_SIGNATURE")
+									? "bg-indigo-500/30 text-indigo-100 border-indigo-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Signature
 						</button>
 						<button
 							onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
@@ -1677,6 +1898,20 @@ function AdminApplicationsPageContent() {
 									>
 										Audit Trail
 									</div>
+									{/* Show Signatures tab for PENDING_SIGNATURE applications */}
+									{selectedApplication.status === "PENDING_SIGNATURE" && (
+										<div
+											className={`px-4 py-2 cursor-pointer transition-colors ${
+												selectedTab === "signatures"
+													? "border-b-2 border-blue-400 font-medium text-white"
+													: "text-gray-400 hover:text-gray-200"
+											}`}
+											onClick={() => setSelectedTab("signatures")}
+										>
+											<PencilSquareIcon className="inline h-4 w-4 mr-1" />
+											Signatures
+										</div>
+									)}
 									{/* Show Approval tab for PENDING_APPROVAL applications */}
 									{selectedApplication.status ===
 										"PENDING_APPROVAL" && (
@@ -2128,6 +2363,131 @@ function AdminApplicationsPageContent() {
 									</div>
 								)}
 
+								{/* Signatures Tab */}
+								{selectedTab === "signatures" && (
+									<div>
+										{loadingSignatures ? (
+											<div className="flex items-center justify-center py-8">
+												<ArrowPathIcon className="h-6 w-6 animate-spin text-blue-400 mr-2" />
+												<span className="text-gray-400">Loading signature status...</span>
+											</div>
+										) : signaturesData ? (
+											<div>
+												<div className="mb-6">
+													<h4 className="text-white font-medium mb-4 flex items-center">
+														<PencilSquareIcon className="h-5 w-5 mr-2 text-purple-400" />
+														Document Signature Status
+													</h4>
+													<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4 mb-4">
+														<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+															<div>
+																<span className="text-gray-400">Borrower:</span>
+																<span className="text-white ml-2">{signaturesData.borrowerName}</span>
+															</div>
+															<div>
+																<span className="text-gray-400">Email:</span>
+																<span className="text-white ml-2">{signaturesData.borrowerEmail}</span>
+															</div>
+															<div>
+																<span className="text-gray-400">Application Status:</span>
+																<span className="text-white ml-2">{signaturesData.loanStatus}</span>
+															</div>
+															<div>
+																<span className="text-gray-400">Agreement Status:</span>
+																<span className="text-white ml-2">{signaturesData.agreementStatus}</span>
+															</div>
+														</div>
+													</div>
+												</div>
+
+												<div className="space-y-4">
+													{signaturesData.signatures && signaturesData.signatures.length > 0 ? (
+														signaturesData.signatures.map((signature: any) => (
+															<div
+																key={signature.id}
+																className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4"
+															>
+																<div className="flex items-center justify-between">
+																	<div className="flex-1">
+																		<div className="flex items-center mb-2">
+																			<div className="flex-1">
+																				<h5 className="text-white font-medium">
+																					{signature.type === 'USER' && '👤 Borrower'}
+																					{signature.type === 'COMPANY' && '🏢 Company'}
+																					{signature.type === 'WITNESS' && '⚖️ Witness'}
+																				</h5>
+																				<p className="text-gray-400 text-sm">
+																					{signature.name} ({signature.email})
+																				</p>
+																			</div>
+																			<div className="flex items-center">
+																				{signature.status === 'SIGNED' ? (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-800/20 text-green-400 border border-green-800/30">
+																						<CheckCircleIcon className="h-3 w-3 mr-1" />
+																						Signed
+																					</span>
+																				) : signature.status === 'PENDING' ? (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-800/20 text-yellow-400 border border-yellow-800/30">
+																						<ClockIcon className="h-3 w-3 mr-1" />
+																						Pending
+																					</span>
+																				) : (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-800/20 text-red-400 border border-red-800/30">
+																						<XMarkIcon className="h-3 w-3 mr-1" />
+																						{signature.status}
+																					</span>
+																				)}
+																			</div>
+																		</div>
+																		{signature.signedAt && (
+																			<p className="text-gray-400 text-xs">
+																				Signed: {new Date(signature.signedAt).toLocaleString()}
+																			</p>
+																		)}
+																	</div>
+																	<div className="ml-4">
+																		{signature.canSign && signature.signingUrl ? (
+																			<a
+																				href={signature.signingUrl}
+																				target="_blank"
+																				rel="noopener noreferrer"
+																				className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+																			>
+																				<PencilSquareIcon className="h-3 w-3 mr-1" />
+																				Sign Document
+																			</a>
+																		) : signature.status === 'SIGNED' ? (
+																			<span className="text-gray-500 text-xs">
+																				{/* Status already shown above */}
+																			</span>
+																		) : (
+																			<span className="text-gray-500 text-xs">
+																				No action available
+																			</span>
+																		)}
+																	</div>
+																</div>
+															</div>
+														))
+													) : (
+														<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-8 text-center">
+															<PencilSquareIcon className="h-12 w-12 text-gray-600 mx-auto mb-3" />
+															<p className="text-gray-400">No signature records found for this application.</p>
+															<p className="text-gray-500 text-sm mt-1">Signature tracking may not be enabled for this application.</p>
+														</div>
+													)}
+												</div>
+											</div>
+										) : (
+											<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-8 text-center">
+												<ExclamationTriangleIcon className="h-12 w-12 text-yellow-500 mx-auto mb-3" />
+												<p className="text-gray-400">Unable to load signature status.</p>
+												<p className="text-gray-500 text-sm mt-1">Please try refreshing the page.</p>
+											</div>
+										)}
+									</div>
+								)}
+
 								{/* Approval Tab */}
 								{selectedTab === "approval" && (
 									<div>
@@ -2312,7 +2672,8 @@ function AdminApplicationsPageContent() {
 															</select>
 														</div>
 														
-														<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+														{/* Basic Loan Terms */}
+														<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 															<div>
 																<label className="block text-sm font-medium text-gray-300 mb-2">
 																	Amount (RM)
@@ -2351,6 +2712,103 @@ function AdminApplicationsPageContent() {
 																	step="0.01"
 																/>
 															</div>
+														</div>
+
+														{/* Fee Structure */}
+														<div className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-4">
+															<div className="flex items-center justify-between mb-4">
+																<h6 className="text-sm font-medium text-gray-300">Fee Structure</h6>
+																{!feeEditMode ? (
+																	<button
+																		onClick={handleEditFees}
+																		className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
+																	>
+																		Edit Fees
+																	</button>
+																) : (
+																	<button
+																		onClick={handleSaveFees}
+																		className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
+																	>
+																		Save Fees
+																	</button>
+																)}
+															</div>
+															<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+																<div>
+																	<label className="block text-sm font-medium text-gray-300 mb-1">
+																		Origination Fee (RM)
+																	</label>
+																	{products.find(p => p.id === freshOfferProductId) && (
+																		<p className="text-xs text-gray-400 mb-2">
+																			Auto: {products.find(p => p.id === freshOfferProductId)?.originationFee}% of loan amount
+																		</p>
+																	)}
+																	<input
+																		type="number"
+																		value={freshOfferOriginationFee}
+																		onChange={(e) => handleFeeChange('origination', e.target.value)}
+																		disabled={!feeEditMode}
+																		placeholder="Auto-calculated"
+																		className={`w-full px-3 py-2 border rounded-lg transition-colors step-0.01 ${
+																			feeEditMode 
+																				? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+																				: "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+																		}`}
+																		step="0.01"
+																	/>
+																</div>
+																<div>
+																	<label className="block text-sm font-medium text-gray-300 mb-1">
+																		Legal Fee (RM)
+																	</label>
+																	{products.find(p => p.id === freshOfferProductId) && (
+																		<p className="text-xs text-gray-400 mb-2">
+																			Auto: {products.find(p => p.id === freshOfferProductId)?.legalFee}% of loan amount
+																		</p>
+																	)}
+																	<input
+																		type="number"
+																		value={freshOfferLegalFee}
+																		onChange={(e) => handleFeeChange('legal', e.target.value)}
+																		disabled={!feeEditMode}
+																		placeholder="Auto-calculated"
+																		className={`w-full px-3 py-2 border rounded-lg transition-colors ${
+																			feeEditMode 
+																				? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+																				: "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+																		}`}
+																		step="0.01"
+																	/>
+																</div>
+																<div>
+																	<label className="block text-sm font-medium text-gray-300 mb-1">
+																		Application Fee (RM)
+																	</label>
+																	{products.find(p => p.id === freshOfferProductId) && (
+																		<p className="text-xs text-gray-400 mb-2">
+																			Auto: RM{products.find(p => p.id === freshOfferProductId)?.applicationFee} fixed
+																		</p>
+																	)}
+																	<input
+																		type="number"
+																		value={freshOfferApplicationFee}
+																		onChange={(e) => handleFeeChange('application', e.target.value)}
+																		disabled={!feeEditMode}
+																		placeholder="Auto-calculated"
+																		className={`w-full px-3 py-2 border rounded-lg transition-colors ${
+																			feeEditMode 
+																				? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+																				: "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+																		}`}
+																		step="0.01"
+																	/>
+																</div>
+															</div>
+														</div>
+
+														{/* Calculated Values */}
+														<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 															<div>
 																<label className="block text-sm font-medium text-gray-300 mb-2">
 																	Monthly Repayment (RM)
@@ -2364,7 +2822,7 @@ function AdminApplicationsPageContent() {
 																	step="0.01"
 																/>
 															</div>
-															<div className="md:col-span-2">
+															<div>
 																<label className="block text-sm font-medium text-gray-300 mb-2">
 																	Net Disbursement (RM)
 																</label>

@@ -1,0 +1,114 @@
+services:
+  signing-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signing-orchestrator
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-4010}:4010"
+    environment:
+      # Application Settings
+      - APP_PORT=4010
+      - APP_BASE_URL=${APP_BASE_URL:-https://sign.kredit.my}
+      - NODE_ENV=${NODE_ENV:-production}
+      
+      # DocuSeal Integration
+      - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL:-https://sign.kredit.my:3001}
+      - DOCUSEAL_WEBHOOK_HMAC_SECRET=${DOCUSEAL_WEBHOOK_HMAC_SECRET}
+      - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
+      
+      # File Storage
+      - SIGNED_FILES_DIR=/data/signed
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
+      
+      # MyTrustSigner Agent Configuration
+      - MTSA_ENV=${MTSA_ENV:-pilot}
+      - MTSA_WSDL_PILOT=${MTSA_WSDL_PILOT:-http://mtsa-pilot:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl}
+      - MTSA_WSDL_PROD=${MTSA_WSDL_PROD:-http://mtsa-prod:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl}
+      - MTSA_SOAP_USERNAME=${MTSA_SOAP_USERNAME}
+      - MTSA_SOAP_PASSWORD=${MTSA_SOAP_PASSWORD}
+      
+      # Timezone & Localization
+      - KUALA_LUMPUR_TZ=${KUALA_LUMPUR_TZ:-Asia/Kuala_Lumpur}
+      - TZ=Asia/Kuala_Lumpur
+      
+      # Network & Performance
+      - OUTBOUND_TIMEOUT_MS=${OUTBOUND_TIMEOUT_MS:-60000}
+      - RETRY_BACKOFF_MS=${RETRY_BACKOFF_MS:-2000}
+      - RETRY_MAX=${RETRY_MAX:-3}
+      
+      # Security
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://sign.kredit.my,https://api.kredit.my}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      
+      # Template Coordinates
+      - SIGNATURE_COORDINATES=${SIGNATURE_COORDINATES:-{}}
+      
+      # Notification Settings (optional)
+      - NOTIFICATION_WEBHOOK_URL=${NOTIFICATION_WEBHOOK_URL}
+      - NOTIFICATION_WEBHOOK_SECRET=${NOTIFICATION_WEBHOOK_SECRET}
+    
+    volumes:
+      # Persistent storage for signed PDFs
+      - signed-pdfs:/data/signed
+      # Log directory
+      - orchestrator-logs:/var/log/signing-orchestrator
+    
+    networks:
+      - docuseal-network
+      - mtsa-network
+    
+    # depends_on:
+    #   - mtsa-pilot
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.orchestrator.rule=Host(`sign.kredit.my`) && PathPrefix(`/api/signing`)"
+      - "traefik.http.routers.orchestrator.tls=true"
+      - "traefik.http.services.orchestrator.loadbalancer.server.port=4010"
+
+  # MyTrustSigner Agent services will be deployed manually
+  # MTSA Pilot expected on: localhost:8081
+  # MTSA Prod expected on: localhost:8082
+
+volumes:
+  signed-pdfs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SIGNED_FILES_HOST_DIR:-./data/signed}
+  
+  orchestrator-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${LOGS_HOST_DIR:-./logs}
+  
+  # MTSA volumes managed separately
+
+networks:
+  docuseal-network:
+    external: true
+    name: docuseal-onprem_docuseal-network
+  
+  mtsa-network:
+    driver: bridge
+    internal: false  # Allow outbound connections for CRL/OCSP
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

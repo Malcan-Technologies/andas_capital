@@ -53,6 +53,16 @@ services:
             # KYC settings
             - KYC_JWT_SECRET=${KYC_JWT_SECRET:-${JWT_SECRET}}
             - KYC_TOKEN_TTL_MINUTES=${KYC_TOKEN_TTL_MINUTES:-15}
+            # DocuSeal Configuration
+            - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL}
+            - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
+            - DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID=${DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID}
+            - FRONTEND_URL=${FRONTEND_URL}
+            - COMPANY_SIGNING_EMAIL=${COMPANY_SIGNING_EMAIL}
+            - WITNESS_EMAIL=${WITNESS_EMAIL}
+            - WITNESS_NAME=${WITNESS_NAME}
+            - COMPANY_SIGNATURE_IMAGE_URL=${COMPANY_SIGNATURE_IMAGE_URL}
+            - COMPANY_STAMP_IMAGE_URL=${COMPANY_STAMP_IMAGE_URL}
         depends_on:
             postgres:
                 condition: service_healthy

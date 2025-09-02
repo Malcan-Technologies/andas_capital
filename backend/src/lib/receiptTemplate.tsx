@@ -268,6 +268,7 @@ interface ReceiptData {
     name: string;
     address: string;
     regNo?: string;
+    licenseNo?: string;
     phone?: string;
     email?: string;
     footerNote?: string;
@@ -319,6 +320,11 @@ const PaymentReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
             {data.company.regNo && (
               <Text style={styles.companyAddress}>
                 Registration No: {data.company.regNo}
+              </Text>
+            )}
+            {data.company.licenseNo && (
+              <Text style={styles.companyAddress}>
+                License No: {data.company.licenseNo}
               </Text>
             )}
             {data.company.phone && (

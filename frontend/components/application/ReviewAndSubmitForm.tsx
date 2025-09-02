@@ -116,6 +116,8 @@ interface ApplicationData {
 	interestRate: string;
 	legalFee: string;
 	netDisbursement: string;
+	applicationFee?: string;
+	originationFee?: string;
 	documents: Array<{
 		id: string;
 		name: string;
@@ -274,6 +276,8 @@ function ReviewAndSubmitFormContent({
 					interestRate: data.interestRate.toString(),
 					legalFee: data.legalFee.toString(),
 					netDisbursement: data.netDisbursement.toString(),
+					applicationFee: data.applicationFee?.toString(),
+					originationFee: data.originationFee?.toString(),
 					documents: data.documents || [],
 					product: {
 						code: data.product?.code || "",
@@ -501,14 +505,14 @@ function ReviewAndSubmitFormContent({
 	};
 
 	const calculateFees = () => {
-		if (!productDetails || !applicationData) return null;
+		if (!applicationData) return null;
 
-		const amount = parseFloat(applicationData.loanAmount);
+		// Use the fees stored in the database instead of calculating them
 		const interestRate = parseFloat(applicationData.interestRate);
 		const legalFee = parseFloat(applicationData.legalFee);
 		const netDisbursement = parseFloat(applicationData.netDisbursement);
-		const originationFee = amount - netDisbursement - legalFee;
-		const applicationFee = Number(productDetails.applicationFee) || 0;
+		const applicationFee = parseFloat(applicationData.applicationFee || "0");
+		const originationFee = parseFloat(applicationData.originationFee || "0");
 
 		return {
 			interestRate,
@@ -851,8 +855,7 @@ function ReviewAndSubmitFormContent({
 											<div className="flex justify-between">
 												<div className="flex items-center gap-1">
 													<Typography className="text-gray-600">
-														Application Fee (paid
-														upfront)
+														Application Fee
 													</Typography>
 													<Tooltip.Provider>
 														<Tooltip.Root
@@ -894,9 +897,8 @@ function ReviewAndSubmitFormContent({
 																	loan
 																	application.
 																	This fee is
-																	paid
-																	separately
-																	before loan
+																	deducted from
+																	your loan
 																	disbursement.
 																	<Tooltip.Arrow className="fill-gray-800" />
 																</Tooltip.Content>
@@ -966,8 +968,10 @@ function ReviewAndSubmitFormContent({
 																		deducting
 																		the
 																		origination
-																		fee and
+																		fee,
 																		legal
+																		fee, and
+																		application
 																		fee from
 																		your
 																		loan

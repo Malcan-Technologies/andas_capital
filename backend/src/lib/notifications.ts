@@ -141,7 +141,7 @@ export class NotificationService {
 						createdAt: true,
 						updatedAt: true,
 					},
-					orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+					orderBy: { createdAt: "desc" },
 					skip: (page - 1) * limit,
 					take: limit,
 				}),

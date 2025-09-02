@@ -1434,7 +1434,10 @@
                   "term",
                   "interestRate",
                   "monthlyRepayment",
-                  "netDisbursement"
+                  "netDisbursement",
+                  "originationFee",
+                  "legalFee",
+                  "applicationFee"
                 ],
                 "properties": {
                   "amount": {
@@ -1456,6 +1459,18 @@
                   "netDisbursement": {
                     "type": "number",
                     "description": "Fresh offer net disbursement amount"
+                  },
+                  "originationFee": {
+                    "type": "number",
+                    "description": "Fresh offer origination fee amount"
+                  },
+                  "legalFee": {
+                    "type": "number",
+                    "description": "Fresh offer legal fee amount"
+                  },
+                  "applicationFee": {
+                    "type": "number",
+                    "description": "Fresh offer application fee amount"
                   },
                   "notes": {
                     "type": "string",

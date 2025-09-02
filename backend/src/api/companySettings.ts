@@ -41,6 +41,7 @@ interface CompanySettingsRequest {
   companyName: string;
   companyAddress: string;
   companyRegNo?: string;
+  licenseNo?: string;
   contactPhone?: string;
   contactEmail?: string;
   footerNote?: string;
@@ -95,6 +96,7 @@ router.post('/', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest
       companyName,
       companyAddress,
       companyRegNo,
+      licenseNo,
       contactPhone,
       contactEmail,
       footerNote,
@@ -125,6 +127,7 @@ router.post('/', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest
           companyName,
           companyAddress,
           companyRegNo: companyRegNo || null,
+          licenseNo: licenseNo || null,
           contactPhone: contactPhone || null,
           contactEmail: contactEmail || null,
           footerNote: footerNote || null,
@@ -141,6 +144,7 @@ router.post('/', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest
           companyName,
           companyAddress,
           companyRegNo: companyRegNo || null,
+          licenseNo: licenseNo || null,
           contactPhone: contactPhone || null,
           contactEmail: contactEmail || null,
           footerNote: footerNote || null,

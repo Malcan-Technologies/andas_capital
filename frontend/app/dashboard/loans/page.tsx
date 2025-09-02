@@ -24,6 +24,7 @@ import {
 	VideoCameraIcon,
 	ChartPieIcon,
 	DocumentIcon,
+	ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 import PaymentMethodModal from "@/components/modals/PaymentMethodModal";
@@ -90,6 +91,11 @@ interface Loan {
 		description: string;
 		dueDate: string | null;
 	};
+	// DocuSeal Agreement fields
+	docusealSubmissionId?: string | null;
+	agreementStatus?: string | null;
+	agreementSignedAt?: string | null;
+	docusealSignUrl?: string | null;
 	application: {
 		id: string;
 		product: {
@@ -164,12 +170,18 @@ interface LoanApplication {
 	monthlyRepayment?: number;
 	interestRate?: number;
 	netDisbursement?: number;
+	applicationFee?: number;
+	originationFee?: number;
+	legalFee?: number;
 	// Fresh offer fields
 	freshOfferAmount?: number;
 	freshOfferTerm?: number;
 	freshOfferInterestRate?: number;
 	freshOfferMonthlyRepayment?: number;
 	freshOfferNetDisbursement?: number;
+	freshOfferOriginationFee?: number;
+	freshOfferLegalFee?: number;
+	freshOfferApplicationFee?: number;
 	freshOfferNotes?: string;
 	freshOfferSubmittedAt?: string;
 	createdAt: string;
@@ -191,6 +203,14 @@ interface LoanApplication {
 		status: string;
 	}>;
 	history?: LoanApplicationHistory[];
+	// DocuSeal Agreement fields for applications
+	loan?: {
+		id: string;
+		docusealSubmissionId?: string | null;
+		agreementStatus?: string | null;
+		agreementSignedAt?: string | null;
+		docusealSignUrl?: string | null;
+	};
 }
 
 interface LoanApplicationHistory {
@@ -229,6 +249,7 @@ function LoansPageContent() {
 		[key: string]: boolean;
 	}>({});
 	const [loading, setLoading] = useState<boolean>(true);
+	const [refreshing, setRefreshing] = useState<boolean>(false);
 	const [showLoanDetails, setShowLoanDetails] = useState<{
 		[key: string]: boolean;
 	}>({});
@@ -293,6 +314,12 @@ function LoansPageContent() {
 		useState<LoanApplication | null>(null);
 	const [deleting, setDeleting] = useState<boolean>(false);
 
+	// Document signing modal states
+	const [showDocumentSigningModal, setShowDocumentSigningModal] = useState<boolean>(false);
+	const [selectedSigningApplication, setSelectedSigningApplication] =
+		useState<LoanApplication | null>(null);
+	const [signingInProgress, setSigningInProgress] = useState<boolean>(false);
+
 	// Attestation method modal states
 	const [showAttestationMethodModal, setShowAttestationMethodModal] =
 		useState<boolean>(false);
@@ -318,6 +345,30 @@ function LoansPageContent() {
 		overdue: number;
 		upcoming: number;
 	} | null>(null);
+
+	// Success message state
+	const [successMessage, setSuccessMessage] = useState<string>("");
+	const [warningMessage, setWarningMessage] = useState<string>("");
+
+	// Handle success and warning messages from URL parameters
+	useEffect(() => {
+		const success = searchParams.get("success");
+		const warning = searchParams.get("warning");
+		
+		if (success === "attestation_completed_signing_initiated") {
+			setSuccessMessage("✅ Attestation completed successfully! Document signing has been opened in a new tab. Please complete the signing process to finalize your loan.");
+			// Clear the success message after 8 seconds
+			setTimeout(() => setSuccessMessage(""), 8000);
+		} else if (success === "attestation_completed") {
+			setSuccessMessage("✅ Attestation completed successfully! You can now proceed to sign your loan documents.");
+			setTimeout(() => setSuccessMessage(""), 6000);
+		}
+		
+		if (warning === "signing_initiation_failed") {
+			setWarningMessage("⚠️ Attestation was completed, but we couldn't automatically start the signing process. Please click 'Begin Signing' to proceed manually.");
+			setTimeout(() => setWarningMessage(""), 8000);
+		}
+	}, [searchParams]);
 
 	useEffect(() => {
 		const checkAuthAndLoadData = async () => {
@@ -798,35 +849,149 @@ function LoansPageContent() {
 		}
 	};
 
+	const downloadSignedAgreement = async (loan: Loan) => {
+		try {
+			// Use the slug directly from the loans table for backwards compatibility and reduced database reads
+			if (!loan.docusealSignUrl) {
+				throw new Error('No signed document available for this loan');
+			}
+
+			// Open DocuSeal signed document directly using the slug from loans table
+			const docusealUrl = `http://localhost:3001/s/${loan.docusealSignUrl}`;
+			window.open(docusealUrl, '_blank', 'noopener,noreferrer');
+			
+		} catch (error) {
+			console.error('Error accessing signed agreement:', error);
+			alert('Failed to access signed agreement. Please try again.');
+		}
+	};
+
 	// Helper functions to get display values (fresh offer or original)
 	const getDisplayAmount = (app: LoanApplication) => {
-		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferAmount 
-			? app.freshOfferAmount 
-			: app.amount;
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferAmount !== undefined) {
+			return app.freshOfferAmount;
+		}
+		return app.amount || 0; // Default to 0 if null/undefined
 	};
 
 	const getDisplayTerm = (app: LoanApplication) => {
-		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferTerm 
-			? app.freshOfferTerm 
-			: app.term;
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferTerm !== undefined) {
+			return app.freshOfferTerm;
+		}
+		return app.term || 0; // Default to 0 if null/undefined
 	};
 
 	const getDisplayMonthlyRepayment = (app: LoanApplication) => {
-		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferMonthlyRepayment 
-			? app.freshOfferMonthlyRepayment 
-			: app.monthlyRepayment;
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferMonthlyRepayment !== undefined) {
+			return app.freshOfferMonthlyRepayment;
+		}
+		return app.monthlyRepayment || 0; // Default to 0 if null/undefined
 	};
 
 	const getDisplayInterestRate = (app: LoanApplication) => {
-		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferInterestRate 
-			? app.freshOfferInterestRate 
-			: app.interestRate;
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferInterestRate !== undefined) {
+			return app.freshOfferInterestRate;
+		}
+		return app.interestRate || 0; // Default to 0 if null/undefined
 	};
 
 	const getDisplayNetDisbursement = (app: LoanApplication) => {
-		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferNetDisbursement 
-			? app.freshOfferNetDisbursement 
-			: app.netDisbursement;
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferNetDisbursement !== undefined) {
+			return app.freshOfferNetDisbursement;
+		}
+		return app.netDisbursement || 0; // Default to 0 if null/undefined
+	};
+
+	// Helper functions to get fee values (fresh offer or original) with null handling
+	const getDisplayOriginationFee = (app: LoanApplication) => {
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferOriginationFee !== undefined) {
+			return app.freshOfferOriginationFee;
+		}
+		return app.originationFee || 0; // Default to 0 if null/undefined
+	};
+
+	const getDisplayLegalFee = (app: LoanApplication) => {
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferLegalFee !== undefined) {
+			return app.freshOfferLegalFee;
+		}
+		return app.legalFee || 0; // Default to 0 if null/undefined
+	};
+
+	const getDisplayApplicationFee = (app: LoanApplication) => {
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferApplicationFee !== undefined) {
+			return app.freshOfferApplicationFee;
+		}
+		return app.applicationFee || 0; // Default to 0 if null/undefined
+	};
+
+	// Helper function to check if any value has changed
+	const hasValueChanged = (original: number | undefined, freshOffer: number | undefined) => {
+		// Convert null/undefined to 0 for comparison
+		const originalValue = original || 0;
+		const freshOfferValue = freshOffer || 0;
+		
+		// Only return true if both values exist and are actually different
+		if (freshOffer === undefined || freshOffer === null) return false;
+		return Math.abs(originalValue - freshOfferValue) > 0.01; // Account for floating point precision
+	};
+
+	// Component to show comparison values for fresh offers
+	const ComparisonValue = ({ 
+		original, 
+		freshOffer, 
+		formatValue, 
+		showComparison = true 
+	}: { 
+		original: number | undefined; 
+		freshOffer: number | undefined; 
+		formatValue: (value: number) => string;
+		showComparison?: boolean;
+	}) => {
+		const hasChanged = hasValueChanged(original, freshOffer);
+		
+		// Use fresh offer value if available, otherwise use original, fallback to 0
+		const displayValue = freshOffer !== undefined && freshOffer !== null ? freshOffer : (original !== undefined ? original : 0);
+		
+
+		
+		// For fresh offers, show comparison logic
+		if (showComparison) {
+			if (hasChanged) {
+				// Show new value with previous value (no strikethrough)
+				const safeOriginal = original || 0;
+				const safeFreshOffer = freshOffer || 0;
+				
+				return (
+					<div className="space-y-2">
+						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700">
+							{formatValue(safeFreshOffer)}
+						</p>
+						<div className="text-xs text-gray-400">
+							Previously: {formatValue(safeOriginal)}
+						</div>
+					</div>
+				);
+			} else {
+				// Show no change text
+				return (
+					<div className="space-y-2">
+						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700">
+							{formatValue(displayValue)}
+						</p>
+						<div className="text-xs text-gray-400">
+							No change
+						</div>
+					</div>
+				);
+			}
+		}
+
+		// Regular display for non-fresh offers
+		return (
+			<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+				{formatValue(displayValue)}
+			</p>
+		);
 	};
 
 	const formatDate = (dateString: string) => {
@@ -1264,7 +1429,105 @@ function LoansPageContent() {
 		setSelectedAttestationApplication(null);
 	};
 
+	// Handle document signing initiation
+	const handleDocumentSigning = async (app: LoanApplication) => {
+		try {
+			setSigningInProgress(true);
+			
+			// First, try to get existing signing URL from loan_signatories table
+			try {
+				const signingResponse = await fetchWithTokenRefresh<{
+					success: boolean;
+					data?: {
+						signingUrl: string;
+						applicationId: string;
+						loanId: string;
+					};
+				}>(`/api/loan-applications/${app.id}/signing-url`);
+
+				if (signingResponse?.success && signingResponse?.data?.signingUrl) {
+					// Open existing signing URL
+					window.open(signingResponse.data.signingUrl, '_blank');
+					return;
+				}
+			} catch (error) {
+				console.log('No existing signing URL found, will initiate new signing process');
+			}
+			
+			// If no existing signing URL, initiate new document signing with DocuSeal
+			const response = await fetchWithTokenRefresh<{
+				success: boolean;
+				message: string;
+				data?: {
+					submissionId: string;
+					signUrl: string;
+					status: string;
+				};
+			}>('/api/docuseal/initiate-application-signing', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					applicationId: app.id,
+				}),
+			});
+
+			if (response?.success && response?.data?.signUrl) {
+				// Open DocuSeal signing URL in a new tab
+				window.open(response.data.signUrl, '_blank');
+				
+				// Update application status locally to reflect signing initiated
+				setApplications(prev => 
+					prev.map(application => 
+						application.id === app.id 
+							? { ...application, status: 'PENDING_SIGNATURE' }
+							: application
+					)
+				);
+
+				// Success - new tab opened automatically
+			} else {
+				throw new Error(response?.message || 'Failed to initiate document signing');
+			}
+
+		} catch (error) {
+			console.error('Error initiating document signing:', error);
+			alert(`Failed to initiate document signing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		} finally {
+			setSigningInProgress(false);
+		}
+	};
+
+	// Handle document signing modal
+	const handleShowDocumentSigningModal = (app: LoanApplication) => {
+		setSelectedSigningApplication(app);
+		setShowDocumentSigningModal(true);
+	};
+
+	const handleDocumentSigningModalClose = () => {
+		setShowDocumentSigningModal(false);
+		setSelectedSigningApplication(null);
+	};
+
 	// Handle fresh offer response
+	// Helper function to get the appropriate signing status message
+	const getSigningStatusMessage = (agreementStatus: string | null | undefined) => {
+		// If status is PENDING_SIGNATURE, it means no one has signed yet
+		if (!agreementStatus || agreementStatus === 'PENDING_SIGNATURE') {
+			return { type: 'pending', message: 'Ready to sign agreement' };
+		}
+		
+		// If status is SIGNED, all parties have completed signing
+		if (agreementStatus === 'SIGNED') {
+			return { type: 'completed', message: 'Agreement fully signed' };
+		}
+		
+		// For any other status (partial completion states), show waiting message
+		// This covers cases where some signatories have signed but not all
+		return { type: 'waiting', message: 'Waiting for other signatories to complete signing' };
+	};
+
 	const handleFreshOfferResponse = async (applicationId: string, action: 'accept' | 'reject') => {
 		try {
 			const actionText = action === 'accept' ? 'accept' : 'reject';
@@ -1301,6 +1564,16 @@ function LoansPageContent() {
 			console.error(`Error ${action}ing fresh offer:`, error);
 			alert(`Failed to ${action} fresh offer. Please try again.`);
 		}
+	};
+
+	// Handle tab switching with refresh
+	const handleTabSwitch = async (tab: "loans" | "discharged" | "applications" | "incomplete" | "rejected") => {
+		setActiveTab(tab);
+		// Refresh all data when switching tabs
+		await Promise.all([
+			loadLoansAndSummary(),
+			loadApplications(),
+		]);
 	};
 
 	// Handle bar click to show details
@@ -1351,6 +1624,56 @@ function LoansPageContent() {
 		<DashboardLayout userName={userName} title="Loans & Applications">
 			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				<div className="space-y-6">
+					{/* Success and Warning Messages */}
+					{successMessage && (
+						<div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 shadow-sm">
+							<div className="flex items-start">
+								<div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+									<svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+									</svg>
+								</div>
+								<div className="flex-1">
+									<p className="text-green-800 font-body font-medium text-sm lg:text-base">
+										{successMessage}
+									</p>
+								</div>
+								<button
+									onClick={() => setSuccessMessage("")}
+									className="text-green-600 hover:text-green-800 ml-2 flex-shrink-0"
+								>
+									<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							</div>
+						</div>
+					)}
+					
+					{warningMessage && (
+						<div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 shadow-sm">
+							<div className="flex items-start">
+								<div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+									<svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+									</svg>
+								</div>
+								<div className="flex-1">
+									<p className="text-amber-800 font-body font-medium text-sm lg:text-base">
+										{warningMessage}
+									</p>
+								</div>
+								<button
+									onClick={() => setWarningMessage("")}
+									className="text-amber-600 hover:text-amber-800 ml-2 flex-shrink-0"
+								>
+									<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							</div>
+						</div>
+					)}
 					{/* Quick Actions Bar - Top */}
 					{/* <div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
 						<div className="p-6 lg:p-8">
@@ -1829,18 +2152,42 @@ function LoansPageContent() {
 					<div id="loans-section" className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 w-full min-w-0 overflow-hidden">
 						{/* Card Header */}
 						<div className="p-6 lg:p-8 pb-0">
-							<div className="flex items-center mb-4">
-								<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3">
-									<DocumentIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
+							<div className="flex items-center justify-between mb-4">
+								<div className="flex items-center">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3">
+										<DocumentIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
+									</div>
+									<div>
+										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+										Your Loans
+									</h3>
+										<p className="text-sm lg:text-base text-blue-600 font-semibold">
+											Active and completed loans
+										</p>
+									</div>
 								</div>
-								<div>
-									<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-									Your Loans
-								</h3>
-									<p className="text-sm lg:text-base text-blue-600 font-semibold">
-										Active and completed loans
-									</p>
-								</div>
+								<button
+									onClick={async () => {
+										setRefreshing(true);
+										try {
+											// Refresh all data including application history
+											await loadLoansAndSummary();
+											await loadApplications();
+										} catch (error) {
+											console.error("Error refreshing data:", error);
+										} finally {
+											setRefreshing(false);
+										}
+									}}
+									disabled={refreshing}
+									className="group inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 bg-white hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 rounded-lg shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
+									title="Refresh all loan and application data"
+								>
+									<ArrowPathIcon className={`h-4 w-4 mr-2 text-gray-500 group-hover:text-blue-600 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
+									<span className="group-hover:text-blue-700 transition-colors">
+										{refreshing ? 'Refreshing...' : 'Refresh All Data'}
+									</span>
+								</button>
 							</div>
 						</div>
 
@@ -1851,7 +2198,7 @@ function LoansPageContent() {
 								aria-label="Tabs"
 							>
 								<button
-									onClick={() => setActiveTab("loans")}
+									onClick={() => handleTabSwitch("loans")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "loans"
 											? "border-blue-600 text-blue-600"
@@ -1887,7 +2234,7 @@ function LoansPageContent() {
 									</div>
 								</button>
 								<button
-									onClick={() => setActiveTab("discharged")}
+									onClick={() => handleTabSwitch("discharged")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "discharged"
 											? "border-blue-600 text-blue-600"
@@ -1917,7 +2264,7 @@ function LoansPageContent() {
 									</div>
 								</button>
 								<button
-									onClick={() => setActiveTab("applications")}
+									onClick={() => handleTabSwitch("applications")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "applications"
 											? "border-blue-600 text-blue-600"
@@ -1959,7 +2306,7 @@ function LoansPageContent() {
 									</div>
 								</button>
 								<button
-									onClick={() => setActiveTab("incomplete")}
+									onClick={() => handleTabSwitch("incomplete")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "incomplete"
 											? "border-blue-600 text-blue-600"
@@ -1989,7 +2336,7 @@ function LoansPageContent() {
 									</div>
 								</button>
 								<button
-									onClick={() => setActiveTab("rejected")}
+									onClick={() => handleTabSwitch("rejected")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "rejected"
 											? "border-blue-600 text-blue-600"
@@ -2706,7 +3053,7 @@ function LoansPageContent() {
 																		</div>
 																	</div>
 
-																	<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+																	<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
 																		{/* Loan Information */}
 																		<div>
 																			<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
@@ -2763,6 +3110,67 @@ function LoansPageContent() {
 																				</div>
 																			</div>
 																		</div>
+
+																		{/* Agreement Information */}
+																		{(loan.agreementStatus || loan.agreementSignedAt || loan.docusealSubmissionId) && (
+																			<div>
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																					Loan Agreement
+																				</h5>
+																				<div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
+																					{loan.agreementStatus && (
+																						<div className="flex justify-between">
+																							<span className="text-gray-600 font-body">
+																								Agreement Status
+																							</span>
+																							<span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+																								loan.agreementStatus === 'SIGNED' 
+																									? 'bg-green-100 text-green-700 border border-green-200'
+																									: loan.agreementStatus === 'PENDING_SIGNATURE'
+																									? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+																									: loan.agreementStatus === 'COMPANY_SIGNED'
+																									? 'bg-blue-100 text-blue-700 border border-blue-200'
+																									: loan.agreementStatus === 'BORROWER_SIGNED'
+																									? 'bg-purple-100 text-purple-700 border border-purple-200'
+																									: loan.agreementStatus === 'WITNESS_SIGNED'
+																									? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+																									: 'bg-gray-100 text-gray-700 border border-gray-200'
+																							}`}>
+																								{loan.agreementStatus === 'SIGNED' ? 'Signed' :
+																								 loan.agreementStatus === 'PENDING_SIGNATURE' ? 'Pending Signature' :
+																								 loan.agreementStatus === 'COMPANY_SIGNED' ? 'Waiting for Other Signatories' :
+																								 loan.agreementStatus === 'BORROWER_SIGNED' ? 'Waiting for Other Signatories' :
+																								 loan.agreementStatus === 'WITNESS_SIGNED' ? 'Waiting for Completion' :
+																								 loan.agreementStatus}
+																							</span>
+																						</div>
+																					)}
+																					{loan.agreementSignedAt && (
+																						<div className="flex justify-between">
+																							<span className="text-gray-600 font-body">
+																								Signed Date
+																							</span>
+																							<span className="font-semibold text-gray-700 font-body">
+																								{formatDateTime(loan.agreementSignedAt)}
+																							</span>
+																						</div>
+																					)}
+																					{loan.agreementStatus === 'SIGNED' && loan.docusealSubmissionId && (
+																						<div className="pt-3 border-t border-gray-100">
+																							<button
+																								onClick={() => downloadSignedAgreement(loan)}
+																								className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+																							>
+																								<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																								</svg>
+																								Download Signed Agreement
+																							</button>
+																						</div>
+																					)}
+																				</div>
+																			</div>
+																		)}
 
 																		{/* Recent Payments */}
 																		<div>
@@ -3159,6 +3567,67 @@ function LoansPageContent() {
 																			</div>
 																		</div>
 
+																		{/* Agreement Information */}
+																		{(loan.agreementStatus || loan.agreementSignedAt || loan.docusealSubmissionId) && (
+																			<div>
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																					Loan Agreement
+																				</h5>
+																				<div className="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
+																					{loan.agreementStatus && (
+																						<div className="flex justify-between py-2">
+																							<span className="text-gray-500 font-body">
+																								Agreement Status
+																							</span>
+																							<span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+																								loan.agreementStatus === 'SIGNED' 
+																									? 'bg-green-100 text-green-700 border border-green-200'
+																									: loan.agreementStatus === 'PENDING_SIGNATURE'
+																									? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+																									: loan.agreementStatus === 'COMPANY_SIGNED'
+																									? 'bg-blue-100 text-blue-700 border border-blue-200'
+																									: loan.agreementStatus === 'BORROWER_SIGNED'
+																									? 'bg-purple-100 text-purple-700 border border-purple-200'
+																									: loan.agreementStatus === 'WITNESS_SIGNED'
+																									? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+																									: 'bg-gray-100 text-gray-700 border border-gray-200'
+																							}`}>
+																								{loan.agreementStatus === 'SIGNED' ? 'Signed' :
+																								 loan.agreementStatus === 'PENDING_SIGNATURE' ? 'Pending Signature' :
+																								 loan.agreementStatus === 'COMPANY_SIGNED' ? 'Waiting for Other Signatories' :
+																								 loan.agreementStatus === 'BORROWER_SIGNED' ? 'Waiting for Other Signatories' :
+																								 loan.agreementStatus === 'WITNESS_SIGNED' ? 'Waiting for Completion' :
+																								 loan.agreementStatus}
+																							</span>
+																						</div>
+																					)}
+																					{loan.agreementSignedAt && (
+																						<div className="flex justify-between py-2">
+																							<span className="text-gray-500 font-body">
+																								Signed Date
+																							</span>
+																							<span className="font-medium text-gray-700 font-body">
+																								{formatDateTime(loan.agreementSignedAt)}
+																							</span>
+																						</div>
+																					)}
+																					{loan.agreementStatus === 'SIGNED' && loan.docusealSubmissionId && (
+																						<div className="pt-3 border-t border-gray-100">
+																							<button
+																								onClick={() => downloadSignedAgreement(loan)}
+																								className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+																							>
+																								<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																								</svg>
+																								Download Signed Agreement
+																							</button>
+																						</div>
+																					)}
+																				</div>
+																			</div>
+																		)}
+
 																		{/* Payment History */}
 																		<div>
 																			<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
@@ -3288,12 +3757,19 @@ function LoansPageContent() {
 																				<DocumentTextIcon className="h-8 w-8 lg:h-10 lg:w-10 text-purple-600" />
 																			</div>
 																			<div>
-																				<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+																				<div className="flex items-center gap-3 mb-1">
+																					<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700">
 																					{app
 																						.product
 																						?.name ||
 																						"Unknown Product"}
 																				</h4>
+																					{app.status === "PENDING_FRESH_OFFER" && (
+																						<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-pink-100 text-pink-800 border border-pink-200">
+																							Fresh Offer
+																						</span>
+																					)}
+																				</div>
 																				<p className="text-sm lg:text-base text-purple-primary font-semibold">
 																					ID: {app.id
 																						.slice(
@@ -3365,6 +3841,41 @@ function LoansPageContent() {
 																						</button>
 																					</div>
 																				)}
+																																{app.status === "PENDING_SIGNATURE" && (
+													<div className="space-y-2">
+														{/* Show different messages based on agreement status */}
+														{(() => {
+															const statusInfo = getSigningStatusMessage(app.loan?.agreementStatus);
+															if (statusInfo.type === 'waiting') {
+																return (
+																	<div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+																		<div className="flex items-center">
+																			<ClockIcon className="h-4 w-4 text-blue-600 mr-2" />
+																			<span className="text-sm font-medium text-blue-700">
+																				{statusInfo.message}
+																			</span>
+																		</div>
+																	</div>
+																);
+															}
+															return null;
+														})()}
+														{(() => {
+															const statusInfo = getSigningStatusMessage(app.loan?.agreementStatus);
+															return app.status === "PENDING_SIGNATURE" && statusInfo.type === 'pending' && (
+                        <button
+                            onClick={() => handleShowDocumentSigningModal(app)}
+                            disabled={signingInProgress}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <DocumentIcon className="h-4 w-4 mr-2" />
+                            {signingInProgress ? "Initiating..." : "Sign Agreement"}
+                            <ArrowRightIcon className="ml-2 h-4 w-4" />
+                        </button>
+                    );
+														})()}
+													</div>
+												)}
                                                                                 {app.status === "PENDING_KYC" && (
                                                                                     <div className="flex items-center space-x-3">
                                                                                         <button
@@ -3472,14 +3983,13 @@ function LoansPageContent() {
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
-																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
-																						</p>
-																						{app.status === "PENDING_FRESH_OFFER" && (
-																							<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-pink-100 text-pink-800 border border-pink-200">
-																								Fresh Offer
-																							</span>
-																						)}
+																						<ComparisonValue 
+																							original={app.amount}
+																							freshOffer={app.freshOfferAmount}
+																							formatValue={formatCurrency}
+																							showComparison={app.status === "PENDING_FRESH_OFFER"}
+																						/>
+
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
 																						{app.status === "PENDING_FRESH_OFFER" ? "Revised loan amount" : "Loan amount requested"}
@@ -3503,9 +4013,13 @@ function LoansPageContent() {
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
-																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
-																						</p>
+																						<ComparisonValue 
+																							original={app.term}
+																							freshOffer={app.freshOfferTerm}
+																							formatValue={(value) => `${value} months`}
+																							showComparison={app.status === "PENDING_FRESH_OFFER"}
+																						/>
+
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
 																						{app.purpose || "Purpose not specified"}
@@ -3532,14 +4046,13 @@ function LoansPageContent() {
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
-																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{getDisplayMonthlyRepayment(app) ? formatCurrency(getDisplayMonthlyRepayment(app)!) : "-"}
-																						</p>
-																						{app.status === "PENDING_FRESH_OFFER" && (
-																							<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-pink-100 text-pink-800 border border-pink-200">
-																								Fresh Offer
-																							</span>
-																						)}
+																						<ComparisonValue 
+																							original={app.monthlyRepayment}
+																							freshOffer={app.freshOfferMonthlyRepayment}
+																							formatValue={formatCurrency}
+																							showComparison={app.status === "PENDING_FRESH_OFFER"}
+																						/>
+
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
 																						{app.status === "PENDING_FRESH_OFFER" ? "Revised monthly payment amount" : "Expected monthly payment"}
@@ -3548,6 +4061,136 @@ function LoansPageContent() {
 																			</div>
 																		</div>
 																	</div>
+
+																	{/* Fees and Net Disbursement Section */}
+																	{app.status === "PENDING_FRESH_OFFER" && (
+																		<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+																			{/* Fee Breakdown */}
+																			<div className="text-left">
+																				<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
+																					<div className="flex items-center mb-4">
+																						<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-600/10 rounded-xl flex items-center justify-center mr-3">
+																							<DocumentTextIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" />
+																						</div>
+																						<div>
+																							<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																								Fee Breakdown
+																							</h4>
+																						</div>
+																					</div>
+																					<div className="space-y-4">
+																						{/* Origination Fee */}
+																						<div className="flex justify-between items-center">
+																							<span className="text-sm text-gray-600">Origination Fee</span>
+																							<div className="text-right">
+																								{hasValueChanged(app.originationFee, app.freshOfferOriginationFee) ? (
+																									<div className="space-y-1">
+																										<span className="text-sm font-medium text-gray-700">
+																											{formatCurrency(app.freshOfferOriginationFee || 0)}
+																										</span>
+																										<div className="text-xs text-gray-400">
+																											Previously: {formatCurrency(app.originationFee || 0)}
+																										</div>
+																									</div>
+																								) : (
+																									<div className="space-y-1">
+																										<span className="text-sm font-medium text-gray-700">
+																											{formatCurrency(getDisplayOriginationFee(app))}
+																										</span>
+																										<div className="text-xs text-gray-400">
+																											No change
+																										</div>
+																									</div>
+																								)}
+																							</div>
+																						</div>
+
+																						{/* Legal Fee */}
+																						<div className="flex justify-between items-center">
+																							<span className="text-sm text-gray-600">Legal Fee</span>
+																							<div className="text-right">
+																								{hasValueChanged(app.legalFee, app.freshOfferLegalFee) ? (
+																									<div className="space-y-1">
+																										<span className="text-sm font-medium text-gray-700">
+																											{formatCurrency(app.freshOfferLegalFee || 0)}
+																										</span>
+																										<div className="text-xs text-gray-400">
+																											Previously: {formatCurrency(app.legalFee || 0)}
+																										</div>
+																									</div>
+																								) : (
+																									<div className="space-y-1">
+																										<span className="text-sm font-medium text-gray-700">
+																											{formatCurrency(getDisplayLegalFee(app))}
+																										</span>
+																										<div className="text-xs text-gray-400">
+																											No change
+																										</div>
+																									</div>
+																								)}
+																							</div>
+																						</div>
+
+																						{/* Application Fee */}
+																						<div className="flex justify-between items-center">
+																							<span className="text-sm text-gray-600">Application Fee</span>
+																							<div className="text-right">
+																								{hasValueChanged(app.applicationFee, app.freshOfferApplicationFee) ? (
+																									<div className="space-y-1">
+																										<span className="text-sm font-medium text-gray-700">
+																											{formatCurrency(app.freshOfferApplicationFee || 0)}
+																										</span>
+																										<div className="text-xs text-gray-400">
+																											Previously: {formatCurrency(app.applicationFee || 0)}
+																										</div>
+																									</div>
+																								) : (
+																									<div className="space-y-1">
+																										<span className="text-sm font-medium text-gray-700">
+																											{formatCurrency(getDisplayApplicationFee(app))}
+																										</span>
+																										<div className="text-xs text-gray-400">
+																											No change
+																										</div>
+																									</div>
+																								)}
+																							</div>
+																						</div>
+																					</div>
+																				</div>
+																			</div>
+
+																			{/* Net Disbursement */}
+																			<div className="text-left">
+																				<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
+																					<div className="flex items-center mb-4">
+																						<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-600/10 rounded-xl flex items-center justify-center mr-3">
+																							<BanknotesIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" />
+																						</div>
+																						<div>
+																							<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																								Net Disbursement
+																							</h4>
+																						</div>
+																					</div>
+																					<div className="space-y-4 lg:space-y-6">
+																						<div>
+																							<ComparisonValue 
+																								original={app.netDisbursement}
+																								freshOffer={app.freshOfferNetDisbursement}
+																								formatValue={formatCurrency}
+																								showComparison={true}
+																							/>
+
+																					</div>
+																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																							Amount you will receive after deducting all fees
+																					</div>
+																				</div>
+																			</div>
+																		</div>
+																	</div>
+																	)}
 
 																	{/* Status */}
 																	<div className="mb-4">
@@ -5198,6 +5841,114 @@ function LoansPageContent() {
 						onBackToInstant={handleLiveCallBack}
 					/>
 				)}
+
+			{/* Document Signing Modal */}
+			{showDocumentSigningModal && selectedSigningApplication && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+					<div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200">
+						<div className="p-6">
+							<div className="flex items-center justify-between mb-6">
+								<h2 className="text-xl font-bold text-gray-700 font-heading">
+									Sign Loan Agreement
+								</h2>
+								<button
+									onClick={handleDocumentSigningModalClose}
+									className="text-gray-500 hover:text-gray-700 transition-colors"
+								>
+									<XMarkIcon className="w-6 h-6" />
+								</button>
+							</div>
+
+							<div className="mb-6">
+								<div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4">
+									<div className="flex items-center">
+										<DocumentIcon className="h-6 w-6 text-indigo-600 mr-3" />
+										<div>
+											<h3 className="text-sm font-medium text-indigo-800 font-heading">
+												Ready to Sign
+											</h3>
+											<p className="text-sm text-indigo-700 mt-1 font-body">
+												Your loan agreement is ready for digital signature.
+											</p>
+										</div>
+									</div>
+								</div>
+
+								<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+									<h4 className="font-semibold text-gray-700 mb-2 font-heading">
+										{selectedSigningApplication.product?.name || "Unknown Product"}
+									</h4>
+									<div className="text-sm text-gray-500 space-y-1 font-body">
+										<p>
+											Application ID:{" "}
+											<span className="text-gray-700 font-medium">
+												{selectedSigningApplication.id.slice(-8).toUpperCase()}
+											</span>
+										</p>
+										<p>
+											Amount:{" "}
+											<span className="text-gray-700 font-medium">
+												{getDisplayAmount(selectedSigningApplication) 
+													? formatCurrency(getDisplayAmount(selectedSigningApplication)!) 
+													: "-"}
+											</span>
+										</p>
+										<p>
+											Monthly Payment:{" "}
+											<span className="text-gray-700 font-medium">
+												{getDisplayMonthlyRepayment(selectedSigningApplication)
+													? formatCurrency(getDisplayMonthlyRepayment(selectedSigningApplication)!)
+													: "-"}
+											</span>
+										</p>
+									</div>
+								</div>
+							</div>
+
+							<div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+								<div className="flex items-start">
+									<svg className="h-5 w-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+									<div>
+										<p className="text-sm text-amber-800 font-medium font-body">
+											Important Information
+										</p>
+										<p className="text-xs text-amber-700 mt-1 font-body">
+											• The document will open in a new tab
+											<br />
+											• Review all terms carefully before signing
+											<br />
+											• You'll receive a copy of the signed agreement
+											<br />
+											• The signing process is secure and legally binding
+										</p>
+									</div>
+								</div>
+							</div>
+
+							<div className="flex space-x-3">
+								<button
+									onClick={handleDocumentSigningModalClose}
+									className="flex-1 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
+								>
+									Cancel
+								</button>
+								<button
+									onClick={() => {
+										handleDocumentSigningModalClose();
+										handleDocumentSigning(selectedSigningApplication);
+									}}
+									disabled={signingInProgress}
+									className="flex-1 bg-indigo-600 text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-indigo-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors shadow-sm"
+								>
+									{signingInProgress ? "Initiating..." : "Proceed to Sign"}
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 		</DashboardLayout>
 	);
 }

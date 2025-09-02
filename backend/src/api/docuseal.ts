@@ -1,0 +1,567 @@
+import express from 'express';
+import { docusealService } from '../lib/docusealService';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
+import crypto from 'crypto';
+
+const router = express.Router();
+
+/**
+ * POST /api/docuseal/initiate-loan-signing
+ * Initiate document signing for a loan
+ */
+router.post('/initiate-loan-signing', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { loanId } = req.body;
+    const userId = req.user?.userId;
+
+    if (!loanId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Loan ID is required'
+      });
+    }
+
+    // Verify user owns this loan (for security)
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const loan = await prisma.loan.findFirst({
+      where: {
+        id: loanId,
+        userId: userId
+      }
+    });
+
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Loan not found or access denied'
+      });
+    }
+
+    // Check if loan is in correct status for signing
+    if (loan.status !== 'APPROVED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Loan must be approved before signing'
+      });
+    }
+
+    // Initiate signing process
+    const result = await docusealService.createLoanAgreementSigning(loanId);
+
+    return res.json({
+      success: true,
+      message: 'Document signing initiated successfully',
+      data: {
+        submissionId: result.submission.id,
+        signUrl: result.signUrl,
+        status: result.submission.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to initiate loan signing:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to initiate document signing',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/docuseal/initiate-application-signing
+ * Initiate document signing for a loan application (before loan record exists)
+ */
+router.post('/initiate-application-signing', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { applicationId } = req.body;
+    const userId = req.user?.userId;
+
+    if (!applicationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Application ID is required'
+      });
+    }
+
+    // Verify user owns this application (for security)
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const application = await prisma.loanApplication.findFirst({
+      where: {
+        id: applicationId,
+        userId: userId
+      },
+      include: {
+        user: true,
+        product: true
+      }
+    });
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found or access denied'
+      });
+    }
+
+    if (application.status !== 'PENDING_SIGNATURE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Application must be in PENDING_SIGNATURE status'
+      });
+    }
+
+    // Check if there's already an existing loan/submission for this application
+    const existingLoan = await prisma.loan.findFirst({
+      where: {
+        applicationId: applicationId
+      }
+    });
+
+    // If loan exists and has a DocuSeal submission, return the existing submission info
+    if (existingLoan && existingLoan.docusealSubmissionId) {
+      console.log(`Found existing submission ${existingLoan.docusealSubmissionId} for application ${applicationId}`);
+      
+      try {
+        // Try to get submission details from DocuSeal to get the correct signing URL
+        const submissionResponse = await fetch(`${process.env.DOCUSEAL_API_URL || 'http://host.docker.internal:3001'}/api/submissions/${existingLoan.docusealSubmissionId}`, {
+          headers: {
+            'Authorization': `Bearer ${process.env.DOCUSEAL_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (submissionResponse.ok) {
+          const submissionData = await submissionResponse.json();
+          const borrowerSubmitter = submissionData.submitters?.find((s: any) => s.role === 'Borrower');
+          const signUrl = borrowerSubmitter?.embed_src || borrowerSubmitter?.sign_url || `${process.env.DOCUSEAL_BASE_URL || 'http://192.168.0.100:3001'}/s/${borrowerSubmitter?.slug}`;
+          
+          return res.json({
+            success: true,
+            message: 'Document signing link retrieved (existing submission)',
+            data: {
+              submissionId: existingLoan.docusealSubmissionId,
+              signUrl: signUrl,
+              status: existingLoan.agreementStatus || 'pending'
+            }
+          });
+        } else {
+          console.warn(`Failed to fetch submission ${existingLoan.docusealSubmissionId} from DocuSeal, falling back to basic URL`);
+        }
+      } catch (error) {
+        console.warn(`Error fetching submission ${existingLoan.docusealSubmissionId} from DocuSeal:`, error);
+      }
+      
+      // Fallback: construct basic signing URL
+      const signUrl = `${process.env.DOCUSEAL_BASE_URL || 'http://192.168.0.100:3001'}/s/${existingLoan.docusealSubmissionId}`;
+      
+      return res.json({
+        success: true,
+        message: 'Document signing link retrieved (existing submission)',
+        data: {
+          submissionId: existingLoan.docusealSubmissionId,
+          signUrl: signUrl,
+          status: existingLoan.agreementStatus || 'pending'
+        }
+      });
+    }
+
+    // Create a temporary loan-like object for DocuSeal service
+    const tempLoanData = {
+      id: applicationId, // Use application ID as loan ID for now
+      principalAmount: application.amount || 0,
+      monthlyPayment: application.monthlyRepayment || 0,
+      interestRate: application.interestRate || 0,
+      term: application.term || 0,
+      user: application.user,
+      // Add other required fields with defaults
+      totalAmount: application.amount || 0,
+      outstandingBalance: application.amount || 0,
+      nextPaymentDue: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+      status: 'PENDING_SIGNATURE',
+      disbursedAt: new Date().toISOString(),
+      repayments: [] // Empty for new applications
+    };
+
+    // Use DocuSeal service to create signing request
+    // Note: We'll need to modify the service to handle application data
+    const result = await docusealService.createApplicationAgreementSigning(applicationId, tempLoanData);
+
+    return res.json({
+      success: true,
+      message: 'Document signing initiated successfully',
+      data: {
+        submissionId: result.submission.id,
+        signUrl: result.signUrl,
+        status: result.submission.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to initiate application signing:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to initiate document signing',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/docuseal/admin/initiate-loan-signing
+ * Admin endpoint to initiate document signing for any loan
+ */
+router.post('/admin/initiate-loan-signing', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { loanId } = req.body;
+
+    if (!loanId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Loan ID is required'
+      });
+    }
+
+    // Initiate signing process (admin can sign any loan)
+    const result = await docusealService.createLoanAgreementSigning(loanId);
+
+    return res.json({
+      success: true,
+      message: 'Document signing initiated successfully by admin',
+      data: {
+        submissionId: result.submission.id,
+        signUrl: result.signUrl,
+        status: result.submission.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin failed to initiate loan signing:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to initiate document signing',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/docuseal/submission/:submissionId
+ * Get submission status
+ */
+router.get('/submission/:submissionId', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { submissionId } = req.params;
+    
+    const submission = await docusealService.getSubmission(submissionId);
+    
+    return res.json({
+      success: true,
+      data: submission
+    });
+
+  } catch (error) {
+    console.error('Failed to get submission:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get submission status',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/docuseal/admin/templates
+ * Admin endpoint to get all DocuSeal templates
+ */
+router.get('/admin/templates', authenticateToken, async (_req: AuthRequest, res) => {
+  try {
+    const templates = await docusealService.getTemplates();
+    
+    return res.json({
+      success: true,
+      data: templates
+    });
+
+  } catch (error) {
+    console.error('Failed to get templates:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get templates',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/docuseal/webhook
+ * Handle DocuSeal webhook events
+ */
+router.post('/webhook', async (req, res) => {
+  try {
+    // Log the complete webhook payload for debugging
+    console.log('POST /api/docuseal/webhook - Body:', JSON.stringify(req.body, null, 2));
+    console.log('POST /api/docuseal/webhook - Headers:', JSON.stringify(req.headers, null, 2));
+    
+    // Verify webhook signature (optional but recommended)
+    const webhookSecret = process.env.DOCUSEAL_WEBHOOK_SECRET;
+    
+    if (webhookSecret) {
+      const signature = req.headers['x-docuseal-signature'] as string;
+      const body = JSON.stringify(req.body);
+      
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(body)
+        .digest('hex');
+      
+      if (signature !== `sha256=${expectedSignature}`) {
+        console.warn('Invalid webhook signature');
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid signature'
+        });
+      }
+    }
+
+    // Handle the webhook
+    await docusealService.handleWebhook(req.body);
+    
+    return res.json({
+      success: true,
+      message: 'Webhook processed successfully'
+    });
+
+  } catch (error) {
+    console.error('Failed to process webhook:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to process webhook',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/docuseal/download/:submissionId
+ * Download signed agreement document
+ */
+router.get('/download/:submissionId', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { submissionId } = req.params;
+    const userId = req.user?.userId;
+
+    if (!submissionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Submission ID is required'
+      });
+    }
+
+    // Verify user has access to this submission
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const loan = await prisma.loan.findFirst({
+      where: {
+        docusealSubmissionId: submissionId,
+        userId: userId
+      },
+      include: {
+        user: true
+      }
+    });
+
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agreement not found or access denied'
+      });
+    }
+
+    // Check if agreement is signed
+    if (loan.agreementStatus !== 'SIGNED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Agreement is not yet signed'
+      });
+    }
+
+    // Get DocuSeal download URL instead of downloading directly
+    const downloadUrl = await docusealService.getSignedDocumentDownloadUrl(submissionId);
+    
+    // Return the download URL so frontend can open it in a new tab
+    return res.json({
+      success: true,
+      data: {
+        downloadUrl: downloadUrl,
+        loanId: loan.id,
+        fileName: `loan_agreement_${loan.id.substring(0, 8)}.pdf`
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to download agreement:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to download agreement',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/docuseal/admin/download/:submissionId
+ * Admin endpoint to download any signed agreement
+ */
+router.get('/admin/download/:submissionId', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { submissionId } = req.params;
+
+    if (!submissionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Submission ID is required'
+      });
+    }
+
+    // Find loan with this submission ID (admin can access any)
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const loan = await prisma.loan.findFirst({
+      where: {
+        docusealSubmissionId: submissionId
+      },
+      include: {
+        user: true
+      }
+    });
+
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agreement not found'
+      });
+    }
+
+    // Check if agreement is signed
+    if (loan.agreementStatus !== 'SIGNED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Agreement is not yet signed'
+      });
+    }
+
+    // Get DocuSeal download URL instead of downloading directly
+    const downloadUrl = await docusealService.getSignedDocumentDownloadUrl(submissionId);
+    
+    // Return the download URL so admin can open it in a new tab
+    return res.json({
+      success: true,
+      data: {
+        downloadUrl: downloadUrl,
+        loanId: loan.id,
+        fileName: `loan_agreement_${(loan.user.fullName || 'unknown').replace(/[^a-zA-Z0-9]/g, '_')}_${loan.id.substring(0, 8)}.pdf`
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin failed to download agreement:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to download agreement',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/docuseal/admin/webhooks
+ * Get existing webhook configurations
+ */
+router.get('/admin/webhooks', authenticateToken, async (_req: AuthRequest, res) => {
+  try {
+    const webhooks = await docusealService.getWebhooks();
+    
+    return res.json({
+      success: true,
+      data: webhooks
+    });
+
+  } catch (error) {
+    console.error('Failed to get webhooks:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get webhook configurations',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/docuseal/admin/configure-webhook
+ * Configure webhook URL for DocuSeal
+ */
+router.post('/admin/configure-webhook', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { webhookUrl } = req.body;
+    
+    if (!webhookUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Webhook URL is required'
+      });
+    }
+
+    const result = await docusealService.configureWebhook(webhookUrl);
+    
+    return res.json({
+      success: true,
+      message: 'Webhook configured successfully',
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Failed to configure webhook:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to configure webhook',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/docuseal/test-connection
+ * Test connection to DocuSeal server
+ */
+router.post('/test-connection-simple', async (_req: any, res) => {
+  try {
+    // Test by getting templates
+    const templates = await docusealService.getTemplates();
+    
+    return res.json({
+      success: true,
+      message: 'DocuSeal connection successful',
+      data: {
+        templatesCount: templates.length,
+        baseUrl: process.env.DOCUSEAL_BASE_URL
+      }
+    });
+
+  } catch (error) {
+    console.error('DocuSeal connection test failed:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'DocuSeal connection failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+export default router;

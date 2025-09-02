@@ -1,0 +1,116 @@
+[
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/MTSAPilot/MyTrustSignerAgentWSAPv2",
+      "queryStringParameters": {
+        "wsdl": [""]
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/xml; charset=utf-8"]
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<definitions xmlns=\"http://schemas.xmlsoap.org/wsdl/\" xmlns:soap=\"http://schemas.xmlsoap.org/wsdl/soap/\" xmlns:tns=\"http://tempuri.org/\" targetNamespace=\"http://tempuri.org/\">\n  <types>\n    <schema xmlns=\"http://www.w3.org/2001/XMLSchema\" targetNamespace=\"http://tempuri.org/\">\n      <!-- Mock WSDL for development -->\n    </schema>\n  </types>\n  <message name=\"RequestEmailOTPRequest\">\n    <part name=\"parameters\" element=\"tns:RequestEmailOTP\"/>\n  </message>\n  <message name=\"RequestEmailOTPResponse\">\n    <part name=\"parameters\" element=\"tns:RequestEmailOTPResponse\"/>\n  </message>\n  <portType name=\"MyTrustSignerAgentPortType\">\n    <operation name=\"RequestEmailOTP\">\n      <input message=\"tns:RequestEmailOTPRequest\"/>\n      <output message=\"tns:RequestEmailOTPResponse\"/>\n    </operation>\n  </portType>\n  <binding name=\"MyTrustSignerAgentBinding\" type=\"tns:MyTrustSignerAgentPortType\">\n    <soap:binding transport=\"http://schemas.xmlsoap.org/soap/http\"/>\n    <operation name=\"RequestEmailOTP\">\n      <soap:operation soapAction=\"RequestEmailOTP\"/>\n      <input><soap:body use=\"literal\"/></input>\n      <output><soap:body use=\"literal\"/></output>\n    </operation>\n  </binding>\n  <service name=\"MyTrustSignerAgentService\">\n    <port name=\"MyTrustSignerAgentPort\" binding=\"tns:MyTrustSignerAgentBinding\">\n      <soap:address location=\"http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2\"/>\n    </port>\n  </service>\n</definitions>"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/MTSAPilot/MyTrustSignerAgentWSAPv2",
+      "body": {
+        "type": "XML",
+        "xml": ".*RequestEmailOTP.*"
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/xml; charset=utf-8"]
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <RequestEmailOTPResponse>\n      <statusCode>0000</statusCode>\n      <message>OTP sent successfully</message>\n      <otpSent>true</otpSent>\n    </RequestEmailOTPResponse>\n  </soap:Body>\n</soap:Envelope>"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/MTSAPilot/MyTrustSignerAgentWSAPv2",
+      "body": {
+        "type": "XML",
+        "xml": ".*RequestCertificate.*"
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/xml; charset=utf-8"]
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <RequestCertificateResponse>\n      <statusCode>0000</statusCode>\n      <message>Certificate issued successfully</message>\n      <certSerialNo>DEV123456789</certSerialNo>\n      <validFrom>2024-01-01T00:00:00Z</validFrom>\n      <validTo>2025-01-01T00:00:00Z</validTo>\n      <userCert>LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tDEV2Q0VSVElGSUNBVEUtLS0tLQ==</userCert>\n    </RequestCertificateResponse>\n  </soap:Body>\n</soap:Envelope>"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/MTSAPilot/MyTrustSignerAgentWSAPv2",
+      "body": {
+        "type": "XML",
+        "xml": ".*GetCertInfo.*"
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/xml; charset=utf-8"]
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCertInfoResponse>\n      <statusCode>0000</statusCode>\n      <message>Certificate info retrieved successfully</message>\n      <certStatus>Valid</certStatus>\n      <validFrom>2024-01-01T00:00:00Z</validFrom>\n      <validTo>2025-01-01T00:00:00Z</validTo>\n      <certSerialNo>DEV123456789</certSerialNo>\n      <issuer>CN=MyTrust Development CA</issuer>\n      <subject>CN=Test User,O=Development</subject>\n      <userCert>LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tDEV2Q0VSVElGSUNBVEUtLS0tLQ==</userCert>\n    </GetCertInfoResponse>\n  </soap:Body>\n</soap:Envelope>"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/MTSAPilot/MyTrustSignerAgentWSAPv2",
+      "body": {
+        "type": "XML",
+        "xml": ".*SignPDF.*"
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/xml; charset=utf-8"]
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <SignPDFResponse>\n      <statusCode>0000</statusCode>\n      <message>PDF signed successfully</message>\n      <signedPdfInBase64>JVBERi0xLjQKJcOkw7zDtsO4CjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgo+PgpzdHJlYW0KREVWRU1PQ0sgU0lHTkVEIFBERiBEQVRBCmVuZHN0cmVhbQplbmRvYmoKCnhyZWYKMCAyCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDIKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjE3MwolJUVPRgo=</signedPdfInBase64>\n      <userCert>LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tDEV2Q0VSVElGSUNBVEUtLS0tLQ==</userCert>\n    </SignPDFResponse>\n  </soap:Body>\n</soap:Envelope>"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/MTSAPilot/MyTrustSignerAgentWSAPv2",
+      "body": {
+        "type": "XML",
+        "xml": ".*VerifyPDFSignature.*"
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/xml; charset=utf-8"]
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <VerifyPDFSignatureResponse>\n      <statusCode>0000</statusCode>\n      <message>PDF signature verified successfully</message>\n      <totalSignatureInPdf>1</totalSignatureInPdf>\n      <signatureDetails>\n        <signature>\n          <signerName>Test User</signerName>\n          <signedDate>2024-01-01T12:00:00Z</signedDate>\n          <isValid>true</isValid>\n          <certStatus>Valid</certStatus>\n        </signature>\n      </signatureDetails>\n    </VerifyPDFSignatureResponse>\n  </soap:Body>\n</soap:Envelope>"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/health"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": "{\"status\":\"healthy\",\"service\":\"Mock MTSA Agent\",\"timestamp\":\"2024-01-01T12:00:00Z\"}"
+    }
+  }
+]

@@ -15,6 +15,7 @@ import notificationsRoutes from "./api/notifications";
 import settingsRoutes from "./api/settings";
 import kycRoutes from "./api/kyc";
 import bankAccountsRoutes from "./api/bank-accounts";
+import docusealRoutes from "./api/docuseal";
 import fs from "fs";
 import path from "path";
 import prisma from "../lib/prisma";
@@ -35,6 +36,7 @@ const corsOrigins = process.env.CORS_ORIGIN
 			"http://localhost:3000",
 			"http://localhost:3001",
 			"http://localhost:3002",
+			"http://localhost:8080",
 	  ]
 	: ["https://kredit.my", "https://admin.kredit.my", "https://api.kredit.my"];
 
@@ -113,6 +115,7 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/bank-accounts", bankAccountsRoutes);
+app.use("/api/docuseal", docusealRoutes);
 
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
