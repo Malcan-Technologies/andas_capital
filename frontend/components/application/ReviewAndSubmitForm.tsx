@@ -431,7 +431,7 @@ function ReviewAndSubmitFormContent({
 
 			// Complete application and redirect to loans page
 			const isCollateralLoan = productDetails?.collateralRequired === true;
-			const newStatus = isCollateralLoan ? "COLLATERAL_REVIEW" : "PENDING_ATTESTATION";
+			const newStatus = isCollateralLoan ? "COLLATERAL_REVIEW" : "PENDING_APPROVAL";
 
 			// Update the application status and terms acceptance
 			const response = await fetch(
