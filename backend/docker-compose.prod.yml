@@ -63,6 +63,9 @@ services:
             - WITNESS_NAME=${WITNESS_NAME}
             - COMPANY_SIGNATURE_IMAGE_URL=${COMPANY_SIGNATURE_IMAGE_URL}
             - COMPANY_STAMP_IMAGE_URL=${COMPANY_STAMP_IMAGE_URL}
+            # MTSA/Signing Orchestrator Configuration
+            - SIGNING_ORCHESTRATOR_URL=${SIGNING_ORCHESTRATOR_URL:-https://sign.kredit.my}
+            - SIGNING_ORCHESTRATOR_API_KEY=${SIGNING_ORCHESTRATOR_API_KEY}
         depends_on:
             postgres:
                 condition: service_healthy

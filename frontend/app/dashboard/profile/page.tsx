@@ -147,6 +147,18 @@ export default function ProfilePage() {
 	const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
 	const [imageViewerOpen, setImageViewerOpen] = useState(false);
 
+	// Certificate status state
+	const [certificateStatus, setCertificateStatus] = useState<{
+		loading: boolean;
+		hasValidCert: boolean;
+		certificateData?: any;
+		nameMatches?: boolean;
+		expectedName?: string;
+	}>({
+		loading: false,
+		hasValidCert: false
+	});
+
 	// Password editing state
 	const [isEditingPassword, setIsEditingPassword] = useState(false);
 	const [passwordData, setPasswordData] = useState({
@@ -216,6 +228,62 @@ export default function ProfilePage() {
 		}
 	};
 
+	const fetchCertificateStatus = async () => {
+		// Only check certificate if user has IC number and KYC is verified
+		if (!profile?.icNumber || !profile?.kycStatus) {
+			return;
+		}
+
+		try {
+			setCertificateStatus(prev => ({ ...prev, loading: true }));
+
+			const certResponse = await fetchWithTokenRefresh(
+				`/api/mtsa/certificate/${profile.icNumber}?t=${Date.now()}`,
+				{
+					method: "GET",
+					cache: "no-store",
+				}
+			) as any;
+
+			const isSuccess = certResponse.success && certResponse.data?.statusCode === "000";
+			const hasValidCert = isSuccess && certResponse.data?.certStatus === "Valid";
+
+			if (hasValidCert && certResponse.data) {
+				// Extract name from certificate subject DN
+				const subjectDN = certResponse.data.certSubjectDN || "";
+				const expectedName = subjectDN
+					.split(',')
+					.find((part: string) => part.trim().startsWith('CN='))
+					?.replace('CN=', '')
+					?.trim() || "";
+
+				// Compare names (normalize for comparison)
+				const profileName = (profile.fullName || "").toLowerCase().trim();
+				const certName = expectedName.toLowerCase().trim();
+				const nameMatches = profileName === certName;
+
+				setCertificateStatus({
+					loading: false,
+					hasValidCert: true,
+					certificateData: certResponse.data,
+					nameMatches,
+					expectedName
+				});
+			} else {
+				setCertificateStatus({
+					loading: false,
+					hasValidCert: false
+				});
+			}
+		} catch (error) {
+			console.error("Error fetching certificate status:", error);
+			setCertificateStatus({
+				loading: false,
+				hasValidCert: false
+			});
+		}
+	};
+
 	const fetchProfile = async () => {
 			try {
 				// Check authentication using our utility
@@ -261,6 +329,13 @@ export default function ProfilePage() {
 		fetchProfile();
 	}, [router]);
 
+	// Check certificate status when profile is loaded and has required data
+	useEffect(() => {
+		if (profile?.icNumber && profile?.kycStatus && !certificateStatus.loading) {
+			fetchCertificateStatus();
+		}
+	}, [profile?.icNumber, profile?.kycStatus]);
+
 	// Refetch profile data when the page becomes visible (e.g., after navigating back)
 	useEffect(() => {
 		const handleVisibilityChange = () => {
@@ -269,6 +344,9 @@ export default function ProfilePage() {
 				fetchProfile();
 				fetchDocuments();
 				fetchKycImagesData();
+				if (profile.icNumber && profile.kycStatus) {
+					fetchCertificateStatus();
+				}
 			}
 		};
 
@@ -278,6 +356,9 @@ export default function ProfilePage() {
 				fetchProfile();
 				fetchDocuments();
 				fetchKycImagesData();
+				if (profile.icNumber && profile.kycStatus) {
+					fetchCertificateStatus();
+				}
 			}
 		};
 
@@ -288,6 +369,9 @@ export default function ProfilePage() {
 				fetchProfile();
 				fetchDocuments();
 				fetchKycImagesData();
+				if (profile?.icNumber && profile?.kycStatus) {
+					fetchCertificateStatus();
+				}
 				// Clear the flag
 				localStorage.removeItem('profile_updated');
 			}
@@ -657,13 +741,47 @@ export default function ProfilePage() {
 											<UserCircleIcon className="h-10 w-10 lg:h-12 lg:w-12 text-purple-primary" />
 										</div>
 										<div>
-											<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700 mb-1">
-												{profile?.fullName || "User Profile"}
-											</h1>
-																			<div className="flex items-center space-x-3">
-									<p className="text-sm lg:text-base text-purple-primary font-semibold">
-										{profile?.phoneNumber}
-									</p>
+											<div className="flex items-center space-x-3 mb-1">
+												<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700">
+													{profile?.fullName || "User Profile"}
+												</h1>
+												
+												{/* Certificate Status Badge */}
+												{profile?.kycStatus && profile?.icNumber && (
+													<div className="flex items-center space-x-2">
+														{certificateStatus.loading ? (
+															<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-primary"></div>
+														) : certificateStatus.hasValidCert ? (
+															certificateStatus.nameMatches ? (
+																<span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
+																	<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+																		<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+																	</svg>
+																	Certificate Ready
+																</span>
+															) : (
+																<span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+																	<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+																		<path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+																	</svg>
+																	Name Mismatch
+																</span>
+															)
+														) : (
+															<span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+																<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+																	<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+																</svg>
+																No Certificate
+															</span>
+														)}
+													</div>
+												)}
+											</div>
+									<div className="flex items-center space-x-3">
+										<p className="text-sm lg:text-base text-purple-primary font-semibold">
+											{profile?.phoneNumber}
+										</p>
 									<button
 										onClick={handleStartPhoneChange}
 										className="text-xs px-3 py-1.5 bg-purple-primary/10 hover:bg-purple-primary/20 text-purple-primary rounded-lg transition-all duration-200 font-medium border border-purple-primary/20 hover:border-purple-primary/30"
@@ -724,6 +842,32 @@ export default function ProfilePage() {
 									</div>
 									
 								</div>
+
+								{/* Name Mismatch Warning */}
+								{certificateStatus.hasValidCert && !certificateStatus.nameMatches && certificateStatus.expectedName && (
+									<div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+										<div className="flex items-start space-x-3">
+											<svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+												<path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+											</svg>
+											<div className="flex-1">
+												<h4 className="text-sm font-medium text-amber-800 font-body mb-1">
+													Name Mismatch with Digital Certificate
+												</h4>
+												<p className="text-sm text-amber-700 font-body mb-2">
+													Your profile name doesn't match the name on your digital certificate. This may prevent you from using digital signing features.
+												</p>
+												<div className="text-sm text-amber-700 font-body space-y-1">
+													<div><strong>Profile Name:</strong> {profile?.fullName || "Not set"}</div>
+													<div><strong>Certificate Name:</strong> {certificateStatus.expectedName}</div>
+												</div>
+												<p className="text-xs text-amber-600 font-body mt-2">
+													Please update your profile name to match your IC exactly, or contact support if this appears to be an error.
+												</p>
+											</div>
+										</div>
+									</div>
+								)}
 
 								{/* Personal Information Display */}
 								<div>
@@ -786,8 +930,9 @@ export default function ProfilePage() {
 
 								{/* IC/Passport Display */}
 								<div className="pt-6">
-									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">IC/Passport Information</h4>
+									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">IC/Passport & Digital Certificate</h4>
 									<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+										{/* IC/Passport Information */}
 										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
 											<div className="flex items-center space-x-3">
 												<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
@@ -808,6 +953,49 @@ export default function ProfilePage() {
 														) : (
 															<p className="text-base text-gray-500 font-body italic">
 																Not provided
+															</p>
+														)}
+													</div>
+												</div>
+											</div>
+										</div>
+
+										{/* Digital Certificate Information */}
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<ShieldCheckIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0 flex-1">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Digital Certificate
+													</label>
+													<div className="mt-1 space-y-1">
+														{profile?.kycStatus && profile?.icNumber && certificateStatus.hasValidCert && certificateStatus.certificateData ? (
+															<>
+																<p className="text-base text-gray-700 font-body">
+																	{certificateStatus.certificateData.certSerialNo?.slice(-8) || 'Available'}
+																</p>
+																<p className="text-sm text-green-600 font-body">
+																	Valid until {certificateStatus.certificateData.certValidTo}
+																</p>
+																{!certificateStatus.nameMatches && (
+																	<p className="text-xs text-amber-600 font-body">
+																		Name verification required
+																	</p>
+																)}
+															</>
+														) : profile?.kycStatus && profile?.icNumber ? (
+															certificateStatus.loading ? (
+																<p className="text-base text-gray-500 font-body italic">
+																	Checking certificate...
+																</p>
+															) : (
+																<p className="text-base text-gray-500 font-body italic">
+																	No certificate
+																</p>
+															)
+														) : (
+															<p className="text-base text-gray-500 font-body italic">
+																KYC required
 															</p>
 														)}
 													</div>

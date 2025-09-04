@@ -1,4 +1,4 @@
-import soap from 'soap';
+import * as soap from 'soap';
 import config from '../config';
 import logger, { createCorrelatedLogger } from '../utils/logger';
 import {
@@ -36,18 +36,16 @@ export class MTSAClient {
     }
 
     try {
-      log.info('Initializing MTSA SOAP client', { wsdlUrl: this.wsdlUrl, env: config.mtsa.env });
+      log.info('Initializing MTSA SOAP client with HTTP header authentication', { wsdlUrl: this.wsdlUrl, env: config.mtsa.env });
       
-      this.client = await soap.createClientAsync(this.wsdlUrl, {
-        timeout: config.network.timeoutMs,
-        connection_timeout: config.network.timeoutMs,
-      });
-
-      // Set SOAP headers for authentication
-      this.client.setSecurity(new soap.BasicAuthSecurity(config.mtsa.username, config.mtsa.password));
+      this.client = await soap.createClientAsync(this.wsdlUrl);
+      
+      // Set default HTTP headers for all requests
+      this.client.addHttpHeader('Username', config.mtsa.username);
+      this.client.addHttpHeader('Password', config.mtsa.password);
       
       this.isInitialized = true;
-      log.info('MTSA SOAP client initialized successfully');
+      log.info('MTSA SOAP client initialized successfully with HTTP header auth');
     } catch (error) {
       log.error('Failed to initialize MTSA SOAP client', { error: error instanceof Error ? error.message : String(error) });
       throw new Error(`MTSA SOAP client initialization failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -76,7 +74,32 @@ export class MTSAClient {
       try {
         log.debug(`Executing SOAP method: ${methodName} (attempt ${attempt})`, { params: { ...params, AuthFactor: '[REDACTED]' } });
         
+        // Execute SOAP method (HTTP headers are already set in initialize())
         const [result] = await this.client[methodName + 'Async'](params);
+        
+        // Try to log available client properties for debugging
+        const clientProps = Object.getOwnPropertyNames(this.client);
+        log.info(`SOAP Client Properties`, { properties: clientProps.slice(0, 10) });
+        
+        // Try different ways to access request data
+        log.info(`SOAP Request Details for ${methodName}`, {
+          hasLastRequest: !!this.client.lastRequest,
+          hasLastResponse: !!this.client.lastResponse,
+          lastRequestLength: this.client.lastRequest?.length || 0,
+          lastResponseLength: this.client.lastResponse?.length || 0
+        });
+        
+        // Log first 500 chars of request/response if available
+        if (this.client.lastRequest) {
+          log.info(`SOAP Request Body (first 500 chars)`, { 
+            request: this.client.lastRequest.substring(0, 500) 
+          });
+        }
+        if (this.client.lastResponse) {
+          log.info(`SOAP Response Body (first 500 chars)`, { 
+            response: this.client.lastResponse.substring(0, 500) 
+          });
+        }
         
         log.debug(`SOAP method ${methodName} completed successfully`, { 
           statusCode: result?.statusCode,
@@ -126,8 +149,9 @@ export class MTSAClient {
     );
 
     log.info('Email OTP request completed', { 
-      statusCode: result.statusCode, 
-      success: result.statusCode === '0000' 
+      statusCode: result.return?.statusCode || result.statusCode,
+      message: result.return?.statusMsg || result.message,
+      success: (result.return?.statusCode || result.statusCode) === '0000'
     });
 
     return result;
@@ -180,10 +204,16 @@ export class MTSAClient {
       correlationId
     );
 
+    // Certificate info retrieved successfully
+    
+    // Handle response structure - data may be in result.return or at root level
+    const responseData = (result as any).return || result;
+    const statusCode = responseData.statusCode || result.statusCode;
+    
     log.info('Certificate info retrieved', { 
-      statusCode: result.statusCode, 
-      success: result.statusCode === '0000',
-      certStatus: result.certStatus 
+      statusCode: statusCode, 
+      success: statusCode === '000',
+      certStatus: responseData.certStatus
     });
 
     return result;
@@ -272,6 +302,35 @@ export class MTSAClient {
       statusCode: result.statusCode, 
       success: result.statusCode === '0000',
       revoked: result.revoked 
+    });
+
+    return result;
+  }
+
+  /**
+   * Verify certificate PIN for digital signing
+   */
+  async verifyCertPin(
+    request: { UserID: string; AuthFactor: string },
+    correlationId?: string
+  ): Promise<{ statusCode: string; statusMsg: string; pinVerified: boolean }> {
+    const log = correlationId ? createCorrelatedLogger(correlationId) : logger;
+    
+    log.info('Verifying certificate PIN', { 
+      userId: request.UserID,
+      hasAuthFactor: !!request.AuthFactor 
+    });
+
+    const result = await this.executeSoapMethod<{ statusCode: string; statusMsg: string; pinVerified: boolean }>(
+      'VerifyCertPIN',
+      request,
+      correlationId
+    );
+
+    log.info('Certificate PIN verification completed', { 
+      statusCode: result.statusCode, 
+      success: result.statusCode === '0000',
+      pinVerified: result.pinVerified 
     });
 
     return result;

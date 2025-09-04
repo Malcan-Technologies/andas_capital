@@ -16,6 +16,7 @@ import settingsRoutes from "./api/settings";
 import kycRoutes from "./api/kyc";
 import bankAccountsRoutes from "./api/bank-accounts";
 import docusealRoutes from "./api/docuseal";
+import mtsaRoutes from "./api/mtsa";
 import fs from "fs";
 import path from "path";
 import prisma from "../lib/prisma";
@@ -116,6 +117,7 @@ app.use("/api/notifications", notificationsRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/bank-accounts", bankAccountsRoutes);
 app.use("/api/docuseal", docusealRoutes);
+app.use("/api/mtsa", mtsaRoutes);
 
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));

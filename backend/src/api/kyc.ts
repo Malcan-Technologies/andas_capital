@@ -96,7 +96,8 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
         // If tied to an application, advance it
         const application = await prisma.loanApplication.findUnique({ where: { id: applicationId } });
         if (application && application.userId === req.user.userId) {
-          await prisma.loanApplication.update({ where: { id: applicationId }, data: { status: "PENDING_APPROVAL" } });
+          // Don't update application status - let the new multi-step flow handle this
+          console.log(`KYC reused for application ${applicationId}, letting new flow handle status`);
         }
       }
       // Return approved session (existing behavior when not redoing)
@@ -291,12 +292,9 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
       }
     });
 
-    // If approved and tied to an application, update application status to PENDING_APPROVAL
+    // Don't automatically update application status - let the new multi-step flow handle this
     if (finalStatus === "APPROVED" && session.applicationId) {
-      await db.loanApplication.update({ 
-        where: { id: session.applicationId }, 
-        data: { status: "PENDING_APPROVAL" } 
-      });
+      console.log(`KYC approved for application ${session.applicationId}, letting new flow handle status`);
     }
     
     // Note: User KYC status is not automatically set to verified - this will be handled in a later verification step
@@ -358,6 +356,8 @@ router.get("/images", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
   try {
     if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
     
+    console.log(`Fetching KYC images for user: ${req.user.userId}`);
+    
     // Find the most recent KYC session with documents for this user (any status)
     const session = await db.kycSession.findFirst({
       where: { 
@@ -367,9 +367,48 @@ router.get("/images", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
       orderBy: { createdAt: "desc" }
     });
     
-    if (!session || session.documents.length === 0) {
+    console.log(`Found session:`, session ? `${session.id} with ${session.documents.length} documents` : 'none');
+    
+    let documents: any[] = [];
+    let kycSessionId = session?.id || 'unknown';
+    
+    if (session?.documents && session.documents.length > 0) {
+      // Use session documents - these come from the include and have different field structure
+      documents = session.documents.map((doc: any) => ({
+        id: doc.id,
+        type: doc.type,
+        storageUrl: doc.storageUrl || doc.filePath // Handle both field names
+      }));
+      console.log(`Using session documents: ${documents.length} found`);
+    } else {
+      // Fallback: Check kyc_documents table directly
+      console.log("No documents in session, checking kyc_documents table...");
+      
+      const kycDocuments = await db.kycDocument.findMany({
+        where: { 
+          kycSession: {
+            userId: req.user.userId
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      
+      if (kycDocuments.length > 0) {
+        console.log(`Found ${kycDocuments.length} documents in kyc_documents table`);
+        documents = kycDocuments.map((doc: any) => ({
+          id: doc.id,
+          type: doc.type,
+          storageUrl: doc.storageUrl
+        }));
+        kycSessionId = kycDocuments[0].kycId || session?.id || 'unknown';
+      }
+    }
+    
+    console.log(`Final documents:`, documents.map(d => ({ id: d.id, type: d.type, hasUrl: !!d.storageUrl })));
+    
+    if (documents.length === 0) {
       const debugInfo = session 
-        ? `Found session with status: ${session.status}, documents: ${session.documents.length}`
+        ? `Found session ${session.id} with status: ${session.status}, but no documents`
         : "No KYC sessions found";
         
       return res.status(404).json({ 
@@ -378,13 +417,19 @@ router.get("/images", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
       });
     }
     
-    const front = session.documents.find((d: any) => d.type === "front");
-    const back = session.documents.find((d: any) => d.type === "back");
-    const selfie = session.documents.find((d: any) => d.type === "selfie");
+    const front = documents.find((d: any) => d.type === "front");
+    const back = documents.find((d: any) => d.type === "back");
+    const selfie = documents.find((d: any) => d.type === "selfie");
+    
+    console.log(`Document URLs:`, {
+      front: front?.storageUrl,
+      back: back?.storageUrl,
+      selfie: selfie?.storageUrl
+    });
     
     return res.json({
-      kycId: session.id,
-      completedAt: session.completedAt,
+      kycId: kycSessionId,
+      completedAt: session?.completedAt || null,
       images: {
         front: front ? {
           id: front.id,
@@ -453,7 +498,7 @@ router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, re
     const { kycId } = req.params as any;
     const session = await db.kycSession.findUnique({ 
       where: { id: kycId },
-      include: { documents: true }
+      include: { documents: true, application: true }
     });
     if (!session) return res.status(404).json({ message: "KYC session not found" });
     if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
@@ -514,7 +559,35 @@ router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, re
       }
     });
 
-    return res.json({ message: "Profile updated with KYC data", user: { id: updatedUser.id, fullName: updatedUser.fullName, icNumber: updatedUser.icNumber, dateOfBirth: updatedUser.dateOfBirth, address1: updatedUser.address1 }, kycId });
+    // Check if this KYC is tied to an application in the new multi-step flow
+    let applicationUpdated = false;
+    if (session.application) {
+      const newFlowStatuses = ["PENDING_SIGNING_OTP", "PENDING_KYC", "PENDING_PROFILE_CONFIRMATION", "PENDING_CERTIFICATE_OTP", "PENDING_SIGNING_OTP_DS", "PENDING_SIGNATURE"];
+      
+      if (newFlowStatuses.includes(session.application.status) || session.application.status === "PENDING_APPROVAL") {
+        // Update application status to PENDING_PROFILE_CONFIRMATION for new flow
+        await db.loanApplication.update({
+          where: { id: session.application.id },
+          data: { status: "PENDING_PROFILE_CONFIRMATION" }
+        });
+        applicationUpdated = true;
+        console.log(`KYC accepted for application ${session.application.id} - updated status to PENDING_PROFILE_CONFIRMATION`);
+      }
+    }
+
+    return res.json({ 
+      message: "Profile updated with KYC data", 
+      user: { 
+        id: updatedUser.id, 
+        fullName: updatedUser.fullName, 
+        icNumber: updatedUser.icNumber, 
+        dateOfBirth: updatedUser.dateOfBirth, 
+        address1: updatedUser.address1 
+      }, 
+      kycId,
+      applicationUpdated,
+      applicationId: session.application?.id
+    });
   } catch (err) {
     console.error("KYC accept error", err);
     return res.status(500).json({ message: "Failed to accept KYC results" });

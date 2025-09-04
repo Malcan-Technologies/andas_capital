@@ -25,7 +25,10 @@ import {
 	ChartPieIcon,
 	DocumentIcon,
 	ArrowPathIcon,
+	UserIcon,
+	DocumentCheckIcon,
 } from "@heroicons/react/24/outline";
+import { Shield } from "lucide-react";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 import PaymentMethodModal from "@/components/modals/PaymentMethodModal";
 import BankTransferModal from "@/components/modals/BankTransferModal";
@@ -1170,7 +1173,13 @@ function LoansPageContent() {
 					return "bg-purple-100 text-purple-800";
 				}
 				return "bg-cyan-100 text-cyan-800";
-			case "PENDING_SIGNATURE":
+			case "CERT_CHECK":
+				return "bg-emerald-100 text-emerald-800";
+					case "PENDING_SIGNING_OTP":
+			return "bg-purple-100 text-purple-800";
+		case "PENDING_CERTIFICATE_OTP":
+			return "bg-purple-100 text-purple-800";
+		case "PENDING_SIGNATURE":
 				return "bg-indigo-100 text-indigo-800";
 			case "PENDING_DISBURSEMENT":
 				return "bg-orange-100 text-orange-800";
@@ -1208,7 +1217,13 @@ function LoansPageContent() {
 					return "Awaiting Live Call";
 				}
 				return "Pending Attestation";
-			case "PENDING_SIGNATURE":
+			case "CERT_CHECK":
+				return "Certificate Check";
+					case "PENDING_SIGNING_OTP":
+			return "Pending OTP Verification";
+		case "PENDING_CERTIFICATE_OTP":
+			return "Pending Certificate OTP";
+		case "PENDING_SIGNATURE":
 				return "Pending Signature";
 			case "PENDING_DISBURSEMENT":
 				return "Pending Disbursement";
@@ -3824,6 +3839,66 @@ function LoansPageContent() {
 																						)}
 																					</>
 																				)}
+																												{app.status === "PENDING_SIGNING_OTP" && (
+									<button
+										onClick={() => router.push(`/dashboard/applications/${app.id}/otp-verification`)}
+										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+									>
+										<Shield className="h-4 w-4 mr-2" />
+										Complete OTP Verification
+										<ArrowRightIcon className="ml-2 h-4 w-4" />
+									</button>
+								)}
+								{app.status === "PENDING_CERTIFICATE_OTP" && (
+									<button
+										onClick={() => router.push(`/dashboard/applications/${app.id}/otp-verification`)}
+										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+									>
+										<Shield className="h-4 w-4 mr-2" />
+										Complete Certificate OTP
+										<ArrowRightIcon className="ml-2 h-4 w-4" />
+									</button>
+								)}
+								{app.status === "CERT_CHECK" && (
+									<button
+										onClick={() => router.push(`/dashboard/applications/${app.id}/cert-check`)}
+										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 transition-colors"
+									>
+										<CheckIcon className="h-4 w-4 mr-2" />
+										Complete Certificate Check
+										<ArrowRightIcon className="ml-2 h-4 w-4" />
+									</button>
+								)}
+								{app.status === "PENDING_KYC" && (
+									<button
+										onClick={() => router.push(`/dashboard/applications/${app.id}/kyc-verification`)}
+										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+									>
+										<CheckIcon className="h-4 w-4 mr-2" />
+										Complete KYC Verification
+										<ArrowRightIcon className="ml-2 h-4 w-4" />
+									</button>
+								)}
+								{app.status === "PENDING_PROFILE_CONFIRMATION" && (
+									<button
+										onClick={() => router.push(`/dashboard/applications/${app.id}/profile-confirmation`)}
+										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+									>
+										<UserIcon className="h-4 w-4 mr-2" />
+										Confirm Profile Details
+										<ArrowRightIcon className="ml-2 h-4 w-4" />
+									</button>
+								)}
+								{app.status === "PENDING_SIGNING_OTP_DS" && (
+									<button
+										onClick={() => router.push(`/dashboard/applications/${app.id}/signing-otp-verification`)}
+										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-violet-600 hover:bg-violet-700 transition-colors"
+									>
+										<DocumentCheckIcon className="h-4 w-4 mr-2" />
+										Complete Signing Verification
+										<ArrowRightIcon className="ml-2 h-4 w-4" />
+									</button>
+								)}
 																				{app.status === "PENDING_FRESH_OFFER" && (
 																					<div className="flex items-center space-x-3">
 																						<button
@@ -3877,29 +3952,7 @@ function LoansPageContent() {
 														})()}
 													</div>
 												)}
-                                                                                {app.status === "PENDING_KYC" && (
-                                                                                    <div className="flex items-center space-x-3">
-                                                                                        <button
-                                                                                            onClick={() => {
-                                                                                                // Deep link into KYC flow
-                                                                                                window.location.href = `/dashboard/kyc?applicationId=${app.id}`;
-                                                                                            }}
-                                                                                            className="inline-flex items-center px-4 py-2 border border-blue-200 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-                                                                                        >
-                                                                                            Continue KYC
-                                                                                            <ArrowRightIcon className="ml-2 h-4 w-4" />
-                                                                                        </button>
-                                                                                        <button
-                                                                                            onClick={() => {
-                                                                                                setSelectedApplication(app);
-                                                                                                setShowWithdrawModal(true);
-                                                                                            }}
-                                                                                            className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
-                                                                                        >
-                                                                                            Withdraw
-                                                                                        </button>
-                                                                                    </div>
-                                                                                )}
+
                                                                                 {["PENDING_APP_FEE","PENDING_APPROVAL"].includes(app.status) && (
                                                                                     <button
                                                                                         onClick={() => {

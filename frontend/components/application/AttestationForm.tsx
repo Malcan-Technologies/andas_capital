@@ -44,6 +44,9 @@ interface LoanApplication {
 		city: string;
 		state: string;
 		postalCode: string;
+		idNumber?: string;
+		icNumber?: string;
+		icType?: string;
 	};
 }
 

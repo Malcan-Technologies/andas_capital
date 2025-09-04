@@ -1,0 +1,15 @@
+step-by-step instructions
+
+1. Build the Docker Image
+	> docker build -t mtsa-pilot:1.01 .
+
+2. Run the Container on Port 8080
+	> docker run -d -p 8080:8080 --name mtsapilot-container mtsa-pilot:1.01
+	
+3. Verify tomcat is Running
+	> docker logs mtsapilot-container
+	
+4. Access via web browser
+	> http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl
+	
+5. Done. Ready to test!

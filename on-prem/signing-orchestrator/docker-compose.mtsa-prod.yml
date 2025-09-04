@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Signing Orchestrator Service (Production)
+  signing-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signing-orchestrator-prod
+    ports:
+      - "4010:4010"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - env.production
+    volumes:
+      - /opt/kapital/signed-files:/data/signed
+      - /opt/kapital/logs/signing-orchestrator:/app/logs
+    networks:
+      - signing-network
+    depends_on:
+      - mtsa-pilot
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # MTSA Pilot Service (Production)
+  mtsa-pilot:
+    build:
+      context: ../mtsa
+      dockerfile: Dockerfile
+    container_name: mtsa-pilot-prod
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Asia/Kuala_Lumpur
+    volumes:
+      - /opt/kapital/mtsa/config:/opt/mtsa
+      - /opt/kapital/logs/mtsa:/usr/local/tomcat/logs
+    networks:
+      - signing-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  signing-network:
+    driver: bridge
+
+volumes:
+  signed-files:
+    driver: local
+  mtsa-config:
+    driver: local
+  logs:
+    driver: local

@@ -10,6 +10,7 @@ function KycPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const applicationId = searchParams.get("applicationId");
+  const isRedo = searchParams.get("redo") === "true";
   const [kycId, setKycId] = useState<string | null>(null);
   const [kycToken, setKycToken] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -22,8 +23,55 @@ function KycPageContent() {
       try {
         const token = TokenStorage.getAccessToken();
         if (!token) throw new Error("Missing token");
+        
+        // Check if this application is already in the new multi-step flow
+        // Skip redirect if user is explicitly redoing KYC
+        // Only redirect if KYC is already completed (not PENDING_KYC)
+        if (applicationId && !isRedo) {
+          const appRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${applicationId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (appRes.ok) {
+            const appData = await appRes.json();
+            // Only redirect if KYC is already completed and user is in later steps
+            const completedKycStatuses = ["PENDING_PROFILE_CONFIRMATION", "PENDING_SIGNING_OTP_DS", "PENDING_SIGNATURE"];
+            
+            if (completedKycStatuses.includes(appData.status)) {
+              // KYC is already completed, redirect to the appropriate step
+              console.log(`Application ${applicationId} has completed KYC with status ${appData.status}, redirecting...`);
+              
+              switch (appData.status) {
+                case "PENDING_PROFILE_CONFIRMATION":
+                  router.replace(`/dashboard/applications/${applicationId}/profile-confirmation`);
+                  return;
+                case "PENDING_SIGNING_OTP_DS":
+                  router.replace(`/dashboard/applications/${applicationId}/signing-otp-verification`);
+                  return;
+                case "PENDING_SIGNATURE":
+                  // Redirect to DocuSeal or signing page
+                  router.replace("/dashboard/loans");
+                  return;
+                default:
+                  break;
+              }
+            }
+            
+            // If status is PENDING_KYC or PENDING_SIGNING_OTP, allow KYC flow to proceed
+            console.log(`Application ${applicationId} with status ${appData.status} - allowing KYC flow to proceed`);
+          }
+        }
+        
+        // Continue with old KYC flow for backward compatibility
         const body: any = applicationId ? { applicationId } : {};
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/start`, {
+        
+        // Build the URL with redo parameter if needed
+        const apiUrl = new URL(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/start`);
+        if (isRedo) {
+          apiUrl.searchParams.set('redo', 'true');
+        }
+        
+        const res = await fetch(apiUrl.toString(), {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(body)
@@ -125,10 +173,12 @@ function KycPageContent() {
                 onClick={() => {
                   if (kycId) {
                     const tokenParam = kycToken ? `&t=${encodeURIComponent(kycToken)}` : "";
-                    const url = `/dashboard/kyc/capture/front?kycId=${kycId}${tokenParam}`;
+                    const appParam = applicationId ? `&applicationId=${applicationId}` : "";
+                    const url = `/dashboard/kyc/capture/front?kycId=${kycId}${tokenParam}${appParam}`;
                     console.log("Opening KYC URL in new tab:", url);
                     console.log("KYC ID:", kycId);
                     console.log("KYC Token:", kycToken ? "PRESENT" : "MISSING");
+                    console.log("Full URL:", window.location.origin + url);
                     window.open(url, '_blank');
                   }
                 }}

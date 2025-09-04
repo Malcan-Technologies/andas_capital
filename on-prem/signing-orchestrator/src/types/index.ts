@@ -59,29 +59,9 @@ export interface DocuSealWebhookPayload {
   };
 }
 
-export interface MTSARequestCertificateRequest {
-  UserID: string;
-  FullName: string;
-  EmailAddress: string;
-  MobileNo: string;
-  Nationality: string;
-  UserType: 1 | 2;
-  AuthFactor: string;
-  NRICFront?: string;
-  NRICBack?: string;
-  PassportImage?: string;
-  SelfieImage?: string;
-  VerificationData: VerificationData;
-}
 
-export interface MTSARequestCertificateResponse {
-  statusCode: string;
-  message: string;
-  certSerialNo?: string;
-  validFrom?: string;
-  validTo?: string;
-  userCert?: string;
-}
+
+
 
 export interface MTSAGetCertInfoRequest {
   UserID: string;
@@ -140,6 +120,82 @@ export interface MTSARequestEmailOTPResponse {
   statusCode: string;
   message: string;
   otpSent?: boolean;
+  return?: {
+    statusCode: string;
+    statusMsg: string;
+  };
+}
+
+export interface MTSAOrganisationInfo {
+  orgAddress?: string;
+  orgAddressCity?: string;
+  orgAddressCountry?: string;
+  orgAddressPostcode?: string;
+  orgAddressState?: string;
+  orgFaxNo?: string;
+  orgName?: string;
+  orgPhoneNo?: string;
+  orgRegistationNo?: string;
+  orgRegistrationType?: string;
+  orgUserDesignation?: string;
+  orgUserRegistrationNo?: string;
+  orgUserRegistrationType?: string;
+}
+
+export interface MTSARequestCertificateRequest {
+  UserID: string;
+  FullName: string;
+  EmailAddress: string;
+  MobileNo: string;
+  Nationality: string;
+  UserType: 1 | 2 | string;
+  IDType: string;
+  AuthFactor: string;
+  NRICFront?: string;
+  NRICBack?: string;
+  SelfieImage?: string;
+  PassportImage?: string;
+  OrganisationInfo?: MTSAOrganisationInfo;
+  VerificationData: {
+    verifyDatetime: string;
+    verifyMethod: string;
+    verifyStatus: string;
+    verifyVerifier: string;
+  };
+}
+
+export interface MTSARequestCertificateResponse {
+  return?: {
+    statusCode: string;
+    statusMsg: string;
+    // Certificate data (only present if successful)
+    certX509?: string;
+    certValidTo?: string;
+    certValidFrom?: string;
+    certSerialNo?: string;
+    // Request tracking
+    certRequestID?: string;
+    certRequestStatus?: string;
+    userID?: string;
+  };
+  // Top-level fields (alternative response format)
+  statusCode?: string;
+  statusMsg?: string;
+  message?: string;
+  certX509?: string;
+  certValidTo?: string;
+  certValidFrom?: string;
+  certSerialNo?: string;
+  certRequestID?: string;
+  certRequestStatus?: string;
+  userID?: string;
+  // Legacy field names for backward compatibility
+  validFrom?: string;
+  validTo?: string;
+  userCert?: string;
+  certificateSerialNo?: string;
+  certificateValidFrom?: string;
+  certificateValidTo?: string;
 }
 
 export interface MTSARequestRevokeCertRequest {

@@ -54,12 +54,32 @@ function KycReviewContent() {
       setAccepting(true);
       const token = TokenStorage.getAccessToken();
       if (!token) throw new Error("Unauthorized");
+      
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to accept');
+      
+      // Check if the backend updated an application (new multi-step flow)
+      if (data.applicationUpdated && data.applicationId) {
+        console.log(`KYC accepted for application ${data.applicationId} in new flow, redirecting to profile confirmation`);
+        router.replace(`/dashboard/applications/${data.applicationId}/profile-confirmation`);
+        return;
+      }
+      
+      // Check URL params as fallback for older flows
+      const params = new URLSearchParams(window.location.search);
+      const applicationId = params.get('applicationId');
+      
+      if (applicationId) {
+        console.log(`KYC accepted with URL param applicationId ${applicationId}, redirecting to profile confirmation`);
+        router.replace(`/dashboard/applications/${applicationId}/profile-confirmation`);
+        return;
+      }
+      
+      // Fallback to old flow behavior
       router.replace('/dashboard/profile');
     } catch (e: any) {
       setError(e.message || 'Failed to accept');

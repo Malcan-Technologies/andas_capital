@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import AttestationForm from "@/components/application/AttestationForm";
+
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 
@@ -41,6 +42,9 @@ interface LoanApplication {
 		city: string;
 		state: string;
 		postalCode: string;
+		idNumber?: string;
+		icNumber?: string;
+		icType?: string;
 	};
 }
 
@@ -54,6 +58,7 @@ export default function AttestationPage() {
 	);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [completing, setCompleting] = useState(false);
 
 	useEffect(() => {
 		const fetchApplication = async () => {
@@ -62,8 +67,12 @@ export default function AttestationPage() {
 					`/api/loan-applications/${applicationId}`
 				);
 
-				// Check if application is in the correct status
-				if (data.status !== "PENDING_ATTESTATION") {
+				// Check if application is in the correct status for attestation
+				if (data.status === "PENDING_SIGNING_OTP") {
+					// Redirect to OTP verification page if attestation is already complete
+					router.push(`/dashboard/applications/${applicationId}/otp-verification`);
+					return;
+				} else if (data.status !== "PENDING_ATTESTATION") {
 					setError(
 						`This application is not pending attestation. Current status: ${data.status}`
 					);
@@ -88,6 +97,7 @@ export default function AttestationPage() {
 	}, [applicationId]);
 
 	const handleAttestationComplete = async () => {
+		setCompleting(true);
 		try {
 			// Complete the attestation first
 			await fetchWithTokenRefresh(
@@ -107,49 +117,17 @@ export default function AttestationPage() {
 				}
 			);
 
-			// After successful attestation, directly initiate document signing
-			try {
-				const signingResponse = await fetchWithTokenRefresh<{
-					success: boolean;
-					message: string;
-					data?: {
-						submissionId: string;
-						signUrl: string;
-						status: string;
-					};
-				}>('/api/docuseal/initiate-application-signing', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						applicationId: applicationId,
-					}),
-				});
-
-				if (signingResponse?.success && signingResponse?.data?.signUrl) {
-					// Open DocuSeal signing URL in a new tab
-					window.open(signingResponse.data.signUrl, '_blank');
-					
-					// Redirect to loans page with success message about both attestation and signing
-					router.push(
-						"/dashboard/loans?tab=applications&success=attestation_completed_signing_initiated"
-					);
-				} else {
-					throw new Error(signingResponse?.message || 'Failed to initiate document signing');
-				}
-			} catch (signingError) {
-				console.error("Error initiating signing after attestation:", signingError);
-				// Even if signing fails, attestation was successful, so redirect with partial success
-				router.push(
-					"/dashboard/loans?tab=applications&success=attestation_completed&warning=signing_initiation_failed"
-				);
-			}
+			// After successful attestation, redirect to certificate check page
+			router.push(`/dashboard/applications/${applicationId}/cert-check`);
 		} catch (error) {
 			console.error("Error completing attestation:", error);
 			throw error;
+		} finally {
+			setCompleting(false);
 		}
 	};
+
+
 
 	const handleBack = () => {
 		router.push("/dashboard/loans?tab=applications");
@@ -245,7 +223,7 @@ export default function AttestationPage() {
 					</button>
 				</div>
 
-				{/* Attestation Form */}
+				{/* Attestation Content */}
 				<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
 					<AttestationForm
 						onSubmit={handleAttestationComplete}

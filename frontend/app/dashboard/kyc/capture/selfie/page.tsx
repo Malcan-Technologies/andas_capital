@@ -3,6 +3,7 @@ import { Suspense, useCallback, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Webcam from "react-webcam";
 import { TokenStorage } from "@/lib/authUtils";
+import KycErrorBoundary from "@/components/KycErrorBoundary";
 
 function CaptureSelfieContent() {
   const router = useRouter();
@@ -69,12 +70,19 @@ function CaptureSelfieContent() {
       }
       // Check if this is a retake from review page or normal flow
       const isRetake = params.get('retake') === 'true';
+      const applicationId = params.get('applicationId');
+      
+      // Build the review URL with all necessary parameters
+      let reviewUrl = `/dashboard/kyc/review?kycId=${kycId}`;
+      if (kycToken) reviewUrl += `&t=${encodeURIComponent(kycToken)}`;
+      if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
+      
       if (isRetake) {
         // Return to review page after individual retake
-        router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+        router.replace(reviewUrl);
       } else {
         // Normal flow - first time completion, go to review
-        router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+        router.replace(reviewUrl);
       }
     } catch (e: any) {
       setError(e.message || "Failed to submit KYC");
@@ -160,9 +168,11 @@ function CaptureSelfieContent() {
 
 export default function CaptureSelfiePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen grid place-items-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary" /></div>}>
-      <CaptureSelfieContent />
-    </Suspense>
+    <KycErrorBoundary>
+      <Suspense fallback={<div className="min-h-screen grid place-items-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary" /></div>}>
+        <CaptureSelfieContent />
+      </Suspense>
+    </KycErrorBoundary>
   );
 }
 

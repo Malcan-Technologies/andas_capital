@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Signing Orchestrator Service
+  signing-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signing-orchestrator-dev
+    ports:
+      - "4010:4010"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - env.development
+    volumes:
+      - ./signed-files:/data/signed
+      - ./logs:/app/logs
+    networks:
+      - signing-network
+    depends_on:
+      - mtsa-pilot
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MTSA Pilot Service (Development)
+  mtsa-pilot:
+    build:
+      context: ../mtsa
+      dockerfile: Dockerfile
+    container_name: mtsa-pilot-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Asia/Kuala_Lumpur
+    networks:
+      - signing-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  signing-network:
+    driver: bridge
+
+volumes:
+  signed-files:
+    driver: local
+  logs:
+    driver: local

@@ -1,26 +1,24 @@
 "use client";
-import { Suspense, useCallback, useRef, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Webcam from "react-webcam";
 import { TokenStorage } from "@/lib/authUtils";
+import KycErrorBoundary from "@/components/KycErrorBoundary";
+import { SmartCardCapture } from "@/components/SmartCardCapture";
 
 function CaptureBackContent() {
   const router = useRouter();
   const params = useSearchParams();
   const kycId = params.get("kycId");
   const kycToken = params.get("t");
-  const cardCamRef = useRef<Webcam | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [serverError, setServerError] = useState<string | null>(null);
 
-  const capture = useCallback(() => {
-    const image = cardCamRef.current?.getScreenshot();
-    if (image) setPreview(image);
+  const handleCapture = useCallback((imageData: string) => {
+    setPreview(imageData);
   }, []);
 
-  const retake = () => setPreview(null);
+  const handleRetake = () => setPreview(null);
 
   async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
     const res = await fetch(dataUrl);
@@ -28,15 +26,15 @@ function CaptureBackContent() {
     return new File([blob], filename, { type: blob.type || "image/png" });
   }
 
-  const next = useCallback(async () => {
+  const handleContinue = useCallback(async (imageData: string) => {
     try {
-      if (!kycId || !preview) return;
+      if (!kycId || !imageData) return;
       setIsSubmitting(true);
       setError(null);
       const token = TokenStorage.getAccessToken();
       if (!token && !kycToken) throw new Error("Unauthorized");
       const form = new FormData();
-      form.append("back", await dataUrlToFile(preview, "mykad-back.png"));
+      form.append("back", await dataUrlToFile(imageData, "mykad-back.png"));
       const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/upload`, {
         method: "POST",
         headers: {
@@ -51,19 +49,27 @@ function CaptureBackContent() {
       }
       // Check if this is a retake from review page
       const isRetake = params.get('retake') === 'true';
+      const applicationId = params.get('applicationId');
+      
       if (isRetake) {
         // Return to review page after individual retake
-        router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+        let reviewUrl = `/dashboard/kyc/review?kycId=${kycId}`;
+        if (kycToken) reviewUrl += `&t=${encodeURIComponent(kycToken)}`;
+        if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
+        router.replace(reviewUrl);
       } else {
         // OCR validation disabled - proceed directly to next step
-        router.replace(`/dashboard/kyc/capture/selfie?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+        let nextUrl = `/dashboard/kyc/capture/selfie?kycId=${kycId}`;
+        if (kycToken) nextUrl += `&t=${encodeURIComponent(kycToken)}`;
+        if (applicationId) nextUrl += `&applicationId=${applicationId}`;
+        router.replace(nextUrl);
       }
     } catch (e: any) {
       setError(e.message || "Failed to upload back image");
     } finally {
       setIsSubmitting(false);
     }
-  }, [kycId, preview]);
+  }, [kycId, kycToken, router, params]);
 
   const backToFront = () => router.replace(`/dashboard/kyc/capture/front?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
 
@@ -83,48 +89,32 @@ function CaptureBackContent() {
             </div>
           </div>
 
-          {(error || serverError) && <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-3">{serverError || error}</div>}
+          {error && <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
-          {!preview ? (
-            <>
-              <div className="rounded-xl border border-blue-tertiary/20 bg-blue-tertiary/5 px-4 py-3 text-sm text-gray-700">
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>Flip the card and ensure the text and barcode are in focus.</li>
-                  <li>Keep the card flat; avoid reflections from overhead lights.</li>
-                  <li>Fill the frame and keep edges within the guide.</li>
-                </ul>
-              </div>
-              <div className="rounded-2xl p-3 bg-gradient-to-br from-purple-primary/5 to-blue-tertiary/5 border border-gray-100">
-                <div className="relative aspect-[16/9] bg-black/5 rounded-xl overflow-hidden">
-                  <Webcam
-                    ref={cardCamRef as any}
-                    audio={false}
-                    screenshotFormat="image/jpeg"
-                    screenshotQuality={0.92}
-                    videoConstraints={{ facingMode: { ideal: "environment" } }}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="pointer-events-none absolute inset-0 border-2 border-white/60 rounded-xl" />
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <button onClick={backToFront} className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700">Back</button>
-                <button onClick={capture} className="px-6 py-2 rounded-xl bg-purple-primary text-white">Capture</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
-                <div className="relative aspect-[16/9]">
-                  <img src={preview} alt="back" className="absolute inset-0 w-full h-full object-contain" />
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <button onClick={retake} className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700">Retake</button>
-                <button disabled={isSubmitting} onClick={next} className="px-6 py-2 rounded-xl bg-purple-primary text-white disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Continue'}</button>
-              </div>
-            </>
-          )}
+          <div className="flex items-center justify-between mb-4">
+            <button 
+              onClick={backToFront} 
+              className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              ← Back to Front
+            </button>
+          </div>
+
+          <SmartCardCapture
+            onCapture={preview ? handleContinue : handleCapture}
+            onRetake={handleRetake}
+            isSubmitting={isSubmitting}
+            preview={preview}
+            captureButtonText="Capture Card"
+            retakeButtonText="Retake"
+            continueButtonText="Continue"
+            stepText="Step 2 of 3 • Capture MyKad (Back)"
+            instructions={[
+              "Flip the card and ensure the text and barcode are in focus.",
+              "Keep the card flat; avoid reflections from overhead lights.",
+              "Fill the frame and keep edges within the guide."
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -133,9 +123,11 @@ function CaptureBackContent() {
 
 export default function CaptureBackPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen grid place-items-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary" /></div>}>
-      <CaptureBackContent />
-    </Suspense>
+    <KycErrorBoundary>
+      <Suspense fallback={<div className="min-h-screen grid place-items-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary" /></div>}>
+        <CaptureBackContent />
+      </Suspense>
+    </KycErrorBoundary>
   );
 }
 

@@ -12,7 +12,7 @@ import {
 
 interface ActionNotification {
 	id: string;
-	type: 'INCOMPLETE_APPLICATION' | 'PENDING_APP_FEE' | 'APPROVED' | 'PENDING_ATTESTATION';
+	type: 'INCOMPLETE_APPLICATION' | 'PENDING_APP_FEE' | 'APPROVED' | 'PENDING_ATTESTATION' | 'CERT_CHECK' | 'PENDING_SIGNING_OTP' | 'PENDING_KYC' | 'PENDING_PROFILE_CONFIRMATION' | 'PENDING_CERTIFICATE_OTP' | 'PENDING_SIGNING_OTP_DS' | 'PENDING_SIGNATURE' | 'PENDING_FRESH_OFFER' | 'PROFILE_INCOMPLETE';
 	title: string;
 	description: string;
 	buttonText: string;
@@ -23,6 +23,8 @@ interface ActionNotification {
 		amount?: string;
 		date?: string;
 		applicationId?: string;
+		completionPercentage?: number;
+		missing?: string[];
 	};
 }
 
@@ -106,6 +108,90 @@ export default function ActionNotificationBar({
 						</svg>
 					)
 				};
+				case 'CERT_CHECK':
+				return {
+					bgColor: 'bg-indigo-50',
+					borderColor: 'border-indigo-200',
+					iconBg: 'bg-indigo-100',
+					iconBorder: 'border-indigo-200',
+					buttonBg: 'bg-indigo-500 hover:bg-indigo-600',
+					textColor: 'text-indigo-600',
+					icon: (
+						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					)
+				};
+				case 'PENDING_SIGNING_OTP':
+			return {
+				bgColor: 'bg-purple-50',
+				borderColor: 'border-purple-200',
+				iconBg: 'bg-purple-100',
+				iconBorder: 'border-purple-200',
+				buttonBg: 'bg-purple-500 hover:bg-purple-600',
+				textColor: 'text-purple-600',
+				icon: (
+					<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+					</svg>
+				)
+			};
+		case 'PENDING_CERTIFICATE_OTP':
+			return {
+				bgColor: 'bg-purple-50',
+				borderColor: 'border-purple-200',
+				iconBg: 'bg-purple-100',
+				iconBorder: 'border-purple-200',
+				buttonBg: 'bg-purple-500 hover:bg-purple-600',
+				textColor: 'text-purple-600',
+				icon: (
+					<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5 0a8 8 0 11-16 0 8 8 0 0116 0z" />
+					</svg>
+				)
+			};
+		case 'PENDING_KYC':
+				return {
+					bgColor: 'bg-purple-50',
+					borderColor: 'border-purple-200',
+					iconBg: 'bg-purple-100',
+					iconBorder: 'border-purple-200',
+					buttonBg: 'bg-purple-500 hover:bg-purple-600',
+					textColor: 'text-purple-600',
+					icon: (
+						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					)
+				};
+			case 'PENDING_PROFILE_CONFIRMATION':
+				return {
+					bgColor: 'bg-purple-50',
+					borderColor: 'border-purple-200',
+					iconBg: 'bg-purple-100',
+					iconBorder: 'border-purple-200',
+					buttonBg: 'bg-purple-500 hover:bg-purple-600',
+					textColor: 'text-purple-600',
+					icon: (
+						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+						</svg>
+					)
+				};
+			case 'PENDING_SIGNING_OTP_DS':
+				return {
+					bgColor: 'bg-violet-50',
+					borderColor: 'border-violet-200',
+					iconBg: 'bg-violet-100',
+					iconBorder: 'border-violet-200',
+					buttonBg: 'bg-violet-500 hover:bg-violet-600',
+					textColor: 'text-violet-600',
+					icon: (
+						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5 0H9l3 3 3-3z" />
+						</svg>
+					)
+				};
 			default:
 				return {
 					bgColor: 'bg-blue-50',
@@ -160,7 +246,7 @@ export default function ActionNotificationBar({
 			)}
 
 			{/* Main Notification Content */}
-			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-6 lg:space-y-0 lg:space-x-6">
 				{/* Left Side - Icon and Content */}
 				<div className="flex items-start space-x-4 min-w-0 flex-1">
 					{/* Icon */}
@@ -212,7 +298,10 @@ export default function ActionNotificationBar({
 							backgroundColor: style.textColor.includes('amber') ? '#D97706' :
 											  style.textColor.includes('orange') ? '#EA580C' :
 											  style.textColor.includes('green') ? '#059669' :
-											  style.textColor.includes('cyan') ? '#0891B2' : '#2563EB',
+											  style.textColor.includes('cyan') ? '#0891B2' :
+											  style.textColor.includes('purple') ? '#9333EA' :
+											  style.textColor.includes('indigo') ? '#4F46E5' :
+											  style.textColor.includes('violet') ? '#7C3AED' : '#2563EB',
 							width: '100%',
 							animation: 'actionNotificationProgress 8s linear infinite'
 						}}

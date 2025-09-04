@@ -7,15 +7,26 @@ import { useRouter, usePathname } from "next/navigation";
 // This component automatically refreshes the access token before it expires
 export default function TokenRefresher() {
 	const router = useRouter();
-	const pathname = usePathname();
+	let pathname: string | null = null;
+	
+	// Safely get pathname to avoid context errors in new tabs
+	try {
+		pathname = usePathname();
+	} catch (error) {
+		console.warn("TokenRefresher: usePathname() failed, pathname will be null", error);
+		pathname = null;
+	}
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [lastRefreshAttempt, setLastRefreshAttempt] = useState(0);
 
 	useEffect(() => {
 		// Helper to check if we're on a protected route
 		const isProtectedRoute = () => {
+			// If pathname is null (context error), check window.location instead
+			const currentPath = pathname || window.location.pathname;
+			
 			// Dashboard and onboarding routes are protected, except KYC routes with tokens
-			if (pathname?.startsWith("/dashboard/kyc/")) {
+			if (currentPath?.startsWith("/dashboard/kyc/")) {
 				// KYC routes with temporary tokens don't need authentication tokens
 				const urlParams = new URLSearchParams(window.location.search);
 				const kycToken = urlParams.get('t');
@@ -25,8 +36,8 @@ export default function TokenRefresher() {
 			}
 			
 			return (
-				pathname?.startsWith("/dashboard") ||
-				pathname?.startsWith("/onboarding")
+				currentPath?.startsWith("/dashboard") ||
+				currentPath?.startsWith("/onboarding")
 			);
 		};
 

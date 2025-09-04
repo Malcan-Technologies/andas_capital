@@ -192,11 +192,15 @@ export default function DashboardPage() {
 					"INCOMPLETE",
 					"PENDING_APP_FEE",
 					"PENDING_KYC",
+					"PENDING_PROFILE_CONFIRMATION",
 					"PENDING_APPROVAL",
 					"PENDING_FRESH_OFFER",
 					"APPROVED",
-					"PENDING_ATTESTATION",
-					"PENDING_SIGNATURE",
+									"PENDING_ATTESTATION",
+				"CERT_CHECK",
+				"PENDING_SIGNING_OTP",
+				"PENDING_CERTIFICATE_OTP",
+				"PENDING_SIGNATURE",
 					"REJECTED",
 				].includes(app.status)
 			);
@@ -507,6 +511,11 @@ export default function DashboardPage() {
                 "APPROVED",
                 "PENDING_FRESH_OFFER",
                 "PENDING_ATTESTATION",
+                "CERT_CHECK",
+                "PENDING_SIGNING_OTP",
+                "PENDING_PROFILE_CONFIRMATION",
+                "PENDING_CERTIFICATE_OTP",
+                "PENDING_SIGNING_OTP_DS",
                 "PENDING_SIGNATURE"
             ].includes(app.status)
         );
@@ -556,7 +565,7 @@ export default function DashboardPage() {
                                     : ""
                             } requires identity verification to proceed`,
                             buttonText: "Continue KYC",
-                            buttonHref: `/dashboard/kyc?applicationId=${app.id}`,
+                            buttonHref: `/dashboard/applications/${app.id}/kyc-verification`,
                             priority: 'HIGH' as const,
                         };
 					case "APPROVED":
@@ -597,7 +606,97 @@ export default function DashboardPage() {
 									: ""
 							} requires attestation to proceed`,
 							buttonText: "Complete Attestation",
-							buttonHref: `/dashboard/loans?tab=applications&scroll=true`,
+							buttonHref: `/dashboard/applications/${app.id}/attestation`,
+							priority: 'HIGH' as const,
+						};
+					case "CERT_CHECK":
+						return {
+							type: 'CERT_CHECK' as const,
+							title: "Certificate Verification",
+							description: `Checking your digital certificate status for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							}`,
+							buttonText: "Check Certificate",
+							buttonHref: `/dashboard/applications/${app.id}/cert-check`,
+							priority: 'HIGH' as const,
+						};
+					case "PENDING_SIGNING_OTP":
+						return {
+							type: 'PENDING_SIGNING_OTP' as const,
+							title: "🔐 OTP Verification Required",
+							description: `Your approved loan for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							} requires OTP verification before document signing`,
+							buttonText: "Complete OTP Verification",
+							buttonHref: `/dashboard/applications/${app.id}/otp-verification`,
+							priority: 'HIGH' as const,
+						};
+					case "PENDING_CERTIFICATE_OTP":
+						return {
+							type: 'PENDING_CERTIFICATE_OTP' as const,
+							title: "📄 Certificate OTP Required",
+							description: `Your approved loan for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							} requires certificate OTP verification to proceed`,
+							buttonText: "Complete Certificate OTP",
+							buttonHref: `/dashboard/applications/${app.id}/otp-verification`,
+							priority: 'HIGH' as const,
+						};
+					case "PENDING_KYC":
+						return {
+							type: 'PENDING_KYC' as const,
+							title: "🆔 Identity Verification Required",
+							description: `Your loan application for ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							} requires identity verification to proceed`,
+							buttonText: "Complete KYC Verification",
+							buttonHref: `/dashboard/applications/${app.id}/kyc-verification`,
+							priority: 'HIGH' as const,
+						};
+					case "PENDING_PROFILE_CONFIRMATION":
+						return {
+							type: 'PENDING_PROFILE_CONFIRMATION' as const,
+							title: "👤 Profile Confirmation Required",
+							description: `Please confirm your personal details match your IC for loan ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							}`,
+							buttonText: "Confirm Profile Details",
+							buttonHref: `/dashboard/applications/${app.id}/profile-confirmation`,
+							priority: 'HIGH' as const,
+						};
+					case "PENDING_SIGNING_OTP_DS":
+						return {
+							type: 'PENDING_SIGNING_OTP_DS' as const,
+							title: "✍️ Digital Signature Verification",
+							description: `Complete digital signature verification for your loan ${
+								app.product?.name || "loan"
+							}${
+								app.amount
+									? ` of ${formatCurrency(parseFloat(app.amount))}`
+									: ""
+							} to proceed with document signing`,
+							buttonText: "Complete Signing Verification",
+							buttonHref: `/dashboard/applications/${app.id}/signing-otp-verification`,
 							priority: 'HIGH' as const,
 						};
 					case "PENDING_SIGNATURE":
@@ -649,6 +748,18 @@ export default function DashboardPage() {
 						? `Approved on ${formatDate(app.approvedAt || app.updatedAt)}`
 						: app.status === "PENDING_ATTESTATION"
 						? `Requires attestation since ${formatDate(app.approvedAt || app.updatedAt)}`
+						: app.status === "CERT_CHECK"
+						? `Checking certificate status since ${formatDate(app.updatedAt)}`
+						: app.status === "PENDING_SIGNING_OTP"
+						? `Requires OTP verification since ${formatDate(app.updatedAt)}`
+						: app.status === "PENDING_CERTIFICATE_OTP"
+						? `Requires certificate OTP since ${formatDate(app.updatedAt)}`
+						: app.status === "PENDING_KYC"
+						? `Requires KYC verification since ${formatDate(app.updatedAt)}`
+						: app.status === "PENDING_PROFILE_CONFIRMATION"
+						? `Requires profile confirmation since ${formatDate(app.updatedAt)}`
+						: app.status === "PENDING_SIGNING_OTP_DS"
+						? `Requires signing verification since ${formatDate(app.updatedAt)}`
 						: app.status === "PENDING_SIGNATURE"
 						? `Requires signature since ${formatDate(app.approvedAt || app.updatedAt)}`
 						: `Started on ${formatDate(app.createdAt)}`,

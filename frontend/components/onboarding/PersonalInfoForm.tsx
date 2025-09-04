@@ -16,7 +16,8 @@ import {
 	IdentificationIcon, 
 	EnvelopeIcon, 
 	UserGroupIcon,
-	AcademicCapIcon
+	AcademicCapIcon,
+	ShieldCheckIcon
 } from "@heroicons/react/24/outline";
 
 const educationLevels = [
@@ -38,6 +39,13 @@ interface PersonalInfoFormProps {
 	onBack: () => void;
 	showBackButton: boolean;
 	isLastStep: boolean;
+	certificateStatus?: {
+		loading: boolean;
+		hasValidCert: boolean;
+		certificateData?: any;
+		nameMatches?: boolean;
+		expectedName?: string;
+	};
 }
 
 export default function PersonalInfoForm({
@@ -46,6 +54,7 @@ export default function PersonalInfoForm({
 	onBack,
 	showBackButton,
 	isLastStep,
+	certificateStatus,
 }: PersonalInfoFormProps) {
 	const [formData, setFormData] = useState<PersonalInfo>({
 		fullName: initialValues.fullName || "",
@@ -62,6 +71,10 @@ export default function PersonalInfoForm({
 
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [icError, setIcError] = useState<string>("");
+
+	// Check if name and IC fields should be disabled due to valid certificate
+	const hasValidCertificate = certificateStatus?.hasValidCert && certificateStatus?.nameMatches;
+	const shouldDisableNameAndIC = hasValidCertificate;
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
 		const { name, value } = e.target;
@@ -231,27 +244,58 @@ export default function PersonalInfoForm({
 				</div>
 
 				<form onSubmit={handleSubmit} className="space-y-6">
+					{/* Certificate Warning */}
+					{shouldDisableNameAndIC && (
+						<div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+							<div className="flex items-start space-x-3">
+								<ShieldCheckIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+								<div className="flex-1">
+									<h4 className="text-sm font-medium text-blue-800 font-body mb-1">
+										Certificate Protection Enabled
+									</h4>
+									<p className="text-sm text-blue-700 font-body">
+										Your name and IC number are protected because you have a valid digital certificate. 
+										These fields cannot be changed to maintain certificate validity.
+									</p>
+								</div>
+							</div>
+						</div>
+					)}
+
 					{/* Full Name */}
 					<div>
 						<label className="block text-sm lg:text-base font-medium text-gray-700 mb-2 font-body">
 							Full Name (as per IC) <span className="text-red-500">*</span>
+							{shouldDisableNameAndIC && (
+								<span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+									Protected
+								</span>
+							)}
 						</label>
 						<div className="relative">
 							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-								<UserIcon className="h-5 w-5 text-gray-400" />
+								<UserIcon className={`h-5 w-5 ${shouldDisableNameAndIC ? 'text-gray-400' : 'text-gray-400'}`} />
 							</div>
 							<input
 								type="text"
 								name="fullName"
 								value={formData.fullName}
 								onChange={handleInputChange}
-								className={`w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl font-body text-sm lg:text-base text-gray-900 bg-white transition-all duration-200 ${
-									errors.fullName
-										? "border-red-300 focus:border-red-500 focus:ring-red-500"
-										: "border-gray-300 focus:border-purple-primary focus:ring-purple-primary hover:border-gray-400"
+								disabled={shouldDisableNameAndIC}
+								className={`w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl font-body text-sm lg:text-base transition-all duration-200 ${
+									shouldDisableNameAndIC
+										? "bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed"
+										: errors.fullName
+										? "border-red-300 focus:border-red-500 focus:ring-red-500 text-gray-900 bg-white"
+										: "border-gray-300 focus:border-purple-primary focus:ring-purple-primary hover:border-gray-400 text-gray-900 bg-white"
 								} focus:outline-none focus:ring-2 focus:ring-opacity-50`}
 								placeholder="Enter your full name"
 							/>
+							{shouldDisableNameAndIC && (
+								<div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+									<ShieldCheckIcon className="h-5 w-5 text-blue-600" />
+								</div>
+							)}
 						</div>
 						{errors.fullName && (
 							<p className="mt-2 text-sm text-red-600 font-medium">{errors.fullName}</p>
@@ -262,6 +306,11 @@ export default function PersonalInfoForm({
 					<div>
 						<label className="block text-sm lg:text-base font-medium text-gray-700 mb-2 font-body">
 							IC/Passport Number <span className="text-red-500">*</span>
+							{shouldDisableNameAndIC && (
+								<span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+									Protected
+								</span>
+							)}
 						</label>
 						<div className="relative">
 							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -272,13 +321,21 @@ export default function PersonalInfoForm({
 								name="icNumber"
 								value={formData.icNumber}
 								onChange={handleIcNumberChange}
-								className={`w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl font-body text-sm lg:text-base text-gray-900 bg-white transition-all duration-200 ${
-									errors.icNumber || icError
-										? "border-red-300 focus:border-red-500 focus:ring-red-500"
-										: "border-gray-300 focus:border-purple-primary focus:ring-purple-primary hover:border-gray-400"
+								disabled={shouldDisableNameAndIC}
+								className={`w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl font-body text-sm lg:text-base transition-all duration-200 ${
+									shouldDisableNameAndIC
+										? "bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed"
+										: errors.icNumber || icError
+										? "border-red-300 focus:border-red-500 focus:ring-red-500 text-gray-900 bg-white"
+										: "border-gray-300 focus:border-purple-primary focus:ring-purple-primary hover:border-gray-400 text-gray-900 bg-white"
 								} focus:outline-none focus:ring-2 focus:ring-opacity-50`}
 								placeholder="Enter your IC or passport number"
 							/>
+							{shouldDisableNameAndIC && (
+								<div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+									<ShieldCheckIcon className="h-5 w-5 text-blue-600" />
+								</div>
+							)}
 						</div>
 						{formData.icType && (
 							<div className="mt-2 flex items-center space-x-2">

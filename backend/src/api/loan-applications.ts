@@ -194,6 +194,24 @@ router.get("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: Res
 			include: {
 				product: true,
 				documents: true,
+				user: {
+					select: {
+						fullName: true,
+						email: true,
+						phoneNumber: true,
+						employmentStatus: true,
+						employerName: true,
+						monthlyIncome: true,
+						address1: true,
+						address2: true,
+						city: true,
+						state: true,
+						zipCode: true,
+						idNumber: true,
+						icNumber: true,
+						icType: true,
+					},
+				},
 			},
 		});
 
@@ -1389,17 +1407,17 @@ router.post(
 
 			// Process the status change in a transaction to ensure loan creation
 			const updatedApplication = await prisma.$transaction(async (tx) => {
-				// Update the application with attestation completion
-				const updated = await tx.loanApplication.update({
-					where: { id },
-					data: {
-						status: "PENDING_SIGNATURE",
-						attestationType: "IMMEDIATE",
-						attestationCompleted: true,
-						attestationDate: new Date(),
-						attestationVideoWatched: true,
-						attestationTermsAccepted: true,
-					},
+							// Update the application with attestation completion
+			const updated = await tx.loanApplication.update({
+				where: { id },
+				data: {
+					status: "CERT_CHECK",
+					attestationType: "IMMEDIATE",
+					attestationCompleted: true,
+					attestationDate: new Date(),
+					attestationVideoWatched: true,
+					attestationTermsAccepted: true,
+				},
 					include: {
 						user: {
 							select: {
@@ -1432,15 +1450,15 @@ router.post(
 				return updated;
 			});
 
-			// Track the status change in history
-			await trackApplicationStatusChange(
-				prisma,
-				id,
-				"PENDING_ATTESTATION",
-				"PENDING_SIGNATURE",
-				userId,
-				"Immediate attestation completed by user",
-				"Immediate attestation completed by user",
+					// Track the status change in history
+		await trackApplicationStatusChange(
+			prisma,
+			id,
+			"PENDING_ATTESTATION",
+			"CERT_CHECK",
+			userId,
+			"Immediate attestation completed by user",
+			"Immediate attestation completed by user - proceeding to certificate check",
 				{
 					attestationType: "IMMEDIATE",
 					attestationVideoWatched: true,

@@ -197,9 +197,15 @@ export class SigningService {
         EmailAddress: signerInfo.emailAddress,
         MobileNo: signerInfo.mobileNo || '60123456789', // Default if not provided
         Nationality: signerInfo.nationality || 'MY',
-        UserType: signerInfo.userType,
+        UserType: signerInfo.userType.toString(),
+        IDType: 'N',
         AuthFactor: 'OTP_PLACEHOLDER', // In real implementation, get from user input
-        VerificationData: verificationData,
+        VerificationData: {
+          verifyDatetime: verificationData.datetime,
+          verifyMethod: verificationData.method,
+          verifyStatus: verificationData.status,
+          verifyVerifier: verificationData.verifier,
+        },
         SelfieImage: verificationData.evidence?.selfieImage,
       }, correlationId);
       

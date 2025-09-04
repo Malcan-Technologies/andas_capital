@@ -429,9 +429,9 @@ function ReviewAndSubmitFormContent({
 				throw new Error("Authentication token not found");
 			}
 
-			// Determine the appropriate status based on whether it's a collateral loan
+			// Complete application and redirect to loans page
 			const isCollateralLoan = productDetails?.collateralRequired === true;
-			const newStatus = isCollateralLoan ? "COLLATERAL_REVIEW" : "PENDING_KYC";
+			const newStatus = isCollateralLoan ? "COLLATERAL_REVIEW" : "PENDING_ATTESTATION";
 
 			// Update the application status and terms acceptance
 			const response = await fetch(
@@ -458,30 +458,11 @@ function ReviewAndSubmitFormContent({
 				);
 			}
 
-			// If KYC already done before, skip; else start KYC flow page with QR
-			try {
-				const kycStartRes = await fetch(
-					`/api/kyc`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ applicationId }),
-					}
-				);
-				const kycData = await kycStartRes.json();
-				if (kycStartRes.ok && kycData?.status === "APPROVED") {
-					// Already KYC-ed; proceed to loans
-					onSubmit({ termsAccepted });
-					router.push("/dashboard/loans");
-					return;
-				}
-			} catch (e) {
-				console.warn("KYC start check failed, proceeding to KYC page", e);
-			}
-
-			// Start KYC flow
+			// Start the new multi-step signing flow
 			onSubmit({ termsAccepted });
-			router.push(`/dashboard/kyc?applicationId=${applicationId}`);
+			
+			// Always redirect to loans dashboard with applications tab open
+			router.push("/dashboard/loans?tab=applications");
 		} catch (err) {
 			console.error("Error submitting application:", err);
 			setError(

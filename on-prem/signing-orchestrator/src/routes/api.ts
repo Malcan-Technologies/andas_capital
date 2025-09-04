@@ -34,7 +34,7 @@ const upload = multer({
  * Manual signing endpoint
  * POST /api/sign
  */
-router.post('/sign', verifyApiKey, async (req, res) => {
+router.post('/sign', verifyApiKey, async (req, res): Promise<void> => {
   const log = createCorrelatedLogger(req.correlationId!);
   
   try {
@@ -52,18 +52,20 @@ router.post('/sign', verifyApiKey, async (req, res) => {
     
     // Validate required fields
     if (!packetId || !signerInfo || !pdfUrl) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Missing required fields: packetId, signerInfo, pdfUrl',
       });
+      return;
     }
     
     // Validate signer info
     if (!signerInfo.userId || !signerInfo.fullName || !signerInfo.emailAddress) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Missing required signer fields: userId, fullName, emailAddress',
       });
+      return;
     }
     
     log.info('Processing manual signing request', { 
@@ -93,6 +95,7 @@ router.post('/sign', verifyApiKey, async (req, res) => {
         },
         correlationId: req.correlationId,
       });
+      return;
     } else {
       res.status(400).json({
         success: false,
@@ -100,6 +103,7 @@ router.post('/sign', verifyApiKey, async (req, res) => {
         error: result.error,
         correlationId: req.correlationId,
       });
+      return;
     }
     
   } catch (error) {
@@ -131,18 +135,20 @@ router.post('/enroll', verifyApiKey, async (req, res) => {
     
     // Validate required fields
     if (!signerInfo || !verificationData) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Missing required fields: signerInfo, verificationData',
       });
+      return;
     }
     
     // Validate signer info
     if (!signerInfo.userId || !signerInfo.fullName || !signerInfo.emailAddress) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Missing required signer fields: userId, fullName, emailAddress',
       });
+      return;
     }
     
     log.info('Processing enrollment request', { signerId: signerInfo.userId });
@@ -158,6 +164,7 @@ router.post('/enroll', verifyApiKey, async (req, res) => {
         },
         correlationId: req.correlationId,
       });
+      return;
     } else {
       res.status(400).json({
         success: false,
@@ -165,6 +172,7 @@ router.post('/enroll', verifyApiKey, async (req, res) => {
         error: result.error,
         correlationId: req.correlationId,
       });
+      return;
     }
     
   } catch (error) {
@@ -196,18 +204,20 @@ router.post('/verify', upload.single('pdf'), verifyApiKey, async (req, res) => {
       log.debug('PDF uploaded via file', { size: req.file.size });
     } else if (req.body.pdfBase64) {
       if (!isValidBase64(req.body.pdfBase64)) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'Invalid base64 PDF data',
         });
+        return;
       }
       pdfBase64 = req.body.pdfBase64;
       log.debug('PDF provided as base64');
     } else {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'No PDF provided (use file upload or pdfBase64 field)',
       });
+      return;
     }
     
     log.info('Processing PDF verification request');
@@ -249,27 +259,41 @@ router.get('/cert/:userId', verifyApiKey, async (req, res) => {
     const { userId } = req.params;
     
     if (!userId) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Missing userId parameter',
       });
+      return;
     }
     
     log.info('Getting certificate info', { userId });
     
     const result = await mtsaClient.getCertInfo({ UserID: userId }, req.correlationId!);
     
+    // Handle response structure - data may be in result.return or at root level
+    const responseData = (result as any).return || result;
+    const statusCode = responseData.statusCode || result.statusCode;
+    const statusMsg = responseData.statusMsg || (result as any).statusMsg || (result as any).message;
+    
+    // Certificate check completed
+    
     res.status(200).json({
-      success: result.statusCode === '0000',
-      message: result.message,
+      success: statusCode === '000',
+      message: statusMsg,
       data: {
-        statusCode: result.statusCode,
-        certStatus: result.certStatus,
-        validFrom: result.validFrom,
-        validTo: result.validTo,
-        certSerialNo: result.certSerialNo,
-        issuer: result.issuer,
-        subject: result.subject,
+        statusCode: statusCode,
+        certStatus: responseData.certStatus,
+        certValidFrom: responseData.certValidFrom,
+        certValidTo: responseData.certValidTo,
+        certSerialNo: responseData.certSerialNo,
+        certIssuer: responseData.certIssuer,
+        certSubjectDN: responseData.certSubjectDN,
+        certX509: responseData.certX509,
+        // Legacy field names for backward compatibility
+        validFrom: responseData.certValidFrom,
+        validTo: responseData.certValidTo,
+        issuer: responseData.certIssuer,
+        subject: responseData.certSubjectDN,
       },
       correlationId: req.correlationId,
     });
@@ -298,24 +322,27 @@ router.post('/otp', verifyApiKey, async (req, res) => {
     const { userId, usage, emailAddress } = req.body;
     
     if (!userId || !usage) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Missing required fields: userId, usage',
       });
+      return;
     }
     
     if (!['DS', 'NU'].includes(usage)) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Invalid usage. Must be DS (digital signing) or NU (new enrollment)',
       });
+      return;
     }
     
     if (usage === 'NU' && !emailAddress) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'emailAddress is required for new enrollment (NU)',
       });
+      return;
     }
     
     log.info('Requesting OTP', { userId, usage });
@@ -326,11 +353,14 @@ router.post('/otp', verifyApiKey, async (req, res) => {
       EmailAddress: emailAddress,
     }, req.correlationId!);
     
+    const statusCode = result.return?.statusCode || result.statusCode;
+    const message = result.return?.statusMsg || result.message;
+    
     res.status(200).json({
-      success: result.statusCode === '0000',
-      message: result.message,
+      success: statusCode === '000' || statusCode === '0000',
+      message: message,
       data: {
-        statusCode: result.statusCode,
+        statusCode: statusCode,
         otpSent: result.otpSent,
       },
       correlationId: req.correlationId,
@@ -350,6 +380,154 @@ router.post('/otp', verifyApiKey, async (req, res) => {
 });
 
 /**
+ * Request Certificate endpoint
+ * POST /api/certificate
+ */
+router.post('/certificate', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { 
+      userId, 
+      fullName, 
+      emailAddress, 
+      mobileNo, 
+      nationality = 'MY',
+      userType = '1', 
+      idType = 'N',
+      authFactor,
+      nricFront,
+      nricBack,
+      selfieImage,
+      passportImage,
+      organisationInfo,
+      verificationData
+    } = req.body;
+    
+    if (!userId || !fullName || !emailAddress || !mobileNo || !authFactor || !verificationData) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required fields: userId, fullName, emailAddress, mobileNo, authFactor, verificationData',
+      });
+      return;
+    }
+    
+    log.info('Requesting certificate', { userId, userType, nationality });
+    
+    const result = await mtsaClient.requestCertificate({
+      UserID: userId,
+      FullName: fullName,
+      EmailAddress: emailAddress,
+      MobileNo: mobileNo,
+      Nationality: nationality,
+      UserType: userType,
+      IDType: idType,
+      AuthFactor: authFactor,
+      NRICFront: nricFront,
+      NRICBack: nricBack,
+      SelfieImage: selfieImage,
+      PassportImage: passportImage,
+      OrganisationInfo: organisationInfo,
+      VerificationData: {
+        verifyDatetime: verificationData.verifyDatetime,
+        verifyMethod: verificationData.verifyMethod,
+        verifyStatus: verificationData.verifyStatus,
+        verifyVerifier: verificationData.verifyVerifier,
+      },
+    }, req.correlationId!);
+    
+    const statusCode = result.return?.statusCode || result.statusCode;
+    const message = result.return?.statusMsg || result.message;
+    
+    res.status(200).json({
+      success: statusCode === '000' || statusCode === '0000',
+      message: message,
+      data: {
+        statusCode: statusCode,
+        statusMsg: message,
+        // Certificate data (only present if successful)
+        certX509: result.return?.certX509 || result.certX509,
+        certValidTo: result.return?.certValidTo || result.certValidTo,
+        certValidFrom: result.return?.certValidFrom || result.certValidFrom,
+        certSerialNo: result.return?.certSerialNo || result.certSerialNo,
+        // Request tracking
+        certRequestID: result.return?.certRequestID || result.certRequestID,
+        certRequestStatus: result.return?.certRequestStatus || result.certRequestStatus,
+        userID: result.return?.userID || result.userID,
+        // Legacy field names for backward compatibility
+        certificateSerialNo: result.return?.certSerialNo || result.certSerialNo,
+        certificateValidFrom: result.return?.certValidFrom || result.certValidFrom,
+        certificateValidTo: result.return?.certValidTo || result.certValidTo,
+      },
+      correlationId: req.correlationId,
+    });
+    
+  } catch (error) {
+    log.error('Certificate request failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Certificate request failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * Test GetCertInfo with HTTP header authentication
+ * POST /api/test-getcert
+ */
+router.post('/test-getcert', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required field: userId',
+      });
+      return;
+    }
+    
+    log.info('Testing GetCertInfo with HTTP header auth', { userId });
+    
+    const result = await mtsaClient.getCertInfo({
+      UserID: userId,
+    }, req.correlationId!);
+    
+    res.status(200).json({
+      success: result.statusCode === '000',
+      message: result.message,
+      data: {
+        statusCode: result.statusCode,
+        certStatus: result.certStatus,
+        validFrom: result.validFrom,
+        validTo: result.validTo,
+        certSerialNo: result.certSerialNo,
+        issuer: result.issuer,
+        subject: result.subject,
+      },
+      correlationId: req.correlationId,
+    });
+    
+  } catch (error) {
+    log.error('GetCertInfo test failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'GetCertInfo test failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
  * List signed PDFs for a packet
  * GET /api/signed/:packetId
  */
@@ -360,10 +538,11 @@ router.get('/signed/:packetId', verifyApiKey, async (req, res) => {
     const { packetId } = req.params;
     
     if (!packetId) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Bad Request',
         message: 'Missing packetId parameter',
       });
+      return;
     }
     
     log.info('Listing signed PDFs', { packetId });

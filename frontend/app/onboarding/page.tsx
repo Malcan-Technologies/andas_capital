@@ -46,6 +46,69 @@ function OnboardingPageContent() {
 	const [activeStep, setActiveStep] = useState(0);
 	const [formData, setFormData] = useState<Partial<OnboardingFormData>>({});
 	const [loading, setLoading] = useState(true);
+	
+	// Certificate status state
+	const [certificateStatus, setCertificateStatus] = useState<{
+		loading: boolean;
+		hasValidCert: boolean;
+		certificateData?: any;
+		nameMatches?: boolean;
+		expectedName?: string;
+	}>({
+		loading: false,
+		hasValidCert: false
+	});
+
+	const fetchCertificateStatus = async (icNumber: string, fullName: string) => {
+		try {
+			setCertificateStatus(prev => ({ ...prev, loading: true }));
+
+			const certResponse = await fetchWithTokenRefresh(
+				`/api/mtsa/certificate/${icNumber}?t=${Date.now()}`,
+				{
+					method: "GET",
+					cache: "no-store",
+				}
+			) as any;
+
+			const isSuccess = certResponse.success && certResponse.data?.statusCode === "000";
+			const hasValidCert = isSuccess && certResponse.data?.certStatus === "Valid";
+
+			if (hasValidCert && certResponse.data) {
+				// Extract name from certificate subject DN
+				const subjectDN = certResponse.data.certSubjectDN || "";
+				const expectedName = subjectDN
+					.split(',')
+					.find((part: string) => part.trim().startsWith('CN='))
+					?.replace('CN=', '')
+					?.trim() || "";
+
+				// Compare names (normalize for comparison)
+				const profileName = (fullName || "").toLowerCase().trim();
+				const certName = expectedName.toLowerCase().trim();
+				const nameMatches = profileName === certName;
+
+				setCertificateStatus({
+					loading: false,
+					hasValidCert: true,
+					certificateData: certResponse.data,
+					nameMatches,
+					expectedName
+				});
+			} else {
+				setCertificateStatus({
+					loading: false,
+					hasValidCert: false
+				});
+			}
+		} catch (error) {
+			console.error("Error fetching certificate status:", error);
+			setCertificateStatus({
+				loading: false,
+				hasValidCert: false
+			});
+		}
+	};
 
 	useEffect(() => {
 		const fetchUserData = async () => {
@@ -119,6 +182,11 @@ function OnboardingPageContent() {
 					onboardingStep: userData.onboardingStep || 0,
 					isOnboardingComplete: userData.isOnboardingComplete || false,
 				});
+
+				// Check certificate status if user has IC number and full name
+				if (userData.icNumber && userData.fullName) {
+					fetchCertificateStatus(userData.icNumber, userData.fullName);
+				}
 
 				// Check if step is specified in URL query parameter
 				const stepParam = searchParams.get('step');
@@ -223,6 +291,7 @@ function OnboardingPageContent() {
 						onBack={handleBack}
 						showBackButton={false}
 						isLastStep={false}
+						certificateStatus={certificateStatus}
 					/>
 				);
 			case 1:

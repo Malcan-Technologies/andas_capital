@@ -5337,6 +5337,145 @@
         }
       }
     },
+    "/api/mtsa/cert-info/{userId}": {
+      "get": {
+        "summary": "Get certificate information for a user",
+        "tags": [
+          "MTSA"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (IC number)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Certificate information retrieved successfully"
+          },
+          "400": {
+            "description": "User ID is required"
+          },
+          "500": {
+            "description": "Failed to get certificate information"
+          }
+        }
+      }
+    },
+    "/api/mtsa/request-otp": {
+      "post": {
+        "summary": "Request OTP for certificate enrollment or digital signing",
+        "tags": [
+          "MTSA"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "userId",
+                  "usage"
+                ],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "User ID (IC number)"
+                  },
+                  "usage": {
+                    "type": "string",
+                    "enum": [
+                      "DS",
+                      "NU"
+                    ],
+                    "description": "DS for digital signing, NU for new enrollment"
+                  },
+                  "emailAddress": {
+                    "type": "string",
+                    "description": "Email address (required for NU)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP request sent successfully"
+          },
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "500": {
+            "description": "Failed to request OTP"
+          }
+        }
+      }
+    },
+    "/api/mtsa/verify-otp": {
+      "post": {
+        "summary": "Verify OTP for digital signing",
+        "tags": [
+          "MTSA"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "userId",
+                  "otp"
+                ],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "User ID (IC number)"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "description": "6-digit OTP code"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP verification completed"
+          },
+          "400": {
+            "description": "Invalid OTP or missing parameters"
+          },
+          "500": {
+            "description": "Failed to verify OTP"
+          }
+        }
+      }
+    },
     "/api/notifications": {
       "get": {
         "summary": "Get user's notifications",
@@ -6411,6 +6550,10 @@
     {
       "name": "Loans",
       "description": "API endpoints for managing user loans"
+    },
+    {
+      "name": "MTSA",
+      "description": "MyTrustSigner Agent integration for digital certificates and OTP"
     },
     {
       "name": "Products",

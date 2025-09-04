@@ -10,7 +10,7 @@ const router = express.Router();
  * DocuSeal webhook endpoint
  * Handles signer_submitted and packet_completed events
  */
-router.post('/docuseal', rawBodyMiddleware, verifyDocuSealWebhook, async (req, res): Promise<Response | void> => {
+router.post('/docuseal', rawBodyMiddleware, verifyDocuSealWebhook, async (req, res) => {
   const log = createCorrelatedLogger(req.correlationId!);
   
   try {
@@ -25,10 +25,11 @@ router.post('/docuseal', rawBodyMiddleware, verifyDocuSealWebhook, async (req, r
     // Validate required fields
     if (!payload.event_type || !payload.data) {
       log.warn('Invalid webhook payload structure');
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'Bad Request', 
         message: 'Invalid payload structure' 
       });
+      return;
     }
     
     // Handle different event types
