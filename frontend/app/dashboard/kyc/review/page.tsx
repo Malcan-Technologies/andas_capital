@@ -264,7 +264,7 @@ function KycReviewContent() {
                   onClick={onAccept} 
                   className="px-6 py-2 rounded-xl bg-purple-primary text-white disabled:opacity-50 hover:bg-purple-700 transition-colors"
                 >
-                  {accepting ? 'Saving…' : 'Save to Profile'}
+                  {accepting ? 'Saving…' : 'Confirm & Continue'}
                 </button>
               </div>
             </div>

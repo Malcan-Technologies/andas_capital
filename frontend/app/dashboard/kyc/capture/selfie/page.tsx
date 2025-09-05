@@ -73,8 +73,8 @@ function CaptureSelfieContent() {
       const isQrCodeFlow = qrParam === "1";
       
       if (isQrCodeFlow) {
-        // For QR code flow, show completion message instead of review page
-        router.replace('/dashboard/kyc/complete');
+        // For QR code flow, show completion message instead of review page (unprotected route)
+        router.replace('/kyc-complete');
       } else {
         // Build the review URL with all necessary parameters for regular flow
         const applicationId = params.get('applicationId');
