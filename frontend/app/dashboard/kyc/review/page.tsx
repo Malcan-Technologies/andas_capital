@@ -171,7 +171,7 @@ function KycReviewContent() {
   const renderDocumentImage = (doc: KycDocument, altText: string) => {
     return (
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden h-40">
-        <KycImageDisplay imageId={doc.id} />
+        <KycImageDisplay imageId={doc.id} kycToken={kycToken || undefined} />
       </div>
     );
   };

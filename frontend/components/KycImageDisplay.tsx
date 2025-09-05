@@ -5,9 +5,10 @@ import { TokenStorage } from "@/lib/authUtils";
 
 interface KycImageDisplayProps {
 	imageId: string;
+	kycToken?: string; // Optional KYC token for QR code flow
 }
 
-export default function KycImageDisplay({ imageId }: KycImageDisplayProps) {
+export default function KycImageDisplay({ imageId, kycToken }: KycImageDisplayProps) {
 	const [imageUrl, setImageUrl] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -20,22 +21,41 @@ export default function KycImageDisplay({ imageId }: KycImageDisplayProps) {
 
 				// Get the access token using TokenStorage
 				const accessToken = TokenStorage.getAccessToken();
-				if (!accessToken) {
-					throw new Error("No access token available");
+				
+				// For QR code flow, we might not have a regular access token
+				if (!accessToken && !kycToken) {
+					throw new Error("No authentication available");
+				}
+
+				// Build URL and headers for authentication
+				let imageUrl = `/api/kyc/images/${imageId}`;
+				const headers: Record<string, string> = {};
+
+				if (accessToken) {
+					// Regular authenticated flow
+					headers.Authorization = `Bearer ${accessToken}`;
+				} else if (kycToken) {
+					// QR code flow - add token as query parameter and header
+					imageUrl += `?t=${encodeURIComponent(kycToken)}`;
+					headers['X-KYC-TOKEN'] = kycToken;
 				}
 
 				// Fetch the image with authentication
-				const response = await fetch(`/api/kyc/images/${imageId}`, {
+				const response = await fetch(imageUrl, {
 					method: "GET",
-					headers: {
-						Authorization: `Bearer ${accessToken}`,
-					},
+					headers,
 				});
 
 				if (!response.ok) {
-					// If unauthorized, the token might be expired - redirect to login
+					// If unauthorized, check if this is QR code flow
 					if (response.status === 401 || response.status === 403) {
-						throw new Error("Authentication failed. Please log in again.");
+						if (kycToken && !accessToken) {
+							// QR code flow - show user-friendly message
+							throw new Error("Please view images on your web browser where you scanned the QR code.");
+						} else {
+							// Regular flow - authentication failed
+							throw new Error("Authentication failed. Please log in again.");
+						}
 					}
 					throw new Error(`Failed to fetch image: ${response.status}`);
 				}
@@ -62,7 +82,7 @@ export default function KycImageDisplay({ imageId }: KycImageDisplayProps) {
 				URL.revokeObjectURL(imageUrl);
 			}
 		};
-	}, [imageId]);
+	}, [imageId, kycToken]);
 
 	if (loading) {
 		return (
