@@ -53,14 +53,30 @@ function KycReviewContent() {
       if (!kycId) return;
       setAccepting(true);
       const token = TokenStorage.getAccessToken();
-      if (!token) throw new Error("Unauthorized");
+      
+      // Check if this is a QR code flow (has kycToken but no regular auth token)
+      const isQrCodeFlow = kycToken && !token;
+      
+      if (!token && !kycToken) {
+        throw new Error("Unauthorized");
+      }
       
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/accept`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Failed to accept');
+      if (!res.ok) {
+        // Handle specific unauthorized error from backend
+        if (res.status === 401 || res.status === 403) {
+          // If this is QR code flow, show message to complete on web browser
+          if (isQrCodeFlow) {
+            setError("Please complete this step on your web browser where you scanned the QR code.");
+            return;
+          }
+        }
+        throw new Error(data?.message || 'Failed to accept');
+      }
       
       // Check if the backend updated an application (new multi-step flow)
       if (data.applicationUpdated && data.applicationId) {
@@ -82,6 +98,15 @@ function KycReviewContent() {
       // Fallback to old flow behavior
       router.replace('/dashboard/profile');
     } catch (e: any) {
+      // Additional check for unauthorized errors
+      if (e.message === "Unauthorized" || e.message.includes("401") || e.message.includes("403")) {
+        // If this is QR code flow, show message to complete on web browser
+        const isQrCodeFlow = kycToken && !TokenStorage.getAccessToken();
+        if (isQrCodeFlow) {
+          setError("Please complete this step on your web browser where you scanned the QR code.");
+          return;
+        }
+      }
       setError(e.message || 'Failed to accept');
     } finally {
       setAccepting(false);
@@ -95,7 +120,23 @@ function KycReviewContent() {
 
   const onRedoAll = () => {
     if (!kycId) return;
-    router.replace(`/dashboard/kyc/capture/front?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+    
+    // Check if this is a QR code flow (has kycToken but no regular auth token)
+    const isQrCodeFlow = kycToken && !TokenStorage.getAccessToken();
+    
+    if (isQrCodeFlow) {
+      // If QR code flow, redirect back to QR code page for redo
+      const params = new URLSearchParams(window.location.search);
+      const applicationId = params.get('applicationId');
+      let qrUrl = '/dashboard/kyc?redo=true';
+      if (applicationId) {
+        qrUrl += `&applicationId=${applicationId}`;
+      }
+      router.replace(qrUrl);
+    } else {
+      // If authenticated user (mobile or desktop), can directly restart capture
+      router.replace(`/dashboard/kyc/capture/front?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+    }
   };
 
   // Helper to get document by type

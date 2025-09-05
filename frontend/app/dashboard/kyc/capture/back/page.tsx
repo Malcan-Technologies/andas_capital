@@ -65,7 +65,18 @@ function CaptureBackContent() {
         router.replace(nextUrl);
       }
     } catch (e: any) {
-      setError(e.message || "Failed to upload back image");
+      // Handle unauthorized errors gracefully for QR code flow
+      if (e.message === "Unauthorized" || e.message.includes("401") || e.message.includes("403")) {
+        // Check if this is a QR code flow (has kycToken but no regular auth token)
+        const isQrCodeFlow = kycToken && !TokenStorage.getAccessToken();
+        if (isQrCodeFlow) {
+          setError("Please complete this step on your web browser where you scanned the QR code.");
+        } else {
+          setError(e.message || "Failed to upload back image");
+        }
+      } else {
+        setError(e.message || "Failed to upload back image");
+      }
     } finally {
       setIsSubmitting(false);
     }
