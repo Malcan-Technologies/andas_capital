@@ -68,16 +68,23 @@ function CaptureSelfieContent() {
         setServerHint({ nextStep: proc?.nextStep, message: msg });
         throw new Error(msg);
       }
-      // Build the review URL with all necessary parameters
-      const applicationId = params.get('applicationId');
+      // Check if this is QR code flow
       const qrParam = params.get('qr');
-      let reviewUrl = `/dashboard/kyc/review?kycId=${kycId}`;
-      if (kycToken) reviewUrl += `&t=${encodeURIComponent(kycToken)}`;
-      if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
-      if (qrParam) reviewUrl += `&qr=${qrParam}`;
+      const isQrCodeFlow = qrParam === "1";
       
-      // Go to review page after completion
-      router.replace(reviewUrl);
+      if (isQrCodeFlow) {
+        // For QR code flow, show completion message instead of review page
+        router.replace('/dashboard/kyc/complete');
+      } else {
+        // Build the review URL with all necessary parameters for regular flow
+        const applicationId = params.get('applicationId');
+        let reviewUrl = `/dashboard/kyc/review?kycId=${kycId}`;
+        if (kycToken) reviewUrl += `&t=${encodeURIComponent(kycToken)}`;
+        if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
+        
+        // Go to review page after completion
+        router.replace(reviewUrl);
+      }
     } catch (e: any) {
       // Handle unauthorized errors gracefully for QR code flow
       if (e.message === "Unauthorized" || e.message.includes("401") || e.message.includes("403")) {

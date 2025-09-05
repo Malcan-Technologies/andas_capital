@@ -112,8 +112,14 @@ function KycPageContent() {
         const data = await res.json();
         if (["APPROVED", "REJECTED", "MANUAL_REVIEW", "FAILED"].includes(data.status)) {
           clearInterval(pollingRef.current!);
-          if (data.status === "APPROVED") router.replace(`/dashboard/kyc/review?kycId=${id}`);
-          else router.replace("/dashboard/loans");
+          if (data.status === "APPROVED") {
+            // Build review URL with applicationId if available
+            let reviewUrl = `/dashboard/kyc/review?kycId=${id}`;
+            if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
+            router.replace(reviewUrl);
+          } else {
+            router.replace("/dashboard/loans");
+          }
         }
       } catch {}
     }, 3000);
