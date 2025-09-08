@@ -244,18 +244,30 @@ router.post('/webhook', async (req, res) => {
     }
 
     // Update KYC session with webhook data
+    const newStatus = webhookData.status === 2 ? // Completed
+      (webhookData.result === 1 ? 'APPROVED' : 'REJECTED') :
+      webhookData.status === 3 ? 'FAILED' : 'IN_PROGRESS';
+    
+    console.log(`🔄 Webhook updating session ${kycSession.id}:`, {
+      oldStatus: kycSession.status,
+      newStatus,
+      ctosStatus: webhookData.status,
+      ctosResult: webhookData.result,
+      willSetCompleted: webhookData.status === 2
+    });
+    
     await prisma.kycSession.update({
       where: { id: kycSession.id },
       data: {
         ctosStatus: webhookData.status,
         ctosResult: webhookData.result,
         ctosData: { ...(kycSession.ctosData as any), webhook: webhookData } as any,
-        status: webhookData.status === 2 ? // Completed
-          (webhookData.result === 1 ? 'APPROVED' : 'REJECTED') :
-          webhookData.status === 3 ? 'FAILED' : 'IN_PROGRESS',
+        status: newStatus,
         completedAt: webhookData.status === 2 ? new Date() : null
       }
     });
+    
+    console.log(`✅ Webhook session update completed for ${kycSession.id} - Status: ${newStatus}`);
 
     // Store document images if available
     // Images can be at the top level, step1 (front/back), or step2 (selfie)

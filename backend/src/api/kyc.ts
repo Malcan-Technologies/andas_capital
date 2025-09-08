@@ -1124,6 +1124,24 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       
       if (storedImages.length >= 3) {
         console.log(`User ${userId} - Session already approved with ${storedImages.length} stored images, returning without CTOS API call`);
+        
+        // Make sure session status is updated to APPROVED if it's not already
+        if (kycSession.status !== 'APPROVED') {
+          console.log(`Updating session ${kycSession.id} status from ${kycSession.status} to APPROVED`);
+          await db.kycSession.update({
+            where: { id: kycSession.id },
+            data: {
+              status: 'APPROVED',
+              completedAt: kycSession.completedAt || new Date()
+            }
+          });
+        }
+        
+        // Set cache-busting headers to prevent 304 responses
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
         return res.json({
           success: true,
           hasKycSession: true,
@@ -1133,7 +1151,7 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
           ctosStatus: kycSession.ctosStatus,
           ctosResult: kycSession.ctosResult,
           kycId: kycSession.id,
-          completedAt: kycSession.completedAt
+          completedAt: kycSession.completedAt || new Date()
         });
       } else {
         console.log(`User ${userId} - Session approved but only ${storedImages.length} images stored, fetching from CTOS`);
@@ -1145,21 +1163,27 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
     try {
       // Try with OPG-Capital prefix first, fallback to original userId
       let ctosStatus;
+      console.log(`🔍 CTOS Status Check - User: ${userId}, Session: ${kycSession.id}, OnboardingId: ${kycSession.ctosOnboardingId}`);
+      
       try {
+        console.log(`🔍 Trying CTOS with OPG-Capital prefix: OPG-Capital${kycSession.userId}`);
         ctosStatus = await ctosService.getStatus({
           ref_id: `OPG-Capital${kycSession.userId}`,
           onboarding_id: kycSession.ctosOnboardingId,
           platform: 'Web',
           mode: 2 // Detail mode
         });
+        console.log(`✅ CTOS Response with prefix:`, { status: ctosStatus.status, result: ctosStatus.result });
       } catch (error) {
-        console.log('Failed with OPG-Capital prefix, trying original userId...');
+        console.log('❌ Failed with OPG-Capital prefix, trying original userId...');
+        console.log(`🔍 Trying CTOS with original userId: ${kycSession.userId}`);
         ctosStatus = await ctosService.getStatus({
           ref_id: kycSession.userId,
           onboarding_id: kycSession.ctosOnboardingId,
           platform: 'Web',
           mode: 2 // Detail mode
         });
+        console.log(`✅ CTOS Response with original:`, { status: ctosStatus.status, result: ctosStatus.result });
       }
 
       // Update our session with the latest status

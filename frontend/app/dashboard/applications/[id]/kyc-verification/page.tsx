@@ -312,8 +312,8 @@ export default function KycVerificationPage() {
 			}
 		};
 
-		// Poll every 5 seconds
-		const interval = setInterval(pollStatus, 5000);
+		// Poll every 2 seconds
+		const interval = setInterval(pollStatus, 2000);
 		
 		// Clean up after 30 minutes
 		setTimeout(() => {

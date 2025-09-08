@@ -46,15 +46,17 @@ export default function KycCompletePage() {
 
           {/* Auto-close message */}
           <p className="text-xs text-gray-500 font-body">
-            This tab will close automatically in a few seconds, or you can close it manually.
+            You can close this page now and return to your web browser to continue.
           </p>
 
-          {/* Manual close button */}
+          {/* Return to homepage button */}
           <button
-            onClick={() => window.close()}
-            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors text-sm font-medium"
+            onClick={() => {
+              window.location.href = '/';
+            }}
+            className="inline-flex items-center px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-medium"
           >
-            Close Tab
+            Return to Homepage
           </button>
         </div>
       </div>
