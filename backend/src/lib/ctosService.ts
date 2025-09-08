@@ -19,6 +19,7 @@ interface CreateTransactionRequest {
   response_url?: string;
   backend_url: string;
   callback_mode: number;
+  response_mode?: number; // 0 = no queries, 1 = with queries
   document_type?: string; // 1 = NRIC, 3 = Passport
 }
 
@@ -200,6 +201,7 @@ export class CTOSService {
       response_url: params.response_url || '',
       backend_url: params.backend_url,
       callback_mode: params.callback_mode.toString(), // Convert to string
+      response_mode: (params.response_mode || 0).toString(), // Default to 0 (no queries)
       document_type: params.document_type || '1', // Default to NRIC (1)
       signature: this.generateSignature({
         api_key: this.config.apiKey,

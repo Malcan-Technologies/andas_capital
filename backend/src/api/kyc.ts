@@ -154,6 +154,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         response_url: completionUrl, // Use KYC completion page instead of frontend callback
         backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
         callback_mode: 2, // Detailed callback
+        response_mode: 0, // No queries - should make webhook work without URL parameters
         document_type: '1' // 1 = NRIC (default for Malaysian users)
       });
 
@@ -922,7 +923,8 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
             kycId: approvedSession.id,
             type: 'front',
             storageUrl: `data:image/jpeg;base64,${frontImage}`,
-            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
+            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex'),
+            updatedAt: new Date()
           });
         }
 
@@ -931,7 +933,8 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
             kycId: approvedSession.id,
             type: 'back',
             storageUrl: `data:image/jpeg;base64,${backImage}`,
-            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
+            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex'),
+            updatedAt: new Date()
           });
         }
 
@@ -940,36 +943,29 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
             kycId: approvedSession.id,
             type: 'selfie',
             storageUrl: `data:image/jpeg;base64,${faceImage}`,
-            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
+            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex'),
+            updatedAt: new Date()
           });
         }
 
-        // Store documents if any found
+        // Store documents if any found - use upsert to prevent race condition duplicates
         if (documentsToUpsert.length > 0) {
           for (const doc of documentsToUpsert) {
-            // Check if document exists
-            const existingDoc = await db.kycDocument.findFirst({
+            // Use upsert to avoid race condition between webhook and polling
+            await db.kycDocument.upsert({
               where: {
-                kycId: doc.kycId,
-                type: doc.type
-              }
-            });
-
-            if (existingDoc) {
-              // Update existing document
-              await db.kycDocument.update({
-                where: { id: existingDoc.id },
-                data: {
-                  storageUrl: doc.storageUrl,
-                  hashSha256: doc.hashSha256
+                kycId_type: {
+                  kycId: doc.kycId,
+                  type: doc.type
                 }
-              });
-            } else {
-              // Create new document
-              await db.kycDocument.create({
-                data: doc
-              });
-            }
+              },
+              update: {
+                storageUrl: doc.storageUrl,
+                hashSha256: doc.hashSha256,
+                updatedAt: new Date()
+              },
+              create: doc
+            });
           }
           console.log(`Stored ${documentsToUpsert.length} images from CTOS for approved session`);
         } else {
@@ -1222,59 +1218,54 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       });
 
       // Store images if available (regardless of current CTOS status if we know user is approved)
-      if (frontImage) {
-        documentsToUpsert.push({
-          kycId: kycSession.id,
-          type: 'front',
-          storageUrl: `data:image/jpeg;base64,${frontImage}`,
-          hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
-        });
-      }
+        if (frontImage) {
+          documentsToUpsert.push({
+            kycId: kycSession.id,
+            type: 'front',
+            storageUrl: `data:image/jpeg;base64,${frontImage}`,
+            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex'),
+            updatedAt: new Date()
+          });
+        }
 
-      if (backImage) {
-        documentsToUpsert.push({
-          kycId: kycSession.id,
-          type: 'back',
-          storageUrl: `data:image/jpeg;base64,${backImage}`,
-          hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
-        });
-      }
+        if (backImage) {
+          documentsToUpsert.push({
+            kycId: kycSession.id,
+            type: 'back',
+            storageUrl: `data:image/jpeg;base64,${backImage}`,
+            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex'),
+            updatedAt: new Date()
+          });
+        }
 
-      if (faceImage) {
-        documentsToUpsert.push({
-          kycId: kycSession.id,
-          type: 'selfie',
-          storageUrl: `data:image/jpeg;base64,${faceImage}`,
-          hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
-        });
-      }
+        if (faceImage) {
+          documentsToUpsert.push({
+            kycId: kycSession.id,
+            type: 'selfie',
+            storageUrl: `data:image/jpeg;base64,${faceImage}`,
+            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex'),
+            updatedAt: new Date()
+          });
+        }
 
-      // Upsert documents (create if not exists, update if exists)
+      // Upsert documents (create if not exists, update if exists) - prevent race condition duplicates
       if (documentsToUpsert.length > 0) {
         for (const doc of documentsToUpsert) {
-          // Check if document exists
-          const existingDoc = await db.kycDocument.findFirst({
+          // Use upsert to avoid race condition between webhook and polling
+          await db.kycDocument.upsert({
             where: {
-              kycId: doc.kycId,
-              type: doc.type
-            }
-          });
-
-          if (existingDoc) {
-            // Update existing document
-            await db.kycDocument.update({
-              where: { id: existingDoc.id },
-              data: {
-                storageUrl: doc.storageUrl,
-                hashSha256: doc.hashSha256
+              kycId_type: {
+                kycId: doc.kycId,
+                type: doc.type
               }
-            });
-          } else {
-            // Create new document
-            await db.kycDocument.create({
-              data: doc
-            });
-          }
+            },
+            update: {
+              storageUrl: doc.storageUrl,
+              hashSha256: doc.hashSha256,
+              updatedAt: new Date()
+            },
+            create: doc
+          });
         }
         console.log(`Stored/updated ${documentsToUpsert.length} documents for KYC session ${kycSession.id}`);
       } else {

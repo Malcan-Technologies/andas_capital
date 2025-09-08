@@ -160,13 +160,38 @@ router.post('/status', async (req, res) => {
 });
 
 /**
+ * CTOS Webhook endpoint test
+ * GET /api/ctos/webhook - for testing accessibility
+ */
+router.get('/webhook', async (req, res) => {
+  console.log('🔔 CTOS webhook GET test accessed:', {
+    timestamp: new Date().toISOString(),
+    userAgent: req.headers['user-agent'],
+    remoteAddress: req.connection?.remoteAddress || req.socket?.remoteAddress
+  });
+  
+  return res.json({ 
+    success: true, 
+    message: 'CTOS webhook endpoint is accessible',
+    timestamp: new Date().toISOString()
+  });
+});
+
+/**
  * CTOS Webhook endpoint
  * POST /api/ctos/webhook
  */
 router.post('/webhook', async (req, res) => {
   try {
-    console.log('Received CTOS webhook:', {
-      headers: req.headers,
+    console.log('🔔 CTOS webhook received:', {
+      timestamp: new Date().toISOString(),
+      method: req.method,
+      url: req.url,
+      userAgent: req.headers['user-agent'],
+      contentType: req.headers['content-type'],
+      contentLength: req.headers['content-length'],
+      xForwardedFor: req.headers['x-forwarded-for'],
+      remoteAddress: req.connection?.remoteAddress || req.socket?.remoteAddress,
       body: typeof req.body === 'string' ? 'encrypted_data' : req.body
     });
 
@@ -282,7 +307,8 @@ router.post('/webhook', async (req, res) => {
         kycId: kycSession.id,
         type: 'front',
         storageUrl: `data:image/jpeg;base64,${frontImage}`,
-        hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
+        hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex'),
+        updatedAt: new Date()
       });
     }
 
@@ -291,7 +317,8 @@ router.post('/webhook', async (req, res) => {
         kycId: kycSession.id,
         type: 'back',
         storageUrl: `data:image/jpeg;base64,${backImage}`,
-        hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
+        hashSha256: crypto.createHash('sha256').update(backImage).digest('hex'),
+        updatedAt: new Date()
       });
     }
 
@@ -300,15 +327,29 @@ router.post('/webhook', async (req, res) => {
         kycId: kycSession.id,
         type: 'selfie',
         storageUrl: `data:image/jpeg;base64,${faceImage}`,
-        hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
+        hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex'),
+        updatedAt: new Date()
       });
     }
 
-    // Create documents in batch
+    // Create documents using upsert to prevent duplicates
     if (documentsToCreate.length > 0) {
-      await prisma.kycDocument.createMany({
-        data: documentsToCreate
-      });
+      for (const doc of documentsToCreate) {
+        await prisma.kycDocument.upsert({
+          where: {
+            kycId_type: {
+              kycId: doc.kycId,
+              type: doc.type
+            }
+          },
+          update: {
+            storageUrl: doc.storageUrl,
+            hashSha256: doc.hashSha256,
+            updatedAt: new Date()
+          },
+          create: doc
+        });
+      }
       console.log(`Stored ${documentsToCreate.length} documents for KYC session ${kycSession.id}`);
     }
 

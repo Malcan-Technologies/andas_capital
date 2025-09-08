@@ -502,8 +502,10 @@ model KycDocument {
   storageUrl String
   hashSha256 String
   createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt @default(now())
   kycSession KycSession  @relation(fields: [kycId], references: [id], onDelete: Cascade)
 
+  @@unique([kycId, type], name: "kycId_type")
   @@index([kycId])
   @@map("kyc_documents")
 }
