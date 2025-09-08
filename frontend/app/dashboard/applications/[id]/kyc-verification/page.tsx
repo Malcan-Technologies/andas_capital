@@ -109,6 +109,12 @@ export default function KycVerificationPage() {
 				}>('/api/kyc/user-ctos-status');
 				
 				console.log('CTOS Status Data:', ctosData);
+				console.log('CTOS Status Result Check:', {
+					success: ctosData.success,
+					hasKycSession: ctosData.hasKycSession,
+					ctosResult: ctosData.ctosResult,
+					isAlreadyApproved: ctosData.isAlreadyApproved
+				});
 				
 				if (ctosData.success && ctosData.hasKycSession) {
 					setCtosStatus({
@@ -169,6 +175,12 @@ export default function KycVerificationPage() {
 			if (documentsData.success && documentsData.hasDocuments) {
 				setKycDocuments(documentsData.documents);
 				console.log('Fetched KYC documents:', documentsData.documents);
+				console.log('Document storage URLs:', documentsData.documents.map(doc => ({
+					type: doc.type,
+					hasStorageUrl: !!doc.storageUrl,
+					storageUrlLength: doc.storageUrl?.length,
+					isBase64: doc.storageUrl?.startsWith('data:image/')
+				})));
 			}
 		} catch (err) {
 			console.error('Error fetching KYC documents:', err);
@@ -315,7 +327,11 @@ export default function KycVerificationPage() {
 	};
 
 	const handleAcceptKyc = async () => {
-		if (!ctosStatus || ctosStatus.result !== 1) return;
+		// Allow continuing if either result is 1 OR if isAlreadyApproved is true
+		if (!ctosStatus || (ctosStatus.result !== 1 && !ctosStatus.isAlreadyApproved)) {
+			console.log('Cannot continue - KYC not approved:', { ctosStatus });
+			return;
+		}
 
 		try {
 			setProcessingAccept(true);
@@ -334,9 +350,10 @@ export default function KycVerificationPage() {
 				}
 			);
 
-			// Redirect to certificate request
-			router.push(`/dashboard/applications/${params.id}/cert-check`);
+			// Redirect to OTP verification for certificate request
+			router.push(`/dashboard/applications/${params.id}/otp-verification`);
 		} catch (err) {
+			console.log('Error in handleAcceptKyc:', err);
 			setKycError(err instanceof Error ? err.message : "Failed to proceed with KYC verification");
 		} finally {
 			setProcessingAccept(false);
@@ -568,15 +585,25 @@ export default function KycVerificationPage() {
 										{kycDocuments.map((doc) => (
 											<div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
 												<div className="aspect-[4/3] mb-3 bg-gray-100 rounded-lg overflow-hidden">
-													<img 
-														src={doc.storageUrl} 
-														alt={`${doc.type === 'front' ? 'IC Front' : doc.type === 'back' ? 'IC Back' : 'Selfie'}`}
-														className="w-full h-full object-cover"
-														onError={(e) => {
-															const target = e.target as HTMLImageElement;
-															target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDIwMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMDAgNzVMMTI1IDEwMEg3NUwxMDAgNzVaIiBmaWxsPSIjOUI5QkE0Ii8+CjwvdXNnPg==';
-														}}
-													/>
+													{doc.storageUrl ? (
+														<img 
+															src={doc.storageUrl} 
+															alt={`${doc.type === 'front' ? 'IC Front' : doc.type === 'back' ? 'IC Back' : 'Selfie'}`}
+															className="w-full h-full object-cover"
+															onError={(e) => {
+																const target = e.target as HTMLImageElement;
+																target.style.display = 'none';
+																const parent = target.parentElement;
+																if (parent) {
+																	parent.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500 text-sm">Image not available</div>';
+																}
+															}}
+														/>
+													) : (
+														<div className="flex items-center justify-center h-full text-gray-500 text-sm">
+															No image available
+														</div>
+													)}
 												</div>
 												<div className="text-center">
 													<h5 className="text-sm font-semibold text-gray-700 mb-1">
@@ -608,29 +635,24 @@ export default function KycVerificationPage() {
 							</div>
 
 							{/* Action Buttons */}
-							<div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100">
+							<div className="flex justify-center pt-6 border-t border-gray-100">
 								<button
 									onClick={handleAcceptKyc}
 									disabled={processingAccept}
-									className="flex-1 flex items-center justify-center px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+									className="flex items-center justify-center px-8 py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
 								>
 									{processingAccept ? (
 										<>
-											<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+											<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
 											Accepting...
 										</>
 									) : (
 										<>
-											<CheckCircleIcon className="w-5 h-5 mr-2" />
+											<CheckCircleIcon className="w-6 h-6 mr-2" />
 											Accept & Continue
 										</>
 									)}
 								</button>
-								<div className="flex-1 text-center">
-									<p className="text-sm text-gray-500 font-body">
-										✅ You have already passed KYC verification. No further identity verification is needed.
-									</p>
-								</div>
 							</div>
 						</div>
 					) : ctosStatus?.hasKycSession && ctosStatus?.result === 0 ? (

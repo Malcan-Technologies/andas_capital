@@ -88,13 +88,30 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
     }
 
     // Check if user already has an approved KYC session
+    // Need to check for sessions where userId might have a prefix (like OPG-Capital, etc.)
     const existingApprovedSession = await db.kycSession.findFirst({
       where: {
-        userId: req.user.userId,
-        ctosOnboardingId: { not: null },
-        ctosResult: 1 // Approved
+        OR: [
+          {
+            userId: req.user.userId,
+            ctosOnboardingId: { not: null },
+            ctosResult: 1 // Approved
+          },
+          {
+            userId: { endsWith: req.user.userId },
+            ctosOnboardingId: { not: null },
+            ctosResult: 1 // Approved
+          }
+        ]
       },
       orderBy: { createdAt: 'desc' }
+    });
+
+    console.log(`User ${req.user.userId} - Checking for approved KYC sessions:`, {
+      found: !!existingApprovedSession,
+      sessionId: existingApprovedSession?.id,
+      ctosResult: existingApprovedSession?.ctosResult,
+      ctosOnboardingId: existingApprovedSession?.ctosOnboardingId
     });
 
     if (existingApprovedSession) {
@@ -825,10 +842,19 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
     }
 
     // Find the most recent approved KYC session
+    // Need to check for sessions where userId might have a prefix (like OPG-Capital, etc.)
     let approvedSession = await db.kycSession.findFirst({
       where: {
-        userId,
-        ctosResult: 1 // Approved
+        OR: [
+          {
+            userId,
+            ctosResult: 1 // Approved
+          },
+          {
+            userId: { endsWith: userId },
+            ctosResult: 1 // Approved
+          }
+        ]
       },
       include: {
         documents: true
@@ -848,12 +874,24 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
     if (approvedSession.ctosOnboardingId) {
       try {
         console.log(`Fetching latest CTOS data for approved session ${approvedSession.id}`);
-        const ctosStatus = await ctosService.getStatus({
-          ref_id: userId,
-          onboarding_id: approvedSession.ctosOnboardingId,
-          platform: 'Web',
-          mode: 2 // Detail mode
-        });
+        // Try with OPG-Capital prefix first, fallback to original userId
+        let ctosStatus;
+        try {
+          ctosStatus = await ctosService.getStatus({
+            ref_id: `OPG-Capital${userId}`,
+            onboarding_id: approvedSession.ctosOnboardingId,
+            platform: 'Web',
+            mode: 2 // Detail mode
+          });
+        } catch (error) {
+          console.log('Failed with OPG-Capital prefix, trying original userId...');
+          ctosStatus = await ctosService.getStatus({
+            ref_id: userId,
+            onboarding_id: approvedSession.ctosOnboardingId,
+            platform: 'Web',
+            mode: 2 // Detail mode
+          });
+        }
 
         // Update session with latest CTOS data
         await db.kycSession.update({
@@ -865,71 +903,85 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
           }
         });
 
-        // Store/update document images if available
-        if (ctosStatus.status === 2 && ctosStatus.result === 1) {
-          const ctosData = ctosStatus as any;
-          const documentsToUpsert = [];
+        // Store/update document images if available from CTOS response
+        const ctosData = ctosStatus as any;
+        const documentsToUpsert = [];
 
-          // Extract images from step1/step2 or top level
-          const frontImage = ctosData.front_document_image || ctosData.step1?.front_document_image;
-          const backImage = ctosData.back_document_image || ctosData.step1?.back_document_image;
-          const faceImage = ctosData.face_image || ctosData.step2?.best_frame;
+        // Extract images from step1 and step2 (based on actual CTOS response structure)
+        const frontImage = ctosData.step1?.front_document_image;
+        const backImage = ctosData.step1?.back_document_image;
+        const faceImage = ctosData.step2?.best_frame;
 
-          console.log('CTOS response structure check for documents endpoint:', {
-            hasStep1: !!ctosData.step1,
-            hasStep2: !!ctosData.step2,
-            frontImage: !!frontImage,
-            backImage: !!backImage,
-            faceImage: !!faceImage
+      console.log('CTOS response structure check for documents endpoint:', {
+        ctosStatus: ctosStatus.status,
+        ctosResult: ctosStatus.result,
+        hasStep1: !!ctosData.step1,
+        hasStep2: !!ctosData.step2,
+        frontImage: !!frontImage,
+        backImage: !!backImage,
+        faceImage: !!faceImage,
+        hasAnyImage: !!(frontImage || backImage || faceImage),
+        fullResponse: JSON.stringify(ctosData, null, 2)
+      });
+
+        // Store images if available (regardless of current CTOS status since user is already approved)
+        if (frontImage) {
+          documentsToUpsert.push({
+            kycId: approvedSession.id,
+            type: 'front',
+            storageUrl: `data:image/jpeg;base64,${frontImage}`,
+            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
           });
+        }
 
-          if (frontImage) {
-            documentsToUpsert.push({
-              kycId: approvedSession.id,
-              type: 'front',
-              storageUrl: `data:image/jpeg;base64,${frontImage}`,
-              hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
+        if (backImage) {
+          documentsToUpsert.push({
+            kycId: approvedSession.id,
+            type: 'back',
+            storageUrl: `data:image/jpeg;base64,${backImage}`,
+            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
+          });
+        }
+
+        if (faceImage) {
+          documentsToUpsert.push({
+            kycId: approvedSession.id,
+            type: 'selfie',
+            storageUrl: `data:image/jpeg;base64,${faceImage}`,
+            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
+          });
+        }
+
+        // Upsert documents (create if not exists, update if exists)
+        if (documentsToUpsert.length > 0) {
+          for (const doc of documentsToUpsert) {
+            // Check if document exists
+            const existingDoc = await db.kycDocument.findFirst({
+              where: {
+                kycId: doc.kycId,
+                type: doc.type
+              }
             });
-          }
 
-          if (backImage) {
-            documentsToUpsert.push({
-              kycId: approvedSession.id,
-              type: 'back',
-              storageUrl: `data:image/jpeg;base64,${backImage}`,
-              hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
-            });
-          }
-
-          if (faceImage) {
-            documentsToUpsert.push({
-              kycId: approvedSession.id,
-              type: 'selfie',
-              storageUrl: `data:image/jpeg;base64,${faceImage}`,
-              hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
-            });
-          }
-
-          // Upsert documents (update if exists, create if not)
-          if (documentsToUpsert.length > 0) {
-            for (const doc of documentsToUpsert) {
-              await db.kycDocument.upsert({
-                where: {
-                  kycId_type: {
-                    kycId: doc.kycId,
-                    type: doc.type
-                  }
-                },
-                update: {
+            if (existingDoc) {
+              // Update existing document
+              await db.kycDocument.update({
+                where: { id: existingDoc.id },
+                data: {
                   storageUrl: doc.storageUrl,
-                  hashSha256: doc.hashSha256,
-                  updatedAt: new Date()
-                },
-                create: doc
+                  hashSha256: doc.hashSha256
+                }
+              });
+            } else {
+              // Create new document
+              await db.kycDocument.create({
+                data: doc
               });
             }
-            console.log(`Updated ${documentsToUpsert.length} documents from latest CTOS data`);
           }
+          console.log(`Stored/updated ${documentsToUpsert.length} documents from CTOS response`);
+        } else {
+          console.log('No images found in CTOS response for approved session');
         }
       } catch (ctosError) {
         console.error('Error updating CTOS data for documents endpoint:', ctosError);
@@ -974,11 +1026,21 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
     }
 
     // Find the best KYC session for this user (prioritize approved, then most recent)
+    // Need to check for sessions where userId might have a prefix (like OPG-Capital, etc.)
     let kycSession = await db.kycSession.findFirst({
       where: {
-        userId,
-        ctosOnboardingId: { not: null },
-        ctosResult: 1 // Approved
+        OR: [
+          {
+            userId,
+            ctosOnboardingId: { not: null },
+            ctosResult: 1 // Approved
+          },
+          {
+            userId: { endsWith: userId },
+            ctosOnboardingId: { not: null },
+            ctosResult: 1 // Approved
+          }
+        ]
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -988,15 +1050,54 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       sessionId: kycSession?.id,
       ctosOnboardingId: kycSession?.ctosOnboardingId,
       ctosResult: kycSession?.ctosResult,
-      status: kycSession?.status
+      status: kycSession?.status,
+      sessionUserId: kycSession?.userId
     });
+
+    // Additional debug: Let's see what sessions exist for this user (with any prefix)
+    const allSessions = await db.kycSession.findMany({
+      where: {
+        OR: [
+          { userId },
+          { userId: { endsWith: userId } }
+        ]
+      },
+      select: {
+        id: true,
+        userId: true,
+        ctosResult: true,
+        ctosStatus: true,
+        status: true,
+        ctosOnboardingId: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    console.log(`User ${userId} - All sessions found:`, allSessions.map((s: any) => ({
+      id: s.id,
+      userId: s.userId,
+      ctosResult: s.ctosResult,
+      ctosStatus: s.ctosStatus,
+      status: s.status,
+      hasCtosOnboardingId: !!s.ctosOnboardingId,
+      createdAt: s.createdAt
+    })));
 
     // If no approved session found, get the most recent session with CTOS data
     if (!kycSession) {
       kycSession = await db.kycSession.findFirst({
         where: {
-          userId,
-          ctosOnboardingId: { not: null }
+          OR: [
+            {
+              userId,
+              ctosOnboardingId: { not: null }
+            },
+            {
+              userId: { endsWith: userId },
+              ctosOnboardingId: { not: null }
+            }
+          ]
         },
         orderBy: { createdAt: 'desc' }
       });
@@ -1022,12 +1123,24 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
 
     // Always get latest status from CTOS (to update images even for approved sessions)
     try {
-      const ctosStatus = await ctosService.getStatus({
-        ref_id: kycSession.userId,
-        onboarding_id: kycSession.ctosOnboardingId,
-        platform: 'Web',
-        mode: 2 // Detail mode
-      });
+      // Try with OPG-Capital prefix first, fallback to original userId
+      let ctosStatus;
+      try {
+        ctosStatus = await ctosService.getStatus({
+          ref_id: `OPG-Capital${kycSession.userId}`,
+          onboarding_id: kycSession.ctosOnboardingId,
+          platform: 'Web',
+          mode: 2 // Detail mode
+        });
+      } catch (error) {
+        console.log('Failed with OPG-Capital prefix, trying original userId...');
+        ctosStatus = await ctosService.getStatus({
+          ref_id: kycSession.userId,
+          onboarding_id: kycSession.ctosOnboardingId,
+          platform: 'Web',
+          mode: 2 // Detail mode
+        });
+      }
 
       // Update our session with the latest status
       await db.kycSession.update({
@@ -1043,73 +1156,89 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         }
       });
 
-      // Store/update document images if available and session is completed
-      if (ctosStatus.status === 2 && ctosStatus.result === 1) { // Completed and approved
-        const ctosData = ctosStatus as any;
-        const documentsToUpsert = [];
+      // Store/update document images if available from CTOS response
+      const ctosData = ctosStatus as any;
+      const documentsToUpsert = [];
 
-        // Extract images from step1/step2 or top level
-        const frontImage = ctosData.front_document_image || ctosData.step1?.front_document_image;
-        const backImage = ctosData.back_document_image || ctosData.step1?.back_document_image;
-        const faceImage = ctosData.face_image || ctosData.step2?.best_frame;
+      // Extract images from step1 and step2 (based on actual CTOS response structure)
+      const frontImage = ctosData.step1?.front_document_image;
+      const backImage = ctosData.step1?.back_document_image;
+      const faceImage = ctosData.step2?.best_frame;
 
-        console.log('CTOS response structure check:', {
-          hasStep1: !!ctosData.step1,
-          hasStep2: !!ctosData.step2,
-          frontImage: !!frontImage,
-          backImage: !!backImage,
-          faceImage: !!faceImage
+      console.log('CTOS response structure check:', {
+        ctosStatus: ctosStatus.status,
+        ctosResult: ctosStatus.result,
+        hasStep1: !!ctosData.step1,
+        hasStep2: !!ctosData.step2,
+        frontImage: !!frontImage,
+        backImage: !!backImage,
+        faceImage: !!faceImage,
+        hasAnyImage: !!(frontImage || backImage || faceImage),
+        fullResponse: JSON.stringify(ctosData, null, 2)
+      });
+
+      // Store images if available (regardless of current CTOS status if we know user is approved)
+      if (frontImage) {
+        documentsToUpsert.push({
+          kycId: kycSession.id,
+          type: 'front',
+          storageUrl: `data:image/jpeg;base64,${frontImage}`,
+          hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
         });
+      }
 
-        if (frontImage) {
-          documentsToUpsert.push({
-            kycId: kycSession.id,
-            type: 'front',
-            storageUrl: `data:image/jpeg;base64,${frontImage}`,
-            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
+      if (backImage) {
+        documentsToUpsert.push({
+          kycId: kycSession.id,
+          type: 'back',
+          storageUrl: `data:image/jpeg;base64,${backImage}`,
+          hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
+        });
+      }
+
+      if (faceImage) {
+        documentsToUpsert.push({
+          kycId: kycSession.id,
+          type: 'selfie',
+          storageUrl: `data:image/jpeg;base64,${faceImage}`,
+          hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
+        });
+      }
+
+      // Upsert documents (create if not exists, update if exists)
+      if (documentsToUpsert.length > 0) {
+        for (const doc of documentsToUpsert) {
+          // Check if document exists
+          const existingDoc = await db.kycDocument.findFirst({
+            where: {
+              kycId: doc.kycId,
+              type: doc.type
+            }
           });
-        }
 
-        if (backImage) {
-          documentsToUpsert.push({
-            kycId: kycSession.id,
-            type: 'back',
-            storageUrl: `data:image/jpeg;base64,${backImage}`,
-            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
-          });
-        }
-
-        if (faceImage) {
-          documentsToUpsert.push({
-            kycId: kycSession.id,
-            type: 'selfie',
-            storageUrl: `data:image/jpeg;base64,${faceImage}`,
-            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
-          });
-        }
-
-        // Upsert documents (update if exists, create if not)
-        if (documentsToUpsert.length > 0) {
-          for (const doc of documentsToUpsert) {
-            await db.kycDocument.upsert({
-              where: {
-                kycId_type: {
-                  kycId: doc.kycId,
-                  type: doc.type
-                }
-              },
-              update: {
+          if (existingDoc) {
+            // Update existing document
+            await db.kycDocument.update({
+              where: { id: existingDoc.id },
+              data: {
                 storageUrl: doc.storageUrl,
-                hashSha256: doc.hashSha256,
-                updatedAt: new Date()
-              },
-              create: doc
+                hashSha256: doc.hashSha256
+              }
+            });
+          } else {
+            // Create new document
+            await db.kycDocument.create({
+              data: doc
             });
           }
-          console.log(`Stored/updated ${documentsToUpsert.length} documents for KYC session ${kycSession.id}`);
         }
+        console.log(`Stored/updated ${documentsToUpsert.length} documents for KYC session ${kycSession.id}`);
+      } else {
+        console.log('No images found in CTOS response');
+      }
 
-        // Update user KYC status if approved
+      // Update user KYC status if approved
+      if (ctosStatus.status === 2 && ctosStatus.result === 1) {
         await db.user.update({
           where: { id: kycSession.userId },
           data: { kycStatus: true }
