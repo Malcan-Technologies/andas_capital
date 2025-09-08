@@ -172,7 +172,8 @@ export default function CertCheckPage() {
 	};
 
 	const handleBack = () => {
-		router.push("/dashboard/loans");
+		// Go back to KYC verification (previous step in the flow)
+		router.push(`/dashboard/applications/${params.id}/kyc-verification`);
 	};
 
 	if (loading || checking) {

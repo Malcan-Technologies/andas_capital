@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
-import { fetchKycImages, KycImages } from "@/lib/kycUtils";
-import KycImageDisplay from "@/components/KycImageDisplay";
-import { ArrowLeftIcon, EyeIcon, CheckCircleIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, CheckCircleIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 
 interface LoanApplication {
 	id: string;
@@ -63,17 +61,20 @@ export default function KycVerificationPage() {
 		}
 	}, [isSuccess]);
 	const [application, setApplication] = useState<LoanApplication | null>(null);
-	const [kycImages, setKycImages] = useState<KycImages | null>(null);
 	const [loading, setLoading] = useState(true);
-	const [kycImagesLoading, setKycImagesLoading] = useState(true);
+	const [ctosStatusLoading, setCtosStatusLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [kycError, setKycError] = useState<string | null>(null);
-	const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
-	const [imageViewerOpen, setImageViewerOpen] = useState(false);
 	const [processingAccept, setProcessingAccept] = useState(false);
 	const [ctosOnboardingUrl, setCtosOnboardingUrl] = useState<string | null>(null);
 	const [pollingKycId, setPollingKycId] = useState<string | null>(null);
-	const [ctosStatus, setCtosStatus] = useState<{ status: number; result?: number } | null>(null);
+	const [ctosStatus, setCtosStatus] = useState<{ 
+		status: number; 
+		result?: number;
+		rejectMessage?: string;
+		canRetry?: boolean;
+		hasKycSession?: boolean;
+	} | null>(null);
 	const [kycInProgress, setKycInProgress] = useState(false);
 	const [kycCompleted, setKycCompleted] = useState(false);
 
@@ -86,14 +87,48 @@ export default function KycVerificationPage() {
 				);
 				setApplication(appData);
 
-				// Fetch KYC images for this user (KYC is tied to user profile, not specific application)
-				const kycData = await fetchKycImages();
-				setKycImages(kycData);
+				// Fetch user's CTOS KYC status instead of KYC images
+				const ctosData = await fetchWithTokenRefresh<{
+					success: boolean;
+					hasKycSession: boolean;
+					status: string;
+					ctosStatus: number;
+					ctosResult: number;
+					canRetry: boolean;
+					rejectMessage?: string;
+					kycSessionId?: string;
+				}>('/api/kyc/user-ctos-status');
+				
+				console.log('CTOS Status Data:', ctosData);
+				
+				if (ctosData.success && ctosData.hasKycSession) {
+					setCtosStatus({
+						status: ctosData.ctosStatus,
+						result: ctosData.ctosResult,
+						rejectMessage: ctosData.rejectMessage,
+						canRetry: ctosData.canRetry,
+						hasKycSession: true
+					});
+					
+					// Set completed state if approved
+					if (ctosData.ctosResult === 1) {
+						setKycCompleted(true);
+						setKycInProgress(false);
+					}
+				} else {
+					setCtosStatus({
+						status: 0,
+						result: 2,
+						hasKycSession: false,
+						canRetry: true
+					});
+				}
 			} catch (err) {
+				console.error('Error fetching data:', err);
 				setError(err instanceof Error ? err.message : "An error occurred");
 			} finally {
 				setLoading(false);
-				setKycImagesLoading(false);
+				setCtosStatusLoading(false);
 			}
 		};
 
@@ -181,13 +216,17 @@ export default function KycVerificationPage() {
 					setKycInProgress(false);
 					setKycCompleted(true);
 					
-					if (statusResponse.ctosResult === 1) { // Approved
-						// Refresh KYC images to show new documents
-						const kycData = await fetchKycImages();
-						setKycImages(kycData);
-						setCtosOnboardingUrl(null);
-						setPollingKycId(null);
-					} else {
+				if (statusResponse.ctosResult === 1) { // Approved
+					// Update CTOS status state
+					setCtosStatus(prev => ({
+						...prev!,
+						status: statusResponse.ctosStatus,
+						result: statusResponse.ctosResult,
+						hasKycSession: true
+					}));
+					setCtosOnboardingUrl(null);
+					setPollingKycId(null);
+				} else {
 						// Rejected
 						setKycError("KYC verification was rejected. Please try again.");
 						setCtosOnboardingUrl(null);
@@ -221,15 +260,11 @@ export default function KycVerificationPage() {
 	};
 
 	const handleAcceptKyc = async () => {
-		if (!kycImages) return;
+		if (!ctosStatus || ctosStatus.result !== 1) return;
 
 		try {
 			setProcessingAccept(true);
 			
-			// In the new flow, we just need to update the application status
-			// The KYC images are already approved and available
-			console.log("New flow: Accepting existing KYC images and proceeding to profile confirmation");
-
 			// Update application status to next step - certificate request
 			await fetchWithTokenRefresh(
 				`/api/loan-applications/${params.id}`,
@@ -247,25 +282,16 @@ export default function KycVerificationPage() {
 			// Redirect to certificate request
 			router.push(`/dashboard/applications/${params.id}/cert-check`);
 		} catch (err) {
-			setKycError(err instanceof Error ? err.message : "Failed to accept KYC verification");
+			setKycError(err instanceof Error ? err.message : "Failed to proceed with KYC verification");
 		} finally {
 			setProcessingAccept(false);
 		}
 	};
 
-	const handleKycImageView = (imageId: string) => {
-		setSelectedImageId(imageId);
-		setImageViewerOpen(true);
-	};
-
-	const closeImageViewer = () => {
-		setImageViewerOpen(false);
-		setSelectedImageId(null);
-	};
 
 	const handleBack = () => {
-		// Go back to loans dashboard - attestation is already completed and cannot be reversed
-		router.push("/dashboard/loans?tab=applications");
+		// Go back to profile confirmation (previous step in the flow)
+		router.push(`/dashboard/applications/${params.id}/profile-confirmation`);
 	};
 
 	if (loading) {
@@ -443,13 +469,13 @@ export default function KycVerificationPage() {
 								</button>
 							</div>
 						</div>
-					) : kycImagesLoading ? (
+					) : ctosStatusLoading ? (
 						<div className="flex items-center justify-center py-12">
 							<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-primary"></div>
 							<span className="ml-3 text-gray-600 font-body">Checking KYC status...</span>
 						</div>
-					) : kycImages ? (
-						// Show existing KYC images
+					) : ctosStatus?.hasKycSession && ctosStatus?.result === 1 ? (
+						// Show approved KYC status from CTOS
 						<div className="space-y-6">
 							<div className="bg-green-50 border border-green-200 rounded-xl p-6">
 								<div className="flex items-start space-x-4">
@@ -458,95 +484,28 @@ export default function KycVerificationPage() {
 									</div>
 									<div className="flex-1">
 										<h3 className="text-lg font-heading font-bold text-green-800 mb-2">
-											KYC Documents Found
+											KYC Verification Approved
 										</h3>
 										<p className="text-green-700 font-body">
-											We found your previously uploaded KYC documents. Please review them below and accept to continue, or redo the verification if needed.
+											Your identity verification has been approved by CTOS. You can proceed to the next step or redo the verification if needed.
 										</p>
 									</div>
 								</div>
 							</div>
 
-							{/* KYC Images Grid */}
-							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-								{kycImages.images?.front && (
-									<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-										<div className="flex flex-col items-center space-y-3">
-											<div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-												<svg className="h-6 w-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-													<rect x="3" y="3" width="18" height="14" rx="2" ry="2"/>
-												</svg>
-											</div>
-											<div className="text-center">
-												<h4 className="text-sm lg:text-base font-semibold text-gray-700 font-body mb-1">
-													{kycImages.images?.front?.type}
-												</h4>
-												<p className="text-xs text-gray-500 font-body mb-3">
-													MyKad Front Side
-												</p>
-												<button
-													onClick={() => handleKycImageView(kycImages.images?.front?.id!)}
-													className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200 hover:border-blue-300 w-full"
-												>
-													<EyeIcon className="h-4 w-4 mr-1" />
-													View
-												</button>
-											</div>
-										</div>
+							{/* Status Information */}
+							<div className="bg-gray-50 rounded-xl p-6">
+								<div className="text-center">
+									<div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+										<CheckCircleIcon className="w-10 h-10 text-green-600" />
 									</div>
-								)}
-								{kycImages.images?.back && (
-									<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-										<div className="flex flex-col items-center space-y-3">
-											<div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-												<svg className="h-6 w-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-													<rect x="3" y="3" width="18" height="14" rx="2" ry="2"/>
-												</svg>
-											</div>
-											<div className="text-center">
-												<h4 className="text-sm lg:text-base font-semibold text-gray-700 font-body mb-1">
-													{kycImages.images?.back?.type}
-												</h4>
-												<p className="text-xs text-gray-500 font-body mb-3">
-													MyKad Back Side
-												</p>
-												<button
-													onClick={() => handleKycImageView(kycImages.images?.back?.id!)}
-													className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200 hover:border-blue-300 w-full"
-												>
-													<EyeIcon className="h-4 w-4 mr-1" />
-													View
-												</button>
-											</div>
-										</div>
-									</div>
-								)}
-								{kycImages.images?.selfie && (
-									<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-										<div className="flex flex-col items-center space-y-3">
-											<div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-												<svg className="h-6 w-6 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-													<circle cx="12" cy="12" r="4"/>
-												</svg>
-											</div>
-											<div className="text-center">
-												<h4 className="text-sm lg:text-base font-semibold text-gray-700 font-body mb-1">
-													{kycImages.images?.selfie?.type}
-												</h4>
-												<p className="text-xs text-gray-500 font-body mb-3">
-													Identity Verification Photo
-												</p>
-												<button
-													onClick={() => handleKycImageView(kycImages.images?.selfie?.id!)}
-													className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200 hover:border-blue-300 w-full"
-												>
-													<EyeIcon className="h-4 w-4 mr-1" />
-													View
-												</button>
-											</div>
-										</div>
-									</div>
-								)}
+									<h4 className="text-xl font-heading font-bold text-gray-700 mb-2">
+										Identity Verified Successfully
+									</h4>
+									<p className="text-gray-600 font-body">
+										Your identity documents have been processed and verified through our secure CTOS eKYC system.
+									</p>
+								</div>
 							</div>
 
 							{/* Action Buttons */}
@@ -579,8 +538,40 @@ export default function KycVerificationPage() {
 								</button>
 							</div>
 						</div>
+					) : ctosStatus?.hasKycSession && ctosStatus?.result === 0 ? (
+						// Show rejected KYC status from CTOS
+						<div className="space-y-6">
+							<div className="bg-red-50 border border-red-200 rounded-xl p-6">
+								<div className="flex items-start space-x-4">
+									<div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+										<svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.754-.833-2.464 0L4.35 15.5c-.77.833.192 2.5 1.732 2.5z" />
+										</svg>
+									</div>
+									<div className="flex-1">
+										<h3 className="text-lg font-heading font-bold text-red-800 mb-2">
+											KYC Verification Rejected
+										</h3>
+										<p className="text-red-700 font-body mb-3">
+											{ctosStatus.rejectMessage || "Your identity verification was rejected. Please try again with clearer documents."}
+										</p>
+										<div className="mt-4">
+											<button
+												onClick={() => handleStartKyc(true)}
+												className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+											>
+												<svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+												</svg>
+												Retry KYC Verification
+											</button>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
 					) : (
-						// No existing KYC - start new
+						// No existing KYC or not available - start new
 						<div className="text-center py-12">
 							<div className="w-20 h-20 mx-auto mb-6 bg-purple-100 rounded-full flex items-center justify-center">
 								<ShieldCheckIcon className="w-10 h-10 text-purple-600" />
@@ -710,36 +701,6 @@ export default function KycVerificationPage() {
 				</div>
 			</div>
 
-			{/* KYC Image Viewer Modal */}
-			{imageViewerOpen && selectedImageId && (
-				<div 
-					className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-					onClick={(e) => {
-						if (e.target === e.currentTarget) {
-							closeImageViewer();
-						}
-					}}
-				>
-					<div className="bg-white rounded-2xl shadow-2xl max-w-4xl max-h-[90vh] overflow-hidden border border-gray-100 relative">
-						<div className="flex items-center justify-between p-6 border-b border-gray-100">
-							<h3 className="text-xl font-heading font-bold text-gray-700">
-								KYC Document
-							</h3>
-							<button
-								onClick={closeImageViewer}
-								className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-							>
-								<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-								</svg>
-							</button>
-						</div>
-						<div className="p-6">
-							<KycImageDisplay imageId={selectedImageId} />
-						</div>
-					</div>
-				</div>
-			)}
 		</DashboardLayout>
 	);
 }

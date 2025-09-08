@@ -778,6 +778,90 @@ router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, re
 
 // OCR validation endpoints removed - KYC now uses simplified image upload only
 
+// New endpoint to get user's KYC status based on CTOS data
+router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Find the most recent KYC session for this user
+    const kycSession = await db.kycSession.findFirst({
+      where: {
+        userId,
+        ctosOnboardingId: { not: null }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!kycSession || !kycSession.ctosOnboardingId) {
+      return res.json({
+        success: true,
+        hasKycSession: false,
+        status: 'no_kyc_session',
+        ctosStatus: null,
+        ctosResult: null
+      });
+    }
+
+    // Get latest status from CTOS
+    try {
+      const ctosStatus = await ctosService.getStatus({
+        ref_id: kycSession.userId,
+        onboarding_id: kycSession.ctosOnboardingId,
+        platform: 'Web',
+        mode: 2 // Detail mode
+      });
+
+      // Update our session with the latest status
+      await db.kycSession.update({
+        where: { id: kycSession.id },
+        data: {
+          ctosStatus: ctosStatus.status,
+          ctosResult: ctosStatus.result,
+          ctosData: ctosStatus as any
+        }
+      });
+
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        kycSessionId: kycSession.id,
+        status: kycSession.status,
+        ctosStatus: ctosStatus.status,
+        ctosResult: ctosStatus.result,
+        ctosData: ctosStatus,
+        canRetry: ctosStatus.result === 0 || ctosStatus.result === 2, // Can retry if rejected or not available
+        rejectMessage: ctosStatus.result === 0 ? (ctosStatus as any).reject_message : null
+      });
+    } catch (ctosError) {
+      console.error('Error fetching CTOS status:', ctosError);
+      
+      // Return the last known status from our database
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        kycSessionId: kycSession.id,
+        status: kycSession.status,
+        ctosStatus: kycSession.ctosStatus,
+        ctosResult: kycSession.ctosResult,
+        ctosData: kycSession.ctosData,
+        canRetry: kycSession.ctosResult === 0 || kycSession.ctosResult === 2,
+        rejectMessage: kycSession.ctosResult === 0 ? (kycSession.ctosData as any)?.reject_message : null,
+        error: 'Could not fetch latest status from CTOS, showing cached data'
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching user CTOS status:', error);
+    return res.status(500).json({ 
+      error: 'Failed to fetch user KYC status',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Export the helper function for use in other API files
 export { userHasAllKycDocuments };
 
