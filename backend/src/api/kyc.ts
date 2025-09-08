@@ -504,13 +504,38 @@ router.get("/:kycId/ctos-status", authenticateKycOrAuth, async (req: AuthRequest
     }
 
     try {
-      // Get status from CTOS
+      console.log(`📊 CTOS Status Check for session ${kycId}: current status=${session.status}, ctosStatus=${session.ctosStatus}, ctosResult=${session.ctosResult}`);
+      
+      // If session is already completed (webhook updated it), return DB values
+      if (session.status === 'APPROVED' || session.status === 'REJECTED') {
+        console.log(`✅ Session ${kycId} already completed with status=${session.status}, returning DB values`);
+        
+        // Set cache-busting headers to prevent 304 responses
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
+        return res.json({
+          success: true,
+          kycId,
+          status: session.status,
+          ctosStatus: session.ctosStatus || 2, // Mark as completed
+          ctosResult: session.ctosResult || (session.status === 'APPROVED' ? 1 : 0),
+          isAlreadyCompleted: true,
+          completedAt: session.completedAt
+        });
+      }
+
+      // Only call CTOS API if session is still pending
+      console.log(`🔄 Session ${kycId} still pending, checking CTOS API for updates`);
       const ctosStatus = await ctosService.getStatus({
         ref_id: session.userId,
         onboarding_id: session.ctosOnboardingId,
         platform: 'Web',
         mode: 2 // Detailed mode
       });
+
+      console.log(`📡 CTOS API returned: status=${ctosStatus.status}, result=${ctosStatus.result}`);
 
       // Update KYC session with latest status
       const updatedSession = await db.kycSession.update({
@@ -526,6 +551,11 @@ router.get("/:kycId/ctos-status", authenticateKycOrAuth, async (req: AuthRequest
           completedAt: ctosStatus.status === 2 ? new Date() : null
         }
       });
+
+      // Set cache-busting headers
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
 
       return res.json({
         success: true,
