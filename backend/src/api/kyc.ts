@@ -72,7 +72,7 @@ function sha256(buffer: Buffer): string {
 router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
   let kycSession: any = null;
   try {
-    const { applicationId, documentName, documentNumber, platform = 'Web', responseUrl } = req.body;
+    const { applicationId, documentName, documentNumber, platform = 'Web' } = req.body;
     if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
 
     if (!documentName || !documentNumber) {
