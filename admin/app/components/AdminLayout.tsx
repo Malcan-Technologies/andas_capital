@@ -24,6 +24,7 @@ import {
 	ReceiptPercentIcon,
 	ExclamationTriangleIcon,
 	VideoCameraIcon,
+	ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import {
 	AdminTokenStorage,
@@ -256,6 +257,11 @@ export default function AdminLayout({
 			name: "Reports",
 			href: "/dashboard/reports",
 			icon: ChartBarIcon,
+		},
+		{
+			name: "Digital Signing",
+			href: "/dashboard/settings/signing",
+			icon: ShieldCheckIcon,
 		},
 		{
 			name: "Settings",

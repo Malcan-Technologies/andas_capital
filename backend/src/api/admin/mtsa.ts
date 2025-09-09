@@ -1,0 +1,391 @@
+import { Router, Response } from 'express';
+import { authenticateToken, AuthRequest } from '../../middleware/auth';
+import { prisma } from '../../lib/prisma';
+
+const router = Router();
+
+// Admin-only middleware
+const adminOnlyMiddleware = async (req: AuthRequest, res: any, next: any) => {
+  try {
+    if (!req.user?.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
+    // Check if user is admin
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { role: true }
+    });
+
+    if (!user || user.role !== "ADMIN") {
+      return res.status(403).json({
+        success: false,
+        message: "Admin access required"
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Admin check error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /api/admin/mtsa/cert-info/{userId}:
+ *   get:
+ *     summary: Get certificate information for a user (admin only)
+ *     tags: [Admin, MTSA]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID (IC number)
+ *     responses:
+ *       200:
+ *         description: Certificate information retrieved successfully
+ *       400:
+ *         description: User ID is required
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to get certificate information
+ */
+router.get('/cert-info/:userId', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    console.log('Admin getting certificate info for user:', { userId, adminUserId: req.user?.userId });
+
+    // Make request to signing orchestrator
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/cert/${userId}`, {
+      method: 'GET',
+      headers: {
+        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    
+    console.log('Certificate info response:', { 
+      userId, 
+      statusCode: data.data?.statusCode,
+      success: data.success 
+    });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error getting certificate info:', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.params.userId 
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get certificate information'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/mtsa/request-otp:
+ *   post:
+ *     summary: Request OTP for certificate enrollment (admin only)
+ *     tags: [Admin, MTSA]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - usage
+ *               - emailAddress
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: User ID (IC number)
+ *               usage:
+ *                 type: string
+ *                 enum: [NU, DS]
+ *                 description: OTP usage type (NU for new user, DS for digital signing)
+ *               emailAddress:
+ *                 type: string
+ *                 description: Email address to send OTP to
+ *     responses:
+ *       200:
+ *         description: OTP request processed successfully
+ *       400:
+ *         description: Invalid request parameters
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to request OTP
+ */
+router.post('/request-otp', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, usage, emailAddress } = req.body;
+    
+    if (!userId || !usage || !emailAddress) {
+      return res.status(400).json({
+        success: false,
+        message: 'Required fields missing: userId, usage, emailAddress'
+      });
+    }
+
+    console.log('Admin requesting OTP for user:', { 
+      userId, 
+      usage, 
+      emailAddress,
+      adminUserId: req.user?.userId 
+    });
+
+    // Make request to signing orchestrator
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/otp`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        usage,
+        emailAddress,
+        requestedBy: 'admin',
+        adminUserId: req.user?.userId
+      }),
+    });
+
+    const data = await response.json();
+    
+    console.log('OTP request response:', { 
+      userId, 
+      usage,
+      statusCode: data.data?.statusCode,
+      success: data.success 
+    });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error requesting OTP:', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.body.userId 
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to request OTP'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/mtsa/request-certificate:
+ *   post:
+ *     summary: Request digital certificate enrollment (admin only)
+ *     tags: [Admin, MTSA]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - fullName
+ *               - emailAddress
+ *               - mobileNo
+ *               - authFactor
+ *               - nricFrontUrl
+ *               - nricBackUrl
+ *               - selfieImageUrl
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: User ID (IC number)
+ *               fullName:
+ *                 type: string
+ *                 description: Full name
+ *               emailAddress:
+ *                 type: string
+ *                 description: Email address
+ *               mobileNo:
+ *                 type: string
+ *                 description: Mobile number
+ *               nationality:
+ *                 type: string
+ *                 description: Nationality code (default: MY)
+ *               userType:
+ *                 type: string
+ *                 description: User type (default: 2 for internal users)
+ *               idType:
+ *                 type: string
+ *                 description: ID type (N for NRIC, P for Passport)
+ *               authFactor:
+ *                 type: string
+ *                 description: OTP code for authentication
+ *               nricFrontUrl:
+ *                 type: string
+ *                 description: Base64 data URL of NRIC front image
+ *               nricBackUrl:
+ *                 type: string
+ *                 description: Base64 data URL of NRIC back image
+ *               selfieImageUrl:
+ *                 type: string
+ *                 description: Base64 data URL of selfie image
+ *               verificationData:
+ *                 type: object
+ *                 description: Verification metadata
+ *     responses:
+ *       200:
+ *         description: Certificate request processed successfully
+ *       400:
+ *         description: Invalid request parameters or missing KYC images
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to request certificate
+ */
+router.post('/request-certificate', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { 
+      userId, 
+      fullName, 
+      emailAddress, 
+      mobileNo, 
+      nationality = 'MY', 
+      userType = '2', // Default to internal user type for admin requests
+      idType = 'N', 
+      authFactor, 
+      nricFrontUrl, 
+      nricBackUrl, 
+      selfieImageUrl, 
+      verificationData 
+    } = req.body;
+
+    // Validate required fields
+    if (!userId || !fullName || !emailAddress || !authFactor) {
+      return res.status(400).json({
+        success: false,
+        message: 'Required fields missing: userId, fullName, emailAddress, authFactor'
+      });
+    }
+
+    if (!nricFrontUrl || !nricBackUrl || !selfieImageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'KYC images are required: nricFrontUrl, nricBackUrl, selfieImageUrl'
+      });
+    }
+
+    console.log('Admin requesting certificate enrollment for user:', { 
+      userId, 
+      fullName, 
+      emailAddress,
+      userType,
+      hasNricFront: !!nricFrontUrl,
+      hasNricBack: !!nricBackUrl,
+      hasSelfie: !!selfieImageUrl,
+      adminUserId: req.user?.userId
+    });
+
+    // Helper function to extract base64 data from data URL
+    const extractBase64Data = (dataUrl: string): string => {
+      if (dataUrl.startsWith('data:')) {
+        const commaIndex = dataUrl.indexOf(',');
+        if (commaIndex !== -1) {
+          return dataUrl.substring(commaIndex + 1);
+        }
+      }
+      // If not a data URL, assume it's already base64 data
+      return dataUrl;
+    };
+
+    // Extract base64 data from URLs (remove data:image/jpeg;base64, prefix)
+    const nricFrontBase64 = extractBase64Data(nricFrontUrl);
+    const nricBackBase64 = extractBase64Data(nricBackUrl);
+    const selfieImageBase64 = extractBase64Data(selfieImageUrl);
+
+    console.log('Base64 data extracted:', {
+      nricFrontLength: nricFrontBase64.length,
+      nricBackLength: nricBackBase64.length,
+      selfieLength: selfieImageBase64.length
+    });
+
+    // Make request to signing orchestrator with userType = 2 for internal users
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/certificate`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        fullName,
+        emailAddress,
+        mobileNo,
+        nationality,
+        userType, // Will be 2 for internal users
+        idType,
+        authFactor,
+        nricFront: nricFrontBase64,
+        nricBack: nricBackBase64,
+        selfieImage: selfieImageBase64,
+        verificationData: {
+          ...verificationData,
+          requestedBy: 'admin',
+          adminUserId: req.user?.userId
+        }
+      }),
+    });
+
+    const data = await response.json();
+    
+    console.log('Certificate request response:', { 
+      userId, 
+      statusCode: data.data?.statusCode,
+      success: data.success,
+      message: data.message 
+    });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error requesting certificate:', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.body.userId 
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to request certificate'
+    });
+  }
+});
+
+export default router;

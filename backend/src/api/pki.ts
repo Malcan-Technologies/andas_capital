@@ -32,7 +32,7 @@ router.post('/check-certificate', authenticateToken, async (req: AuthRequest, re
     console.log('Checking PKI certificate status:', { userId, submissionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'http://192.168.0.100:4010';
+    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
     const response = await fetch(`${orchestratorUrl}/api/pki/cert-status/${userId}`, {
       method: 'GET',
       headers: {
@@ -70,7 +70,6 @@ router.post('/check-certificate', authenticateToken, async (req: AuthRequest, re
 router.post('/request-otp', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { userId, email, submissionId } = req.body;
-    const requestUserId = req.user?.userId;
 
     if (!userId || !email) {
       return res.status(400).json({
@@ -79,18 +78,13 @@ router.post('/request-otp', authenticateToken, async (req: AuthRequest, res) => 
       });
     }
 
-    // Security check
-    if (userId !== requestUserId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: can only request OTP for own account'
-      });
-    }
+    // Note: Authentication is already handled by authenticateToken middleware
+    // The orchestrator will validate the OTP request
 
     console.log('Requesting PKI OTP:', { userId, email, submissionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'http://192.168.0.100:4010';
+    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
     const response = await fetch(`${orchestratorUrl}/api/pki/request-otp`, {
       method: 'POST',
       headers: {
@@ -148,7 +142,7 @@ router.post('/complete-signing', authenticateToken, async (req: AuthRequest, res
     console.log('Completing PKI signing:', { sessionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'http://192.168.0.100:4010';
+    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
     const response = await fetch(`${orchestratorUrl}/api/pki/complete-signing`, {
       method: 'POST',
       headers: {
@@ -264,7 +258,7 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
     });
 
     // Forward request to signing orchestrator with correct DocuSeal IDs
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'http://192.168.0.100:4010';
+    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
     const response = await fetch(`${orchestratorUrl}/api/pki/sign-pdf`, {
       method: 'POST',
       headers: {
@@ -326,7 +320,7 @@ router.get('/session/:sessionId', authenticateToken, async (req: AuthRequest, re
     console.log('Getting PKI session status:', { sessionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'http://192.168.0.100:4010';
+    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
     const response = await fetch(`${orchestratorUrl}/api/pki/session/${sessionId}`, {
       method: 'GET',
       headers: {

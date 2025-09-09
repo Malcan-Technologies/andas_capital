@@ -27,6 +27,8 @@ import {
 	ArrowPathIcon,
 	UserIcon,
 	DocumentCheckIcon,
+	ShieldCheckIcon,
+	KeyIcon,
 } from "@heroicons/react/24/outline";
 import { Shield } from "lucide-react";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
@@ -1175,8 +1177,10 @@ function LoansPageContent() {
 				return "bg-cyan-100 text-cyan-800";
 			case "CERT_CHECK":
 				return "bg-emerald-100 text-emerald-800";
-					case "PENDING_SIGNING_OTP":
-			return "bg-purple-100 text-purple-800";
+			case "PENDING_PKI_SIGNING":
+				return "bg-violet-100 text-violet-800";
+			case "PENDING_SIGNING_OTP":
+				return "bg-purple-100 text-purple-800";
 		case "PENDING_CERTIFICATE_OTP":
 			return "bg-purple-100 text-purple-800";
 		case "PENDING_SIGNATURE":
@@ -1219,8 +1223,10 @@ function LoansPageContent() {
 				return "Pending Attestation";
 			case "CERT_CHECK":
 				return "Certificate Check";
-					case "PENDING_SIGNING_OTP":
-			return "Pending OTP Verification";
+			case "PENDING_PKI_SIGNING":
+				return "Pending PKI Signing";
+			case "PENDING_SIGNING_OTP":
+				return "Pending OTP Verification";
 		case "PENDING_CERTIFICATE_OTP":
 			return "Pending Certificate OTP";
 		case "PENDING_SIGNATURE":
@@ -3950,6 +3956,27 @@ function LoansPageContent() {
                         </button>
                     );
 														})()}
+													</div>
+												)}
+
+																{app.status === "PENDING_PKI_SIGNING" && (
+													<div className="space-y-2">
+														<div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
+															<div className="flex items-center">
+																<ShieldCheckIcon className="h-4 w-4 text-violet-600 mr-2" />
+																<span className="text-sm font-medium text-violet-700">
+																	Document signed. Ready for PKI digital signature.
+																</span>
+															</div>
+														</div>
+														<button
+															onClick={() => router.push(`/pki-signing?application=${app.id}`)}
+															className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-violet-600 hover:bg-violet-700 transition-colors"
+														>
+															<KeyIcon className="h-4 w-4 mr-2" />
+															Complete Signing
+															<ArrowRightIcon className="ml-2 h-4 w-4" />
+														</button>
 													</div>
 												)}
 

@@ -34,115 +34,130 @@ function PKISigningContent() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const hasInitialized = useRef(false);
-  const [step, setStep] = useState<'checking' | 'otp_input' | 'signing' | 'complete' | 'error'>('checking');
+  const [step, setStep] = useState<'checking' | 'ready_to_request' | 'otp_input' | 'signing' | 'complete' | 'error'>('checking');
   const [resendingOtp, setResendingOtp] = useState(false);
   const [lastOtpRequest, setLastOtpRequest] = useState<number>(0);
   const [countdown, setCountdown] = useState<number>(0);
   const [otpAlreadySent, setOtpAlreadySent] = useState<boolean>(false);
+  const otpRequestInProgress = useRef(false);
+  const lastSuccessfulOtpTime = useRef<number>(0);
 
-  // Check if OTP was already sent for this session
-  useEffect(() => {
-    if (typeof window !== 'undefined' && applicationId) {
-      const sessionKey = `pki_otp_sent_${applicationId}`;
-      const otpSent = sessionStorage.getItem(sessionKey);
-      if (otpSent) {
-        console.log('🔄 PKI session found - OTP already sent, skipping auto-send');
-        setOtpAlreadySent(true);
-        setStep('otp_input');
-        setLoading(false);
-        // Restore countdown if still active
-        const sentTime = parseInt(otpSent);
-        const elapsed = Math.floor((Date.now() - sentTime) / 1000);
-        if (elapsed < 30) {
-          setCountdown(30 - elapsed);
-        }
-        // Create a mock PKI session to show the UI
-        const mockSession: PKISession = {
-          id: `pki_${Date.now()}`,
-          submissionId: applicationId!,
-          applicationId: applicationId!,
-          currentSignatory: {
-            fullName: 'User',
-            email: 'user@example.com',
-            userId: '891114075601',
-            status: 'otp_sent',
-            certificateStatus: 'valid',
-            otpRequested: true
-          },
-          submissionStatus: 'in_progress'
-        };
-        setPkiSession(mockSession);
-      }
-    }
-  }, [applicationId]);
-
-  // Reusable function to request OTP
-  const requestOtp = async (userId: string, userEmail: string) => {
-    console.log('📧 Requesting OTP for digital signing...');
-    
-    const otpRequestData = await fetchWithTokenRefresh(
-      "/api/mtsa/request-otp",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: userId,
-          usage: "DS", // Digital Signing
-          emailAddress: userEmail,
-        }),
-      }
-    ) as any;
-    
-    console.log('🎯 OTP request response:', otpRequestData);
-    
-    if (!otpRequestData.success) {
-      throw new Error(otpRequestData.message || 'Failed to request OTP');
-    }
-    
+  // Function to request OTP manually
+  const handleRequestOtp = async (source = 'unknown') => {
     const now = Date.now();
-    setLastOtpRequest(now);
-    setCountdown(30); // Start 30-second countdown
-    setOtpAlreadySent(true);
+    console.log(`🔍 OTP request triggered from: ${source} at ${now}`);
     
-    // Save to session storage to prevent re-sending on refresh
+    // FIRST: Check sessionStorage for recent OTP request (cross-instance protection)
     if (typeof window !== 'undefined' && applicationId) {
-      const sessionKey = `pki_otp_sent_${applicationId}`;
-      sessionStorage.setItem(sessionKey, now.toString());
+      const recentOtpKey = `recent_otp_${applicationId}`;
+      const globalOtpKey = `global_recent_otp`;
+      const lastOtpTime = sessionStorage.getItem(recentOtpKey);
+      const lastGlobalOtpTime = sessionStorage.getItem(globalOtpKey);
+      console.log(`🔍 SessionStorage check: key=${recentOtpKey}, lastTime=${lastOtpTime}, globalTime=${lastGlobalOtpTime}, appId=${applicationId}`);
+      
+      // Check both app-specific and global OTP timing
+      if (lastOtpTime && (now - parseInt(lastOtpTime)) < 5000) {
+        console.log(`🚫 OTP request blocked by app sessionStorage - sent ${now - parseInt(lastOtpTime)}ms ago`);
+        return;
+      }
+      if (lastGlobalOtpTime && (now - parseInt(lastGlobalOtpTime)) < 3000) {
+        console.log(`🚫 OTP request blocked by global sessionStorage - sent ${now - parseInt(lastGlobalOtpTime)}ms ago`);
+        return;
+      }
+      
+      // Immediately mark this request to prevent others
+      sessionStorage.setItem(recentOtpKey, now.toString());
+      sessionStorage.setItem(globalOtpKey, now.toString());
+      console.log(`✅ SessionStorage updated: ${recentOtpKey} = ${now}, global = ${now}`);
     }
     
-    return otpRequestData;
-  };
-
-  // Resend OTP handler
-  const handleResendOtp = async () => {
+    // SECOND: Check time-based protection immediately
+    if (lastSuccessfulOtpTime.current && (now - lastSuccessfulOtpTime.current) < 10000) {
+      console.log(`🚫 OTP was sent recently (${now - lastSuccessfulOtpTime.current}ms ago), preventing duplicate request`);
+      return;
+    }
+    
     if (!pkiSession?.currentSignatory?.userId) return;
+    
+    // Only allow manual button clicks, not programmatic calls during Fast Refresh
+    if (source !== 'manual_button' && source !== 'resend_button') {
+      console.log('🚫 OTP request blocked - not from user interaction');
+      return;
+    }
+    
+    // Prevent multiple clicks
+    if (resendingOtp || otpRequestInProgress.current) {
+      console.log('🚫 OTP request already in progress, ignoring click...');
+      return;
+    }
+    
+    // Set the time immediately to prevent rapid successive calls
+    lastSuccessfulOtpTime.current = now;
+    otpRequestInProgress.current = true;
     
     try {
       setResendingOtp(true);
       setError('');
       setSuccessMessage('');
       
-      // Get current user data
-      const applicationData = await fetchWithTokenRefresh(
-        `/api/loan-applications/${applicationId}`
+      const userId = pkiSession.currentSignatory.userId;
+      const userEmail = pkiSession.currentSignatory.email;
+      
+      console.log('📧 Requesting OTP for digital signing...');
+      console.trace('OTP request call stack');
+      
+      const otpRequestData = await fetchWithTokenRefresh(
+        "/api/pki/request-otp",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: userId,
+            email: userEmail,
+            submissionId: applicationId
+          }),
+        }
       ) as any;
       
-      const userId = applicationData.user.icNumber || applicationData.user.idNumber;
-      const userEmail = applicationData.user.email;
+      console.log('🎯 OTP request response:', otpRequestData);
       
-      await requestOtp(userId, userEmail);
+      if (!otpRequestData.success) {
+        throw new Error(otpRequestData.message || 'Failed to request OTP');
+      }
       
-      // Show success message temporarily
-      setSuccessMessage('OTP resent successfully! Check your email.');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      const now = Date.now();
+      setLastOtpRequest(now);
+      setCountdown(30); // Start 30-second countdown
+      setOtpAlreadySent(true);
+      lastSuccessfulOtpTime.current = now; // Track successful OTP time
+      
+      // Save to session storage to prevent re-sending on refresh
+      if (typeof window !== 'undefined' && applicationId) {
+        const sessionKey = `pki_otp_sent_${applicationId}`;
+        sessionStorage.setItem(sessionKey, now.toString());
+      }
+      
+      // Update PKI session status
+      const updatedSession = {
+        ...pkiSession,
+        currentSignatory: {
+          ...pkiSession.currentSignatory,
+          status: 'otp_sent' as const,
+          otpRequested: true
+        }
+      };
+      setPkiSession(updatedSession);
+      setStep('otp_input');
+      
+      console.log('✅ OTP sent to:', userEmail);
       
     } catch (error) {
-      console.error('❌ Failed to resend OTP:', error);
+      console.error('❌ Failed to request OTP:', error);
       
-      // Enhanced error message for resend OTP
-      let errorMessage = 'Failed to resend OTP. Please try again.';
+      // Enhanced error message for OTP request
+      let errorMessage = 'Failed to request OTP. Please try again.';
       
       if (error instanceof Error) {
         const message = error.message.toLowerCase();
@@ -161,6 +176,17 @@ function PKISigningContent() {
       setError(errorMessage);
     } finally {
       setResendingOtp(false);
+      otpRequestInProgress.current = false;
+    }
+  };
+
+  // Resend OTP handler (reuse the same logic as initial request)
+  const handleResendOtp = async () => {
+    await handleRequestOtp('resend_button');
+    // Show success message temporarily if successful
+    if (!error) {
+      setSuccessMessage('OTP resent successfully! Check your email.');
+      setTimeout(() => setSuccessMessage(''), 3000);
     }
   };
 
@@ -172,13 +198,60 @@ function PKISigningContent() {
       return;
     }
 
-    // Poll for PKI session status
-    const pollSession = async () => {
+    // Initialize PKI session - either restore from storage or create new
+    const initializePKISession = async () => {
       try {
-        // TODO: Implement actual API call to get PKI session
-        // For now, simulate the PKI workflow
-        
-        console.log('🔐 PKI Signing Page loaded', { applicationId, status });
+        // First check if OTP was already sent for this session
+        if (typeof window !== 'undefined') {
+          const sessionKey = `pki_otp_sent_${applicationId}`;
+          const otpSent = sessionStorage.getItem(sessionKey);
+          if (otpSent) {
+            console.log('🔄 PKI session found - OTP already sent, fetching real user data...');
+            
+            // Get real application data to restore proper user info
+            const applicationData = await fetchWithTokenRefresh(
+              `/api/loan-applications/${applicationId}`
+            ) as any;
+            
+            if (!applicationData.user?.icNumber && !applicationData.user?.idNumber) {
+              throw new Error('IC Number is required for PKI signing');
+            }
+            
+            const userId = applicationData.user.icNumber || applicationData.user.idNumber;
+            const userEmail = applicationData.user.email;
+            const userName = applicationData.user.fullName;
+            
+            setOtpAlreadySent(true);
+            setStep('otp_input');
+            setLoading(false);
+            // Restore countdown if still active
+            const sentTime = parseInt(otpSent);
+            const elapsed = Math.floor((Date.now() - sentTime) / 1000);
+            if (elapsed < 30) {
+              setCountdown(30 - elapsed);
+            }
+            // Create PKI session with real user data
+            const restoredSession: PKISession = {
+              id: `pki_${Date.now()}`,
+              submissionId: applicationId!,
+              applicationId: applicationId!,
+              currentSignatory: {
+                fullName: userName,
+                email: userEmail,
+                userId: userId,
+                status: 'otp_sent',
+                certificateStatus: 'valid',
+                otpRequested: true
+              },
+              submissionStatus: 'in_progress'
+            };
+            setPkiSession(restoredSession);
+            return;
+          }
+        }
+
+        // If no OTP session found, prepare for OTP request (don't auto-send)
+        console.log('🔐 Preparing PKI workflow', { applicationId, status });
         
         // Step 1: Get application details to extract user information
         const applicationData = await fetchWithTokenRefresh(
@@ -205,10 +278,7 @@ function PKISigningContent() {
         
         console.log('📜 Certificate check response:', certCheckData);
         
-        // Step 3: Request OTP with DS (Digital Signing) usage
-        const otpRequestData = await requestOtp(userId, userEmail);
-        
-        // Create PKI session with real data
+        // Create PKI session with real data (but don't send OTP yet)
         const pkiSession: PKISession = {
           id: `pki_${Date.now()}`,
           submissionId: applicationId!, // Use application ID as submission ID for now
@@ -217,18 +287,18 @@ function PKISigningContent() {
             fullName: userName,
             email: userEmail,
             userId: userId,
-            status: 'otp_sent',
+            status: 'cert_checked',
             certificateStatus: certCheckData.success && certCheckData.data?.certStatus === 'ACTIVE' ? 'valid' : 'pending',
-            otpRequested: true
+            otpRequested: false
           },
           submissionStatus: 'in_progress'
         };
         
         setPkiSession(pkiSession);
-        setStep('otp_input');
+        setStep('ready_to_request');
         setLoading(false);
         
-        console.log('✅ PKI session created, OTP sent to:', userEmail);
+        console.log('✅ PKI session prepared, ready for OTP request:', userEmail);
         
       } catch (error) {
         console.error('❌ Failed to initialize PKI workflow:', error);
@@ -239,12 +309,14 @@ function PKISigningContent() {
     };
 
     // Only run once when component mounts and has applicationId
-    // AND only if OTP hasn't been sent already for this session
-    if (applicationId && !hasInitialized.current && !otpAlreadySent) {
+    if (applicationId && !hasInitialized.current) {
+      console.log('🚀 Initializing PKI session', { applicationId, hasInitialized: hasInitialized.current });
       hasInitialized.current = true;
-      pollSession();
+      initializePKISession();
+    } else {
+      console.log('🔄 Skipping PKI initialization', { applicationId, hasInitialized: hasInitialized.current });
     }
-  }, [otpAlreadySent]); // Include otpAlreadySent to check if OTP was already sent
+  }, [applicationId]); // Remove otpAlreadySent dependency to prevent re-runs
 
   // Countdown timer effect
   useEffect(() => {
@@ -366,6 +438,51 @@ function PKISigningContent() {
               <p className="text-gray-600 mt-2">
                 Checking your digital certificate and preparing secure signing...
               </p>
+            </div>
+          </div>
+        );
+
+      case 'ready_to_request':
+        return (
+          <div className="space-y-6">
+            {/* Error Message Display */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="flex items-center">
+                  <XCircleIcon className="h-5 w-5 text-red-600 mr-3 flex-shrink-0" />
+                  <div>
+                    <h4 className="text-red-800 font-medium">Error</h4>
+                    <p className="text-red-700 text-sm mt-1">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="text-center">
+              <div className="flex items-center justify-center mb-4">
+                <KeyIcon className="h-8 w-8 text-purple-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-700">Ready for PKI Signing</h3>
+              <p className="text-gray-600 mt-2">
+                We'll send a 6-digit OTP to <strong>{pkiSession?.currentSignatory.email}</strong> for secure document signing.
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <button 
+                onClick={() => handleRequestOtp('manual_button')}
+                disabled={resendingOtp}
+                className="w-full px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resendingOtp ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Sending OTP...
+                  </div>
+                ) : (
+                  'Send OTP to Email'
+                )}
+              </button>
             </div>
           </div>
         );
@@ -607,10 +724,12 @@ function PKISigningContent() {
             </div>
           )}
 
-          {pkiSession && step === 'otp_input' && (
+          {pkiSession && (step === 'ready_to_request' || step === 'otp_input') && (
             <div className="text-center mt-6 pt-6 border-t border-gray-100">
               <p className="text-xs text-gray-500">
-                Certificate Status: <span className="font-medium text-green-600">Valid</span> | 
+                Certificate Status: <span className="font-medium text-green-600">
+                  {pkiSession.currentSignatory.certificateStatus === 'valid' ? 'Valid' : 'Pending'}
+                </span> | 
                 Session ID: {pkiSession.id.slice(-8)}
               </p>
             </div>

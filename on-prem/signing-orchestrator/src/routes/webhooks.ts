@@ -188,34 +188,20 @@ async function handleFormCompleted(payload: DocuSealWebhookPayload, correlationI
         userId: pkiSession.currentSignatory.userId 
       });
     
-    // Step 2: Request OTP via MTSA
-    log.info('📧 Requesting OTP via MTSA', { 
+    // Step 2: Skip automatic OTP request - now handled manually by frontend
+    log.info('⚡ Skipping automatic OTP request - manual control enabled', { 
       userId: pkiSession.currentSignatory.userId,
       email: pkiSession.currentSignatory.email
     });
     
-    const signingService = new SigningService();
-    const otpRequested = await signingService.requestSigningOTP(
-      pkiSession.currentSignatory.userId,
-      pkiSession.currentSignatory.email,
-      correlationId
-    );
-    
-    if (!otpRequested) {
-      log.error('❌ Failed to request OTP', { 
-        userId: pkiSession.currentSignatory.userId 
-      });
-      pkiSession.currentSignatory.status = 'failed';
-      await savePKISession(pkiSession);
-      return;
-    }
-    
-    // Step 3: Update session status  
-    pkiSession.currentSignatory.status = 'otp_sent';
-    pkiSession.currentSignatory.otpRequested = true;
-    pkiSession.currentSignatory.otpTimestamp = new Date();
+    // Step 3: Update session status to ready for manual OTP request
+    pkiSession.currentSignatory.status = 'cert_checked';
+    pkiSession.currentSignatory.otpRequested = false;
     
     await savePKISession(pkiSession);
+    
+    // Step 4: Status will be updated by backend webhook directly
+    // No need to notify backend - it handles status update in its own webhook
     
     log.info('🎯 PKI workflow initiated successfully with REAL MTSA integration', { 
       sessionId: pkiSession.id,
@@ -270,9 +256,17 @@ async function createPKISession(payload: DocuSealWebhookPayload, correlationId: 
   
   log.info('🔑 Extracted user ID', { userId, fromData: data });
   
+  // Get the actual submission ID from DocuSeal API using the submitter ID
+  const actualSubmissionId = await getSubmissionIdFromSubmitter(data.id, correlationId);
+  
+  log.info('📋 Got actual submission ID', { 
+    submitterId: data.id, 
+    submissionId: actualSubmissionId 
+  });
+  
   const session: PKISession = {
     id: `pki_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    submissionId: data.id.toString(),
+    submissionId: actualSubmissionId,
     templateId: data.template?.id?.toString() || 'unknown',
     
     currentSignatory: {
@@ -616,5 +610,57 @@ async function handlePacketCompleted(payload: DocuSealWebhookPayload, correlatio
     throw error;
   }
 }
+
+/**
+ * Get the actual submission ID from DocuSeal API using submitter ID
+ */
+async function getSubmissionIdFromSubmitter(submitterId: string, correlationId: string): Promise<string> {
+  const log = createCorrelatedLogger(correlationId);
+  
+  try {
+    const config = await import('../config');
+    const axios = (await import('axios')).default;
+    
+    log.info('🔍 Getting submission ID from submitter', { submitterId });
+    
+    // Get submitter details from DocuSeal API
+    const response = await axios.get(
+      `${config.default.docuseal.baseUrl}/api/submitters/${submitterId}`,
+      {
+        headers: {
+          'X-Auth-Token': config.default.docuseal.apiToken,
+          'Accept': 'application/json'
+        },
+        timeout: config.default.network.timeoutMs
+      }
+    );
+    
+    const submitter = response.data;
+    const submissionId = submitter.submission_id;
+    
+    if (!submissionId) {
+      throw new Error(`No submission_id found in submitter ${submitterId}`);
+    }
+    
+    log.info('✅ Found submission ID from submitter', {
+      submitterId,
+      submissionId,
+      submitterEmail: submitter.email
+    });
+    
+    return submissionId.toString();
+    
+  } catch (error) {
+    log.error('💥 Failed to get submission ID from submitter', {
+      submitterId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    
+    // Fallback to using submitter ID as submission ID (old behavior)
+    log.warn('⚠️ Falling back to using submitter ID as submission ID', { submitterId });
+    return submitterId.toString();
+  }
+}
+
 
 export default router;

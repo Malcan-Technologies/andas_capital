@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
-import { ArrowLeftIcon, CheckCircleIcon, ClockIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, CheckCircleIcon, ClockIcon, XCircleIcon, IdentificationIcon } from "@heroicons/react/24/outline";
 
 interface LoanApplication {
 	id: string;
@@ -59,6 +59,9 @@ export default function CertCheckPage() {
 		nextStep: string;
 		certificateData?: any;
 	} | null>(null);
+	const [showIcInput, setShowIcInput] = useState(false);
+	const [icNumber, setIcNumber] = useState("");
+	const [updating, setUpdating] = useState(false);
 
 	useEffect(() => {
 		const fetchApplication = async () => {
@@ -69,12 +72,21 @@ export default function CertCheckPage() {
 				
 				setApplication(data);
 				
-				// Auto-start certificate check
-				const userId = data.user?.icNumber || data.user?.idNumber;
+				// Debug logging
+				console.log("User data:", data.user);
+				console.log("IC Number:", data.user?.icNumber);
+				
+				// Auto-start certificate check - only use icNumber, ignore idNumber
+				const userId = data.user?.icNumber;
+				console.log("Final userId (icNumber only):", userId);
+				
 				if (userId) {
+					console.log("Starting certificate check with userId:", userId);
 					checkCertificate(userId);
 				} else {
-					setError("IC Number not found. Please complete your profile first.");
+					console.log("No IC number found, showing IC input form");
+					// Show IC input form if no IC number found
+					setShowIcInput(true);
 					setLoading(false);
 				}
 			} catch (err) {
@@ -171,10 +183,62 @@ export default function CertCheckPage() {
 		}
 	};
 
+	const updateIcNumber = async () => {
+		if (!icNumber.trim()) {
+			setError("Please enter your IC number");
+			return;
+		}
+
+		// Validate IC number format (Malaysian IC: 12 digits)
+		const icPattern = /^\d{12}$/;
+		if (!icPattern.test(icNumber)) {
+			setError("Please enter a valid IC number (12 digits)");
+			return;
+		}
+
+		try {
+			setUpdating(true);
+			setError(null);
+
+			// Update user IC number
+			await fetchWithTokenRefresh("/api/users/me", {
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					icNumber: icNumber.trim(),
+				}),
+			});
+
+			// Update the application state
+			if (application) {
+				setApplication({
+					...application,
+					user: {
+						...application.user!,
+						icNumber: icNumber.trim(),
+					},
+				});
+			}
+
+			// Hide IC input and start certificate check
+			setShowIcInput(false);
+			checkCertificate(icNumber.trim());
+
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to update IC number");
+		} finally {
+			setUpdating(false);
+		}
+	};
+
 	const handleBack = () => {
 		// Go back to KYC verification (previous step in the flow)
 		router.push(`/dashboard/applications/${params.id}/kyc-verification`);
 	};
+
+	console.log("Render states:", { loading, checking, showIcInput, error, application: !!application });
 
 	if (loading || checking) {
 		return (
@@ -240,6 +304,92 @@ export default function CertCheckPage() {
 										</svg>
 										Try Again
 									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</DashboardLayout>
+		);
+	}
+
+	// IC Number Input State
+	if (showIcInput) {
+		return (
+			<DashboardLayout>
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+					{/* Back Button */}
+					<div className="mb-6">
+						<button
+							onClick={handleBack}
+							className="inline-flex items-center px-6 py-3 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-body"
+						>
+							<ArrowLeftIcon className="h-4 w-4 mr-2" />
+							Back to Applications
+						</button>
+					</div>
+
+					{/* IC Number Input Form */}
+					<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+						<div className="text-center py-12">
+							<div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+								<IdentificationIcon className="w-8 h-8 text-blue-600" />
+							</div>
+							
+							<h2 className="text-2xl font-heading font-bold text-gray-700 mb-4">
+								IC Number Required
+							</h2>
+							
+							<div className="max-w-md mx-auto">
+								<p className="text-gray-600 mb-6 leading-relaxed">
+									To check your digital certificate status, please enter your Malaysian IC number.
+								</p>
+
+								{error && (
+									<div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+										<p className="text-red-600 text-sm">{error}</p>
+									</div>
+								)}
+								
+								<div className="space-y-4">
+									<div>
+										<label htmlFor="icNumber" className="block text-sm font-medium text-gray-700 mb-2">
+											IC Number
+										</label>
+										<input
+											type="text"
+											id="icNumber"
+											value={icNumber}
+											onChange={(e) => setIcNumber(e.target.value)}
+											placeholder="XXXXXXXXXXXX"
+											className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-mono text-center text-gray-900 placeholder-gray-400"
+											maxLength={12}
+											disabled={updating}
+										/>
+										<p className="text-xs text-gray-500 mt-1">
+											Enter your IC number in the format: XXXXXXXXXXXX
+										</p>
+									</div>
+									
+									<div className="space-y-3">
+										<button
+											onClick={updateIcNumber}
+											disabled={updating || !icNumber.trim()}
+											className="w-full inline-flex items-center justify-center px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+										>
+											{updating ? (
+												<>
+													<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+													Updating...
+												</>
+											) : (
+												<>
+													<IdentificationIcon className="h-4 w-4 mr-2" />
+													Continue Certificate Check
+												</>
+											)}
+										</button>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -366,7 +516,7 @@ export default function CertCheckPage() {
 											className="w-full inline-flex items-center justify-center px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors font-semibold"
 										>
 											<ClockIcon className="h-4 w-4 mr-2" />
-											Continue to Profile Confirmation
+											Continue to e-KYC
 										</button>
 									)}
 									

@@ -21,6 +21,7 @@ services:
     volumes:
       - ./signed-files:/data/signed
       - ./logs:/app/logs
+      - ./src:/app/src  # Mount source code for live development
     networks:
       - signing-network
     depends_on:

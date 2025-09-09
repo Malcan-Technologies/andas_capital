@@ -53,19 +53,14 @@ export class SigningService {
         return;
       }
       
-      // Step 3: Request OTP for digital signing
-      const otpRequested = await this.requestSigningOTP(
-        currentSubmitter.userId, 
-        currentSubmitter.email, 
-        correlationId
-      );
+      // Step 3: Skip automatic OTP request - now handled manually by frontend
+      log.info('⚡ Skipping automatic OTP request in PKI workflow - manual control enabled', { 
+        userId: currentSubmitter.userId,
+        email: currentSubmitter.email
+      });
       
-      if (!otpRequested) {
-        throw new Error('Failed to request OTP for digital signing');
-      }
-      
-      // Step 4: Update session status
-      await this.updatePKISessionStatus(session.id, 'otp_sent', correlationId);
+      // Step 4: Update session status to ready for manual OTP request
+      await this.updatePKISessionStatus(session.id, 'cert_checked', correlationId);
       
       // Step 5: Inject OTP input into DocuSeal UI
       await this.injectOTPInputOverlay(submissionId, currentSubmitter, session.id, correlationId);
@@ -951,12 +946,28 @@ export class SigningService {
         pdfSizeKB: Math.round(pdfResponse.data.byteLength / 1024) 
       });
       
-      // Step 3: Sign the PDF with MTSA using the OTP
+      // Step 3: Get signature coordinates and image using hardcoded positions
+      log.info('Getting signature coordinates and image', { submissionId, userId, submitterUuid: currentSubmitter?.uuid });
+      
+      // Get coordinates and signature image for current user
+      const { coordinates, signatureImage } = await this.getSignatureDataForUser(currentSubmitter?.uuid, submissionId);
+      
+      log.info('Retrieved signature data', {
+        userId,
+        submitterUuid: currentSubmitter?.uuid,
+        coordinates,
+        hasSignatureImage: !!signatureImage,
+        imageSize: signatureImage?.length || 0
+      });
+      
+      // Step 4: Sign the PDF with MTSA using extracted coordinates and image
       log.info('Signing PDF with MTSA', { 
         userId, 
-        fullName: userFullName, 
+        fullName: finalUserFullName, 
         otpLength: otp.length,
-        hasOtp: !!otp 
+        hasOtp: !!otp,
+        coordinates,
+        hasSignatureImage: !!signatureImage
       });
       
       const signRequest: any = {
@@ -967,11 +978,12 @@ export class SigningService {
         SignatureInfo: {
           pdfInBase64: pdfBase64,
           visibility: true,
-          x1: 100,
-          y1: 200,
-          x2: 300,
-          y2: 250,
-          pageNo: 1
+          x1: coordinates.x1,
+          y1: coordinates.y1,
+          x2: coordinates.x2,
+          y2: coordinates.y2,
+          pageNo: coordinates.pageNo,
+          ...(signatureImage && { sigImageInBase64: signatureImage })
         }
       };
       
@@ -986,7 +998,7 @@ export class SigningService {
       
       log.info('PDF signed successfully with MTSA');
       
-      // Step 4: Update DocuSeal submission with signed PDF
+      // Step 5: Update DocuSeal submission with signed PDF
       log.info('Updating DocuSeal submission with signed PDF');
       
       // DocuSeal might use a different endpoint for updating with signed PDF
@@ -1008,7 +1020,7 @@ export class SigningService {
       
       log.info('DocuSeal submission updated with signed PDF', { updateStatus: updateResponse.status });
       
-      // Step 5: Mark the DocuSeal submission as completed
+      // Step 6: Mark the DocuSeal submission as completed
       await axios.patch(
         `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
         {
@@ -1057,6 +1069,300 @@ export class SigningService {
         success: false,
         message: error instanceof Error ? error.message : 'PKI PDF signing failed'
       };
+    }
+  }
+
+  /**
+   * Get signature coordinates and image for a specific user based on their role and DocuSeal template
+   */
+  private async getSignatureDataForUser(submitterUuid: string | undefined, submissionId: string): Promise<{
+    coordinates: { x1: number; y1: number; x2: number; y2: number; pageNo: number };
+    signatureImage?: string;
+  }> {
+    const log = createCorrelatedLogger('getSignatureDataForUser');
+
+    // Get submission details to determine the submitter's role and find their signature fields
+    const submissionResponse = await axios.get(
+      `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
+      {
+        headers: {
+          'X-Auth-Token': config.docuseal.apiToken,
+          'Accept': 'application/json'
+        },
+        timeout: config.network.timeoutMs
+      }
+    );
+
+    const submission = submissionResponse.data;
+    
+    // Debug log the full submission structure
+    log.info('Full submission structure', {
+      submissionId,
+      hasSubmitters: !!submission?.submitters,
+      submitterCount: submission?.submitters?.length,
+      hasTemplate: !!submission?.template,
+      templateStructure: submission?.template ? Object.keys(submission.template) : 'no template',
+      templateFields: submission?.template?.fields?.length || 'no fields',
+      submissionKeys: Object.keys(submission || {})
+    });
+    
+    const currentSubmitter = submission?.submitters?.find((submitter: any) => 
+      submitter.uuid === submitterUuid
+    );
+
+    if (!currentSubmitter) {
+      throw new Error(`Submitter with UUID ${submitterUuid} not found in submission ${submissionId}`);
+    }
+
+    const submitterRole = currentSubmitter.role;
+    log.info('Detected submitter role', { submitterUuid, role: submitterRole });
+
+    // Use hardcoded signature coordinates based on role
+    // We don't need template fields since FieldListToUpdate remains empty
+    let matchingField: any;
+    
+    switch (submitterRole) {
+      case 'Borrower':
+        matchingField = {
+          fieldName: 'Signature Field 1',
+          normalizedCoords: {
+            x: 0.6303923644724104,
+            y: 0.7620533496946855,
+            w: 0.2708661060019362,
+            h: 0.1025646269633508,
+            page: 3
+          }
+        };
+        break;
+      case 'Witness':
+        matchingField = {
+          fieldName: 'Signature Field 2', 
+          normalizedCoords: {
+            x: 0.6303923644724104,
+            y: 0.5620533496946855, // Different Y position for witness
+            w: 0.2708661060019362,
+            h: 0.1025646269633508,
+            page: 3
+          }
+        };
+        break;
+      case 'Company':
+        matchingField = {
+          fieldName: 'company_signature',
+          normalizedCoords: {
+            x: 0.6303923644724104,
+            y: 0.3620533496946855, // Different Y position for company
+            w: 0.2708661060019362,
+            h: 0.1025646269633508,
+            page: 3
+          }
+        };
+        break;
+      default:
+        throw new Error(`Unsupported signer role: ${submitterRole}. PKI signing supports Borrower, Witness, and Company only.`);
+    }
+
+    log.info('Using hardcoded signature field for role', {
+      role: submitterRole,
+      fieldName: matchingField.fieldName,
+      page: matchingField.normalizedCoords.page
+    });
+
+    // Convert normalized coordinates to pixel coordinates
+    const coordinates = this.convertNormalizedToPixels(matchingField.normalizedCoords);
+
+    // Get signature image from DocuSeal submission values
+    let signatureImage: string | undefined;
+    try {
+      signatureImage = await this.getSignatureImageFromSubmission(matchingField.fieldName, submissionId);
+    } catch (error) {
+      log.warn('Failed to get signature image from submission', {
+        error: error instanceof Error ? error.message : String(error),
+        fieldName: matchingField.fieldName,
+        submitterRole,
+        submitterUuid
+      });
+    }
+
+    return {
+      coordinates,
+      signatureImage
+    };
+  }
+
+  /**
+   * Convert normalized coordinates (0-1) to pixel coordinates for MTSA
+   */
+  private convertNormalizedToPixels(normalizedCoords: {
+    x: number; y: number; w: number; h: number; page: number;
+  }): { x1: number; y1: number; x2: number; y2: number; pageNo: number } {
+    // Assuming standard PDF page size (612x792 points)
+    const pageWidth = 612;
+    const pageHeight = 792;
+
+    const x1 = Math.round(normalizedCoords.x * pageWidth);
+    const y1 = Math.round((1 - normalizedCoords.y - normalizedCoords.h) * pageHeight); // PDF coordinates are bottom-up
+    const x2 = Math.round((normalizedCoords.x + normalizedCoords.w) * pageWidth);
+    const y2 = Math.round((1 - normalizedCoords.y) * pageHeight);
+
+    return {
+      x1,
+      y1,
+      x2,
+      y2,
+      pageNo: normalizedCoords.page
+    };
+  }
+
+  /**
+   * Get signature image from DocuSeal submission and convert to Base64
+   */
+  private async getSignatureImageFromSubmission(fieldName: string, submissionId: string): Promise<string | undefined> {
+    const log = createCorrelatedLogger('getSignatureImageFromSubmission');
+
+    try {
+      // Get the signature image URL directly from DocuSeal submission API
+      const signatureUrl = await this.getSignatureUrlFromSubmission(submissionId, fieldName);
+
+      if (!signatureUrl) {
+        log.warn('No signature URL found in submission', { submissionId, fieldName });
+        return undefined;
+      }
+
+      log.info('Found signature URL in submission', {
+        fieldName,
+        signatureUrl
+      });
+
+      // Download the signature image from DocuSeal and convert to Base64
+      const imageBase64 = await this.downloadSignatureImage(signatureUrl);
+
+      return imageBase64;
+
+    } catch (error) {
+      log.error('Failed to get signature image from submission', {
+        error: error instanceof Error ? error.message : String(error),
+        fieldName,
+        submissionId
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * Get signature image URL from DocuSeal submission values
+   */
+  private async getSignatureUrlFromSubmission(submissionId: string, fieldName: string): Promise<string | undefined> {
+    const log = createCorrelatedLogger('getSignatureUrlFromSubmission');
+    
+    try {
+      // Fetch submission details from DocuSeal API
+      const submissionResponse = await axios.get(
+        `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
+        {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Accept': 'application/json'
+          },
+          timeout: config.network.timeoutMs
+        }
+      );
+
+      const submission = submissionResponse.data;
+      
+      log.info('Retrieved submission for signature image', {
+        submissionId,
+        hasSubmitters: !!submission?.submitters,
+        submitterCount: submission?.submitters?.length || 0
+      });
+
+      // Look through all submitters for the signature field value
+      for (const submitter of submission?.submitters || []) {
+        if (submitter.values) {
+          // Find the signature field in this submitter's values
+          const signatureValue = submitter.values.find((value: any) => 
+            value.field === fieldName && 
+            value.value && 
+            typeof value.value === 'string' && 
+            value.value.includes('/file/')
+          );
+
+          if (signatureValue) {
+            log.info('Found signature field in submitter values', {
+              submitterUuid: submitter.uuid,
+              fieldName,
+              signatureUrl: signatureValue.value
+            });
+            return signatureValue.value;
+          }
+        }
+      }
+
+      log.warn('No signature field found in any submitter values', { 
+        fieldName,
+        submitterCount: submission?.submitters?.length || 0
+      });
+      
+      return undefined;
+
+    } catch (error) {
+      log.error('Failed to get signature URL from submission', { 
+        error: error instanceof Error ? error.message : String(error),
+        submissionId,
+        fieldName
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * Download signature image from DocuSeal and convert to Base64
+   */
+  private async downloadSignatureImage(imageUrl: string): Promise<string | undefined> {
+    const log = createCorrelatedLogger('downloadSignatureImage');
+    
+    try {
+      // Handle URL based on whether we're accessing DocuSeal from inside containers or externally
+      let actualUrl = imageUrl;
+      
+      // If the URL contains localhost:3001, replace with the DocuSeal base URL from config
+      if (imageUrl.includes('localhost:3001')) {
+        actualUrl = imageUrl.replace('http://localhost:3001', config.docuseal.baseUrl);
+      }
+      
+      log.info('Downloading signature image', { 
+        originalUrl: imageUrl,
+        actualUrl 
+      });
+
+      const response = await axios.get(actualUrl, {
+        responseType: 'arraybuffer',
+        timeout: config.network.timeoutMs,
+        headers: {
+          'X-Auth-Token': config.docuseal.apiToken
+        }
+      });
+
+      if (response.status !== 200) {
+        throw new Error(`Failed to download image: HTTP ${response.status}`);
+      }
+
+      // Convert to Base64
+      const base64Image = Buffer.from(response.data).toString('base64');
+      
+      log.info('Successfully downloaded and converted signature image', { 
+        imageSize: base64Image.length,
+        contentType: response.headers['content-type']
+      });
+
+      return base64Image;
+
+    } catch (error) {
+      log.error('Failed to download signature image', { 
+        error: error instanceof Error ? error.message : String(error),
+        originalUrl: imageUrl
+      });
+      return undefined;
     }
   }
 }

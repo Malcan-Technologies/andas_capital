@@ -133,7 +133,30 @@ export class MTSAClient {
           hasResult: !!result 
         });
         
-        return result;
+        // Check MTSA status code - if successful, break retry loop immediately
+        if (result?.statusCode === '000') {
+          log.debug(`MTSA returned success status code, breaking retry loop`, { statusCode: result.statusCode });
+          return result;
+        } else if (result?.statusCode) {
+          // MTSA returned an error status code, treat as failure and retry
+          log.warn(`MTSA returned error status code (attempt ${attempt}/${config.network.retryMax})`, { 
+            statusCode: result.statusCode,
+            statusMsg: result.statusMsg 
+          });
+          lastError = new Error(`MTSA error: ${result.statusCode} - ${result.statusMsg}`);
+          
+          if (attempt < config.network.retryMax) {
+            const delay = config.network.retryBackoffMs * attempt;
+            log.debug(`Retrying MTSA call in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            break; // Max attempts reached
+          }
+        } else {
+          // No status code in response, return as-is
+          return result;
+        }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         log.warn(`SOAP method ${methodName} failed (attempt ${attempt}/${config.network.retryMax})`, { 

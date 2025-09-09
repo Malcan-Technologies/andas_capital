@@ -332,6 +332,9 @@ router.post('/webhook', async (req, res) => {
     if (req.body.event_type === 'form.completed') {
       console.log('🔐 Intercepting form.completed event for PKI workflow');
       
+      // Update application status to PENDING_PKI_SIGNING
+      await handleFormCompletedForPKI(req.body);
+      
       // Forward to signing orchestrator for PKI processing
       await forwardToSigningOrchestrator(req.body);
       
@@ -361,11 +364,85 @@ router.post('/webhook', async (req, res) => {
 });
 
 /**
+ * Handle form.completed event to update application status for PKI signing
+ */
+async function handleFormCompletedForPKI(payload: any): Promise<void> {
+  try {
+    console.log('🔄 Updating application status for PKI signing', { 
+      eventType: payload.event_type,
+      submitterId: payload.data?.id 
+    });
+
+    // Get submitter details from DocuSeal to find the submission ID
+    const submitterId = payload.data?.id;
+    if (!submitterId) {
+      console.warn('No submitter ID found in webhook payload');
+      return;
+    }
+
+    // Get submission ID from DocuSeal API
+    const submissionResponse = await fetch(`${process.env.DOCUSEAL_API_URL || 'http://host.docker.internal:3001'}/api/submitters/${submitterId}`, {
+      headers: {
+        'X-Auth-Token': process.env.DOCUSEAL_API_TOKEN || '',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!submissionResponse.ok) {
+      console.error('Failed to get submitter details from DocuSeal');
+      return;
+    }
+
+    const submitter = await submissionResponse.json();
+    const submissionId = submitter.submission_id;
+
+    if (!submissionId) {
+      console.warn('No submission ID found in submitter data');
+      return;
+    }
+
+    console.log('📋 Found submission ID from submitter', { submitterId, submissionId });
+
+    // Find the loan by DocuSeal submission ID
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const loan = await prisma.loan.findFirst({
+      where: {
+        docusealSubmissionId: submissionId.toString()
+      },
+      include: {
+        application: true
+      }
+    });
+    
+    if (!loan) {
+      console.warn(`No loan found for submission ID: ${submissionId}`);
+      return;
+    }
+    
+    console.log(`Found loan ${loan.id} for submission ${submissionId}, updating application ${loan.application.id} status to PENDING_PKI_SIGNING`);
+    
+    // Update the application status
+    await prisma.loanApplication.update({
+      where: { id: loan.application.id },
+      data: { status: 'PENDING_PKI_SIGNING' }
+    });
+    
+    console.log(`✅ Application ${loan.application.id} status updated to PENDING_PKI_SIGNING`);
+    
+  } catch (error) {
+    console.error('Failed to update application status for PKI:', error);
+    // Don't throw - we want to continue with orchestrator processing
+  }
+}
+
+/**
  * Forward webhook to signing orchestrator for PKI processing
  */
 async function forwardToSigningOrchestrator(payload: any): Promise<void> {
   try {
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'http://192.168.0.100:4010';
+    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
     const webhookUrl = `${orchestratorUrl}/webhooks/docuseal`;
     
     console.log('Forwarding to signing orchestrator:', webhookUrl);

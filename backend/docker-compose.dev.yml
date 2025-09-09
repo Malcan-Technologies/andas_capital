@@ -39,7 +39,7 @@ services:
             - KYC_JWT_SECRET=kapital_nextauth_secret_key_2024_03_secure_789!@#
             # DocuSeal Configuration - From .env file
             - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL}
-            - DOCUSEAL_API_URL=${DOCUSEAL_BASE_URL}
+            - DOCUSEAL_API_URL=http://host.docker.internal:3001
             - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
             - DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID=${DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID}
             - FRONTEND_URL=http://localhost:3000

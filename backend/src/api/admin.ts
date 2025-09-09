@@ -11,6 +11,8 @@ import multer from "multer";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import lateFeeRoutes from "./admin/late-fees";
+import mtsaAdminRoutes from "./admin/mtsa";
+import kycAdminRoutes from "./admin/kyc";
 import companySettingsRoutes from "./companySettings";
 import receiptsRoutes from "./receipts";
 import whatsappService from "../lib/whatsappService";
@@ -84,6 +86,8 @@ const prisma = new PrismaClient();
 
 // Register sub-routes
 router.use("/late-fees", lateFeeRoutes);
+router.use("/mtsa", mtsaAdminRoutes);
+router.use("/kyc", kycAdminRoutes);
 router.use("/company-settings", companySettingsRoutes);
 router.use("/receipts", receiptsRoutes);
 
@@ -2466,6 +2470,7 @@ router.get(
 					phoneNumber: true,
 					email: true,
 					role: true,
+					icNumber: true,
 				},
 			});
 
@@ -2483,6 +2488,144 @@ router.get(
 			return res.json(user);
 		} catch (error) {
 			console.error("Admin profile error:", error);
+			return res.status(500).json({ error: "Server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/me:
+ *   put:
+ *     summary: Update admin profile information
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phoneNumber:
+ *                 type: string
+ *               icNumber:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Admin profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                 fullName:
+ *                   type: string
+ *                 phoneNumber:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 role:
+ *                   type: string
+ *                 icNumber:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Not an admin
+ *       500:
+ *         description: Server error
+ */
+router.put(
+	"/me",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			if (!req.user?.userId) {
+				return res.status(401).json({ error: "Unauthorized" });
+			}
+
+			// Get current user to verify admin role
+			const currentUser = await prisma.user.findUnique({
+				where: { id: req.user.userId },
+				select: { role: true }
+			});
+
+			if (!currentUser || currentUser.role !== "ADMIN") {
+				return res.status(403).json({
+					error: "Access denied. Admin privileges required.",
+				});
+			}
+
+			const updateData = req.body;
+
+			// Validate IC number if provided
+			if (updateData.icNumber) {
+				const icNumber = updateData.icNumber.trim();
+				if (icNumber.length < 6) {
+					return res.status(400).json({ 
+						error: "IC number is too short" 
+					});
+				}
+			}
+
+			// Validate and normalize phone number if provided
+			if (updateData.phoneNumber) {
+				const { validatePhoneNumber, normalizePhoneNumber } = require("../lib/phoneUtils");
+				
+				const phoneValidation = validatePhoneNumber(updateData.phoneNumber, {
+					requireMobile: false,
+					allowLandline: true
+				});
+
+				if (!phoneValidation.isValid) {
+					return res.status(400).json({ 
+						error: phoneValidation.error || "Invalid phone number format" 
+					});
+				}
+
+				const normalizedPhone = normalizePhoneNumber(updateData.phoneNumber);
+				updateData.phoneNumber = normalizedPhone;
+
+				// Check if another user already has this phone number
+				const existingUserWithPhone = await prisma.user.findFirst({
+					where: { 
+						phoneNumber: normalizedPhone,
+						NOT: { id: req.user.userId }
+					}
+				});
+
+				if (existingUserWithPhone) {
+					return res.status(400).json({ 
+						error: "This phone number is already registered to another account" 
+					});
+				}
+			}
+
+			// Update admin user profile
+			const updatedUser = await prisma.user.update({
+				where: { id: req.user.userId },
+				data: updateData,
+				select: {
+					id: true,
+					fullName: true,
+					phoneNumber: true,
+					email: true,
+					role: true,
+					icNumber: true,
+				},
+			});
+
+			return res.json(updatedUser);
+		} catch (error) {
+			console.error("Admin profile update error:", error);
 			return res.status(500).json({ error: "Server error" });
 		}
 	}
@@ -3151,6 +3294,8 @@ router.patch(
 				"APPROVED",
 				"PENDING_FRESH_OFFER",
 				"PENDING_ATTESTATION",
+				"CERT_CHECK",
+				"PENDING_PKI_SIGNING",
 				"PENDING_SIGNING_OTP",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
