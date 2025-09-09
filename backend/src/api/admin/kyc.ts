@@ -86,7 +86,7 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
   let kycSession: any = null;
   
   try {
-    const { documentName, documentNumber, platform = 'web', adminRequest, adminUserId } = req.body;
+    const { documentName, documentNumber, platform = 'web' } = req.body;
 
     if (!documentName || !documentNumber) {
       return res.status(400).json({
@@ -106,15 +106,16 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
     const existingApprovedSession = await prisma.kycSession.findFirst({
       where: {
         userId: req.user?.userId,
-        status: 'APPROVED'
+        ctosOnboardingId: { not: null },
+        ctosResult: 1 // Approved
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log('Existing approved session check:', {
-      userId: req.user?.userId,
-      existingSession: existingApprovedSession?.id,
-      status: existingApprovedSession?.status,
+    console.log(`Admin user ${req.user?.userId} - Checking for approved KYC sessions:`, {
+      found: !!existingApprovedSession,
+      sessionId: existingApprovedSession?.id,
+      ctosResult: existingApprovedSession?.ctosResult,
       ctosOnboardingId: existingApprovedSession?.ctosOnboardingId
     });
 
@@ -133,7 +134,7 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
       data: {
         userId: req.user?.userId!,
         status: 'IN_PROGRESS',
-        metadata: {
+        ctosData: {
           adminRequest: true,
           requestedBy: req.user?.userId
         }
@@ -188,66 +189,62 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
       const updatedSession = await prisma.kycSession.update({
         where: { id: kycSession.id },
         data: {
-          ctosTransactionId: ctosResponse.transaction_id,
           ctosOnboardingId: ctosResponse.onboarding_id,
           ctosOnboardingUrl: ctosResponse.onboarding_url,
           ctosStatus: 1, // Started
           ctosExpiredAt,
-          ctosRawResponse: ctosResponse
+          ctosData: {
+            ...kycSession.ctosData,
+            rawResponse: ctosResponse
+          }
         }
       });
 
       console.log('Admin KYC session updated:', {
         kycId: updatedSession.id,
-        ctosTransactionId: updatedSession.ctosTransactionId,
         ctosOnboardingId: updatedSession.ctosOnboardingId,
         hasOnboardingUrl: !!updatedSession.ctosOnboardingUrl
       });
 
-      return res.json({
+      return res.status(201).json({
         success: true,
         kycId: updatedSession.id,
-        ctosOnboardingUrl: updatedSession.ctosOnboardingUrl,
-        ctosTransactionId: updatedSession.ctosTransactionId,
-        status: updatedSession.status,
+        onboardingUrl: updatedSession.ctosOnboardingUrl,
+        onboardingId: updatedSession.ctosOnboardingId,
+        expiredAt: ctosResponse.expired_at,
         message: "KYC session started successfully. Complete the verification using the provided URL."
       });
 
     } catch (ctosError: any) {
-      console.error('CTOS Integration Error for admin:', ctosError);
-      
-      // Update session status to failed
+      // If CTOS fails, clean up the KYC session
       if (kycSession) {
-        await prisma.kycSession.update({
-          where: { id: kycSession.id },
-          data: { 
-            status: 'REJECTED',
-            ctosRawResponse: { error: ctosError.message || String(ctosError) }
-          }
-        });
+        await prisma.kycSession.delete({ where: { id: kycSession.id } });
       }
-
-      const errorMessage = ctosError.message || String(ctosError);
-      return res.status(500).json({
-        success: false,
-        message: `CTOS Integration Error: ${errorMessage}`
+      console.error('CTOS Integration Error for admin:', ctosError);
+      return res.status(500).json({ 
+        message: 'Failed to create CTOS eKYC transaction',
+        error: ctosError instanceof Error ? ctosError.message : 'Unknown error'
       });
     }
   } catch (error) {
     console.error('Admin KYC start error:', error);
     
-    // Clean up failed session
-    if (kycSession) {
+    // Delete the KYC session if it was created but CTOS failed
+    if (kycSession?.id) {
       try {
         await prisma.kycSession.delete({ where: { id: kycSession.id } });
-      } catch (cleanupError) {
-        console.error('Failed to cleanup KYC session:', cleanupError);
+        console.log(`Deleted failed admin KYC session ${kycSession.id}`);
+      } catch (deleteError) {
+        console.error('Error deleting failed admin KYC session:', deleteError);
       }
     }
-
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to start KYC verification'
+    
+    // Pass through specific CTOS error message
+    const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
+    return res.status(500).json({ 
+      message: 'Failed to create CTOS eKYC session',
+      error: errorMessage,
+      details: errorMessage.includes('CTOS API Error:') ? errorMessage : `CTOS Integration Error: ${errorMessage}`
     });
   }
 });
@@ -304,7 +301,7 @@ router.get('/:kycId/status', authenticateToken, adminOnlyMiddleware, async (req:
           select: {
             id: true,
             type: true,
-            url: true,
+            storageUrl: true,
             createdAt: true
           }
         }
@@ -325,7 +322,6 @@ router.get('/:kycId/status', authenticateToken, adminOnlyMiddleware, async (req:
       ctosStatus: kycSession.ctosStatus,
       ctosResult: kycSession.ctosResult,
       ctosOnboardingUrl: kycSession.ctosOnboardingUrl,
-      ctosTransactionId: kycSession.ctosTransactionId,
       completedAt: kycSession.completedAt,
       documents: kycSession.documents,
       createdAt: kycSession.createdAt,
@@ -374,8 +370,7 @@ router.get('/images', authenticateToken, adminOnlyMiddleware, async (req: AuthRe
           select: {
             id: true,
             type: true,
-            url: true,
-            filename: true,
+            storageUrl: true,
             createdAt: true
           }
         }
@@ -409,20 +404,17 @@ router.get('/images', authenticateToken, adminOnlyMiddleware, async (req: AuthRe
       images: {
         front: front ? {
           id: front.id,
-          url: front.url,
-          filename: front.filename,
+          url: front.storageUrl,
           createdAt: front.createdAt
         } : null,
         back: back ? {
           id: back.id,
-          url: back.url,
-          filename: back.filename,
+          url: back.storageUrl,
           createdAt: back.createdAt
         } : null,
         selfie: selfie ? {
           id: selfie.id,
-          url: selfie.url,
-          filename: selfie.filename,
+          url: selfie.storageUrl,
           createdAt: selfie.createdAt
         } : null
       }

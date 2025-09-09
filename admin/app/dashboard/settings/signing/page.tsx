@@ -39,6 +39,22 @@ interface KycSession {
   ctosResult?: number;
 }
 
+interface OrganisationInfo {
+  orgName: string;
+  orgUserDesignation: string;
+  orgUserRegistrationNo: string;
+  orgUserRegistrationType: 'P' | 'E';
+  orgAddress: string;
+  orgAddressCity: string;
+  orgAddressState: string;
+  orgAddressPostcode: string;
+  orgAddressCountry: string;
+  orgRegistationNo: string; // Note: keeping the typo as per MTSA API
+  orgRegistationType: 'NTRMY' | 'IRB' | 'RMC' | 'CIDB' | 'BAM' | 'GOV' | 'GOVSUB' | 'INT' | 'LEI';
+  orgPhoneNo: string;
+  orgFaxNo?: string;
+}
+
 export default function AdminSigningSettingsPage() {
   const router = useRouter();
   
@@ -63,24 +79,31 @@ export default function AdminSigningSettingsPage() {
   const [ctosOnboardingUrl, setCtosOnboardingUrl] = useState<string | null>(null);
   const [pollingKycId, setPollingKycId] = useState<string | null>(null);
   
-  // OTP state
-  const [showOtpStep, setShowOtpStep] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
-  const [countdown, setCountdown] = useState(0);
+  // PIN and Organisation state
+  const [showPinStep, setShowPinStep] = useState(false);
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [organisationInfo, setOrganisationInfo] = useState<OrganisationInfo>({
+    orgName: '',
+    orgUserDesignation: '',
+    orgUserRegistrationNo: '',
+    orgUserRegistrationType: 'E',
+    orgAddress: '',
+    orgAddressCity: '',
+    orgAddressState: '',
+    orgAddressPostcode: '',
+    orgAddressCountry: 'MY',
+    orgRegistationNo: '',
+    orgRegistationType: 'NTRMY',
+    orgPhoneNo: '',
+    orgFaxNo: ''
+  });
+  const [submittingCertificate, setSubmittingCertificate] = useState(false);
 
   useEffect(() => {
     fetchCurrentUser();
   }, []);
 
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
 
   const fetchCurrentUser = async () => {
     try {
@@ -270,54 +293,61 @@ export default function AdminSigningSettingsPage() {
       return;
     }
 
-    // Proceed to OTP step
-    setShowOtpStep(true);
+    // Proceed to PIN and organisation step
+    setShowPinStep(true);
     setKycCompleted(false);
   };
 
-  const handleSendOTP = async () => {
-    if (!currentUser?.icNumber) {
-      setError('IC number is required for OTP verification');
-      return;
+  const validatePin = () => {
+    if (!pin || pin.length !== 6) {
+      setError('Please enter a 6-digit PIN');
+      return false;
     }
 
-    try {
-      setSendingOtp(true);
-      setError(null);
-
-      console.log('Requesting OTP for admin user:', currentUser.icNumber);
-
-      // Request OTP for certificate enrollment (userType = 2 for internal users)
-      const otpResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/request-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: currentUser.icNumber,
-          usage: 'NU', // New user enrollment
-          emailAddress: currentUser.email,
-        }),
-      });
-
-      if (otpResponse.success) {
-        setOtpSent(true);
-        setCountdown(300); // 5 minutes countdown
-        console.log('OTP sent successfully to', currentUser.email);
-      } else {
-        throw new Error(otpResponse.message || 'Failed to send OTP');
-      }
-    } catch (err) {
-      console.error('OTP send error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to send OTP');
-    } finally {
-      setSendingOtp(false);
+    if (!/^\d{6}$/.test(pin)) {
+      setError('PIN must contain only numbers');
+      return false;
     }
+
+    if (pin !== confirmPin) {
+      setError('PINs do not match');
+      return false;
+    }
+
+    return true;
   };
 
-  const handleVerifyOTP = async () => {
-    if (!otp || otp.length !== 6) {
-      setError('Please enter a valid 6-digit OTP');
+  const validateOrganisationInfo = () => {
+    const required = [
+      'orgName', 'orgUserDesignation', 'orgUserRegistrationNo', 
+      'orgAddress', 'orgAddressCity', 'orgAddressState', 
+      'orgAddressPostcode', 'orgRegistationNo', 'orgPhoneNo'
+    ];
+
+    for (const field of required) {
+      if (!organisationInfo[field as keyof OrganisationInfo]) {
+        setError(`Please fill in ${field.replace('org', '').replace(/([A-Z])/g, ' $1').toLowerCase().trim()}`);
+        return false;
+      }
+    }
+
+    // Validate postcode
+    if (!/^\d{5}$/.test(organisationInfo.orgAddressPostcode)) {
+      setError('Postcode must be 5 digits');
+      return false;
+    }
+
+    // Validate phone number format
+    if (!/^\+?[\d\s-()]+$/.test(organisationInfo.orgPhoneNo)) {
+      setError('Please enter a valid phone number');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleCertificateEnrollment = async () => {
+    if (!validatePin() || !validateOrganisationInfo()) {
       return;
     }
 
@@ -327,7 +357,7 @@ export default function AdminSigningSettingsPage() {
     }
 
     try {
-      setVerifyingOtp(true);
+      setSubmittingCertificate(true);
       setError(null);
 
       console.log('Requesting certificate enrollment for admin user:', currentUser.icNumber);
@@ -359,10 +389,11 @@ export default function AdminSigningSettingsPage() {
           nationality: 'MY',
           userType: '2', // Internal user type
           idType: 'N',
-          authFactor: otp,
+          authFactor: pin, // Use PIN instead of OTP
           nricFrontUrl: front.url,
           nricBackUrl: back.url,
           selfieImageUrl: selfie.url,
+          organisationInfo, // Add organisation info for internal users
           verificationData: {
             source: 'admin_dashboard',
             timestamp: new Date().toISOString(),
@@ -375,9 +406,9 @@ export default function AdminSigningSettingsPage() {
       if (certificateResponse.success) {
         // Success - refresh certificate status
         await checkCertificate(currentUser.icNumber);
-        setShowOtpStep(false);
-        setOtp('');
-        setOtpSent(false);
+        setShowPinStep(false);
+        setPin('');
+        setConfirmPin('');
       } else {
         throw new Error(certificateResponse.message || 'Certificate enrollment failed');
       }
@@ -385,7 +416,7 @@ export default function AdminSigningSettingsPage() {
       console.error('Certificate enrollment error:', err);
       setError(err instanceof Error ? err.message : 'Failed to enroll certificate');
     } finally {
-      setVerifyingOtp(false);
+      setSubmittingCertificate(false);
     }
   };
 
@@ -529,7 +560,7 @@ export default function AdminSigningSettingsPage() {
         {certificateStatus && !showIcInput && !checkingCertificate && (
           <div className="space-y-4">
             {/* KYC Step */}
-            {certificateStatus.nextStep === 'kyc' && !showOtpStep && (
+            {certificateStatus.nextStep === 'kyc' && !showPinStep && (
               <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
                 <div className="flex items-center mb-4">
                   <DocumentTextIcon className="h-6 w-6 text-purple-400 mr-3" />
@@ -600,76 +631,218 @@ export default function AdminSigningSettingsPage() {
               </div>
             )}
 
-            {/* OTP Step */}
-            {showOtpStep && (
+            {/* PIN and Organisation Step */}
+            {showPinStep && (
               <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
                 <div className="flex items-center mb-4">
                   <ShieldCheckIcon className="h-6 w-6 text-purple-400 mr-3" />
                   <h3 className="text-lg font-semibold text-white">Step 2: Certificate Enrollment</h3>
                 </div>
                 
-                <p className="text-gray-400 mb-4">
-                  Enter the OTP sent to your email to complete certificate enrollment.
+                <p className="text-gray-400 mb-6">
+                  Set a 6-digit PIN and provide organisation information to complete certificate enrollment.
                 </p>
 
-                {!otpSent ? (
-                  <button
-                    onClick={handleSendOTP}
-                    disabled={sendingOtp}
-                    className="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {sendingOtp ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Sending OTP...
-                      </>
-                    ) : (
-                      'Send OTP to Email'
-                    )}
-                  </button>
-                ) : (
+                <div className="space-y-6">
+                  {/* PIN Section */}
                   <div className="space-y-4">
-                    <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg">
-                      <div className="flex items-center">
-                        <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
-                        <span className="text-green-400">
-                          OTP sent to {currentUser?.email}
-                          {countdown > 0 && (
-                            <span className="ml-2 text-sm">({Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')})</span>
-                          )}
-                        </span>
+                    <h4 className="text-white font-medium">Security PIN</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Enter 6-digit PIN</label>
+                        <input
+                          type="password"
+                          value={pin}
+                          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="••••••"
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
+                          maxLength={6}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Confirm PIN</label>
+                        <input
+                          type="password"
+                          value={confirmPin}
+                          onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="••••••"
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
+                          maxLength={6}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Organisation Information Section */}
+                  <div className="space-y-4">
+                    <h4 className="text-white font-medium">Organisation Information</h4>
+                    
+                    {/* Organisation Name and User Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Organisation Name *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgName}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgName: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Enter organisation name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Your Designation *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgUserDesignation}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserDesignation: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="e.g., Director, Manager"
+                        />
                       </div>
                     </div>
 
-                    <div className="flex gap-4">
-                      <input
-                        type="text"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="Enter 6-digit OTP"
-                        className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
-                        maxLength={6}
-                      />
-                      <button
-                        onClick={handleVerifyOTP}
-                        disabled={verifyingOtp || otp.length !== 6}
-                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {verifyingOtp ? 'Verifying...' : 'Verify OTP'}
-                      </button>
+                    {/* User Registration Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Registration Number *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgUserRegistrationNo}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserRegistrationNo: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Professional/Employee ID"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Registration Type *</label>
+                        <select
+                          value={organisationInfo.orgUserRegistrationType}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserRegistrationType: e.target.value as 'P' | 'E'})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        >
+                          <option value="E">Employee ID</option>
+                          <option value="P">Professional Registration</option>
+                        </select>
+                      </div>
                     </div>
 
-                    {countdown === 0 && (
-                      <button
-                        onClick={handleSendOTP}
-                        disabled={sendingOtp}
-                        className="text-purple-400 hover:text-purple-300 text-sm"
-                      >
-                        Resend OTP
-                      </button>
-                    )}
+                    {/* Organisation Address */}
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-2">Organisation Address *</label>
+                      <textarea
+                        value={organisationInfo.orgAddress}
+                        onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddress: e.target.value})}
+                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter full address"
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">City *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgAddressCity}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddressCity: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">State *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgAddressState}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddressState: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Postcode *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgAddressPostcode}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddressPostcode: e.target.value.replace(/\D/g, '').slice(0, 5)})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          maxLength={5}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Organisation Registration */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Organisation Registration No *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgRegistationNo}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgRegistationNo: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Company registration number"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Registration Type *</label>
+                        <select
+                          value={organisationInfo.orgRegistationType}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgRegistationType: e.target.value as any})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        >
+                          <option value="NTRMY">Malaysia Trade Register</option>
+                          <option value="IRB">Inland Revenue Board</option>
+                          <option value="RMC">Royal Malaysia Customs</option>
+                          <option value="CIDB">Construction Industry Development Board</option>
+                          <option value="BAM">Board of Architects Malaysia</option>
+                          <option value="GOV">Government Entity</option>
+                          <option value="GOVSUB">Government Subdivision</option>
+                          <option value="INT">International Organization</option>
+                          <option value="LEI">LEI Registration</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Contact Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Phone Number *</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgPhoneNo}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgPhoneNo: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="+60123456789"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Fax Number (Optional)</label>
+                        <input
+                          type="text"
+                          value={organisationInfo.orgFaxNo}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgFaxNo: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="+60312345678"
+                        />
+                      </div>
+                    </div>
                   </div>
-                )}
+
+                  <div className="pt-4">
+                    <button
+                      onClick={handleCertificateEnrollment}
+                      disabled={submittingCertificate || pin.length !== 6 || confirmPin.length !== 6}
+                      className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    >
+                      {submittingCertificate ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                          Enrolling Certificate...
+                        </>
+                      ) : (
+                        'Enroll Certificate'
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

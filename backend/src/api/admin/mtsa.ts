@@ -285,7 +285,8 @@ router.post('/request-certificate', authenticateToken, adminOnlyMiddleware, asyn
       authFactor, 
       nricFrontUrl, 
       nricBackUrl, 
-      selfieImageUrl, 
+      selfieImageUrl,
+      organisationInfo,
       verificationData 
     } = req.body;
 
@@ -301,6 +302,14 @@ router.post('/request-certificate', authenticateToken, adminOnlyMiddleware, asyn
       return res.status(400).json({
         success: false,
         message: 'KYC images are required: nricFrontUrl, nricBackUrl, selfieImageUrl'
+      });
+    }
+
+    // Validate organisation info for internal users (userType = 2)
+    if (userType === '2' && !organisationInfo) {
+      return res.status(400).json({
+        success: false,
+        message: 'Organisation information is required for internal users'
       });
     }
 
@@ -357,6 +366,7 @@ router.post('/request-certificate', authenticateToken, adminOnlyMiddleware, asyn
         nricFront: nricFrontBase64,
         nricBack: nricBackBase64,
         selfieImage: selfieImageBase64,
+        ...(organisationInfo && { organisationInfo }), // Include organisation info for internal users
         verificationData: {
           ...verificationData,
           requestedBy: 'admin',
