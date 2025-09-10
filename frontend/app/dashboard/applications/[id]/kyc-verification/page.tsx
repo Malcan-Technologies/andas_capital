@@ -241,8 +241,8 @@ export default function KycVerificationPage() {
 				// Open CTOS eKYC in new tab
 				window.open(response.onboardingUrl, '_blank');
 				
-				// Start polling for status updates
-				startStatusPolling(response.kycId);
+				// Note: Removed polling - now only relying on webhook updates
+				// Status will be updated by CTOS webhook when KYC is completed
 			} else {
 				throw new Error('Failed to create CTOS eKYC session');
 			}
@@ -263,68 +263,8 @@ export default function KycVerificationPage() {
 		}
 	};
 
-	const startStatusPolling = (kycId: string) => {
-		const pollStatus = async () => {
-			try {
-				const statusResponse = await fetchWithTokenRefresh<{
-					success: boolean;
-					status: string;
-					ctosStatus: number;
-					ctosResult: number;
-				}>(`/api/kyc/${kycId}/ctos-status`);
-
-				setCtosStatus({ 
-					status: statusResponse.ctosStatus, 
-					result: statusResponse.ctosResult 
-				});
-
-				// Check if CTOS process is completed
-				if (statusResponse.ctosStatus === 2) { // Completed
-					setKycInProgress(false);
-					setKycCompleted(true);
-					
-				if (statusResponse.ctosResult === 1) { // Approved
-					// Update CTOS status state
-					setCtosStatus(prev => ({
-						...prev!,
-						status: statusResponse.ctosStatus,
-						result: statusResponse.ctosResult,
-						hasKycSession: true
-					}));
-					setCtosOnboardingUrl(null);
-					setPollingKycId(null);
-				} else {
-						// Rejected
-						setKycError("KYC verification was rejected. Please try again.");
-						setCtosOnboardingUrl(null);
-						setPollingKycId(null);
-						setKycCompleted(false);
-					}
-				} else if (statusResponse.ctosStatus === 3) { // Expired
-					setKycError("KYC verification session expired. Please start again.");
-					setCtosOnboardingUrl(null);
-					setPollingKycId(null);
-					setKycInProgress(false);
-					setKycCompleted(false);
-				}
-			} catch (err) {
-				console.error("Status polling error:", err);
-			}
-		};
-
-		// Poll every 2 seconds
-		const interval = setInterval(pollStatus, 2000);
-		
-		// Clean up after 30 minutes
-		setTimeout(() => {
-			clearInterval(interval);
-			setCtosOnboardingUrl(null);
-			setPollingKycId(null);
-		}, 30 * 60 * 1000);
-
-		// Return cleanup function
-		return () => clearInterval(interval);
-	};
+	// Removed startStatusPolling function - now relying on webhook updates only
+	// Page refresh will still call get-status API to check current status
 
 	const handleAcceptKyc = async () => {
 		// Allow continuing if either result is 1 OR if isAlreadyApproved is true
@@ -719,7 +659,7 @@ export default function KycVerificationPage() {
 										<div className="text-center">
 											<h4 className="text-lg font-semibold text-blue-800 mb-2">KYC Verification in Progress</h4>
 											<p className="text-blue-600 mb-4">
-												Please complete the identity verification process in the CTOS tab. We're monitoring your progress...
+												Please complete the identity verification process in the CTOS tab. Status will be updated automatically when completed, or click "Check Status" to refresh.
 											</p>
 											<div className="flex flex-col sm:flex-row gap-3 justify-center">
 												<button
@@ -730,6 +670,15 @@ export default function KycVerificationPage() {
 														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
 													</svg>
 													Reopen KYC Window
+												</button>
+												<button
+													onClick={() => window.location.reload()}
+													className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+												>
+													<svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+													</svg>
+													Check Status
 												</button>
 												<button
 													onClick={() => {
