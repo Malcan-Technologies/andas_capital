@@ -321,7 +321,8 @@ router.post('/request-certificate', authenticateToken, adminOnlyMiddleware, asyn
       hasNricFront: !!nricFrontUrl,
       hasNricBack: !!nricBackUrl,
       hasSelfie: !!selfieImageUrl,
-      adminUserId: req.user?.userId
+      adminUserId: req.user?.userId,
+      verificationData
     });
 
     // Helper function to extract base64 data from data URL
