@@ -350,12 +350,12 @@ export default function AdminSigningSettingsPage() {
   };
 
   const validatePin = () => {
-    if (!pin || pin.length !== 6) {
-      setError('Please enter a 6-digit PIN');
+    if (!pin || pin.length !== 8) {
+      setError('Please enter an 8-digit PIN');
       return false;
     }
 
-    if (!/^\d{6}$/.test(pin)) {
+    if (!/^\d{8}$/.test(pin)) {
       setError('PIN must contain only numbers');
       return false;
     }
@@ -693,7 +693,7 @@ export default function AdminSigningSettingsPage() {
                 </div>
                 
                 <p className="text-gray-400 mb-6">
-                  Set a 6-digit PIN and provide organisation information to complete certificate enrollment.
+                  Set an 8-digit PIN and provide organisation information to complete certificate enrollment.
                 </p>
 
                 <div className="space-y-6">
@@ -702,14 +702,14 @@ export default function AdminSigningSettingsPage() {
                     <h4 className="text-white font-medium">Security PIN</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm text-gray-400 mb-2">Enter 6-digit PIN</label>
+                        <label className="block text-sm text-gray-400 mb-2">Enter 8-digit PIN</label>
                         <input
                           type="password"
                           value={pin}
-                          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                          placeholder="••••••"
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
-                          maxLength={6}
+                        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
+                        maxLength={8}
                         />
                       </div>
                       <div>
@@ -717,10 +717,10 @@ export default function AdminSigningSettingsPage() {
                         <input
                           type="password"
                           value={confirmPin}
-                          onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                          placeholder="••••••"
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
-                          maxLength={6}
+                        onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
+                        maxLength={8}
                         />
                       </div>
                     </div>
@@ -882,7 +882,7 @@ export default function AdminSigningSettingsPage() {
                   <div className="pt-4">
                     <button
                       onClick={handleCertificateEnrollment}
-                      disabled={submittingCertificate || pin.length !== 6 || confirmPin.length !== 6}
+                      disabled={submittingCertificate || pin.length !== 8 || confirmPin.length !== 8}
                       className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                     >
                       {submittingCertificate ? (

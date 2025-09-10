@@ -67,8 +67,8 @@ router.get('/status', authenticateToken, adminOnlyMiddleware, async (req: AuthRe
       });
     }
 
-    // Find the best KYC session for this admin user (prioritize approved, then most recent)
-    const kycSession = await prisma.kycSession.findFirst({
+    // First check for approved sessions
+    const approvedSession = await prisma.kycSession.findFirst({
       where: {
         userId,
         ctosOnboardingId: { not: null },
@@ -77,35 +77,68 @@ router.get('/status', authenticateToken, adminOnlyMiddleware, async (req: AuthRe
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log(`Admin user ${userId} - KYC status check:`, {
-      found: !!kycSession,
-      sessionId: kycSession?.id,
-      ctosOnboardingId: kycSession?.ctosOnboardingId,
-      ctosResult: kycSession?.ctosResult,
-      status: kycSession?.status
-    });
+    if (approvedSession) {
+      console.log(`Admin user ${userId} - Found approved KYC session:`, {
+        sessionId: approvedSession.id,
+        ctosOnboardingId: approvedSession.ctosOnboardingId,
+        status: approvedSession.status
+      });
 
-    if (kycSession) {
       return res.json({
         success: true,
         hasKycSession: true,
-        status: kycSession.status,
-        ctosStatus: kycSession.ctosStatus,
-        ctosResult: kycSession.ctosResult,
+        status: approvedSession.status,
+        ctosStatus: approvedSession.ctosStatus,
+        ctosResult: approvedSession.ctosResult,
         isAlreadyApproved: true,
-        kycSessionId: kycSession.id
-      });
-    } else {
-      return res.json({
-        success: true,
-        hasKycSession: false,
-        status: null,
-        ctosStatus: 0,
-        ctosResult: 2,
-        isAlreadyApproved: false,
-        canRetry: true
+        kycSessionId: approvedSession.id
       });
     }
+
+    // Then check for pending/in-progress sessions that can be resumed
+    const pendingSession = await prisma.kycSession.findFirst({
+      where: {
+        userId,
+        ctosOnboardingUrl: { not: null }, // Must have onboarding URL to resume
+        status: 'IN_PROGRESS' // Must be in progress
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (pendingSession) {
+      console.log(`Admin user ${userId} - Found pending KYC session:`, {
+        sessionId: pendingSession.id,
+        ctosOnboardingId: pendingSession.ctosOnboardingId,
+        status: pendingSession.status,
+        ctosOnboardingUrl: pendingSession.ctosOnboardingUrl
+      });
+
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        status: pendingSession.status,
+        ctosStatus: pendingSession.ctosStatus,
+        ctosResult: pendingSession.ctosResult,
+        isAlreadyApproved: false,
+        isPending: true,
+        canResume: true,
+        kycSessionId: pendingSession.id,
+        ctosOnboardingUrl: pendingSession.ctosOnboardingUrl
+      });
+    }
+
+    // No sessions found
+    console.log(`Admin user ${userId} - No KYC sessions found`);
+    return res.json({
+      success: true,
+      hasKycSession: false,
+      status: null,
+      ctosStatus: 0,
+      ctosResult: 2,
+      isAlreadyApproved: false,
+      isPending: false,
+      canRetry: true
+    });
 
   } catch (error) {
     console.error('Admin KYC status check error:', error);
@@ -231,7 +264,7 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
 
       // Build completion URL from BASE_URL environment variable  
       const baseUrl = process.env.BASE_URL || 'https://kredit.my';
-      const completionUrl = `${baseUrl}/admin/kyc-complete`;
+      const completionUrl = `${baseUrl}/kyc-complete`;
 
       const ctosResponse = await ctosService.createTransaction({
         ref_id: req.user?.userId!, // Use admin user UUID as ref_id
@@ -269,7 +302,7 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
         data: {
           ctosOnboardingId: ctosResponse.onboarding_id,
           ctosOnboardingUrl: ctosResponse.onboarding_url,
-          ctosStatus: 1, // Started
+          ctosStatus: 0, // Not opened yet (consistent with user KYC)
           ctosExpiredAt,
           ctosData: {
             ...kycSession.ctosData,
@@ -323,6 +356,259 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
       message: 'Failed to create CTOS eKYC session',
       error: errorMessage,
       details: errorMessage.includes('CTOS API Error:') ? errorMessage : `CTOS Integration Error: ${errorMessage}`
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/kyc/admin-ctos-status:
+ *   get:
+ *     summary: Get admin user's CTOS KYC status and update database (like user-ctos-status)
+ *     tags: [Admin, KYC]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: KYC status retrieved and database updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to get KYC status
+ */
+router.get('/admin-ctos-status', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    console.log(`🔍 Admin CTOS Status Check - User: ${userId}`);
+
+    // Find the most recent KYC session for this admin user
+    const kycSession = await prisma.kycSession.findFirst({
+      where: {
+        userId,
+        ctosOnboardingId: { not: null } // Must have CTOS session
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!kycSession) {
+      console.log(`❌ No KYC session found for admin user ${userId}`);
+      return res.json({
+        success: true,
+        hasKycSession: false,
+        status: null,
+        ctosStatus: 0,
+        ctosResult: 2,
+        isAlreadyApproved: false,
+        canRetry: true
+      });
+    }
+
+    console.log(`📊 Found admin KYC session ${kycSession.id}: status=${kycSession.status}, ctosStatus=${kycSession.ctosStatus}, ctosResult=${kycSession.ctosResult}`);
+
+    // If already approved, return existing data
+    if (kycSession.status === 'APPROVED') {
+      console.log(`✅ Admin session ${kycSession.id} already approved`);
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        status: kycSession.status,
+        ctosStatus: kycSession.ctosStatus,
+        ctosResult: kycSession.ctosResult,
+        isAlreadyApproved: true,
+        kycSessionId: kycSession.id
+      });
+    }
+
+    // Check if documents already exist in database (webhook might have processed them)
+    const existingDocuments = await prisma.kycDocument.findMany({
+      where: { kycId: kycSession.id },
+      select: { type: true, id: true }
+    });
+
+    const hasAllDocuments = ['front', 'back', 'selfie'].every(type =>
+      existingDocuments.some(doc => doc.type === type)
+    );
+
+    if (hasAllDocuments && kycSession.ctosResult === 1) {
+      console.log(`✅ Admin session ${kycSession.id} has all documents and is approved`);
+      // Update session status if it's not already marked as approved
+      if (kycSession.status !== 'APPROVED') {
+        await prisma.kycSession.update({
+          where: { id: kycSession.id },
+          data: { status: 'APPROVED', completedAt: new Date() }
+        });
+      }
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        status: 'APPROVED',
+        ctosStatus: kycSession.ctosStatus,
+        ctosResult: kycSession.ctosResult,
+        isAlreadyApproved: true,
+        kycSessionId: kycSession.id
+      });
+    }
+
+    // Only call CTOS API for non-approved sessions
+    try {
+      if (!kycSession.ctosOnboardingId) {
+        throw new Error('No CTOS onboarding ID found');
+      }
+      
+      console.log(`🔍 Calling CTOS API for admin session ${kycSession.id}`);
+      
+      // Try with OPG-Capital prefix first, fallback to original userId (same as user KYC)
+      let ctosStatus;
+      try {
+        console.log(`🔍 Trying CTOS with OPG-Capital prefix: OPG-Capital${userId}`);
+        ctosStatus = await ctosService.getStatus({
+          ref_id: `OPG-Capital${userId}`,
+          onboarding_id: kycSession.ctosOnboardingId,
+          platform: 'Web',
+          mode: 2 // Detail mode
+        });
+        console.log(`✅ CTOS Response with prefix:`, { status: ctosStatus.status, result: ctosStatus.result });
+      } catch (error) {
+        console.log('❌ Failed with OPG-Capital prefix, trying original userId...');
+        console.log(`🔍 Trying CTOS with original userId: ${userId}`);
+        ctosStatus = await ctosService.getStatus({
+          ref_id: userId,
+          onboarding_id: kycSession.ctosOnboardingId,
+          platform: 'Web',
+          mode: 2 // Detail mode
+        });
+        console.log(`✅ CTOS Response with original:`, { status: ctosStatus.status, result: ctosStatus.result });
+      }
+
+      console.log(`✅ CTOS Response for admin:`, { status: ctosStatus.status, result: ctosStatus.result });
+
+      // Update our session with the latest status
+      await prisma.kycSession.update({
+        where: { id: kycSession.id },
+        data: {
+          ctosStatus: ctosStatus.status,
+          ctosResult: ctosStatus.result,
+          ctosData: ctosStatus as any,
+          status: ctosStatus.status === 2 ? // Completed
+            (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
+            ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS',
+          completedAt: ctosStatus.status === 2 ? new Date() : null
+        }
+      });
+
+      // Store/update document images if available from CTOS response (same logic as user endpoint)
+      const ctosData = ctosStatus as any;
+      const documentsToUpsert = [];
+
+      // Extract images from step1 and step2 (based on actual CTOS response structure)
+      const frontImage = ctosData.front_document_image || ctosData.step1?.front_document_image;
+      const backImage = ctosData.back_document_image || ctosData.step1?.back_document_image;
+      const faceImage = ctosData.face_image || ctosData.step2?.best_frame;
+
+      if (frontImage) {
+        documentsToUpsert.push({
+          kycId: kycSession.id,
+          type: 'front',
+          storageUrl: `data:image/jpeg;base64,${frontImage}`,
+          hashSha256: require('crypto').createHash('sha256').update(frontImage).digest('hex'),
+          updatedAt: new Date()
+        });
+      }
+
+      if (backImage) {
+        documentsToUpsert.push({
+          kycId: kycSession.id,
+          type: 'back', 
+          storageUrl: `data:image/jpeg;base64,${backImage}`,
+          hashSha256: require('crypto').createHash('sha256').update(backImage).digest('hex'),
+          updatedAt: new Date()
+        });
+      }
+
+      if (faceImage) {
+        documentsToUpsert.push({
+          kycId: kycSession.id,
+          type: 'selfie',
+          storageUrl: `data:image/jpeg;base64,${faceImage}`,
+          hashSha256: require('crypto').createHash('sha256').update(faceImage).digest('hex'),
+          updatedAt: new Date()
+        });
+      }
+
+      // Upsert documents to prevent duplicates
+      if (documentsToUpsert.length > 0) {
+        for (const doc of documentsToUpsert) {
+          await prisma.kycDocument.upsert({
+            where: {
+              kycId_type: {
+                kycId: doc.kycId,
+                type: doc.type
+              }
+            },
+            update: {
+              storageUrl: doc.storageUrl,
+              hashSha256: doc.hashSha256,
+              updatedAt: new Date()
+            },
+            create: doc
+          });
+        }
+        console.log(`📄 Stored ${documentsToUpsert.length} documents for admin KYC session ${kycSession.id}`);
+      }
+
+      // Update admin user KYC status if approved
+      if (ctosStatus.status === 2 && ctosStatus.result === 1) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { kycStatus: true }
+        });
+        console.log(`✅ Updated admin user ${userId} KYC status to approved`);
+      }
+
+      const finalStatus = ctosStatus.status === 2 ? 
+        (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
+        ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS';
+
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        status: finalStatus,
+        ctosStatus: ctosStatus.status,
+        ctosResult: ctosStatus.result,
+        isAlreadyApproved: finalStatus === 'APPROVED',
+        kycSessionId: kycSession.id
+      });
+
+    } catch (ctosError) {
+      console.error('CTOS API error for admin:', ctosError);
+      // Return current database status on CTOS error
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        status: kycSession.status,
+        ctosStatus: kycSession.ctosStatus,
+        ctosResult: kycSession.ctosResult,
+        isAlreadyApproved: kycSession.status === 'APPROVED',
+        kycSessionId: kycSession.id,
+        error: 'Failed to get latest status from CTOS, showing database status'
+      });
+    }
+
+  } catch (error) {
+    console.error('Admin CTOS status check error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to check KYC status'
     });
   }
 });
