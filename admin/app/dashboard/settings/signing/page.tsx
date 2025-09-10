@@ -28,7 +28,7 @@ interface CertificateStatus {
   hasValidCert: boolean;
   message: string;
   certificateData?: any;
-  nextStep: 'kyc' | 'certificate' | 'complete';
+  nextStep: 'kyc' | 'certificate' | 'enrollment' | 'complete';
 }
 
 interface KycSession {
@@ -145,11 +145,36 @@ export default function AdminSigningSettingsPage() {
           nextStep: 'complete'
         });
       } else {
-        setCertificateStatus({
-          hasValidCert: false,
-          message: 'No valid digital certificate found. You need to complete KYC verification and certificate enrollment.',
-          nextStep: 'kyc'
-        });
+        // Check if user already has approved KYC before showing KYC step
+        console.log('Checking existing KYC status for admin user...');
+        
+        try {
+          const kycStatusResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/status');
+          
+          console.log('KYC status response:', kycStatusResponse);
+          
+          if (kycStatusResponse.success && kycStatusResponse.isAlreadyApproved) {
+            setCertificateStatus({
+              hasValidCert: false,
+              message: 'KYC verification completed. You can now proceed to certificate enrollment.',
+              nextStep: 'enrollment'
+            });
+            setKycCompleted(true);
+          } else {
+            setCertificateStatus({
+              hasValidCert: false,
+              message: 'No valid digital certificate found. You need to complete KYC verification and certificate enrollment.',
+              nextStep: 'kyc'
+            });
+          }
+        } catch (kycError) {
+          console.error('KYC status check error:', kycError);
+          setCertificateStatus({
+            hasValidCert: false,
+            message: 'No valid digital certificate found. You need to complete KYC verification and certificate enrollment.',
+            nextStep: 'kyc'
+          });
+        }
       }
     } catch (err) {
       console.error('Certificate check error:', err);
@@ -220,18 +245,32 @@ export default function AdminSigningSettingsPage() {
       setKycInProgress(true);
       setError(null);
       
+      // Check if user already has approved KYC before starting new one
+      console.log('Checking existing KYC status before starting new KYC...');
+      const kycStatusResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/status');
+      
+      if (kycStatusResponse.success && kycStatusResponse.isAlreadyApproved) {
+        setKycCompleted(true);
+        setCertificateStatus({
+          hasValidCert: false,
+          message: 'KYC verification already completed. You can proceed to certificate enrollment.',
+          nextStep: 'enrollment'
+        });
+        setKycInProgress(false);
+        return;
+      }
+      
       console.log('Starting KYC for admin user:', currentUser.icNumber);
       
-      const response = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/start', {
+      const response = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/start-ctos', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          icNumber: currentUser.icNumber,
-          fullName: currentUser.fullName,
-          email: currentUser.email,
-          phoneNumber: currentUser.phoneNumber,
+          documentName: currentUser.fullName,
+          documentNumber: currentUser.icNumber,
+          platform: 'web'
         }),
       });
 
@@ -843,6 +882,28 @@ export default function AdminSigningSettingsPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Certificate Enrollment Step */}
+            {certificateStatus.nextStep === 'enrollment' && !showPinStep && (
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+                <div className="flex items-center mb-4">
+                  <ShieldCheckIcon className="h-6 w-6 text-purple-400 mr-3" />
+                  <h3 className="text-lg font-semibold text-white">Step 2: Certificate Enrollment</h3>
+                </div>
+                
+                <p className="text-gray-400 mb-6">
+                  KYC verification completed successfully. You can now enroll for your digital certificate.
+                </p>
+
+                <button
+                  onClick={() => setShowPinStep(true)}
+                  className="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  Start Certificate Enrollment
+                  <ArrowRightIcon className="h-4 w-4 ml-2" />
+                </button>
               </div>
             )}
 

@@ -40,6 +40,84 @@ const adminOnlyMiddleware = async (req: AuthRequest, res: any, next: any) => {
 
 /**
  * @swagger
+ * /api/admin/kyc/status:
+ *   get:
+ *     summary: Get admin user's CTOS KYC status
+ *     tags: [Admin, KYC]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: KYC status retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to get KYC status
+ */
+router.get('/status', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    // Find the best KYC session for this admin user (prioritize approved, then most recent)
+    const kycSession = await prisma.kycSession.findFirst({
+      where: {
+        userId,
+        ctosOnboardingId: { not: null },
+        ctosResult: 1 // Approved
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    console.log(`Admin user ${userId} - KYC status check:`, {
+      found: !!kycSession,
+      sessionId: kycSession?.id,
+      ctosOnboardingId: kycSession?.ctosOnboardingId,
+      ctosResult: kycSession?.ctosResult,
+      status: kycSession?.status
+    });
+
+    if (kycSession) {
+      return res.json({
+        success: true,
+        hasKycSession: true,
+        status: kycSession.status,
+        ctosStatus: kycSession.ctosStatus,
+        ctosResult: kycSession.ctosResult,
+        isAlreadyApproved: true,
+        kycSessionId: kycSession.id
+      });
+    } else {
+      return res.json({
+        success: true,
+        hasKycSession: false,
+        status: null,
+        ctosStatus: 0,
+        ctosResult: 2,
+        isAlreadyApproved: false,
+        canRetry: true
+      });
+    }
+
+  } catch (error) {
+    console.error('Admin KYC status check error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to check KYC status'
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/admin/kyc/start-ctos:
  *   post:
  *     summary: Start CTOS eKYC process for admin user
