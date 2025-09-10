@@ -274,13 +274,25 @@ export default function AdminSigningSettingsPage() {
         }),
       });
 
-      if (response.success && response.data) {
-        setKycSession(response.data);
+      if (response.success) {
+        const kycData = {
+          id: response.kycId,
+          ctosOnboardingUrl: response.onboardingUrl,
+          ctosOnboardingId: response.onboardingId,
+          status: 'IN_PROGRESS'
+        };
         
-        if (response.data.ctosOnboardingUrl) {
-          setCtosOnboardingUrl(response.data.ctosOnboardingUrl);
-          setPollingKycId(response.data.id);
-          startKycStatusPolling(response.data.id);
+        setKycSession(kycData);
+        
+        if (response.onboardingUrl) {
+          setCtosOnboardingUrl(response.onboardingUrl);
+          setPollingKycId(response.kycId);
+          
+          // Open CTOS eKYC in new tab
+          window.open(response.onboardingUrl, '_blank');
+          
+          // Start polling for status updates
+          startKycStatusPolling(response.kycId);
         }
       } else {
         throw new Error(response.message || 'Failed to start KYC verification');
