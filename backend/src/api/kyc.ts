@@ -1352,6 +1352,54 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
 // Export the helper function for use in other API files
 export { userHasAllKycDocuments };
 
+// Lightweight endpoint for database polling - only checks local database status
+router.get('/session-status/:kycSessionId', authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  try {
+    const { kycSessionId } = req.params;
+    
+    // Simple database query - no external API calls
+    const session = await db.kycSession.findUnique({
+      where: { id: kycSessionId },
+      select: {
+        id: true,
+        status: true,
+        ctosResult: true,
+        ctosStatus: true,
+        completedAt: true,
+        userId: true
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    // Verify this session belongs to the authenticated user
+    if (session.userId !== req.user?.userId) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
+    // Set cache-busting headers
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    return res.json({
+      success: true,
+      status: session.status,
+      ctosResult: session.ctosResult,
+      ctosStatus: session.ctosStatus,
+      isApproved: session.status === 'APPROVED',
+      isCompleted: session.status === 'APPROVED' || session.status === 'REJECTED',
+      completedAt: session.completedAt
+    });
+
+  } catch (err) {
+    console.error('Error checking session status:', err);
+    return res.status(500).json({ success: false, message: 'Failed to check status' });
+  }
+});
+
 export default router;
 
 

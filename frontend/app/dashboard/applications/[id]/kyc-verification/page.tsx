@@ -241,8 +241,8 @@ export default function KycVerificationPage() {
 				// Open CTOS eKYC in new tab
 				window.open(response.onboardingUrl, '_blank');
 				
-				// Note: Removed polling - now only relying on webhook updates
-				// Status will be updated by CTOS webhook when KYC is completed
+				// Start lightweight database polling to detect webhook updates
+				startDatabasePolling(response.kycId);
 			} else {
 				throw new Error('Failed to create CTOS eKYC session');
 			}
@@ -263,8 +263,39 @@ export default function KycVerificationPage() {
 		}
 	};
 
-	// Removed startStatusPolling function - now relying on webhook updates only
-	// Page refresh will still call get-status API to check current status
+	// Lightweight database polling - only checks our database for status changes
+	const startDatabasePolling = (kycSessionId: string) => {
+		const pollDatabase = async () => {
+			try {
+				// Only poll our database, not CTOS API
+				const statusResponse = await fetchWithTokenRefresh<{
+					success: boolean;
+					status: string;
+					ctosResult: number;
+					isCompleted: boolean;
+				}>(`/api/kyc/session-status/${kycSessionId}`);
+
+				if (statusResponse.success && statusResponse.status === 'APPROVED') {
+					// KYC approved - refresh page to show results
+					console.log('KYC approved via webhook, refreshing page...');
+					window.location.reload();
+				}
+			} catch (err) {
+				console.error("Database polling error:", err);
+			}
+		};
+
+		// Poll database every 3 seconds (much lighter than CTOS API)
+		const interval = setInterval(pollDatabase, 3000);
+		
+		// Clean up after 30 minutes
+		setTimeout(() => {
+			clearInterval(interval);
+		}, 30 * 60 * 1000);
+
+		// Return cleanup function
+		return () => clearInterval(interval);
+	};
 
 	const handleAcceptKyc = async () => {
 		// Allow continuing if either result is 1 OR if isAlreadyApproved is true
@@ -459,26 +490,40 @@ export default function KycVerificationPage() {
 								</div>
 							</div>
 							
-							<div className="text-center">
-								<button
-									onClick={() => window.open(ctosOnboardingUrl, '_blank')}
-									className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors mr-4"
-								>
-									<svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M7 7l10 10M17 7l-4 4" />
-									</svg>
-									Reopen KYC Window
-								</button>
-								<button
-									onClick={() => {
-										setCtosOnboardingUrl(null);
-										setPollingKycId(null);
-										setCtosStatus(null);
-									}}
-									className="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
-								>
-									Cancel
-								</button>
+							<div className="text-center space-y-3">
+								<div className="flex flex-col sm:flex-row gap-3 justify-center">
+									<button
+										onClick={() => window.open(ctosOnboardingUrl, '_blank')}
+										className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+									>
+										<svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M7 7l10 10M17 7l-4 4" />
+										</svg>
+										Reopen KYC Window
+									</button>
+									<button
+										onClick={() => window.location.reload()}
+										className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors"
+									>
+										<svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+										</svg>
+										Check Status
+									</button>
+									<button
+										onClick={() => {
+											setCtosOnboardingUrl(null);
+											setPollingKycId(null);
+											setCtosStatus(null);
+										}}
+										className="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+									>
+										Cancel
+									</button>
+								</div>
+								<p className="text-sm text-blue-600">
+									Status updates automatically via webhook when completed
+								</p>
 							</div>
 						</div>
 					) : ctosStatusLoading ? (
