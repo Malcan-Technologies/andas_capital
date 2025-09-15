@@ -130,6 +130,12 @@ function PaymentsContent() {
 	const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 	const [searchTerm, setSearchTerm] = useState("");
 	const [statusFilter, setStatusFilter] = useState("PENDING");
+	const [filterCounts, setFilterCounts] = useState({
+		all: 0,
+		PENDING: 0,
+		APPROVED: 0,
+		REJECTED: 0,
+	});
 	const [refreshing, setRefreshing] = useState(false);
 	const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 	const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
@@ -194,6 +200,15 @@ function PaymentsContent() {
 			if (data.success && data.data) {
 				setPayments(data.data);
 				setLastRefresh(new Date());
+				
+				// Calculate filter counts
+				const counts = {
+					all: data.data.length,
+					PENDING: data.data.filter((p: Payment) => p.status === "PENDING").length,
+					APPROVED: data.data.filter((p: Payment) => p.status === "APPROVED").length,
+					REJECTED: data.data.filter((p: Payment) => p.status === "REJECTED").length,
+				};
+				setFilterCounts(counts);
 			} else {
 				throw new Error("Failed to fetch payments");
 			}
@@ -708,72 +723,74 @@ function PaymentsContent() {
 					</div>
 				</div>
 
-				{/* Search and Filter Bar */}
-				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
-					<div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-						<div className="flex-1 relative">
-							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-								<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-							</div>
-							<input
-								type="text"
-								className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-								placeholder="Search by customer name, email, payment ID, loan ID, or product..."
-								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-							/>
-							{searchTerm && (
-								<button
-									onClick={() => setSearchTerm("")}
-									className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
-									title="Clear search"
-								>
-									<XMarkIcon className="h-4 w-4" />
-								</button>
-							)}
+				{/* Search Bar */}
+				<div className="mb-4 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+					<div className="flex-1 relative">
+						<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+							<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
 						</div>
-						<div className="flex space-x-2">
+						<input
+							type="text"
+							className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+							placeholder="Search by customer name, email, payment ID, loan ID, or product..."
+							value={searchTerm}
+							onChange={(e) => setSearchTerm(e.target.value)}
+						/>
+						{searchTerm && (
 							<button
-								onClick={() => setStatusFilter("PENDING")}
-								className={`px-4 py-2 rounded-lg border transition-colors ${
-									statusFilter === "PENDING"
-										? "bg-orange-500/30 text-orange-100 border-orange-400/30"
-										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-								}`}
+								onClick={() => setSearchTerm("")}
+								className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+								title="Clear search"
 							>
-								Pending
+								<XMarkIcon className="h-4 w-4" />
 							</button>
-							<button
-								onClick={() => setStatusFilter("APPROVED")}
-								className={`px-4 py-2 rounded-lg border transition-colors ${
-									statusFilter === "APPROVED"
-										? "bg-green-500/30 text-green-100 border-green-400/30"
-										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-								}`}
-							>
-								Approved
-							</button>
-							<button
-								onClick={() => setStatusFilter("REJECTED")}
-								className={`px-4 py-2 rounded-lg border transition-colors ${
-									statusFilter === "REJECTED"
-										? "bg-red-500/30 text-red-100 border-red-400/30"
-										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-								}`}
-							>
-								Rejected
-							</button>
-							<button
-								onClick={() => setStatusFilter("all")}
-								className={`px-4 py-2 rounded-lg border transition-colors ${
-									statusFilter === "all"
-										? "bg-blue-500/30 text-blue-100 border-blue-400/30"
-										: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-								}`}
-							>
-								All
-							</button>
-						</div>
+						)}
+					</div>
+				</div>
+
+				{/* Filter Buttons */}
+				<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+					<div className="flex flex-wrap gap-2">
+						<button
+							onClick={() => setStatusFilter("all")}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								statusFilter === "all"
+									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							All ({filterCounts.all})
+						</button>
+						<button
+							onClick={() => setStatusFilter("PENDING")}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								statusFilter === "PENDING"
+									? "bg-orange-500/30 text-orange-100 border-orange-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending ({filterCounts.PENDING})
+						</button>
+						<button
+							onClick={() => setStatusFilter("APPROVED")}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								statusFilter === "APPROVED"
+									? "bg-green-500/30 text-green-100 border-green-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Approved ({filterCounts.APPROVED})
+						</button>
+						<button
+							onClick={() => setStatusFilter("REJECTED")}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								statusFilter === "REJECTED"
+									? "bg-red-500/30 text-red-100 border-red-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Rejected ({filterCounts.REJECTED})
+						</button>
 					</div>
 				</div>
 

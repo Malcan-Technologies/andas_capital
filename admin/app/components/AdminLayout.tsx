@@ -211,40 +211,16 @@ export default function AdminLayout({
 			name: "All Applications",
 			href: "/dashboard/applications",
 			icon: DocumentTextIcon,
-			subItems: [
-				{
-					name: "Pending Approval",
-					href: "/dashboard/applications?filter=pending-approval",
-					icon: ClockIcon,
-				},
-				{
-					name: "Pending Disbursement",
-					href: "/dashboard/applications?filter=pending-disbursement",
-					icon: CheckCircleIcon,
-				},
-			],
 		},
 		{
 			name: "All Loans",
 			href: "/dashboard/loans",
 			icon: BanknotesIcon,
-			subItems: [
-				{
-					name: "Pending Discharge",
-					href: "/dashboard/loans?filter=pending_discharge",
-					icon: ClockIcon,
-				},
-			],
 		},
 		{
 			name: "Live Attestations",
 			href: "/dashboard/live-attestations",
 			icon: VideoCameraIcon,
-		},
-		{
-			name: "Workflow Overview",
-			href: "/dashboard/applications/workflow",
-			icon: ArrowPathIcon,
 		},
 	];
 
@@ -265,11 +241,6 @@ export default function AdminLayout({
 			icon: BellIcon,
 		},
 		{
-			name: "Reports",
-			href: "/dashboard/reports",
-			icon: ChartBarIcon,
-		},
-		{
 			name: "Digital Signing",
 			href: "/dashboard/settings/signing",
 			icon: ShieldCheckIcon,
@@ -285,12 +256,7 @@ export default function AdminLayout({
 	const isDropdownActive = (items: any[]) => {
 		return items.some((item) => {
 			// Check if the main item is active
-			const isMainActive = isActive(item.href);
-			// Check if any sub-item is active
-			const isSubActive = item.subItems?.some((subItem: any) =>
-				isActive(subItem.href)
-			);
-			return isMainActive || isSubActive;
+			return isActive(item.href);
 		});
 	};
 
@@ -351,11 +317,7 @@ export default function AdminLayout({
 		if (!allowAutoExpand) return;
 
 		const isLoanPath = loanWorkflowItems.some((item) => {
-			const isMainActive = isActive(item.href);
-			const isSubActive = item.subItems?.some((subItem) =>
-				isActive(subItem.href)
-			);
-			return isMainActive || isSubActive;
+			return isActive(item.href);
 		});
 		const isManagementPath = managementItems.some((item) =>
 			isActive(item.href)
@@ -395,6 +357,7 @@ export default function AdminLayout({
 		};
 
 		const getDropdownClasses = (active: boolean) => {
+			// Only highlight dropdown if one of its child pages is currently active, not when dropdown is just open
 			return active
 				? "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 bg-blue-600/20 text-blue-200 border border-blue-500/30"
 				: "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 text-gray-300 hover:bg-gray-800/50 hover:text-white";
@@ -449,9 +412,9 @@ export default function AdminLayout({
 							setLoanWorkflowOpen(false);
 							setManagementOpen(false);
 						}}
-						className={getDropdownClasses(paymentsOpen || isDropdownActive(paymentItems))}
+						className={getDropdownClasses(isDropdownActive(paymentItems))}
 					>
-						<ReceiptPercentIcon className={getIconClasses(paymentsOpen || isDropdownActive(paymentItems))} />
+						<ReceiptPercentIcon className={getIconClasses(isDropdownActive(paymentItems))} />
 						Payments
 						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
 					</button>
@@ -487,9 +450,9 @@ export default function AdminLayout({
 							setPaymentsOpen(false);
 							setManagementOpen(false);
 						}}
-						className={getDropdownClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))}
+						className={getDropdownClasses(isDropdownActive(loanWorkflowItems))}
 					>
-						<DocumentTextIcon className={getIconClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))} />
+						<DocumentTextIcon className={getIconClasses(isDropdownActive(loanWorkflowItems))} />
 						Loans
 						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
 					</button>
@@ -498,59 +461,17 @@ export default function AdminLayout({
 							<div className="py-1">
 								{loanWorkflowItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
 									const active = isActive(item.href);
-									const hasSubItems = item.subItems && item.subItems.length > 0;
-									const isExpanded = (item.name === "All Applications" && applicationsOpen) ||
-										(item.name === "All Loans" && loansOpen);
 
 									return (
-										<div key={item.name}>
-											<div className="flex items-center justify-between">
-												<Link
-													href={item.href}
-													className={getSubItemClasses(active)}
-													onClick={() => setAllowAutoExpand(true)}
-												>
-													<item.icon className="mr-2 h-4 w-4 inline" />
-													{item.name}
-												</Link>
-												{hasSubItems && (
-													<button
-														onClick={() => {
-															if (item.name === "All Applications") {
-																setApplicationsOpen(!applicationsOpen);
-															} else if (item.name === "All Loans") {
-																setLoansOpen(!loansOpen);
-															}
-														}}
-														className="p-1 rounded hover:bg-gray-700 transition-colors"
-													>
-														{isExpanded ? (
-															<ChevronDownIcon className="h-3 w-3 text-gray-400" />
-														) : (
-															<ChevronRightIcon className="h-3 w-3 text-gray-400" />
-														)}
-													</button>
-												)}
-											</div>
-											{hasSubItems && isExpanded && (
-												<div className="ml-4 border-l border-gray-700">
-													{item.subItems.map((subItem) => {
-														const subActive = isActive(subItem.href);
-														return (
-															<Link
-																key={subItem.name}
-																href={subItem.href}
-																className={getSubItemClasses(subActive)}
-																onClick={() => setAllowAutoExpand(true)}
-															>
-																<subItem.icon className="mr-2 h-4 w-4 inline" />
-																{subItem.name}
-															</Link>
-														);
-													})}
-												</div>
-											)}
-										</div>
+										<Link
+											key={item.name}
+											href={item.href}
+											className={getSubItemClasses(active)}
+											onClick={() => setAllowAutoExpand(true)}
+										>
+											<item.icon className="mr-2 h-4 w-4 inline" />
+											{item.name}
+										</Link>
 									);
 								})}
 							</div>
@@ -568,9 +489,9 @@ export default function AdminLayout({
 							setPaymentsOpen(false);
 							setLoanWorkflowOpen(false);
 						}}
-						className={getDropdownClasses(managementOpen || isDropdownActive(managementItems))}
+						className={getDropdownClasses(isDropdownActive(managementItems))}
 					>
-						<Cog6ToothIcon className={getIconClasses(managementOpen || isDropdownActive(managementItems))} />
+						<Cog6ToothIcon className={getIconClasses(isDropdownActive(managementItems))} />
 						Management
 						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
 					</button>
@@ -688,9 +609,9 @@ export default function AdminLayout({
 								setLoanWorkflowOpen(false);
 								setManagementOpen(false);
 							}}
-							className={getBaseClasses(paymentsOpen || isDropdownActive(paymentItems))}
+							className={getBaseClasses(isDropdownActive(paymentItems))}
 						>
-							<ReceiptPercentIcon className={getIconClasses(paymentsOpen || isDropdownActive(paymentItems))} />
+							<ReceiptPercentIcon className={getIconClasses(isDropdownActive(paymentItems))} />
 							Payments
 							{paymentsOpen ? (
 								<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
@@ -731,9 +652,9 @@ export default function AdminLayout({
 							setPaymentsOpen(false);
 							setManagementOpen(false);
 						}}
-						className={getBaseClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))}
+						className={getBaseClasses(isDropdownActive(loanWorkflowItems))}
 					>
-						<DocumentTextIcon className={getIconClasses(loanWorkflowOpen || isDropdownActive(loanWorkflowItems))} />
+						<DocumentTextIcon className={getIconClasses(isDropdownActive(loanWorkflowItems))} />
 						Loans
 						{loanWorkflowOpen ? (
 							<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
@@ -745,65 +666,20 @@ export default function AdminLayout({
 						<div className="mt-1 space-y-1">
 							{loanWorkflowItems.map((item) => {
 								const active = isActive(item.href);
-									const hasSubItems = item.subItems && item.subItems.length > 0;
-									const isExpanded = (item.name === "All Applications" && applicationsOpen) ||
-									(item.name === "All Loans" && loansOpen);
 
 								return (
-									<div key={item.name}>
-											<div className="flex items-center">
-												<Link
-													href={item.href}
-													className={`${getSubItemClasses(active)} flex-1 mr-2`}
-													onClick={() => {
-														setMobileMenuOpen(false);
-														setAllowAutoExpand(true);
-													}}
-												>
-													<item.icon className={getSubIconClasses(active)} />
-													{item.name}
-												</Link>
-												{hasSubItems && (
-												<button
-													onClick={() => {
-															if (item.name === "All Applications") {
-																setApplicationsOpen(!applicationsOpen);
-															} else if (item.name === "All Loans") {
-																setLoansOpen(!loansOpen);
-														}
-													}}
-													className="p-1 rounded hover:bg-gray-800/30 transition-colors"
-												>
-													{isExpanded ? (
-														<ChevronDownIcon className="h-4 w-4 text-gray-400" />
-													) : (
-														<ChevronRightIcon className="h-4 w-4 text-gray-400" />
-													)}
-												</button>
-												)}
-											</div>
-										{hasSubItems && isExpanded && (
-											<div className="mt-1 space-y-1">
-													{item.subItems.map((subItem) => {
-														const subActive = isActive(subItem.href);
-														return (
-															<Link
-																key={subItem.name}
-																href={subItem.href}
-																className={getSubSubItemClasses(subActive)}
-																onClick={() => {
-																	setMobileMenuOpen(false);
-																	setAllowAutoExpand(true);
-																}}
-															>
-																<subItem.icon className={getSubSubIconClasses(subActive)} />
-																{subItem.name}
-															</Link>
-														);
-													})}
-											</div>
-										)}
-									</div>
+									<Link
+										key={item.name}
+										href={item.href}
+										className={getSubItemClasses(active)}
+										onClick={() => {
+											setMobileMenuOpen(false);
+											setAllowAutoExpand(true);
+										}}
+									>
+										<item.icon className={getSubIconClasses(active)} />
+										{item.name}
+									</Link>
 								);
 							})}
 						</div>
@@ -820,9 +696,9 @@ export default function AdminLayout({
 							setPaymentsOpen(false);
 							setLoanWorkflowOpen(false);
 						}}
-						className={getBaseClasses(managementOpen || isDropdownActive(managementItems))}
+						className={getBaseClasses(isDropdownActive(managementItems))}
 					>
-						<Cog6ToothIcon className={getIconClasses(managementOpen || isDropdownActive(managementItems))} />
+						<Cog6ToothIcon className={getIconClasses(isDropdownActive(managementItems))} />
 						Management
 						{managementOpen ? (
 							<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />

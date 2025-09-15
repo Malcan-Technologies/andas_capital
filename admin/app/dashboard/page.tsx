@@ -680,7 +680,7 @@ export default function AdminDashboardPage() {
 					PENDING_DISCHARGE: pendingDischargeCount,
 					PENDING_PAYMENTS: pendingPaymentsCount,
 					LIVE_ATTESTATIONS: liveAttestationsCount,
-					PENDING_SIGNATURE: pendingCompanySignatureCount, // Legacy field
+					PENDING_SIGNATURE: pendingCompanySignatureCount + pendingWitnessSignatureCount, // Combined count
 					PENDING_COMPANY_SIGNATURE: pendingCompanySignatureCount,
 					PENDING_WITNESS_SIGNATURE: pendingWitnessSignatureCount,
 				});
@@ -690,7 +690,7 @@ export default function AdminDashboardPage() {
 					...prevStats,
 					statusBreakdown: prevStats.statusBreakdown?.map(item => {
 						if (item.status === "Pending Signature") {
-							return { ...item, count: pendingCompanySignatureCount };
+							return { ...item, count: pendingCompanySignatureCount + pendingWitnessSignatureCount };
 						} else if (item.status === "Pending Attestation") {
 							return { ...item, count: countsData.PENDING_ATTESTATION || 0 };
 						} else if (item.status === "Pending KYC") {
@@ -1071,7 +1071,7 @@ export default function AdminDashboardPage() {
 						<div className="flex items-center gap-2">
 							<ArrowPathIcon className={`h-5 w-5 text-slate-300 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
 							<span className="text-sm font-medium text-slate-300 group-hover:text-slate-200">
-								{refreshing ? 'Refreshing...' : 'Refresh All Data'}
+								{refreshing ? 'Refreshing...' : 'Refresh'}
 							</span>
 						</div>
 					</button>
@@ -1080,7 +1080,7 @@ export default function AdminDashboardPage() {
 					{/* Pending Decisions - ADMIN only */}
 					{userRole === "ADMIN" && (
 					<Link
-						href="/dashboard/applications/pending-decision"
+						href="/dashboard/applications?filter=pending-approval"
 						className="group bg-gradient-to-br from-amber-600/20 to-amber-800/20 backdrop-blur-md border border-amber-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-amber-400/50"
 					>
 						<div className="flex items-center justify-between mb-3">
@@ -1183,7 +1183,7 @@ export default function AdminDashboardPage() {
 					{/* Pending Disbursements - ADMIN only */}
 					{userRole === "ADMIN" && (
 					<Link
-						href="/dashboard/applications/pending-disbursement"
+						href="/dashboard/applications?filter=pending-disbursement"
 						className="group bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-md border border-green-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-green-400/50"
 					>
 						<div className="flex items-center justify-between mb-3">

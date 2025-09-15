@@ -172,6 +172,13 @@ function ActiveLoansContent() {
 	const [selectedLoan, setSelectedLoan] = useState<LoanData | null>(null);
 	const [searchTerm, setSearchTerm] = useState("");
 	const [statusFilter, setStatusFilter] = useState("all");
+	const [filterCounts, setFilterCounts] = useState({
+		all: 0,
+		active: 0,
+		pending_discharge: 0,
+		discharged: 0,
+		late: 0,
+	});
 	const [refreshing, setRefreshing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [selectedTab, setSelectedTab] = useState<string>("details");
@@ -469,6 +476,30 @@ function ActiveLoansContent() {
 		}
 	};
 
+	const calculateFilterCounts = useCallback(() => {
+		const counts = {
+			all: loans.length,
+			active: loans.filter((loan) => loan.status === "ACTIVE").length,
+			pending_discharge: loans.filter((loan) => loan.status === "PENDING_DISCHARGE").length,
+			discharged: loans.filter((loan) => loan.status === "DISCHARGED").length,
+			late: loans.filter((loan) => {
+				if (loan.status !== "ACTIVE") return false;
+				
+				// Use backend's overdueInfo if available
+				if (loan.overdueInfo) {
+					return loan.overdueInfo.hasOverduePayments && loan.overdueInfo.overdueRepayments.length > 0;
+				}
+				
+				// Fallback to nextPaymentDue check for backward compatibility
+				if (!loan.nextPaymentDue) return false;
+				const dueDate = new Date(loan.nextPaymentDue);
+				const today = new Date();
+				return dueDate < today;
+			}).length,
+		};
+		setFilterCounts(counts);
+	}, [loans]);
+
 	const filterLoans = useCallback(() => {
 		let filtered = [...loans];
 
@@ -539,6 +570,11 @@ function ActiveLoansContent() {
 
 		setFilteredLoans(filtered);
 	}, [loans, searchTerm, statusFilter]);
+
+	// Calculate filter counts when loans data changes
+	useEffect(() => {
+		calculateFilterCounts();
+	}, [calculateFilterCounts]);
 
 	// Apply filters whenever dependencies change
 	useEffect(() => {
@@ -1664,7 +1700,7 @@ function ActiveLoansContent() {
 								0
 							)
 						)}
-						{" | "}
+						{" • "}
 						Total loan value:{" "}
 						{formatCurrency(
 							filteredLoans.reduce(
@@ -1677,13 +1713,6 @@ function ActiveLoansContent() {
 					</p>
 				</div>
 				<div className="mt-4 md:mt-0 flex gap-3">
-					<button
-						onClick={() => handleCreateManualPayment()}
-						className="flex items-center px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors"
-					>
-						<CurrencyDollarIcon className="h-4 w-4 mr-2" />
-						Create Manual Payment
-					</button>
 					<button
 						onClick={downloadCSV}
 						disabled={refreshing}
@@ -1706,7 +1735,7 @@ function ActiveLoansContent() {
 						) : (
 							<ArrowPathIcon className="h-4 w-4 mr-2" />
 						)}
-						Refresh Data
+						Refresh
 					</button>
 				</div>
 			</div>
@@ -1718,82 +1747,84 @@ function ActiveLoansContent() {
 				</div>
 			)}
 
-			{/* Search and Filter Bar */}
+			{/* Search Bar */}
+			<div className="mb-4 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+				<div className="flex-1 relative">
+					<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+						<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+					</div>
+					<input
+						type="text"
+						className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+						placeholder="Search by name, email, loan ID, or purpose"
+						value={searchTerm}
+						onChange={handleSearch}
+					/>
+					{searchTerm && (
+						<button
+							onClick={() => setSearchTerm("")}
+							className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+							title="Clear search"
+						>
+							<XMarkIcon className="h-4 w-4" />
+						</button>
+					)}
+				</div>
+			</div>
+
+			{/* Filter Buttons */}
 			<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
-				<div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-					<div className="flex-1 relative">
-						<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-							<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-						</div>
-						<input
-							type="text"
-							className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-							placeholder="Search by name, email, loan ID, or purpose"
-							value={searchTerm}
-							onChange={handleSearch}
-						/>
-						{searchTerm && (
-							<button
-								onClick={() => setSearchTerm("")}
-								className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
-								title="Clear search"
-							>
-								<XMarkIcon className="h-4 w-4" />
-							</button>
-						)}
-					</div>
-					<div className="flex space-x-2">
-						<button
-							onClick={() => setStatusFilter("all")}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								statusFilter === "all"
-									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							All Loans
-						</button>
-						<button
-							onClick={() => setStatusFilter("active")}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								statusFilter === "active"
-									? "bg-green-500/30 text-green-100 border-green-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Current
-						</button>
-						<button
-							onClick={() => setStatusFilter("pending_discharge")}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								statusFilter === "pending_discharge"
-									? "bg-yellow-500/30 text-yellow-100 border-yellow-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending Discharge
-						</button>
-						<button
-							onClick={() => setStatusFilter("discharged")}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								statusFilter === "discharged"
-									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Discharged
-						</button>
-						<button
-							onClick={() => setStatusFilter("late")}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								statusFilter === "late"
-									? "bg-red-500/30 text-red-100 border-red-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Late
-						</button>
-					</div>
+				<div className="flex flex-wrap gap-2">
+					<button
+						onClick={() => setStatusFilter("all")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							statusFilter === "all"
+								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						All ({filterCounts.all})
+					</button>
+					<button
+						onClick={() => setStatusFilter("active")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							statusFilter === "active"
+								? "bg-green-500/30 text-green-100 border-green-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Current ({filterCounts.active})
+					</button>
+					<button
+						onClick={() => setStatusFilter("pending_discharge")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							statusFilter === "pending_discharge"
+								? "bg-yellow-500/30 text-yellow-100 border-yellow-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Pending Discharge ({filterCounts.pending_discharge})
+					</button>
+					<button
+						onClick={() => setStatusFilter("discharged")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							statusFilter === "discharged"
+								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Discharged ({filterCounts.discharged})
+					</button>
+					<button
+						onClick={() => setStatusFilter("late")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							statusFilter === "late"
+								? "bg-red-500/30 text-red-100 border-red-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Late ({filterCounts.late})
+					</button>
 				</div>
 			</div>
 
@@ -1928,19 +1959,32 @@ function ActiveLoansContent() {
 										ID: {selectedLoan.id.substring(0, 8)}
 									</span>
 								</div>
-								<button
-									onClick={() => downloadIndividualLoanCSV(selectedLoan)}
-									disabled={refreshing}
-									className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
-									title="Download loan data as CSV"
-								>
-									{refreshing ? (
-										<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
-									) : (
-										<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
+								<div className="flex items-center gap-2">
+									{/* Manual Payment Button - Show for ACTIVE loans */}
+									{selectedLoan.status === "ACTIVE" && (
+										<button
+											onClick={() => handleCreateManualPayment(selectedLoan.id)}
+											className="flex items-center px-3 py-1.5 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors text-xs"
+											title="Create manual payment for this loan"
+										>
+											<CurrencyDollarIcon className="h-3 w-3 mr-1" />
+											Manual Payment
+										</button>
 									)}
-									Download CSV
-								</button>
+									<button
+										onClick={() => downloadIndividualLoanCSV(selectedLoan)}
+										disabled={refreshing}
+										className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+										title="Download loan data as CSV"
+									>
+										{refreshing ? (
+											<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
+										) : (
+											<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
+										)}
+										Download CSV
+									</button>
+								</div>
 							</div>
 
 							<div className="p-6">
@@ -2630,17 +2674,6 @@ function ActiveLoansContent() {
 
 										{/* Action Buttons */}
 										<div className="flex flex-wrap gap-3">
-											{/* Manual Payment Button - Show for ACTIVE loans */}
-											{selectedLoan.status === "ACTIVE" && (
-												<button
-													onClick={() => handleCreateManualPayment(selectedLoan.id)}
-													className="px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors flex items-center"
-												>
-													<CurrencyDollarIcon className="h-5 w-5 mr-2" />
-													Create Manual Payment
-												</button>
-											)}
-
 											{selectedLoan.applicationId && (
 												<Link
 													href={`/dashboard/disbursements?search=${selectedLoan.applicationId}`}
@@ -3834,7 +3867,7 @@ function ActiveLoansContent() {
 							{/* Header */}
 							<div className="flex-shrink-0 p-3 xs:p-4 sm:p-6 border-b border-gray-700/30">
 								<h3 className="text-base xs:text-lg sm:text-xl font-medium text-white mb-1 sm:mb-2">
-									Create Manual Payment
+									Manual Payment
 								</h3>
 								<div className="text-gray-300 text-xs xs:text-sm sm:text-base">
 									<p>Create a manual payment for direct bank transfers or other offline payments.</p>

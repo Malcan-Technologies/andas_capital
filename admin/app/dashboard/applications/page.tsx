@@ -75,6 +75,19 @@ interface LoanApplication {
 	};
 	documents?: Document[];
 	history?: LoanApplicationHistory[];
+	loan?: {
+		id: string;
+		status: string;
+		agreementStatus?: string;
+		signatories?: {
+			id: string;
+			signatoryType: string;
+			name: string;
+			email: string;
+			status: string;
+			signedAt?: string;
+		}[];
+	};
 }
 
 interface Document {
@@ -164,6 +177,20 @@ function AdminApplicationsPageContent() {
 	const [signaturesData, setSignaturesData] = useState<any>(null);
 	const [loadingSignatures, setLoadingSignatures] = useState(false);
 
+	// Helper function to check if application has pending company signature
+	const hasPendingCompanySignature = (app: LoanApplication): boolean => {
+		if (!app.loan?.signatories) return false;
+		const companySignatory = app.loan.signatories.find(s => s.signatoryType === "COMPANY");
+		return companySignatory ? ["PENDING", "PENDING_PKI_SIGNING"].includes(companySignatory.status) : false;
+	};
+
+	// Helper function to check if application has pending witness signature
+	const hasPendingWitnessSignature = (app: LoanApplication): boolean => {
+		if (!app.loan?.signatories) return false;
+		const witnessSignatory = app.loan.signatories.find(s => s.signatoryType === "WITNESS");
+		return witnessSignatory ? ["PENDING", "PENDING_PKI_SIGNING"].includes(witnessSignatory.status) : false;
+	};
+
 	// Initialize filters based on URL parameter
 	const getInitialFilters = () => {
 		if (filterParam === "pending-approval") {
@@ -175,9 +202,9 @@ function AdminApplicationsPageContent() {
 		} else if (filterParam === "pending_signature") {
 			return ["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_OTP_DS"];
 		} else if (filterParam === "pending_company_signature") {
-			return ["PENDING_SIGNING_COMPANY_WITNESS"];
+			return ["PENDING_COMPANY_SIGNATURE"];
 		} else if (filterParam === "pending_witness_signature") {
-			return ["PENDING_SIGNING_COMPANY_WITNESS"];
+			return ["PENDING_WITNESS_SIGNATURE"];
 		} else if (filterParam === "pending_kyc") {
 			return ["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"];
 		} else {
@@ -744,9 +771,22 @@ function AdminApplicationsPageContent() {
 			(app.status?.toLowerCase() || "").includes(searchTerm);
 
 		// Filter by statuses - if no filters selected, show all
-		const matchesStatus =
-			selectedFilters.length === 0 ||
-			selectedFilters.includes(app.status || "");
+		let matchesStatus = selectedFilters.length === 0;
+
+		// Check if app matches any of the selected filters
+		if (selectedFilters.length > 0) {
+			matchesStatus = selectedFilters.some(filter => {
+				// Handle special signature filters
+				if (filter === "PENDING_COMPANY_SIGNATURE") {
+					return app.status === "PENDING_SIGNING_COMPANY_WITNESS" && hasPendingCompanySignature(app);
+				} else if (filter === "PENDING_WITNESS_SIGNATURE") {
+					return app.status === "PENDING_SIGNING_COMPANY_WITNESS" && hasPendingWitnessSignature(app);
+				} else {
+					// Handle regular status filters
+					return app.status === filter;
+				}
+			});
+		}
 
 		return matchesSearch && matchesStatus;
 	});
@@ -1748,7 +1788,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 					) : (
 						<ArrowPathIcon className="h-4 w-4 mr-2" />
 					)}
-					Refresh Data
+					Refresh
 				</button>
 			</div>
 
@@ -1810,12 +1850,29 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 								"COLLATERAL_REVIEW",
 							])}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 14 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW") && selectedFilters.includes("PENDING_FRESH_OFFER") && selectedFilters.includes("PENDING_PKI_SIGNING")
+								selectedFilters.length === 14 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW") && selectedFilters.includes("PENDING_FRESH_OFFER") && selectedFilters.includes("PENDING_PKI_SIGNING") && selectedFilters.includes("PENDING_ATTESTATION")
 									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
-							All Active
+							All ({applications.filter(app => 
+								[
+									"PENDING_APP_FEE",
+									"PENDING_PROFILE_CONFIRMATION",
+									"PENDING_KYC",
+									"PENDING_KYC_VERIFICATION",
+									"PENDING_CERTIFICATE_OTP",
+									"PENDING_APPROVAL",
+									"PENDING_FRESH_OFFER",
+									"PENDING_ATTESTATION",
+									"PENDING_SIGNATURE",
+									"PENDING_PKI_SIGNING",
+									"PENDING_SIGNING_COMPANY_WITNESS",
+									"PENDING_SIGNING_OTP_DS",
+									"PENDING_DISBURSEMENT",
+									"COLLATERAL_REVIEW",
+								].includes(app.status || "")
+							).length})
 						</button>
 						<button
 							onClick={() => setSelectedFilters(["PENDING_APPROVAL"])}
@@ -1825,7 +1882,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
-							Pending Approval
+							Pending Approval ({applications.filter(app => app.status === "PENDING_APPROVAL").length})
 						</button>
 						<button
 							onClick={() => setSelectedFilters(["PENDING_FRESH_OFFER"])}
@@ -1835,67 +1892,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
-							Fresh Offers
-						</button>
-						<button
-							onClick={() => setSelectedFilters(["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_OTP_DS"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 3 && selectedFilters.includes("PENDING_SIGNATURE") && selectedFilters.includes("PENDING_PKI_SIGNING") && selectedFilters.includes("PENDING_SIGNING_OTP_DS")
-									? "bg-indigo-500/30 text-indigo-100 border-indigo-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending User Signature
-						</button>
-						<button
-							onClick={() => setSelectedFilters(["PENDING_SIGNING_COMPANY_WITNESS"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("PENDING_SIGNING_COMPANY_WITNESS")
-									? "bg-teal-500/30 text-teal-100 border-teal-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending Company Signature
-						</button>
-						<button
-							onClick={() => setSelectedFilters(["PENDING_SIGNING_COMPANY_WITNESS"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("PENDING_SIGNING_COMPANY_WITNESS")
-									? "bg-orange-500/30 text-orange-100 border-orange-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending Witness Signature
-						</button>
-						<button
-							onClick={() => setSelectedFilters(["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 4 && selectedFilters.includes("PENDING_PROFILE_CONFIRMATION") && selectedFilters.includes("PENDING_KYC") && selectedFilters.includes("PENDING_KYC_VERIFICATION") && selectedFilters.includes("PENDING_CERTIFICATE_OTP")
-									? "bg-purple-500/30 text-purple-100 border-purple-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending KYC
-						</button>
-						<button
-							onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("PENDING_DISBURSEMENT")
-									? "bg-green-500/30 text-green-100 border-green-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending Disbursement
-						</button>
-						<button
-							onClick={() => setSelectedFilters(["COLLATERAL_REVIEW"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("COLLATERAL_REVIEW")
-									? "bg-orange-500/30 text-orange-100 border-orange-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Collateral Review
+							Collateral Review ({applications.filter(app => app.status === "COLLATERAL_REVIEW").length})
 						</button>
 
 						<button
@@ -1906,7 +1903,90 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
-							Closed Applications
+							Fresh Offers ({applications.filter(app => app.status === "PENDING_FRESH_OFFER").length})
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_OTP_DS"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 3 && selectedFilters.includes("PENDING_SIGNATURE") && selectedFilters.includes("PENDING_PKI_SIGNING") && selectedFilters.includes("PENDING_SIGNING_OTP_DS")
+									? "bg-indigo-500/30 text-indigo-100 border-indigo-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							
+							Pending Attestation ({applications.filter(app => app.status === "PENDING_ATTESTATION").length})
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["COLLATERAL_REVIEW"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("COLLATERAL_REVIEW")
+									? "bg-orange-500/30 text-orange-100 border-orange-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending KYC ({applications.filter(app => 
+								["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"].includes(app.status || "")
+							).length})
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_DISBURSEMENT")
+									? "bg-green-500/30 text-green-100 border-green-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending User Signature ({applications.filter(app => 
+								["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_OTP_DS"].includes(app.status || "")
+							).length})
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_COMPANY_SIGNATURE"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_COMPANY_SIGNATURE")
+									? "bg-teal-500/30 text-teal-100 border-teal-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Company Signature ({applications.filter(app => 
+								app.status === "PENDING_SIGNING_COMPANY_WITNESS" && hasPendingCompanySignature(app)
+							).length})
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_WITNESS_SIGNATURE"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_WITNESS_SIGNATURE")
+									? "bg-orange-500/30 text-orange-100 border-orange-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Witness Signature ({applications.filter(app => 
+								app.status === "PENDING_SIGNING_COMPANY_WITNESS" && hasPendingWitnessSignature(app)
+							).length})
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 4 && selectedFilters.includes("PENDING_PROFILE_CONFIRMATION") && selectedFilters.includes("PENDING_KYC") && selectedFilters.includes("PENDING_KYC_VERIFICATION") && selectedFilters.includes("PENDING_CERTIFICATE_OTP")
+									? "bg-purple-500/30 text-purple-100 border-purple-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Disbursement ({applications.filter(app => app.status === "PENDING_DISBURSEMENT").length})
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_ATTESTATION"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_ATTESTATION")
+									? "bg-cyan-500/30 text-cyan-100 border-cyan-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							
+							
+							Closed ({applications.filter(app => 
+								["REJECTED", "WITHDRAWN"].includes(app.status || "")
+							).length})
 						</button>
 				</div>
 			</div>

@@ -2744,6 +2744,7 @@ router.get(
 			// ATTESTOR users only need specific counts for their work
 			if (userRole === "ATTESTOR") {
 				// Get pending witness signature count (ATTESTOR can act on these)
+				// Only count applications with PENDING_SIGNING_COMPANY_WITNESS status and check signatory status within that
 				const pendingWitnessSignatureCount = await prisma.loanApplication.count({
 					where: {
 						status: "PENDING_SIGNING_COMPANY_WITNESS",
@@ -2751,7 +2752,9 @@ router.get(
 							signatories: {
 								some: {
 									signatoryType: "WITNESS",
-									status: "PENDING"
+									status: {
+										in: ["PENDING", "PENDING_PKI_SIGNING"]
+									}
 								}
 							}
 						}
@@ -2759,6 +2762,7 @@ router.get(
 				});
 
 				// Get pending company signature count (ATTESTOR can see but not act on these)
+				// Only count applications with PENDING_SIGNING_COMPANY_WITNESS status and check signatory status within that
 				const pendingCompanySignatureCount = await prisma.loanApplication.count({
 					where: {
 						status: "PENDING_SIGNING_COMPANY_WITNESS",
@@ -2766,7 +2770,9 @@ router.get(
 							signatories: {
 								some: {
 									signatoryType: "COMPANY",
-									status: "PENDING"
+									status: {
+										in: ["PENDING", "PENDING_PKI_SIGNING"]
+									}
 								}
 							}
 						}
@@ -2862,6 +2868,7 @@ router.get(
 			}
 
 			// Get specific counts for company vs witness signatures
+			// Only count applications with PENDING_SIGNING_COMPANY_WITNESS status and check signatory status within that
 			const pendingCompanySignatureCount = await prisma.loanApplication.count({
 				where: {
 					status: "PENDING_SIGNING_COMPANY_WITNESS",
@@ -2869,7 +2876,9 @@ router.get(
 						signatories: {
 							some: {
 								signatoryType: "COMPANY",
-								status: "PENDING"
+								status: {
+									in: ["PENDING", "PENDING_PKI_SIGNING"]
+								}
 							}
 						}
 					}
@@ -2883,7 +2892,9 @@ router.get(
 						signatories: {
 							some: {
 								signatoryType: "WITNESS",
-								status: "PENDING"
+								status: {
+									in: ["PENDING", "PENDING_PKI_SIGNING"]
+								}
 							}
 						}
 					}
@@ -2989,6 +3000,23 @@ router.get(
 							status: true,
 							fileUrl: true,
 							createdAt: true,
+						},
+					},
+					loan: {
+						select: {
+							id: true,
+							status: true,
+							agreementStatus: true,
+							signatories: {
+								select: {
+									id: true,
+									signatoryType: true,
+									name: true,
+									email: true,
+									status: true,
+									signedAt: true,
+								},
+							},
 						},
 					},
 				},

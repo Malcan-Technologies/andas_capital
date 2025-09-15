@@ -220,10 +220,10 @@ export default function LiveAttestationsPage() {
 				</div>
 				<button
 					onClick={loadLiveAttestationRequests}
-					className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors"
+					className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors"
 				>
 					<ArrowPathIcon className="h-4 w-4 mr-2" />
-					Refresh Data
+					Refresh
 				</button>
 			</div>
 
