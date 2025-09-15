@@ -86,6 +86,7 @@ export default function AdminUsersPage() {
 	const [userLoans, setUserLoans] = useState<LoanApplication[]>([]);
 	const [userActiveLoans, setUserActiveLoans] = useState<ActiveLoan[]>([]);
 	const [loadingLoans, setLoadingLoans] = useState(false);
+	const [refreshing, setRefreshing] = useState(false);
 
 	// Form states
 	const [editForm, setEditForm] = useState({
@@ -124,6 +125,25 @@ export default function AdminUsersPage() {
 			setError("Failed to load users. Please try again.");
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const handleRefresh = async () => {
+		setRefreshing(true);
+		try {
+			setError(null);
+			setSuccess(null);
+
+			// Fetch all users with token refresh
+			const users = await fetchWithAdminTokenRefresh<User[]>(
+				"/api/admin/users"
+			);
+			setUsers(users);
+		} catch (error) {
+			console.error("Error refreshing users:", error);
+			setError("Failed to refresh users. Please try again.");
+		} finally {
+			setRefreshing(false);
 		}
 	};
 
@@ -481,51 +501,101 @@ export default function AdminUsersPage() {
 								</p>
 							</div>
 						</div>
-						<button
-							onClick={handleCreateClick}
-							className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-						>
-							<PlusIcon className="h-5 w-5 mr-2" />
-							Create User
-						</button>
+						<div className="flex gap-3">
+							<button
+								onClick={handleCreateClick}
+								className="flex items-center px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors"
+							>
+								<PlusIcon className="h-5 w-5 mr-2" />
+								Create User
+							</button>
+							<button
+								onClick={handleRefresh}
+								disabled={refreshing}
+								className="flex items-center px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors"
+							>
+								{refreshing ? (
+									<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+								) : (
+									<ArrowPathIcon className="h-4 w-4 mr-2" />
+								)}
+								Refresh
+							</button>
+						</div>
 					</div>
 
-					{/* Search and Filter Bar */}
-					<div className="mt-4 flex flex-col md:flex-row gap-4">
-						{/* Search Bar */}
-						<div className="relative flex-1 max-w-md">
-							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-								<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-							</div>
-							<input
-								type="text"
-								placeholder="Search users..."
-								value={search}
-								onChange={(e) => setSearch(e.target.value)}
-								className="block w-full pl-10 pr-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-							/>
-						</div>
-						
-						{/* Role Filter */}
-						<div className="relative">
-							<select
-								value={roleFilter}
-								onChange={(e) => setRoleFilter(e.target.value)}
-								className="block w-full md:w-48 px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
-							>
-								<option value="all">All Roles</option>
-								<option value="USER">User</option>
-								<option value="ADMIN">Admin</option>
-								<option value="ATTESTOR">Attestor</option>
-							</select>
-							<div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-								<svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-								</svg>
-							</div>
-						</div>
-					</div>
 				</div>
+
+			{/* Search Bar */}
+			<div className="mb-4 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+				<div className="relative">
+					<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+						<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+					</div>
+					<input
+						type="text"
+						className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+						placeholder="Search by name, email, phone, or role"
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+					/>
+					{search && (
+						<button
+							onClick={() => setSearch("")}
+							className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+							title="Clear search"
+						>
+							<XMarkIcon className="h-4 w-4" />
+						</button>
+					)}
+				</div>
+			</div>
+
+			{/* Filter Bar */}
+			<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+				<div className="flex flex-wrap gap-2">
+					<button
+						onClick={() => setRoleFilter("all")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							roleFilter === "all"
+								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						All ({users.length})
+					</button>
+					<button
+						onClick={() => setRoleFilter("USER")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							roleFilter === "USER"
+								? "bg-green-500/30 text-green-100 border-green-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Users ({users.filter(user => user.role === "USER").length})
+					</button>
+					<button
+						onClick={() => setRoleFilter("ADMIN")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							roleFilter === "ADMIN"
+								? "bg-purple-500/30 text-purple-100 border-purple-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Admins ({users.filter(user => user.role === "ADMIN").length})
+					</button>
+					<button
+						onClick={() => setRoleFilter("ATTESTOR")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							roleFilter === "ATTESTOR"
+								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Attestors ({users.filter(user => user.role === "ATTESTOR").length})
+					</button>
+				</div>
+			</div>
 
 				{/* Users Table */}
 				<div className="overflow-x-auto">
