@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
@@ -85,6 +85,32 @@ export default function KycVerificationPage() {
 		createdAt: string;
 	}[]>([]);
 	const [documentsLoading, setDocumentsLoading] = useState(false);
+	const [userName, setUserName] = useState("");
+
+	const layoutProps = useMemo(
+		() => ({
+			title: "KYC Verification",
+			userName: userName || "User",
+		}),
+		[userName]
+	);
+
+	useEffect(() => {
+		const loadUserName = async () => {
+			try {
+				const profile = await fetchWithTokenRefresh<any>("/api/users/me");
+				if (profile?.firstName) {
+					setUserName(profile.firstName);
+				} else if (profile?.fullName) {
+					setUserName(profile.fullName.split(" ")[0]);
+				}
+			} catch (err) {
+				console.warn("Failed to load user profile for KYC page", err);
+			}
+		};
+
+		loadUserName();
+	}, []);
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -94,6 +120,9 @@ export default function KycVerificationPage() {
 					`/api/loan-applications/${params.id}`
 				);
 				setApplication(appData);
+				if (appData.user?.fullName) {
+					setUserName((prev) => prev || appData.user!.fullName.split(" ")[0]);
+				}
 
 				// Fetch user's CTOS KYC status instead of KYC images
 				const ctosData = await fetchWithTokenRefresh<{
@@ -343,14 +372,29 @@ export default function KycVerificationPage() {
 	};
 
 
-	const handleBack = () => {
-		// Go back to profile confirmation (previous step in the flow)
-		router.push(`/dashboard/applications/${params.id}/profile-confirmation`);
+	const handleBack = async () => {
+		try {
+			await fetchWithTokenRefresh(
+				`/api/loan-applications/${params.id}`,
+				{
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ status: "PENDING_PROFILE_CONFIRMATION" }),
+				}
+			);
+
+			// Go back to profile confirmation (previous step in the flow)
+			router.push(`/dashboard/applications/${params.id}/profile-confirmation`);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to go back to profile confirmation");
+		}
 	};
 
 	if (loading) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="flex items-center justify-center min-h-96">
 					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-primary"></div>
 				</div>
@@ -360,18 +404,18 @@ export default function KycVerificationPage() {
 
 	if (error || !application) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="text-center py-12">
 					<h2 className="text-2xl font-heading font-bold text-gray-700 mb-4">
 						Error Loading Application
 					</h2>
 					<p className="text-gray-600 mb-6">{error || "Application not found"}</p>
 					<button
-						onClick={() => router.push("/dashboard/loans")}
+						onClick={() => router.push(`/dashboard/applications/${params.id}/profile-confirmation`)}
 						className="inline-flex items-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 transition-colors"
 					>
 						<ArrowLeftIcon className="h-4 w-4 mr-2" />
-						Back to Applications
+						Back to Profile Confirmation
 					</button>
 				</div>
 			</DashboardLayout>
@@ -381,7 +425,7 @@ export default function KycVerificationPage() {
 	// Only show KYC verification for applications in PENDING_KYC status
 	if (application.status !== "PENDING_KYC") {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="text-center py-12">
 					<h2 className="text-2xl font-heading font-bold text-gray-700 mb-4">
 						KYC Verification Not Required
@@ -389,12 +433,12 @@ export default function KycVerificationPage() {
 					<p className="text-gray-600 mb-6">
 						This application is not in the correct status for KYC verification.
 					</p>
-					<button
-						onClick={() => router.push("/dashboard/loans")}
+				<button
+					onClick={() => router.push(`/dashboard/applications/${params.id}/profile-confirmation`)}
 						className="inline-flex items-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 transition-colors"
 					>
 						<ArrowLeftIcon className="h-4 w-4 mr-2" />
-						Back to Applications
+						Back to Profile Confirmation
 					</button>
 				</div>
 			</DashboardLayout>
@@ -404,17 +448,17 @@ export default function KycVerificationPage() {
 	const formatCurrency = (amount: number) => `RM ${amount.toFixed(2)}`;
 
 	return (
-		<DashboardLayout>
+		<DashboardLayout {...layoutProps}>
 			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				{/* Back Button */}
 				<div className="mb-6">
-					<button
-						onClick={handleBack}
-						className="inline-flex items-center px-6 py-3 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-body"
-					>
-						<ArrowLeftIcon className="h-4 w-4 mr-2" />
-						Back to Applications
-					</button>
+				<button
+					onClick={handleBack}
+					className="inline-flex items-center px-6 py-3 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-body"
+				>
+					<ArrowLeftIcon className="h-4 w-4 mr-2" />
+					Back to Profile Confirmation
+				</button>
 				</div>
 
 				{/* KYC Verification Content */}

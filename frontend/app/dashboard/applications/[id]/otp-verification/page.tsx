@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
@@ -60,6 +60,32 @@ export default function OTPVerificationPage() {
 	const [countdown, setCountdown] = useState(0);
 	const [certificateSuccess, setCertificateSuccess] = useState(false);
 	const [certificateData, setCertificateData] = useState<any>(null);
+	const [userName, setUserName] = useState("");
+
+	const layoutProps = useMemo(
+		() => ({
+			title: "OTP Verification",
+			userName: userName || "User",
+		}),
+		[userName]
+	);
+
+	useEffect(() => {
+		const loadUserName = async () => {
+			try {
+				const profile = await fetchWithTokenRefresh<any>("/api/users/me");
+				if (profile?.firstName) {
+					setUserName(profile.firstName);
+				} else if (profile?.fullName) {
+					setUserName(profile.fullName.split(" ")[0]);
+				}
+			} catch (err) {
+				console.warn("Failed to load user profile for OTP page", err);
+			}
+		};
+
+		loadUserName();
+	}, []);
 
 	useEffect(() => {
 		const fetchApplication = async () => {
@@ -70,6 +96,9 @@ export default function OTPVerificationPage() {
 				
 				setApplication(data);
 				setEmail(data.user?.email || "");
+				if (data.user?.fullName) {
+					setUserName((prev) => prev || data.user!.fullName.split(" ")[0]);
+				}
 			} catch (err) {
 				setError(err instanceof Error ? err.message : "An error occurred");
 			} finally {
@@ -431,7 +460,7 @@ export default function OTPVerificationPage() {
 
 	if (loading) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="flex items-center justify-center min-h-96">
 					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-primary"></div>
 				</div>
@@ -441,7 +470,7 @@ export default function OTPVerificationPage() {
 
 	if (error || !application) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 					{/* Back Button */}
 					<div className="mb-6">
@@ -503,7 +532,7 @@ export default function OTPVerificationPage() {
 	// Only show OTP verification for applications in PENDING_SIGNING_OTP or PENDING_CERTIFICATE_OTP status
 	if (application.status !== "PENDING_SIGNING_OTP" && application.status !== "PENDING_CERTIFICATE_OTP") {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 					{/* Back Button */}
 					<div className="mb-6">
@@ -552,7 +581,7 @@ export default function OTPVerificationPage() {
 	// Success Screen
 	if (certificateSuccess) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 					{/* Success Card */}
 					<div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center max-w-2xl mx-auto">
@@ -619,7 +648,7 @@ export default function OTPVerificationPage() {
 	}
 
 	return (
-		<DashboardLayout>
+		<DashboardLayout {...layoutProps}>
 			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				{/* Back Button */}
 				<div className="mb-6">

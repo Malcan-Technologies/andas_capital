@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
@@ -75,6 +75,15 @@ export default function ProfileConfirmationPage() {
 	const [editedProfile, setEditedProfile] = useState<UserProfile | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+	const [userName, setUserName] = useState("");
+
+	const layoutProps = useMemo(
+		() => ({
+			title: "Profile Confirmation",
+			userName: userName || "User",
+		}),
+		[userName]
+	);
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -91,6 +100,13 @@ export default function ProfileConfirmationPage() {
 					`/api/users/me?t=${Date.now()}`
 				);
 				setProfile(profileData);
+
+				const nameSource =
+					profileData?.fullName?.trim() ||
+					appData?.user?.fullName?.trim();
+				if (nameSource) {
+					setUserName(nameSource.split(" ")[0]);
+				}
 			} catch (err) {
 				console.error("Profile Confirmation Page - Error fetching data:", err);
 				setError(err instanceof Error ? err.message : "An error occurred");
@@ -292,7 +308,7 @@ export default function ProfileConfirmationPage() {
 
 	if (loading) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="flex items-center justify-center min-h-96">
 					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-primary"></div>
 				</div>
@@ -302,7 +318,7 @@ export default function ProfileConfirmationPage() {
 
 	if (error || !application || !profile) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="text-center py-12">
 					<h2 className="text-2xl font-heading font-bold text-gray-700 mb-4">
 						Error Loading Data
@@ -323,7 +339,7 @@ export default function ProfileConfirmationPage() {
 	// Only show profile confirmation for applications in PENDING_PROFILE_CONFIRMATION status
 	if (application.status !== "PENDING_PROFILE_CONFIRMATION") {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="text-center py-12">
 					<h2 className="text-2xl font-heading font-bold text-gray-700 mb-4">
 						Profile Confirmation Not Required
@@ -414,7 +430,7 @@ export default function ProfileConfirmationPage() {
 
 
 	return (
-		<DashboardLayout>
+		<DashboardLayout {...layoutProps}>
 			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				{/* Back Button */}
 				<div className="mb-6">

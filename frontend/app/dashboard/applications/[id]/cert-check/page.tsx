@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
@@ -63,6 +63,32 @@ export default function CertCheckPage() {
 	const [icNumber, setIcNumber] = useState("");
 	const [updating, setUpdating] = useState(false);
 	const [signingInProgress, setSigningInProgress] = useState(false);
+	const [userName, setUserName] = useState("");
+
+	const layoutProps = useMemo(
+		() => ({
+			title: "Certificate Check",
+			userName: userName || "User",
+		}),
+		[userName]
+	);
+
+	useEffect(() => {
+		const loadUserName = async () => {
+			try {
+				const profile = await fetchWithTokenRefresh<any>("/api/users/me");
+				if (profile?.firstName) {
+					setUserName(profile.firstName);
+				} else if (profile?.fullName) {
+					setUserName(profile.fullName.split(" ")[0]);
+				}
+			} catch (err) {
+				console.warn("Failed to load user profile for certificate check", err);
+			}
+		};
+
+		loadUserName();
+	}, []);
 
 	useEffect(() => {
 		const fetchApplication = async () => {
@@ -76,6 +102,9 @@ export default function CertCheckPage() {
 				// Debug logging
 				console.log("User data:", data.user);
 				console.log("IC Number:", data.user?.icNumber);
+				if (data.user?.fullName) {
+					setUserName((prev) => prev || data.user!.fullName.split(" ")[0]);
+				}
 				
 				// Auto-start certificate check - only use icNumber, ignore idNumber
 				const userId = data.user?.icNumber;
@@ -243,7 +272,7 @@ export default function CertCheckPage() {
 
 	if (loading || checking) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="flex items-center justify-center min-h-96">
 					<div className="text-center">
 						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-primary mx-auto mb-4"></div>
@@ -258,7 +287,7 @@ export default function CertCheckPage() {
 
 	if (error || !application) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 					{/* Back Button */}
 					<div className="mb-6">
@@ -317,7 +346,7 @@ export default function CertCheckPage() {
 	// IC Number Input State
 	if (showIcInput) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 					{/* Back Button */}
 					<div className="mb-6">
@@ -465,7 +494,7 @@ export default function CertCheckPage() {
 	};
 
 	return (
-		<DashboardLayout>
+		<DashboardLayout {...layoutProps}>
 			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				{/* Back Button */}
 				<div className="mb-6">

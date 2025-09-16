@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import AttestationForm from "@/components/application/AttestationForm";
@@ -59,6 +59,32 @@ export default function AttestationPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [completing, setCompleting] = useState(false);
+	const [userName, setUserName] = useState("");
+
+	const layoutProps = useMemo(
+		() => ({
+			title: "Application Attestation",
+			userName: userName || "User",
+		}),
+		[userName]
+	);
+
+	useEffect(() => {
+		const loadUserName = async () => {
+			try {
+				const profile = await fetchWithTokenRefresh<any>("/api/users/me");
+				if (profile?.firstName) {
+					setUserName(profile.firstName);
+				} else if (profile?.fullName) {
+					setUserName(profile.fullName.split(" ")[0]);
+				}
+			} catch (err) {
+				console.warn("Failed to load user profile for attestation page", err);
+			}
+		};
+
+		loadUserName();
+	}, []);
 
 	useEffect(() => {
 		const fetchApplication = async () => {
@@ -80,6 +106,11 @@ export default function AttestationPage() {
 				}
 
 				setApplication(data);
+
+				const fullName = data.user?.fullName?.trim();
+				if (fullName) {
+					setUserName((prev) => prev || fullName.split(" ")[0]);
+				}
 			} catch (err) {
 				setError(
 					err instanceof Error
@@ -172,7 +203,7 @@ export default function AttestationPage() {
 
 	if (loading) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="flex justify-center items-center min-h-[400px]">
 					<div className="flex flex-col items-center space-y-4">
 						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-primary"></div>
@@ -187,7 +218,7 @@ export default function AttestationPage() {
 
 	if (error || !application) {
 		return (
-			<DashboardLayout>
+			<DashboardLayout {...layoutProps}>
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 					<div className="mb-6">
 						<button
@@ -210,7 +241,7 @@ export default function AttestationPage() {
 	}
 
 	return (
-		<DashboardLayout>
+		<DashboardLayout {...layoutProps}>
 			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				{/* Back Button */}
 				<div className="mb-6">
