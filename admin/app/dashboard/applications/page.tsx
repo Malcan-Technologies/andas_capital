@@ -2536,6 +2536,21 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 												<ClipboardDocumentCheckIcon className="h-5 w-5 mr-2 text-purple-400" />
 												Audit Trail
 											</h4>
+											{/* Color Legend */}
+											<div className="flex flex-wrap gap-4 text-xs mb-4">
+												<div className="flex items-center">
+													<div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+													<span className="text-gray-400">System Actions</span>
+												</div>
+												<div className="flex items-center">
+													<div className="w-2 h-2 bg-amber-400 rounded-full mr-2"></div>
+													<span className="text-gray-400">Admin Actions</span>
+												</div>
+												<div className="flex items-center">
+													<div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+													<span className="text-gray-400">Customer Actions</span>
+												</div>
+											</div>
 											<div className="space-y-2">
 												{selectedApplication.history &&
 												selectedApplication.history
@@ -2565,10 +2580,15 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 																		<div className="flex-shrink-0 mt-1">
 																			<div
 																				className={`w-2 h-2 rounded-full ${
-																					index ===
-																					0
-																						? "bg-blue-400"
-																						: "bg-gray-500"
+																					historyItem.changedBy?.toLowerCase().includes('system')
+																						? "bg-blue-400" 
+																						: historyItem.changedBy && (
+																							historyItem.changedBy.startsWith('admin_') || 
+																							historyItem.changeReason?.toLowerCase().includes('admin') ||
+																							historyItem.notes?.toLowerCase().includes('admin')
+																						)
+																						? "bg-amber-400"
+																						: "bg-purple-500"
 																				}`}
 																			></div>
 																		</div>

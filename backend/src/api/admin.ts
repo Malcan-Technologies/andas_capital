@@ -181,6 +181,67 @@ export async function trackApplicationStatusChange(
 	}
 }
 
+// Helper function to track loan status changes using the application history table
+export async function trackLoanStatusChange(
+	prismaTransaction: any,
+	loanId: string,
+	previousStatus: string | null,
+	newStatus: string,
+	changedBy: string | undefined,
+	changeReason: string = "Loan status update",
+	notes: string | null = null,
+	metadata: any = {}
+) {
+	console.log(
+		`Tracking loan status change for loan ${loanId}: ${previousStatus} -> ${newStatus}`
+	);
+
+	try {
+		// Get the loan's application ID to link to the audit trail
+		const loan = await prismaTransaction.loan.findUnique({
+			where: { id: loanId },
+			select: { applicationId: true },
+		});
+
+		if (!loan || !loan.applicationId) {
+			console.warn(`Loan ${loanId} not found or missing application ID. Status change not tracked.`);
+			return null;
+		}
+
+		// Check if the loanApplicationHistory model exists in Prisma
+		if (!prismaTransaction.loanApplicationHistory) {
+			console.warn(
+				"LoanApplicationHistory model not available. Loan status change not tracked."
+			);
+			return null;
+		}
+
+		const historyEntry = await prismaTransaction.loanApplicationHistory.create({
+			data: {
+				applicationId: loan.applicationId,
+				previousStatus,
+				newStatus,
+				changedBy: changedBy || "SYSTEM",
+				changeReason,
+				notes: notes || "",
+				metadata: {
+					...metadata,
+					loanId,
+					isLoanStatusChange: true,
+					timestamp: new Date().toISOString(),
+				},
+			},
+		});
+
+		console.log(`Created loan status history entry: ${historyEntry.id}`);
+		return historyEntry;
+	} catch (error) {
+		console.error("Failed to create loan status history entry:", error);
+		// Don't throw, allow the main transaction to continue
+		return null;
+	}
+}
+
 // Import permissions system
 import { requireAdmin } from '../lib/permissions';
 
@@ -8034,6 +8095,22 @@ async function calculateOutstandingBalance(loanId: string, tx: any) {
 				outstandingBalance: finalOutstandingBalance,
 			},
 		});
+
+		// Track the automatic loan status change in audit trail
+		await trackLoanStatusChange(
+			tx,
+			loanId,
+			"ACTIVE", // previous status
+			"PENDING_DISCHARGE", // new status
+			"SYSTEM",
+			"Loan automatically marked as pending discharge - fully paid",
+			"Outstanding balance reached zero",
+			{
+				automaticStatusChange: true,
+				finalOutstandingBalance,
+				triggeredBy: "payment_processing",
+			}
+		);
 	} else {
 		// Just update the outstanding balance
 		await tx.loan.update({
@@ -8754,32 +8831,53 @@ router.post(
 				});
 			}
 
-			// Update loan status to PENDING_DISCHARGE
-			const updatedLoan = await prisma.loan.update({
-				where: { id },
-				data: {
-					status: "PENDING_DISCHARGE",
-					updatedAt: new Date(),
-				},
-				include: {
-					user: {
-						select: {
-							id: true,
-							fullName: true,
-							email: true,
-						},
+			// Update loan status to PENDING_DISCHARGE with audit trail
+			const updatedLoan = await prisma.$transaction(async (tx) => {
+				const updated = await tx.loan.update({
+					where: { id },
+					data: {
+						status: "PENDING_DISCHARGE",
+						updatedAt: new Date(),
 					},
-					application: {
-						include: {
-							product: {
-								select: {
-									name: true,
-									code: true,
+					include: {
+						user: {
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+							},
+						},
+						application: {
+							include: {
+								product: {
+									select: {
+										name: true,
+										code: true,
+									},
 								},
 							},
 						},
 					},
-				},
+				});
+
+				// Track the loan status change in audit trail
+				await trackLoanStatusChange(
+					tx,
+					id,
+					loan.status, // previous status
+					"PENDING_DISCHARGE", // new status
+					req.user?.userId,
+					"Loan discharge requested by admin",
+					reason,
+					{
+						requestedBy: req.user?.userId,
+						requestedAt: new Date().toISOString(),
+						dischargeReason: reason,
+						outstandingBalance: loan.outstandingBalance,
+					}
+				);
+
+				return updated;
 			});
 
 			// Log the discharge request
@@ -8908,34 +9006,56 @@ router.post(
 				console.log(`🔍 Discharging early settlement loan ${id} with remaining balance: ${loan.outstandingBalance} (due to interest discount)`);
 			}
 
-			// Approve discharge
-			const updatedLoan = await prisma.loan.update({
-				where: { id },
-				data: {
-					status: "DISCHARGED",
-					dischargedAt: new Date(),
-					updatedAt: new Date(),
-				},
-				include: {
-					user: {
-						select: {
-							id: true,
-							fullName: true,
-							email: true,
-							phoneNumber: true,
-						},
+			// Approve discharge with audit trail
+			const updatedLoan = await prisma.$transaction(async (tx) => {
+				const updated = await tx.loan.update({
+					where: { id },
+					data: {
+						status: "DISCHARGED",
+						dischargedAt: new Date(),
+						updatedAt: new Date(),
 					},
-					application: {
-						include: {
-							product: {
-								select: {
-									name: true,
-									code: true,
+					include: {
+						user: {
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+								phoneNumber: true,
+							},
+						},
+						application: {
+							include: {
+								product: {
+									select: {
+										name: true,
+										code: true,
+									},
 								},
 							},
 						},
 					},
-				},
+				});
+
+				// Track the loan status change in audit trail
+				await trackLoanStatusChange(
+					tx,
+					id,
+					"PENDING_DISCHARGE", // previous status
+					"DISCHARGED", // new status
+					req.user?.userId,
+					"Loan discharge approved by admin",
+					hasEarlySettlement ? "Early settlement loan discharged" : "Fully paid loan discharged",
+					{
+						approvedBy: req.user?.userId,
+						approvedAt: new Date().toISOString(),
+						dischargedAt: new Date().toISOString(),
+						hasEarlySettlement,
+						finalOutstandingBalance: loan.outstandingBalance,
+					}
+				);
+
+				return updated;
 			});
 
 			// Create notification for the user about loan discharge

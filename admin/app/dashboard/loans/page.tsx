@@ -3858,9 +3858,28 @@ function ActiveLoansContent() {
 										) : (
 											<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 overflow-hidden">
 												<div className="p-4 border-b border-gray-700/30">
-													<h5 className="text-lg font-medium text-white">
+													<h5 className="text-lg font-medium text-white mb-3">
 														Timeline ({applicationHistory.length + walletTransactions.length} events)
 													</h5>
+													{/* Color Legend */}
+													<div className="flex flex-wrap gap-4 text-xs">
+														<div className="flex items-center">
+															<div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+															<span className="text-gray-400">System Actions</span>
+														</div>
+														<div className="flex items-center">
+															<div className="w-2 h-2 bg-amber-400 rounded-full mr-2"></div>
+															<span className="text-gray-400">Admin Actions</span>
+														</div>
+														<div className="flex items-center">
+															<div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+															<span className="text-gray-400">Customer Actions</span>
+														</div>
+														<div className="flex items-center">
+															<div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+															<span className="text-gray-400">Payment Transactions</span>
+														</div>
+													</div>
 												</div>
 												<div className="overflow-y-auto max-h-[60vh]">
 													{(() => {
@@ -3905,7 +3924,17 @@ function ActiveLoansContent() {
 																			// Application history item
 																			<div className="flex items-start space-x-3">
 																				<div className="flex-shrink-0 mt-1">
-																					<div className={`w-2 h-2 rounded-full ${index === 0 ? "bg-blue-400" : "bg-purple-500"}`}></div>
+																					<div className={`w-2 h-2 rounded-full ${
+																						event.data.changedBy?.toLowerCase().includes('system')
+																							? "bg-blue-400" 
+																							: event.data.changedBy && (
+																								event.data.changedBy.startsWith('admin_') || 
+																								event.data.changeReason?.toLowerCase().includes('admin') ||
+																								event.data.notes?.toLowerCase().includes('admin')
+																							)
+																							? "bg-amber-400"
+																							: "bg-purple-500"
+																					}`}></div>
 																				</div>
 																				<div className="flex-1 min-w-0">
 																					<div className="flex items-center justify-between">
@@ -3934,7 +3963,7 @@ function ActiveLoansContent() {
 																			// Payment transaction item
 																			<div className="flex items-start space-x-3">
 																				<div className="flex-shrink-0 mt-1">
-																					<div className={`w-2 h-2 rounded-full ${index === 0 ? "bg-blue-400" : "bg-green-500"}`}></div>
+																					<div className="w-2 h-2 rounded-full bg-green-500"></div>
 																				</div>
 																				<div className="flex-1 min-w-0">
 																					<div className="flex items-center justify-between">
