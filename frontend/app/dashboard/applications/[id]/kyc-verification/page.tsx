@@ -267,7 +267,7 @@ export default function KycVerificationPage() {
 				setKycInProgress(true);
 				setKycCompleted(false);
 				
-				// Open CTOS eKYC in new tab
+				// Navigate to CTOS eKYC
 				window.open(response.onboardingUrl, '_blank');
 				
 				// Start lightweight database polling to detect webhook updates

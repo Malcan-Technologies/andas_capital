@@ -496,28 +496,217 @@ async function main() {
 			isActive: true,
 			requiresRestart: false,
 			affectsExistingLoans: false,
+		},
+		{
+			key: "WHATSAPP_EARLY_SETTLEMENT_APPROVED",
+			category: "NOTIFICATIONS",
+			name: "WhatsApp Early Settlement Approved",
+			description: "Send WhatsApp notifications when early settlement requests are approved",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(true),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "WHATSAPP_EARLY_SETTLEMENT_REJECTED",
+			category: "NOTIFICATIONS",
+			name: "WhatsApp Early Settlement Rejected",
+			description: "Send WhatsApp notifications when early settlement requests are rejected",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(true),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
 		}
 	];
 
-	// Create/update each notification setting individually
+	// Create/update each notification setting individually (only update metadata, not values)
 	for (const setting of notificationSettings) {
-		await prisma.systemSettings.upsert({
-			where: { key: setting.key },
-			update: {
-				name: setting.name,
-				description: setting.description,
-				dataType: setting.dataType as any,
-				value: setting.value,
-				options: setting.options,
-				isActive: setting.isActive,
-				requiresRestart: setting.requiresRestart,
-				affectsExistingLoans: setting.affectsExistingLoans,
-			},
-			create: setting as any
+		const existing = await prisma.systemSettings.findUnique({
+			where: { key: setting.key }
 		});
+
+		if (existing) {
+			// Only update metadata, preserve existing value
+			await prisma.systemSettings.update({
+				where: { key: setting.key },
+				data: {
+					name: setting.name,
+					description: setting.description,
+					dataType: setting.dataType as any,
+					options: setting.options,
+					isActive: setting.isActive,
+					requiresRestart: setting.requiresRestart,
+					affectsExistingLoans: setting.affectsExistingLoans,
+					// Don't update value - preserve existing
+				}
+			});
+		} else {
+			// Create new setting with default value
+			await prisma.systemSettings.create({
+				data: setting as any
+			});
+		}
 	}
 
 	console.log("Notification settings created/updated successfully");
+
+	// Early Settlement Settings - Create only if they don't exist
+	console.log("Creating/updating early settlement settings...");
+	
+	const earlySettlementSettings = [
+		{
+			key: "EARLY_SETTLEMENT_ENABLED",
+			category: "EARLY_SETTLEMENT",
+			name: "Enable Early Settlement",
+			description: "Allow borrowers to settle loans early with admin approval",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(false),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "EARLY_SETTLEMENT_LOCK_IN_MONTHS",
+			category: "EARLY_SETTLEMENT",
+			name: "Lock-in Period (Months)",
+			description: "Number of months after disbursement before early settlement is allowed",
+			dataType: "NUMBER",
+			value: JSON.stringify(3),
+			options: {
+				min: 0,
+				max: 24,
+				step: 1,
+				unit: "months"
+			},
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "EARLY_SETTLEMENT_DISCOUNT_FACTOR",
+			category: "EARLY_SETTLEMENT",
+			name: "Interest Discount Factor",
+			description: "Percentage of remaining interest to discount (0.0 = no discount, 1.0 = full discount)",
+			dataType: "NUMBER",
+			value: JSON.stringify(0.0),
+			options: {
+				min: 0.0,
+				max: 1.0,
+				step: 0.01,
+				unit: "factor"
+			},
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "EARLY_SETTLEMENT_FEE_TYPE",
+			category: "EARLY_SETTLEMENT",
+			name: "Early Settlement Fee Type",
+			description: "Type of early settlement fee calculation",
+			dataType: "ENUM",
+			value: JSON.stringify("FIXED"),
+			options: {
+				FIXED: {
+					label: "Fixed Amount",
+					description: "Fixed fee amount in MYR"
+				},
+				PERCENT: {
+					label: "Percentage",
+					description: "Percentage of remaining principal balance"
+				}
+			},
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "EARLY_SETTLEMENT_FEE_VALUE",
+			category: "EARLY_SETTLEMENT",
+			name: "Early Settlement Fee Value",
+			description: "Fee amount (fixed amount in MYR or percentage of remaining principal)",
+			dataType: "NUMBER",
+			value: JSON.stringify(0),
+			options: {
+				min: 0,
+				max: 10000,
+				step: 0.01,
+				unit: "MYR or %"
+			},
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "EARLY_SETTLEMENT_INCLUDE_LATE_FEES",
+			category: "EARLY_SETTLEMENT",
+			name: "Include Late Fees",
+			description: "Include unpaid late fees in early settlement calculation",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(true),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "EARLY_SETTLEMENT_ROUNDING_MODE",
+			category: "EARLY_SETTLEMENT",
+			name: "Rounding Mode",
+			description: "Method for rounding settlement amounts to 2 decimal places",
+			dataType: "ENUM",
+			value: JSON.stringify("HALF_UP"),
+			options: {
+				HALF_UP: {
+					label: "Half Up",
+					description: "Round 0.5 up to the next integer (standard rounding)"
+				},
+				HALF_EVEN: {
+					label: "Half Even (Bankers)",
+					description: "Round 0.5 to the nearest even number (bankers rounding)"
+				}
+			},
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+	];
+
+	// Create/update each early settlement setting individually (preserve existing values)
+	for (const setting of earlySettlementSettings) {
+		const existing = await prisma.systemSettings.findUnique({
+			where: { key: setting.key }
+		});
+
+		if (existing) {
+			// Only update metadata, preserve existing value
+			await prisma.systemSettings.update({
+				where: { key: setting.key },
+				data: {
+					name: setting.name,
+					description: setting.description,
+					dataType: setting.dataType as any,
+					options: setting.options,
+					isActive: setting.isActive,
+					requiresRestart: setting.requiresRestart,
+					affectsExistingLoans: setting.affectsExistingLoans,
+					// Don't update value - preserve existing
+				}
+			});
+		} else {
+			// Create new setting with default value
+			await prisma.systemSettings.create({
+				data: setting as any
+			});
+		}
+	}
+
+	console.log("Early settlement settings created/updated successfully");
 
 	// Check if bank accounts table is empty
 	const bankAccountsCount = await prisma.bankAccount.count();

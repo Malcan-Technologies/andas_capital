@@ -15,6 +15,7 @@ import mtsaAdminRoutes from "./admin/mtsa";
 import kycAdminRoutes from "./admin/kyc";
 import companySettingsRoutes from "./companySettings";
 import receiptsRoutes from "./receipts";
+import earlySettlementRoutes from "./admin/early-settlement";
 import whatsappService from "../lib/whatsappService";
 import { processCSVFile } from "../lib/csvProcessor";
 import ReceiptService from "../lib/receiptService";
@@ -90,6 +91,7 @@ router.use("/mtsa", mtsaAdminRoutes);
 router.use("/kyc", kycAdminRoutes);
 router.use("/company-settings", companySettingsRoutes);
 router.use("/receipts", receiptsRoutes);
+router.use("/early-settlement", earlySettlementRoutes);
 
 // Helper function to create a loan disbursement record
 async function createLoanDisbursementRecord(
@@ -4574,7 +4576,7 @@ router.get(
 			const loans = await prisma.loan.findMany({
 				where: {
 					status: {
-						in: ["ACTIVE", "PENDING_DISCHARGE", "DISCHARGED"],
+						in: ["ACTIVE", "PENDING_DISCHARGE", "PENDING_EARLY_SETTLEMENT", "DISCHARGED"],
 					},
 				},
 				include: {
@@ -4611,24 +4613,8 @@ router.get(
 						},
 					},
 					repayments: {
-						select: {
-							id: true,
-							amount: true,
-							principalAmount: true,
-							interestAmount: true,
-							status: true,
-							dueDate: true,
-							paidAt: true,
-							createdAt: true,
-							actualAmount: true,
-							lateFeeAmount: true,
-							lateFeesPaid: true,
-							principalPaid: true,
-							installmentNumber: true,
-							scheduledAmount: true,
-							paymentType: true,
-							daysEarly: true,
-							daysLate: true,
+						include: {
+							receipts: true,
 						},
 						orderBy: {
 							dueDate: "asc",
@@ -6846,6 +6832,9 @@ router.post(
 				});
 			}
 
+			// Check if this is an early settlement request
+			const isEarlySettlement = (transaction.metadata as any)?.kind === 'EARLY_SETTLEMENT';
+
 			// Process the repayment in a transaction
 			const result = await prisma.$transaction(async (tx) => {
 				// Import SafeMath utilities for precise calculations
@@ -6875,61 +6864,195 @@ router.post(
 				// Update loan balance and payment schedule
 				const loan = transaction.loan;
 				if (loan) {
-					// Update the payment schedule to mark repayments as completed
-					// This function already updates the loan record with correct values
-					const scheduleUpdate =
-						await updatePaymentScheduleAfterPayment(
-							loan.id,
-							paymentAmount,
-							tx
-						);
-
-					console.log(`Payment approved for loan ${loan.id}:`);
-					console.log(`  • Payment amount: RM ${paymentAmount}`);
-					console.log(
-						`  • Principal paid: ${
-							scheduleUpdate?.totalPrincipalPaid || 0
-						}`
-					);
-					console.log(
-						`  • New outstanding: ${
-							scheduleUpdate?.newOutstandingBalance || 0
-						}`
-					);
-					console.log(
-						`  • Next payment due: ${
-							scheduleUpdate?.nextPaymentDue || "None"
-						}`
-					);
-
-					// Create notification for user
-					await tx.notification.create({
-						data: {
-							userId: transaction.userId,
-							title: "Payment Approved",
-							message: `Your loan repayment of RM ${new Intl.NumberFormat("en-MY", {
-								minimumFractionDigits: 2,
-								maximumFractionDigits: 2,
-							}).format(paymentAmount)} has been approved and processed successfully.`,
-							type: "SYSTEM",
-							priority: "HIGH",
-							metadata: {
-								transactionId: id,
+					if (isEarlySettlement) {
+						// Handle early settlement: use the same logic as early-settlement.ts
+						const quote = (transaction.metadata as any)?.quote;
+						
+						// First, get all repayments that will be cancelled and store their original statuses
+						const repaymentsToCancel = await tx.loanRepayment.findMany({
+							where: {
 								loanId: loan.id,
-								amount: paymentAmount,
-								newOutstandingBalance:
-									scheduleUpdate?.newOutstandingBalance || 0,
-								processedBy: adminUserId,
-								adminNotes: notes || "",
+								status: { in: ['PENDING', 'PARTIAL'] }
 							},
-						},
-					});
+							select: {
+								id: true,
+								status: true,
+								actualAmount: true,
+								principalPaid: true,
+								lateFeesPaid: true
+							}
+						});
 
-					return { updatedTransaction, scheduleUpdate };
+						// Store original repayment statuses in transaction metadata for potential reversion
+						const originalRepaymentStatuses = repaymentsToCancel.map(r => ({
+							id: r.id,
+							originalStatus: r.status,
+							originalActualAmount: r.actualAmount,
+							originalPrincipalPaid: r.principalPaid,
+							originalLateFeesPaid: r.lateFeesPaid
+						}));
+						
+						// Create a consolidated early settlement repayment record
+						const earlySettlementRepayment = await tx.loanRepayment.create({
+							data: {
+								loanId: loan.id,
+								amount: SafeMath.toNumber(quote?.totalSettlement || paymentAmount),
+								principalAmount: SafeMath.toNumber(quote?.remainingPrincipal || 0),
+								interestAmount: SafeMath.toNumber((quote?.remainingInterest || 0) - (quote?.discountAmount || 0)),
+								lateFeeAmount: SafeMath.toNumber(quote?.lateFeesAmount || 0),
+								status: 'COMPLETED',
+								dueDate: new Date(),
+								paidAt: new Date(),
+								actualAmount: SafeMath.toNumber(quote?.totalSettlement || paymentAmount),
+								principalPaid: SafeMath.toNumber(quote?.remainingPrincipal || 0),
+								lateFeesPaid: SafeMath.toNumber(quote?.lateFeesAmount || 0),
+								paymentType: 'EARLY_SETTLEMENT',
+								installmentNumber: null,
+								createdAt: new Date(),
+								updatedAt: new Date()
+							}
+						});
+
+						// Mark all remaining future repayments as CANCELLED
+						await tx.loanRepayment.updateMany({
+							where: {
+								loanId: loan.id,
+								status: { in: ['PENDING', 'PARTIAL'] }
+							},
+							data: {
+								status: 'CANCELLED',
+								updatedAt: new Date()
+							}
+						});
+
+						// Update transaction metadata to include original repayment statuses for reversion
+						await tx.walletTransaction.update({
+							where: { id },
+							data: {
+								metadata: {
+									...((transaction.metadata as object) || {}),
+									originalRepaymentStatuses,
+									earlySettlementRepaymentId: earlySettlementRepayment.id
+								}
+							}
+						});
+
+						// Update loan status to PENDING_DISCHARGE and set outstanding balance to 0
+						const updatedLoan = await tx.loan.update({
+							where: { id: loan.id },
+							data: {
+								status: 'PENDING_DISCHARGE',
+								outstandingBalance: 0,
+								updatedAt: new Date()
+							},
+							include: {
+								application: {
+									select: {
+										id: true
+									}
+								}
+							}
+						});
+
+						// Create audit trail entry for early settlement approval (admin payments page)
+						if (updatedLoan.applicationId) {
+							const formatCurrency = (amount: number): string => {
+								return new Intl.NumberFormat('en-MY', {
+									style: 'currency',
+									currency: 'MYR'
+								}).format(amount);
+							};
+
+							await tx.loanApplicationHistory.create({
+								data: {
+									applicationId: updatedLoan.applicationId,
+									previousStatus: 'PENDING_EARLY_SETTLEMENT',
+									newStatus: 'PENDING_DISCHARGE',
+									changedBy: adminUserId || 'SYSTEM',
+									changeReason: 'Early Settlement Approved (Admin Payments)',
+									notes: `Early settlement approved via admin payments page. Settlement amount: ${formatCurrency(SafeMath.toNumber(quote?.totalSettlement || paymentAmount))}. Interest discount: ${formatCurrency(SafeMath.toNumber(quote?.discountAmount || 0))}. Early settlement fee: ${formatCurrency(SafeMath.toNumber(quote?.feeAmount || 0))}.${notes ? ` Admin notes: ${notes}` : ''}`,
+									metadata: {
+										kind: 'EARLY_SETTLEMENT_APPROVAL_ADMIN',
+										transactionId: id,
+										settlementDetails: {
+											totalSettlement: SafeMath.toNumber(quote?.totalSettlement || paymentAmount),
+											remainingPrincipal: SafeMath.toNumber(quote?.remainingPrincipal || 0),
+											remainingInterest: SafeMath.toNumber(quote?.remainingInterest || 0),
+											discountAmount: SafeMath.toNumber(quote?.discountAmount || 0),
+											earlySettlementFee: SafeMath.toNumber(quote?.feeAmount || 0),
+											lateFeesAmount: SafeMath.toNumber(quote?.lateFeesAmount || 0),
+											interestSaved: SafeMath.toNumber(quote?.discountAmount || 0),
+											netSavings: SafeMath.toNumber((quote?.discountAmount || 0) - (quote?.feeAmount || 0))
+										},
+										approvedBy: adminUserId || 'SYSTEM',
+										approvedAt: new Date().toISOString(),
+										approvedVia: 'ADMIN_PAYMENTS_PAGE'
+									}
+								}
+							});
+						}
+
+						return { updatedTransaction, scheduleUpdate: { newOutstandingBalance: 0, nextPaymentDue: null, totalPrincipalPaid: 0 }, earlySettlementRepayment };
+					} else {
+						// Regular repayment processing
+						const scheduleUpdate =
+							await updatePaymentScheduleAfterPayment(
+								loan.id,
+								paymentAmount,
+								tx
+							);
+						return { updatedTransaction, scheduleUpdate };
+					}
 				}
 
 				return { updatedTransaction, scheduleUpdate: null };
 			});
+
+			// Log the results after transaction completion
+			if (result.scheduleUpdate && transaction.loan) {
+				const paymentAmount = Math.abs(transaction.amount);
+				console.log(`Payment approved for loan ${transaction.loan.id}:`);
+				console.log(`  • Payment amount: RM ${paymentAmount}`);
+				console.log(`  • New outstanding: ${result.scheduleUpdate.newOutstandingBalance || 0}`);
+				
+				if (isEarlySettlement) {
+					console.log(`  • Early settlement processed - loan status changed to PENDING_DISCHARGE`);
+				}
+			}
+
+			// Create notification for user (outside transaction to avoid rollback issues)
+			if (transaction.loan) {
+				const paymentAmount = Math.abs(transaction.amount);
+				const notificationTitle = isEarlySettlement ? "Early Settlement Approved" : "Payment Approved";
+				const notificationMessage = isEarlySettlement 
+					? `Your early settlement request of RM ${new Intl.NumberFormat("en-MY", {
+						minimumFractionDigits: 2,
+						maximumFractionDigits: 2,
+					}).format(paymentAmount)} has been approved. Your loan is now pending discharge.`
+					: `Your loan repayment of RM ${new Intl.NumberFormat("en-MY", {
+						minimumFractionDigits: 2,
+						maximumFractionDigits: 2,
+					}).format(paymentAmount)} has been approved and processed successfully.`;
+
+				await prisma.notification.create({
+					data: {
+						userId: transaction.userId,
+						title: notificationTitle,
+						message: notificationMessage,
+						type: "SYSTEM",
+						priority: "HIGH",
+						metadata: {
+							transactionId: id,
+							loanId: transaction.loan.id,
+							amount: paymentAmount,
+							newOutstandingBalance: result.scheduleUpdate?.newOutstandingBalance || 0,
+							processedBy: adminUserId,
+							adminNotes: notes || "",
+							isEarlySettlement: isEarlySettlement,
+						},
+					},
+				});
+			}
 
 
 
@@ -6966,10 +7089,16 @@ router.post(
 						
 						console.log(`🧾 Finding repayment for receipt generation...`);
 						
-						// Strategy 1: Look for PARTIAL repayments first (these are currently being paid)
-						affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
-						if (affectedRepayment) {
-							console.log(`🧾 ✅ Found PARTIAL repayment: Installment ${affectedRepayment.installmentNumber}`);
+						// Special case: For early settlement, use the early settlement repayment record
+						if (isEarlySettlement && result.earlySettlementRepayment) {
+							affectedRepayment = result.earlySettlementRepayment;
+							console.log(`🧾 ✅ Using early settlement repayment record for receipt: ${affectedRepayment.id}`);
+						} else {
+							// Strategy 1: Look for PARTIAL repayments first (these are currently being paid)
+							affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+							if (affectedRepayment) {
+								console.log(`🧾 ✅ Found PARTIAL repayment: Installment ${affectedRepayment.installmentNumber}`);
+							}
 						}
 						
 						// Strategy 2: If no PARTIAL, find the most recently completed repayment
@@ -7015,16 +7144,19 @@ router.post(
 						}
 
 						if (affectedRepayment) {
+							console.log(`🧾 Generating receipt for repayment: ${affectedRepayment.id}, transaction: ${transaction.id}, isEarlySettlement: ${isEarlySettlement}`);
 							const receiptResult = await ReceiptService.generateReceipt({
 								repaymentId: affectedRepayment.id,
 								generatedBy: adminUserId || 'admin',
-								paymentMethod: (transaction.metadata as any)?.paymentMethod || 'Online Payment',
+								paymentMethod: (transaction.metadata as any)?.paymentMethod || (isEarlySettlement ? 'Early Settlement' : 'Online Payment'),
 								reference: transaction.reference || transaction.id,
-								actualPaymentAmount: transaction.amount,
+								actualPaymentAmount: Math.abs(transaction.amount),
 								transactionId: transaction.id // Add transaction ID to prevent duplicates
 							});
 							
-							console.log(`Receipt generated for transaction ${transaction.id}: ${receiptResult.receiptNumber}`);
+							console.log(`🧾 ✅ Receipt generated for transaction ${transaction.id}: ${receiptResult.receiptNumber} (repayment: ${affectedRepayment.id})`);
+						} else {
+							console.log(`🧾 ❌ No affected repayment found for receipt generation (transaction: ${transaction.id})`);
 						}
 					} else {
 						console.log(`Receipt already exists for transaction ${transaction.id}`);
@@ -7257,7 +7389,10 @@ router.post(
 				});
 			}
 
-					// Reject the transaction
+			// Check if this is an early settlement request
+			const isEarlySettlement = (transaction.metadata as any)?.kind === 'EARLY_SETTLEMENT';
+
+			// Reject the transaction
 		const result = await prisma.$transaction(async (tx) => {
 			// Import SafeMath utilities for precise calculations
 			const { SafeMath } = await import("../lib/precisionUtils");
@@ -7284,15 +7419,104 @@ router.post(
 					},
 				});
 
+				// If this is an early settlement request, revert loan status and restore repayments
+				if (isEarlySettlement && transaction.loanId) {
+					// Restore original repayment statuses if they were stored
+					const originalRepaymentStatuses = (transaction.metadata as any)?.originalRepaymentStatuses;
+					const earlySettlementRepaymentId = (transaction.metadata as any)?.earlySettlementRepaymentId;
+					
+					if (originalRepaymentStatuses && Array.isArray(originalRepaymentStatuses)) {
+						// Restore each repayment to its original status
+						for (const repaymentStatus of originalRepaymentStatuses) {
+							await tx.loanRepayment.update({
+								where: { id: repaymentStatus.id },
+								data: {
+									status: repaymentStatus.originalStatus,
+									actualAmount: repaymentStatus.originalActualAmount,
+									principalPaid: repaymentStatus.originalPrincipalPaid,
+									lateFeesPaid: repaymentStatus.originalLateFeesPaid,
+									updatedAt: new Date()
+								}
+							});
+						}
+					}
+					
+					// Remove the early settlement repayment record if it exists
+					if (earlySettlementRepaymentId) {
+						await tx.loanRepayment.delete({
+							where: { id: earlySettlementRepaymentId }
+						}).catch((error) => {
+							// Log error but don't fail the transaction if repayment doesn't exist
+							console.warn('Early settlement repayment record not found for deletion:', error);
+						});
+					}
+					
+					// Revert loan status back to ACTIVE and recalculate outstanding balance
+					const revertedLoan = await tx.loan.update({
+						where: { id: transaction.loanId },
+						data: {
+							status: 'ACTIVE',
+							updatedAt: new Date()
+							// Note: Outstanding balance will be recalculated by the system
+						},
+						include: {
+							application: {
+								select: {
+									id: true
+								}
+							}
+						}
+					});
+
+					// Create audit trail entry for early settlement rejection (admin payments page)
+					if (revertedLoan.applicationId) {
+						const formatCurrency = (amount: number): string => {
+							return new Intl.NumberFormat('en-MY', {
+								style: 'currency',
+								currency: 'MYR'
+							}).format(amount);
+						};
+
+						const quote = (transaction.metadata as any)?.quote;
+						await tx.loanApplicationHistory.create({
+							data: {
+								applicationId: revertedLoan.applicationId,
+								previousStatus: 'PENDING_EARLY_SETTLEMENT',
+								newStatus: 'ACTIVE',
+								changedBy: adminUserId || 'SYSTEM',
+								changeReason: 'Early Settlement Rejected (Admin Payments)',
+								notes: `Early settlement request rejected via admin payments page. Reason: ${reason}.${notes ? ` Admin notes: ${notes}` : ''} Settlement amount was: ${quote ? formatCurrency(SafeMath.toNumber(quote.totalSettlement)) : formatCurrency(paymentAmount)}.`,
+								metadata: {
+									kind: 'EARLY_SETTLEMENT_REJECTION_ADMIN',
+									transactionId: id,
+									rejectionReason: reason,
+									rejectedBy: adminUserId || 'SYSTEM',
+									rejectedAt: new Date().toISOString(),
+									rejectedVia: 'ADMIN_PAYMENTS_PAGE',
+									originalQuote: quote || null
+								}
+							}
+						});
+					}
+				}
+
 				// Create notification for user
+				const notificationTitle = isEarlySettlement ? "Early Settlement Rejected" : "Payment Rejected";
+				const notificationMessage = isEarlySettlement 
+					? `Your early settlement request of RM ${new Intl.NumberFormat("en-MY", {
+						minimumFractionDigits: 2,
+						maximumFractionDigits: 2,
+					}).format(paymentAmount)} has been rejected. Your loan remains active. Reason: ${reason}`
+					: `Your loan repayment of RM ${new Intl.NumberFormat("en-MY", {
+						minimumFractionDigits: 2,
+						maximumFractionDigits: 2,
+					}).format(paymentAmount)} has been rejected. Reason: ${reason}`;
+
 				await tx.notification.create({
 					data: {
 						userId: transaction.userId,
-						title: "Payment Rejected",
-						message: `Your loan repayment of RM ${new Intl.NumberFormat("en-MY", {
-							minimumFractionDigits: 2,
-							maximumFractionDigits: 2,
-						}).format(paymentAmount)} has been rejected. Reason: ${reason}`,
+						title: notificationTitle,
+						message: notificationMessage,
 						type: "SYSTEM",
 						priority: "HIGH",
 						metadata: {
@@ -7301,6 +7525,7 @@ router.post(
 							adminNotes: notes || "",
 							rejectedBy: adminUserId,
 							amount: paymentAmount,
+							isEarlySettlement: isEarlySettlement,
 						},
 					},
 				});
@@ -8640,6 +8865,13 @@ router.post(
 							},
 						},
 					},
+					repayments: {
+						select: {
+							id: true,
+							paymentType: true,
+							status: true,
+						},
+					},
 				},
 			});
 
@@ -8657,12 +8889,23 @@ router.post(
 				});
 			}
 
-			// Final check for outstanding balance
-			if (loan.outstandingBalance > 0) {
+			// Check if this is an early settlement case
+			const hasEarlySettlement = loan.repayments.some(
+				repayment => repayment.paymentType === 'EARLY_SETTLEMENT' && 
+				(repayment.status === 'COMPLETED' || repayment.status === 'PAID')
+			);
+
+			// Final check for outstanding balance (skip for early settlement cases)
+			if (loan.outstandingBalance > 0 && !hasEarlySettlement) {
 				return res.status(400).json({
 					success: false,
 					message: `Cannot discharge loan with outstanding balance of ${loan.outstandingBalance}`,
 				});
+			}
+
+			// For early settlement cases with remaining balance, log the details
+			if (hasEarlySettlement && loan.outstandingBalance > 0) {
+				console.log(`🔍 Discharging early settlement loan ${id} with remaining balance: ${loan.outstandingBalance} (due to interest discount)`);
 			}
 
 			// Approve discharge
@@ -8978,72 +9221,6 @@ router.get(
 	}
 );
 
-/**
- * @swagger
- * /api/admin/loans/{id}/repayments:
- *   get:
- *     summary: Get loan repayments (admin only)
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Loan ID
- *     responses:
- *       200:
- *         description: Loan repayments retrieved successfully
- *       404:
- *         description: Loan not found
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Access denied, admin privileges required
- *       500:
- *         description: Server error
- */
-router.get(
-	"/loans/:id/repayments",
-	authenticateToken,
-	isAdmin as unknown as RequestHandler,
-	async (req: AuthRequest, res: Response) => {
-		try {
-			const { id } = req.params;
-
-			// First check if loan exists
-			const loan = await prisma.loan.findUnique({
-				where: { id },
-			});
-
-			if (!loan) {
-				return res.status(404).json({
-					success: false,
-					message: "Loan not found",
-				});
-			}
-
-			const repayments = await prisma.loanRepayment.findMany({
-				where: { loanId: id },
-				orderBy: { dueDate: "asc" },
-			});
-
-			return res.json({
-				success: true,
-				repayments,
-			});
-		} catch (error) {
-			console.error("Error fetching loan repayments:", error);
-			return res.status(500).json({
-				success: false,
-				message: "Failed to fetch loan repayments",
-				error: (error as Error).message,
-			});
-		}
-	}
-);
 
 /**
  * @swagger
@@ -10277,7 +10454,7 @@ router.post(
 								where: { id: payment.loanId! },
 								include: {
 									repayments: {
-										where: { status: "PAID" },
+										where: { status: { in: ["PAID", "COMPLETED"] } },
 										orderBy: { dueDate: 'asc' }
 									},
 									application: {
@@ -10293,7 +10470,7 @@ router.post(
 								const nextPayment = await prisma.loanRepayment.findFirst({
 									where: {
 										loanId: payment.loanId!,
-										status: { not: "PAID" }
+										status: { notIn: ["PAID", "COMPLETED"] }
 									},
 									orderBy: { dueDate: 'asc' }
 								});

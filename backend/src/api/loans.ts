@@ -1,10 +1,384 @@
 import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
-import { TimeUtils } from "../lib/precisionUtils";
+import { TimeUtils, SafeMath } from "../lib/precisionUtils";
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// Early settlement settings keys
+const ES_KEYS = {
+  ENABLED: 'EARLY_SETTLEMENT_ENABLED',
+  LOCK_IN_MONTHS: 'EARLY_SETTLEMENT_LOCK_IN_MONTHS',
+  DISCOUNT_FACTOR: 'EARLY_SETTLEMENT_DISCOUNT_FACTOR',
+  FEE_TYPE: 'EARLY_SETTLEMENT_FEE_TYPE', // FIXED | PERCENT
+  FEE_VALUE: 'EARLY_SETTLEMENT_FEE_VALUE',
+  INCLUDE_LATE_FEES: 'EARLY_SETTLEMENT_INCLUDE_LATE_FEES',
+  ROUNDING_MODE: 'EARLY_SETTLEMENT_ROUNDING_MODE', // HALF_UP | HALF_EVEN
+} as const;
+
+type FeeType = 'FIXED' | 'PERCENT';
+
+async function ensureEarlySettlementSettings() {
+  const defaults = [
+    {
+      key: ES_KEYS.ENABLED,
+      category: 'EARLY_SETTLEMENT',
+      name: 'Enable Early Settlement',
+      description: 'Allow users to settle loans early',
+      dataType: 'BOOLEAN',
+      value: JSON.stringify(false),
+      options: null,
+    },
+    {
+      key: ES_KEYS.LOCK_IN_MONTHS,
+      category: 'EARLY_SETTLEMENT',
+      name: 'Lock-in Period (months)',
+      description: 'Number of months after disbursement before early settlement is allowed',
+      dataType: 'NUMBER',
+      value: JSON.stringify(3),
+      options: JSON.stringify({ min: 0, max: 120 }),
+    },
+    {
+      key: ES_KEYS.DISCOUNT_FACTOR,
+      category: 'EARLY_SETTLEMENT',
+      name: 'Interest Discount Factor',
+      description: 'Discount applied to remaining future interest (0.0 – 1.0)',
+      dataType: 'NUMBER',
+      value: JSON.stringify(0.0),
+      options: JSON.stringify({ min: 0, max: 1 }),
+    },
+    {
+      key: ES_KEYS.FEE_TYPE,
+      category: 'EARLY_SETTLEMENT',
+      name: 'Early Settlement Fee Type',
+      description: 'Whether the fee is fixed amount or percent of remaining principal',
+      dataType: 'ENUM',
+      value: JSON.stringify('FIXED'),
+      options: JSON.stringify({ FIXED: 'Fixed', PERCENT: 'Percent' }),
+    },
+    {
+      key: ES_KEYS.FEE_VALUE,
+      category: 'EARLY_SETTLEMENT',
+      name: 'Early Settlement Fee Value',
+      description: 'If FIXED: amount (MYR). If PERCENT: percent value (e.g., 2 for 2%).',
+      dataType: 'NUMBER',
+      value: JSON.stringify(0),
+      options: JSON.stringify({ min: 0, max: 100000 }),
+    },
+    {
+      key: ES_KEYS.INCLUDE_LATE_FEES,
+      category: 'EARLY_SETTLEMENT',
+      name: 'Include Unpaid Late Fees',
+      description: 'Include any accrued but unpaid late fees in settlement amount',
+      dataType: 'BOOLEAN',
+      value: JSON.stringify(true),
+      options: null,
+    },
+    {
+      key: ES_KEYS.ROUNDING_MODE,
+      category: 'EARLY_SETTLEMENT',
+      name: 'Rounding Mode',
+      description: 'Rounding mode for settlement amounts',
+      dataType: 'ENUM',
+      value: JSON.stringify('HALF_UP'),
+      options: JSON.stringify({ HALF_UP: 'Half Up', HALF_EVEN: 'Bankers' }),
+    },
+  ];
+
+  for (const d of defaults) {
+    const existing = await prisma.systemSettings.findUnique({ where: { key: d.key } });
+    if (!existing) {
+      await prisma.systemSettings.create({
+        data: {
+          key: d.key,
+          category: d.category,
+          name: d.name,
+          description: d.description,
+          dataType: d.dataType,
+          value: d.value,
+          options: d.options ? (d.options as any) : undefined,
+          isActive: true,
+          requiresRestart: false,
+          affectsExistingLoans: false,
+        },
+      });
+    }
+  }
+}
+
+async function getESSetting<T>(key: string): Promise<T> {
+  const s = await prisma.systemSettings.findUnique({ where: { key } });
+  if (!s) throw new Error(`Missing system setting: ${key}`);
+  return JSON.parse(s.value) as T;
+}
+
+function roundAmount(value: number, mode: 'HALF_UP' | 'HALF_EVEN'): number {
+  const safeValue = SafeMath.toNumber(value);
+  const factor = 100;
+  
+  if (mode === 'HALF_EVEN') {
+    // Bankers rounding
+    const n = safeValue * factor;
+    const f = Math.floor(n);
+    const frac = n - f;
+    if (frac > 0.5) return SafeMath.round(Math.round(n) / factor);
+    if (frac < 0.5) return SafeMath.round(f / factor);
+    // exactly .5
+    return SafeMath.round((f % 2 === 0 ? f : f + 1) / factor);
+  }
+  // HALF_UP
+  return SafeMath.round(safeValue);
+}
+
+async function computeEarlySettlementQuote(loanId: string) {
+  await ensureEarlySettlementSettings();
+
+  const enabled = await getESSetting<boolean>(ES_KEYS.ENABLED);
+  const lockInMonths = await getESSetting<number>(ES_KEYS.LOCK_IN_MONTHS);
+  const discountFactor = await getESSetting<number>(ES_KEYS.DISCOUNT_FACTOR);
+  const feeType = await getESSetting<string>(ES_KEYS.FEE_TYPE) as FeeType;
+  const feeValue = await getESSetting<number>(ES_KEYS.FEE_VALUE);
+  const includeLateFees = await getESSetting<boolean>(ES_KEYS.INCLUDE_LATE_FEES);
+  const roundingMode = await getESSetting<'HALF_UP'|'HALF_EVEN'>(ES_KEYS.ROUNDING_MODE);
+
+  if (!enabled) {
+    return { allowed: false, reason: 'Early settlement is currently disabled.' } as const;
+  }
+
+  const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+  if (!loan) {
+    throw new Error('Loan not found');
+  }
+  if (!['ACTIVE','OVERDUE','PENDING_DISCHARGE'].includes(loan.status)) {
+    return { allowed: false, reason: `Loan status ${loan.status} not eligible for early settlement.` } as const;
+  }
+
+  // Lock-in enforcement
+  if (loan.disbursedAt && lockInMonths > 0) {
+    const disb = new Date(loan.disbursedAt);
+    const unlock = new Date(disb);
+    unlock.setMonth(unlock.getMonth() + lockInMonths);
+    const now = new Date();
+    if (now < unlock) {
+      return { allowed: false, reason: `Early settlement available after ${unlock.toISOString().split('T')[0]}.` } as const;
+    }
+  }
+
+  // Remaining principal: sum of unpaid principalAmount from loan_repayments
+  // This accounts for partial payments and excludes already paid principal
+  const unpaidRepayments = await prisma.loanRepayment.findMany({
+    where: {
+      loanId,
+      status: { in: ['PENDING', 'PARTIAL'] },
+    },
+    select: { 
+      principalAmount: true,
+      principalPaid: true,
+    },
+  });
+  
+  const remainingPrincipal = unpaidRepayments.reduce((sum, r) => {
+    const unpaidPrincipal = SafeMath.subtract(
+      SafeMath.toNumber(r.principalAmount || 0),
+      SafeMath.toNumber(r.principalPaid || 0)
+    );
+    return SafeMath.add(sum, SafeMath.max(0, unpaidPrincipal));
+  }, 0);
+
+  // Remaining future interest: sum interestAmount of unpaid repayments with dueDate >= Malaysia start of day
+  const todayMY = TimeUtils.malaysiaStartOfDay();
+  const futureRepayments = await prisma.loanRepayment.findMany({
+    where: {
+      loanId,
+      status: { in: ['PENDING','PARTIAL'] },
+      dueDate: { gte: todayMY },
+    },
+    select: { interestAmount: true },
+  });
+  const remainingInterest = futureRepayments.reduce((sum, r) => 
+    SafeMath.add(sum, SafeMath.toNumber(r.interestAmount || 0)), 0);
+  const discountAmount = SafeMath.multiply(remainingInterest, SafeMath.toNumber(discountFactor));
+
+  // Fee computation (safe math)
+  const feeAmount = feeType === 'PERCENT' 
+    ? SafeMath.percentage(remainingPrincipal, SafeMath.toNumber(feeValue))
+    : SafeMath.toNumber(feeValue);
+
+  // Unpaid late fees (optional)
+  let lateFeesAmount = 0;
+  if (includeLateFees) {
+    const unpaidLF = await prisma.$queryRawUnsafe(
+      `SELECT COALESCE(SUM(GREATEST(lr."lateFeeAmount" - COALESCE(lr."lateFeesPaid",0),0)),0) AS unpaid
+       FROM loan_repayments lr WHERE lr."loanId" = $1`, loanId
+    ) as any[];
+    lateFeesAmount = SafeMath.toNumber(unpaidLF[0]?.unpaid || 0);
+  }
+
+  // Calculate total settlement: remainingPrincipal + remainingInterest - discountAmount + feeAmount + lateFeesAmount
+  const principalPlusInterest = SafeMath.add(remainingPrincipal, remainingInterest);
+  const afterDiscount = SafeMath.subtract(principalPlusInterest, discountAmount);
+  const withFees = SafeMath.add(afterDiscount, feeAmount);
+  const rawTotal = SafeMath.add(withFees, lateFeesAmount);
+  const totalSettlement = SafeMath.max(0, roundAmount(rawTotal, roundingMode));
+
+  return {
+    allowed: true,
+    quote: {
+      remainingPrincipal: roundAmount(remainingPrincipal, roundingMode),
+      remainingInterest: roundAmount(remainingInterest, roundingMode),
+      discountFactor,
+      discountAmount: roundAmount(discountAmount, roundingMode),
+      feeType,
+      feeValue,
+      feeAmount: roundAmount(feeAmount, roundingMode),
+      includeLateFees,
+      lateFeesAmount: roundAmount(lateFeesAmount, roundingMode),
+      totalSettlement,
+      computedAt: new Date().toISOString(),
+    },
+  } as const;
+}
+
+// Get an early settlement quote
+router.post('/:id/early-settlement/quote', authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const loanId = req.params.id;
+
+    // Validate loan ownership
+    const loan = await prisma.loan.findFirst({ where: { id: loanId, userId } });
+    if (!loan) return res.status(404).json({ success: false, message: 'Loan not found' });
+
+    const result = await computeEarlySettlementQuote(loanId);
+    if (!result.allowed) return res.status(400).json({ success: false, message: result.reason });
+
+    return res.json({ success: true, data: result.quote });
+  } catch (err: any) {
+    console.error('Early settlement quote error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to compute quote' });
+  }
+});
+
+// Create an early settlement request (pending payment transaction)
+router.post('/:id/early-settlement/request', authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const loanId = req.params.id;
+    const { reference, description } = req.body || {};
+
+    // Validate loan
+    const loan = await prisma.loan.findFirst({ where: { id: loanId, userId, status: { in: ['ACTIVE','OVERDUE','PENDING_DISCHARGE'] } } });
+    if (!loan) return res.status(404).json({ success: false, message: 'Loan not found or not eligible' });
+
+    // Compute quote
+    const result = await computeEarlySettlementQuote(loanId);
+    if (!result.allowed) return res.status(400).json({ success: false, message: result.reason });
+    const q = result.quote;
+
+    // Get wallet
+    const wallet = await prisma.wallet.findUnique({ where: { userId } });
+    if (!wallet) return res.status(404).json({ success: false, message: 'Wallet not found' });
+
+    // Prevent duplicate pending early settlement
+    const existingPending = await prisma.walletTransaction.findFirst({
+      where: {
+        userId,
+        loanId,
+        status: 'PENDING',
+        type: 'LOAN_REPAYMENT',
+        description: { contains: 'Early settlement' },
+      },
+    });
+    if (existingPending) return res.status(400).json({ success: false, message: 'There is already a pending early settlement request for this loan.' });
+
+    // Create the wallet transaction and update loan status in a transaction
+    const walletTxResult = await prisma.$transaction(async (tx) => {
+      // Create the wallet transaction
+      const walletTx = await tx.walletTransaction.create({
+        data: {
+          userId,
+          walletId: wallet.id,
+          loanId,
+          type: 'LOAN_REPAYMENT',
+          amount: -q.totalSettlement,
+          status: 'PENDING',
+          description: description || `Early settlement request for loan ${loanId}`,
+          reference: reference || `ES-${Date.now()}`,
+          metadata: {
+            kind: 'EARLY_SETTLEMENT',
+            quote: q,
+          },
+        },
+      });
+
+      // Update loan status to PENDING_EARLY_SETTLEMENT
+      const updatedLoan = await tx.loan.update({
+        where: { id: loanId },
+        data: {
+          status: 'PENDING_EARLY_SETTLEMENT',
+          updatedAt: new Date(),
+        },
+        include: {
+          application: {
+            select: {
+              id: true
+            }
+          }
+        }
+      });
+
+      // Create audit trail entry for early settlement request
+      if (updatedLoan.applicationId) {
+        await tx.loanApplicationHistory.create({
+          data: {
+            applicationId: updatedLoan.applicationId,
+            previousStatus: 'ACTIVE',
+            newStatus: 'PENDING_EARLY_SETTLEMENT',
+            changedBy: userId,
+            changeReason: 'Early Settlement Requested',
+            notes: `User requested early settlement. Settlement amount: ${q.totalSettlement.toFixed(2)}. Interest discount: ${q.discountAmount.toFixed(2)}. Early settlement fee: ${(q.feeAmount || 0).toFixed(2)}. Net savings: ${(q.discountAmount - (q.feeAmount || 0)).toFixed(2)}.`,
+            metadata: {
+              kind: 'EARLY_SETTLEMENT_REQUEST',
+              transactionId: walletTx.id,
+              settlementDetails: {
+                totalSettlement: q.totalSettlement,
+                remainingPrincipal: q.remainingPrincipal,
+                remainingInterest: q.remainingInterest,
+                discountAmount: q.discountAmount,
+                earlySettlementFee: q.feeAmount || 0,
+                lateFeesAmount: q.lateFeesAmount || 0,
+                interestSaved: q.discountAmount,
+                netSavings: q.discountAmount - (q.feeAmount || 0)
+              },
+              requestedBy: userId,
+              requestedAt: new Date().toISOString()
+            }
+          }
+        });
+      }
+
+      return walletTx;
+    });
+
+    // Notify user
+    await prisma.notification.create({
+      data: {
+        userId,
+        title: 'Early Settlement Submitted',
+        message: `Your early settlement request for ${q.totalSettlement.toFixed(2)} has been submitted and is awaiting approval.`,
+        type: 'SYSTEM',
+        priority: 'HIGH',
+        metadata: { loanId, transactionId: walletTxResult.id },
+      },
+    });
+
+    return res.status(201).json({ success: true, data: { transactionId: walletTxResult.id, quote: q } });
+  } catch (err: any) {
+    console.error('Early settlement request error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to create early settlement request' });
+  }
+});
 
 /**
  * @swagger
@@ -81,6 +455,7 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 						"ACTIVE",
 						"OVERDUE",
 						"PENDING_DISCHARGE",
+						"PENDING_EARLY_SETTLEMENT",
 						"DISCHARGED",
 					], // Include all loan statuses for dashboard
 				},
@@ -97,23 +472,19 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 					},
 				},
 				repayments: {
+					include: {
+						receipts: {
+							select: {
+								id: true,
+								receiptNumber: true,
+								filePath: true,
+								generatedBy: true,
+								generatedAt: true,
+							},
+						},
+					},
 					orderBy: {
 						dueDate: "asc",
-					},
-					// Include all repayments for chart calculation
-					select: {
-						id: true,
-						amount: true,
-						status: true,
-						dueDate: true,
-						paidAt: true,
-						createdAt: true,
-						actualAmount: true,
-						paymentType: true,
-						installmentNumber: true,
-						lateFeeAmount: true,
-						lateFeesPaid: true,
-						principalPaid: true,
 					},
 				},
 			},
@@ -125,7 +496,7 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 		// Ensure outstanding balances are accurate by recalculating them for all active loans
 		// This ensures single source of truth even if there were any inconsistencies
 		for (const loan of loans.filter(
-			(l) => l.status === "ACTIVE" || l.status === "OVERDUE" || l.status === "PENDING_DISCHARGE"
+			(l) => l.status === "ACTIVE" || l.status === "OVERDUE" || l.status === "PENDING_DISCHARGE" || l.status === "PENDING_EARLY_SETTLEMENT"
 		)) {
 			await prisma.$transaction(async (tx) => {
 				// Import the calculation function from wallet API
@@ -318,7 +689,7 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 					totalRepaid,
 					progressPercentage:
 						Math.round(progressPercentage * 100) / 100,
-					canRepay: loan.outstandingBalance > 0,
+					canRepay: loan.outstandingBalance > 0 && loan.status !== 'PENDING_EARLY_SETTLEMENT' && loan.status !== 'PENDING_DISCHARGE',
 					overdueInfo,
 					nextPaymentInfo,
 				};

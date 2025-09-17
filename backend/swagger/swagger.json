@@ -2509,7 +2509,7 @@
     },
     "/api/admin/loans/{id}/repayments": {
       "get": {
-        "summary": "Get loan repayments (admin only)",
+        "summary": "Get loan repayment schedule and history (admin only)",
         "tags": [
           "Admin"
         ],
@@ -2531,7 +2531,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Loan repayments retrieved successfully"
+            "description": "Loan repayment data"
           },
           "401": {
             "description": "Unauthorized"

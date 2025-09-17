@@ -130,11 +130,15 @@ function PaymentsContent() {
 	const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 	const [searchTerm, setSearchTerm] = useState("");
 	const [statusFilter, setStatusFilter] = useState("PENDING");
+	const [activeTab, setActiveTab] = useState<"repayments" | "early-settlement">("repayments");
 	const [filterCounts, setFilterCounts] = useState({
 		all: 0,
 		PENDING: 0,
 		APPROVED: 0,
 		REJECTED: 0,
+	});
+	const [earlySettlementCounts, setEarlySettlementCounts] = useState({
+		PENDING: 0,
 	});
 	const [refreshing, setRefreshing] = useState(false);
 	const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -156,6 +160,14 @@ function PaymentsContent() {
 	const [csvResults, setCSVResults] = useState<any>(null);
 	const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
 	const [showMatchingResults, setShowMatchingResults] = useState(false);
+
+	// Early settlement states
+	const [earlySettlements, setEarlySettlements] = useState<any[]>([]);
+	const [selectedEarlySettlement, setSelectedEarlySettlement] = useState<any>(null);
+	const [showEarlySettlementApprovalModal, setShowEarlySettlementApprovalModal] = useState(false);
+	const [showEarlySettlementRejectionModal, setShowEarlySettlementRejectionModal] = useState(false);
+	const [earlySettlementNotes, setEarlySettlementNotes] = useState("");
+	const [earlySettlementRejectionReason, setEarlySettlementRejectionReason] = useState("");
 
 	// Manual payment form states
 	const [manualPaymentForm, setManualPaymentForm] = useState({

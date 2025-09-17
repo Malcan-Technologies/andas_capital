@@ -674,6 +674,8 @@ function SettingsPageContent() {
 				return "📱";
 			case "LOAN_LIMITS":
 				return "📊";
+			case "EARLY_SETTLEMENT":
+				return "💰";
 			default:
 				return "⚙️";
 		}
@@ -689,10 +691,26 @@ function SettingsPageContent() {
 				return "Late Fee Settings";
 			case "NOTIFICATIONS":
 				return "Notification Settings";
+			case "EARLY_SETTLEMENT":
+				return "Early Settlement Settings";
 			default:
 				return category.split("_").map(word => 
 					word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
 				).join(" ");
+		}
+	};
+
+	// Helper function to check if a category is disabled
+	const isCategoryDisabled = (category: string, categorySettings: SystemSetting[]) => {
+		switch (category) {
+			case "EARLY_SETTLEMENT":
+				const earlySettlementSetting = categorySettings.find(s => s.key === "EARLY_SETTLEMENT_ENABLED");
+				return earlySettlementSetting ? !earlySettlementSetting.value : true;
+			case "LATE_FEES":
+				const lateFeeSetting = categorySettings.find(s => s.key === "ENABLE_LATE_FEE_GRACE_PERIOD");
+				return lateFeeSetting ? !lateFeeSetting.value : true;
+			default:
+				return false;
 		}
 	};
 
@@ -1037,12 +1055,25 @@ function SettingsPageContent() {
 			<div className="space-y-6">
 				{/* Settings Categories */}
 				<div className="space-y-4">
-					{filteredSettings.map(([category, categorySettings]) => (
-						<div key={category} className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+					{filteredSettings.map(([category, categorySettings]) => {
+						const isDisabled = isCategoryDisabled(category, categorySettings);
+						return (
+						<div key={category} className={`bg-gradient-to-br backdrop-blur-md border rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${
+							isDisabled 
+								? "from-gray-700/40 to-gray-800/40 border-gray-600/20 opacity-60" 
+								: "from-gray-800/70 to-gray-900/70 border-gray-700/30"
+						}`}>
 							<div className="px-6 py-4 border-b border-gray-700/30">
-								<h2 className="text-lg font-semibold text-white flex items-center">
+								<h2 className={`text-lg font-semibold flex items-center ${
+									isDisabled ? "text-gray-400" : "text-white"
+								}`}>
 									<span className="mr-2 text-2xl">{getCategoryIcon(category)}</span>
 									{getCategoryDisplayName(category)}
+									{isDisabled && (
+										<span className="ml-2 text-xs bg-gray-600/50 text-gray-400 px-2 py-1 rounded-full">
+											Disabled
+										</span>
+									)}
 								</h2>
 								{/* Add subtitle explanations for specific categories */}
 								{category === "LOAN_CALCULATION" && (
@@ -1057,9 +1088,75 @@ function SettingsPageContent() {
 										on payment schedules and affects pro-ration calculations for first payments.
 									</p>
 								)}
+								{category === "EARLY_SETTLEMENT" && (
+									<div className="flex items-center justify-between mt-2">
+										<p className={`text-sm leading-relaxed ${
+											isDisabled ? "text-gray-500" : "text-gray-400"
+										}`}>
+											Configure early settlement options for borrowers. Controls eligibility, lock-in periods, 
+											discount factors, fees, and calculation methods for early loan discharge requests.
+										</p>
+										{/* Main Enable Toggle */}
+										{(() => {
+											const mainToggleSetting = categorySettings.find(s => s.key === "EARLY_SETTLEMENT_ENABLED");
+											if (!mainToggleSetting) return null;
+											
+											return (
+												<div className="flex items-center space-x-3 ml-6">
+													<span className="text-sm font-medium text-gray-300">Enable Feature</span>
+													<label className="relative inline-flex items-center cursor-pointer">
+														<input
+															type="checkbox"
+															checked={mainToggleSetting.value}
+															onChange={(e) => handleSettingChange(mainToggleSetting.key, e.target.checked)}
+															className="sr-only peer"
+														/>
+														<div className="w-12 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-400 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-600 shadow-lg"></div>
+													</label>
+												</div>
+											);
+										})()}
+									</div>
+								)}
+								{category === "LATE_FEES" && (
+									<div className="flex items-center justify-between mt-2">
+										<p className={`text-sm leading-relaxed ${
+											isDisabled ? "text-gray-500" : "text-gray-400"
+										}`}>
+											Configure late fee calculations and grace periods for overdue payments. Controls when and how late fees are applied to loan repayments.
+										</p>
+										{/* Main Enable Toggle */}
+										{(() => {
+											const mainToggleSetting = categorySettings.find(s => s.key === "ENABLE_LATE_FEE_GRACE_PERIOD");
+											if (!mainToggleSetting) return null;
+											
+											return (
+												<div className="flex items-center space-x-3 ml-6">
+													<span className="text-sm font-medium text-gray-300">Enable Late Fees</span>
+													<label className="relative inline-flex items-center cursor-pointer">
+														<input
+															type="checkbox"
+															checked={mainToggleSetting.value}
+															onChange={(e) => handleSettingChange(mainToggleSetting.key, e.target.checked)}
+															className="sr-only peer"
+														/>
+														<div className="w-12 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-400 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-red-600 shadow-lg"></div>
+													</label>
+												</div>
+											);
+										})()}
+									</div>
+								)}
 							</div>
 
-							<div className="p-6 space-y-6">
+							<div className={`p-6 space-y-6 relative ${isDisabled ? "pointer-events-none" : ""}`}>
+								{isDisabled && (
+									<div className="absolute inset-0 bg-gray-900/20 rounded-lg flex items-center justify-center">
+										<div className="bg-gray-800/80 text-gray-400 px-4 py-2 rounded-lg text-sm font-medium backdrop-blur-sm">
+											Enable feature to configure settings
+										</div>
+									</div>
+								)}
 								{/* Special handling for Payment Schedule category to group related settings */}
 								{category === "PAYMENT_SCHEDULE" ? (
 									<div className="space-y-8">
@@ -1162,41 +1259,8 @@ function SettingsPageContent() {
 										})()}
 									</div>
 								) : category === "LATE_FEES" ? (
-									/* Special handling for Late Fee category to ensure enabled setting comes first */
-									<div className="space-y-6">
-										{/* First show the enable/disable toggle */}
-										{categorySettings.filter(s => s.key === "ENABLE_LATE_FEE_GRACE_PERIOD").map((setting) => (
-											<div key={setting.key} className="border-b border-gray-700/30 pb-6">
-												<div className="flex items-start justify-between">
-													<div className="flex-1 min-w-0 mr-6">
-														<div className="flex items-center space-x-2 mb-2">
-															<h3 className="text-base font-medium text-white">
-																{setting.name}
-															</h3>
-															{setting.requiresRestart && (
-																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-																	Requires Restart
-																</span>
-															)}
-															{setting.affectsExistingLoans && (
-																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-																	Affects Existing Loans
-																</span>
-															)}
-														</div>
-														<p className="text-sm text-gray-300 mb-3">
-															{setting.description}
-														</p>
-													</div>
-													<div className="flex-shrink-0 w-64">
-														{renderSettingInput(setting)}
-													</div>
-												</div>
-											</div>
-										))}
-										
-										{/* Then show other late fee settings */}
-										{categorySettings.filter(s => s.key !== "ENABLE_LATE_FEE_GRACE_PERIOD").map((setting) => (
+									/* Late Fees - exclude main toggle from regular settings */
+									categorySettings.filter(s => s.key !== "ENABLE_LATE_FEE_GRACE_PERIOD").map((setting) => (
 											<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
 												<div className="flex items-start justify-between">
 													<div className="flex-1 min-w-0 mr-6">
@@ -1229,8 +1293,56 @@ function SettingsPageContent() {
 													</div>
 												</div>
 											</div>
-										))}
-									</div>
+										))
+								) : category === "EARLY_SETTLEMENT" ? (
+									/* Early Settlement - exclude main toggle from regular settings */
+									categorySettings.filter(s => s.key !== "EARLY_SETTLEMENT_ENABLED").map((setting) => (
+										<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
+											<div className="flex items-start justify-between">
+												<div className="flex-1 min-w-0 mr-6">
+													<div className="flex items-center space-x-2 mb-2">
+														<h3 className="text-base font-medium text-white">
+															{setting.name}
+														</h3>
+														{setting.requiresRestart && (
+															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
+																Requires Restart
+															</span>
+														)}
+														{setting.affectsExistingLoans && (
+															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
+																Affects Existing Loans
+															</span>
+														)}
+													</div>
+													<p className="text-sm text-gray-300 mb-3">
+														{setting.description}
+													</p>
+													{setting.options && setting.dataType === "ENUM" && (
+														<div className="text-xs text-gray-400">
+															<strong>Available Options:</strong>
+															<ul className="mt-2 space-y-2">
+																{Object.entries(setting.options).map(([key, option]: [string, any]) => (
+																	<li key={key} className="ml-2 p-2 bg-gray-800/50 rounded border-l-2 border-gray-600">
+																		<strong className="text-gray-200">{option.label}:</strong>
+																		<div className="text-gray-400 mt-1">{option.description}</div>
+																	</li>
+																))}
+															</ul>
+														</div>
+													)}
+												</div>
+												<div className="flex-shrink-0 w-64">
+													{renderSettingInput(setting)}
+													{setting.options && setting.dataType === "NUMBER" && (
+														<div className="mt-1 text-xs text-gray-400">
+															Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+														</div>
+													)}
+												</div>
+											</div>
+										</div>
+									))
 								) : (
 									/* Standard layout for other categories */
 									categorySettings.map((setting) => (
@@ -1283,7 +1395,8 @@ function SettingsPageContent() {
 								)}
 							</div>
 						</div>
-					))}
+						);
+					})}
 				</div>
 
 				{/* Footer Actions */}

@@ -148,7 +148,7 @@ export class ReceiptService {
       throw new Error(`Repayment with ID ${repaymentId} not found`);
     }
 
-    if (repayment.status !== 'COMPLETED' && repayment.status !== 'PARTIAL') {
+    if (repayment.status !== 'COMPLETED' && repayment.status !== 'PARTIAL' && repayment.status !== 'PAID') {
       throw new Error(`Cannot generate receipt for repayment with status: ${repayment.status}`);
     }
 
@@ -374,6 +374,171 @@ export class ReceiptService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * Generate PDF receipt for early settlement
+   */
+  static async generateEarlySettlementReceipt(
+    transactionId: string,
+    quote: any,
+    generatedBy: string
+  ): Promise<{
+    receiptId: string;
+    receiptNumber: string;
+    filePath: string;
+  }> {
+    try {
+      // Ensure receipts directory exists
+      await this.ensureReceiptsDirectory();
+
+      // Get transaction details
+      const transaction = await prisma.walletTransaction.findUnique({
+        where: { id: transactionId },
+        include: {
+          user: true,
+          loan: {
+            include: {
+              application: {
+                include: {
+                  product: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!transaction) {
+        throw new Error(`Transaction ${transactionId} not found`);
+      }
+
+      // Check if receipt already exists
+      const existingReceipt = await prisma.paymentReceipt.findFirst({
+        where: {
+          metadata: {
+            path: ['earlySettlementTransactionId'],
+            equals: transactionId
+          }
+        }
+      });
+
+      if (existingReceipt) {
+        console.log(`Early settlement receipt already exists for transaction ${transactionId}: ${existingReceipt.receiptNumber}`);
+        return {
+          receiptId: existingReceipt.id,
+          receiptNumber: existingReceipt.receiptNumber,
+          filePath: existingReceipt.filePath,
+        };
+      }
+
+      // Get company settings
+      const companySettings = await this.getCompanySettings();
+
+      // Generate receipt number
+      const receiptNumber = await this.generateReceiptNumber();
+
+      // Prepare receipt data for early settlement
+      const receiptData: ReceiptData = {
+        receiptNumber,
+        generatedAt: new Date().toISOString(),
+        customer: {
+          id: transaction.userId,
+          name: transaction.user.fullName || 'N/A',
+          email: transaction.user.email || 'N/A',
+          phone: transaction.user.phoneNumber || 'N/A',
+        },
+        loan: {
+          id: transaction.loan?.id || 'N/A',
+          principalAmount: transaction.loan?.principalAmount || 0,
+          interestRate: transaction.loan?.interestRate || 0,
+          term: transaction.loan?.term || 0,
+        },
+        payment: {
+          dueDate: new Date().toISOString(),
+          principalAmount: quote.remainingPrincipal,
+          interestAmount: quote.remainingInterest,
+          lateFeeAmount: quote.lateFeesAmount || 0,
+          lateFeesPaid: 0,
+          totalAmount: quote.totalSettlement,
+          paidAmount: Math.abs(transaction.amount),
+          paymentDate: new Date().toISOString(),
+          paymentMethod: 'Early Settlement',
+          reference: transaction.reference || 'N/A',
+        },
+        transaction: {
+          processedAt: new Date().toISOString(),
+          createdAt: transaction.createdAt.toISOString(),
+        },
+        company: {
+          name: companySettings.companyName,
+          address: companySettings.companyAddress,
+          regNo: companySettings.companyRegNo ?? undefined,
+          licenseNo: companySettings.licenseNo ?? undefined,
+          phone: companySettings.contactPhone ?? undefined,
+          email: companySettings.contactEmail ?? undefined,
+          taxLabel: companySettings.taxLabel,
+          footerNote: companySettings.footerNote ?? undefined,
+        },
+      };
+
+      // Generate PDF
+      const receiptDocument = PaymentReceiptDocument({ data: receiptData }) as React.ReactElement;
+      const pdfBuffer = await renderToBuffer(receiptDocument);
+      
+      // Save PDF file
+      const fileName = `early-settlement-${receiptNumber}.pdf`;
+      const filePath = path.join(this.RECEIPTS_DIR, fileName);
+      await fs.writeFile(filePath, pdfBuffer);
+
+      // Create database record (create a dummy repayment record for early settlement)
+      const dummyRepayment = await prisma.loanRepayment.create({
+        data: {
+          loanId: transaction.loanId!,
+          amount: quote.totalSettlement,
+          principalAmount: quote.remainingPrincipal,
+          interestAmount: 0, // No interest for early settlement
+          status: 'COMPLETED',
+          dueDate: new Date(),
+          paidAt: new Date(),
+          actualAmount: quote.totalSettlement,
+          principalPaid: quote.remainingPrincipal,
+          paymentType: 'EARLY_SETTLEMENT',
+          scheduledAmount: quote.totalSettlement,
+          lateFeeAmount: quote.lateFeesAmount || 0,
+          lateFeesPaid: quote.lateFeesAmount || 0,
+          installmentNumber: 999 // Special number for early settlement
+        }
+      });
+
+      // Create receipt record
+      const receipt = await prisma.paymentReceipt.create({
+        data: {
+          repaymentId: dummyRepayment.id,
+          receiptNumber,
+          filePath,
+          generatedBy,
+          metadata: {
+            earlySettlementTransactionId: transactionId,
+            quote: quote,
+            paymentMethod: 'Early Settlement',
+            companyInfo: companySettings,
+            isEarlySettlement: true
+          },
+        },
+      });
+
+      console.log(`Early settlement receipt generated: ${receiptNumber} for transaction ${transactionId}`);
+
+      return {
+        receiptId: receipt.id,
+        receiptNumber: receipt.receiptNumber,
+        filePath: receipt.filePath,
+      };
+    } catch (error) {
+      console.error('Error generating early settlement receipt:', error);
+      throw error;
+    }
   }
 
   /**

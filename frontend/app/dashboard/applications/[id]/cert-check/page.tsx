@@ -448,8 +448,8 @@ export default function CertCheckPage() {
 				}>(`/api/loan-applications/${application.id}/signing-url`);
 
 				if (signingResponse?.success && signingResponse?.data?.signingUrl) {
-					// Open existing signing URL
-					window.open(signingResponse.data.signingUrl, '_blank');
+					// Navigate to existing signing URL
+					window.location.href = signingResponse.data.signingUrl;
 					return;
 				}
 			} catch (error) {
@@ -476,11 +476,8 @@ export default function CertCheckPage() {
 			});
 
 			if (response?.success && response?.data?.signUrl) {
-				// Open DocuSeal signing URL in a new tab
-				window.open(response.data.signUrl, '_blank');
-				
-				// Navigate back to dashboard to see updated status
-				router.push("/dashboard/loans?tab=applications");
+				// Navigate to DocuSeal signing URL
+				window.location.href = response.data.signUrl;
 			} else {
 				throw new Error(response?.message || 'Failed to initiate document signing');
 			}

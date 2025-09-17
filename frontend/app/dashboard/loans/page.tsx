@@ -85,6 +85,7 @@ interface Loan {
 	nextPaymentDue: string;
 	status: string;
 	disbursedAt: string;
+	dischargedAt?: string;
 	totalRepaid?: number;
 	progressPercentage?: number;
 	canRepay?: boolean;
@@ -277,6 +278,10 @@ function LoansPageContent() {
 	const [repaymentAmount, setRepaymentAmount] = useState<string>("");
 	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"FPX" | "BANK_TRANSFER">("BANK_TRANSFER");
 	const [repaymentError, setRepaymentError] = useState<string>("");
+	const [isEarlySettlement, setIsEarlySettlement] = useState(false);
+	const [earlySettlementQuote, setEarlySettlementQuote] = useState<any>(null);
+	const [earlySettlementError, setEarlySettlementError] = useState<string>("");
+	const [earlySettlementAvailableDate, setEarlySettlementAvailableDate] = useState<string>("");
 
 	// Late fee information
 	const [lateFeeInfo, setLateFeeInfo] = useState<{
@@ -500,6 +505,34 @@ function LoansPageContent() {
 		}
 	}, [searchParams]);
 
+	// Auto-refresh loans every 10 seconds if there are pending early settlement requests
+	useEffect(() => {
+		const hasPendingEarlySettlement = loans.some(loan => 
+			// Check if loan has pending early settlement status
+			loan.status === 'PENDING_EARLY_SETTLEMENT' || loan.status === 'PENDING_DISCHARGE'
+		);
+
+		if (hasPendingEarlySettlement) {
+			const interval = setInterval(async () => {
+				console.log('Auto-refreshing loans for pending early settlement/discharge updates...');
+				// Force refresh with cache busting
+				await loadLoansAndSummary();
+				// Also refresh selected loan details if it's one of the pending loans
+				if (selectedLoan && (selectedLoan.status === 'PENDING_EARLY_SETTLEMENT' || selectedLoan.status === 'PENDING_DISCHARGE')) {
+					// Force refresh the selected loan by finding it in the updated loans list
+					const updatedLoans = await fetchWithTokenRefresh<{ loans: Loan[] }>("/api/loans");
+					const updatedSelectedLoan = updatedLoans.loans.find(l => l.id === selectedLoan.id);
+					if (updatedSelectedLoan) {
+						console.log('Force refreshing selected loan repayments data...');
+						setSelectedLoan(updatedSelectedLoan);
+					}
+				}
+			}, 10000); // Refresh every 10 seconds (more frequent)
+
+			return () => clearInterval(interval);
+		}
+	}, [loans, selectedLoan]);
+
 	// Combined function to load both loans and summary data efficiently
 	const loadLoansAndSummary = async () => {
 		try {
@@ -514,31 +547,24 @@ function LoansPageContent() {
 				setLoanSummary(walletData.loanSummary);
 			}
 
-			// Set loans data
+			// Set loans data - repayments with receipts are now included in the main API response
 			if (loansData?.loans) {
-				// Load full repayment schedules for all loans
-				const loansWithFullRepayments = await Promise.all(
-					loansData.loans.map(async (loan) => {
-						try {
-							const repaymentData = await fetchWithTokenRefresh<{
-								repayments: LoanRepayment[];
-							}>(`/api/loans/${loan.id}/repayments`);
+				// Debug logging for pending discharge loans
+				loansData.loans.forEach(loan => {
+					if (loan.status === 'PENDING_DISCHARGE') {
+						console.log(`🔍 Repayments for PENDING_DISCHARGE loan ${loan.id}:`, 
+							loan.repayments?.map(r => ({
+								id: r.id,
+								status: r.status,
+								amount: r.amount,
+								paymentType: r.paymentType,
+								receipts: r.receipts?.length || 0
+							}))
+						);
+					}
+				});
 
-							return {
-								...loan,
-								repayments: repaymentData?.repayments || [],
-							};
-						} catch (error) {
-							console.error(
-								`Error loading repayments for loan ${loan.id}:`,
-								error
-							);
-							return loan; // Return loan without repayments if error
-						}
-					})
-				);
-
-				setLoans(loansWithFullRepayments);
+				setLoans(loansData.loans);
 			}
 		} catch (error) {
 			console.error("Error loading loans and summary:", error);
@@ -734,38 +760,56 @@ function LoansPageContent() {
 		try {
 			const amount = parseFloat(repaymentAmount);
 
-			// Call the API to create the bank transfer payment transaction
-			const response = await fetchWithTokenRefresh(
-				"/api/wallet/repay-loan",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						loanId: selectedLoan.id,
-						amount,
-						paymentMethod: "FRESH_FUNDS",
-						reference: currentPaymentReference,
-						description: `Loan repayment - ${formatCurrency(
-							amount
-						)}`,
-					}),
-				}
-			);
+			let response: any;
+			if (isEarlySettlement && earlySettlementQuote) {
+				// Create early settlement request
+				response = await fetchWithTokenRefresh(
+					`/api/loans/${selectedLoan.id}/early-settlement/request`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							reference: currentPaymentReference,
+							description: `Early settlement - ${formatCurrency(amount)}`,
+						}),
+					}
+				) as any;
+			} else {
+				// Standard repayment
+				response = await fetchWithTokenRefresh(
+					"/api/wallet/repay-loan",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							loanId: selectedLoan.id,
+							amount,
+							paymentMethod: "FRESH_FUNDS",
+							reference: currentPaymentReference,
+							description: `Loan repayment - ${formatCurrency(amount)}`,
+						}),
+					}
+				);
+			}
 
 			if (response) {
-				// Bank transfer payment submitted successfully
+				// Payment/Request submitted successfully
 				setShowPaymentMethodModal(false);
 				setCurrentPaymentReference("");
 				setRepaymentAmount("");
 				setSelectedLoan(null);
+				setIsEarlySettlement(false);
+				setEarlySettlementQuote(null);
 
 				// Reload data to show updated status
 				await loadLoansAndSummary();
 
 				alert(
-					"Payment submitted successfully! Your transaction is pending approval."
+					isEarlySettlement
+						? "Early settlement request submitted! Pending admin approval."
+						: "Payment submitted successfully! Your transaction is pending approval."
 				);
 			}
 		} catch (error) {
@@ -776,6 +820,12 @@ function LoansPageContent() {
 
 	const handleAutoFillMonthlyPayment = async () => {
 		if (selectedLoan) {
+			// Reset early settlement state when switching to regular payment
+			setIsEarlySettlement(false);
+			setEarlySettlementQuote(null);
+			setEarlySettlementError("");
+			setEarlySettlementAvailableDate("");
+			
 			// Use the next payment info from backend instead of calculating
 			const nextPayment = selectedLoan.nextPaymentInfo || {
 				amount: selectedLoan.monthlyPayment,
@@ -796,6 +846,10 @@ function LoansPageContent() {
 	const handleLoanSelection = async (loan: Loan) => {
 		setSelectedLoan(loan);
 		setRepaymentError("");
+		setIsEarlySettlement(false);
+		setEarlySettlementQuote(null);
+		setEarlySettlementError("");
+		setEarlySettlementAvailableDate("");
 		// Load late fee info if loan has overdue payments
 		if (loan.overdueInfo?.hasOverduePayments) {
 			await loadLateFeeInfo(loan.id);
@@ -825,6 +879,103 @@ function LoansPageContent() {
 		} else {
 			return `RM ${amount.toFixed(0)}`;
 		}
+	};
+
+	const handleEarlySettlementClick = async () => {
+		if (!selectedLoan) return;
+		
+		// Clear previous errors
+		setEarlySettlementError("");
+		setEarlySettlementAvailableDate("");
+		
+		try {
+			const resp = await fetchWithTokenRefresh<any>(`/api/loans/${selectedLoan.id}/early-settlement/quote`, { method: 'POST' });
+			if (!resp?.success) {
+				// Handle lock-in period error
+				if (resp?.message?.includes('Early settlement available after')) {
+					// Extract date from message like "Early settlement available after 2025-11-29."
+					const dateMatch = resp.message.match(/after\s+(\d{4}-\d{2}-\d{2})/);
+					if (dateMatch && dateMatch[1]) {
+						const availableDate = dateMatch[1];
+						setEarlySettlementAvailableDate(availableDate);
+						
+						// Format the date for display
+						const formattedDate = new Date(availableDate).toLocaleDateString('en-MY', {
+							year: 'numeric',
+							month: 'long',
+							day: 'numeric'
+						});
+						
+						const daysLeft = getDaysUntilEarlySettlement(availableDate);
+						const dayText = daysLeft === 1 ? 'day' : 'days';
+						
+						setEarlySettlementError(
+							`Lock-in period active. Available in ${daysLeft} ${dayText} (${formattedDate}).`
+						);
+					} else {
+						setEarlySettlementError(resp.message);
+					}
+				} else if (resp?.message?.includes('disabled')) {
+					setEarlySettlementError('Early settlement feature is currently disabled. Please contact support for assistance.');
+				} else {
+					setEarlySettlementError(resp?.message || 'Unable to get early settlement quote');
+				}
+				return;
+			}
+			
+			// Success - show quote
+			setIsEarlySettlement(true);
+			setEarlySettlementQuote(resp.data);
+			const amt = Number(resp.data.totalSettlement).toFixed(2);
+			setRepaymentAmount(amt);
+			validateRepaymentAmount(amt, selectedLoan);
+		} catch (e: any) {
+			console.error('Early settlement quote error', e);
+			
+			// Try to extract error message from the response
+			let errorMessage = 'Failed to get early settlement quote. Please try again later.';
+			
+			if (e?.message?.includes('Early settlement available after')) {
+				// Handle the case where the error comes from the catch block
+				const dateMatch = e.message.match(/after\s+(\d{4}-\d{2}-\d{2})/);
+				if (dateMatch && dateMatch[1]) {
+					const availableDate = dateMatch[1];
+					setEarlySettlementAvailableDate(availableDate);
+					
+					const formattedDate = new Date(availableDate).toLocaleDateString('en-MY', {
+						year: 'numeric',
+						month: 'long',
+						day: 'numeric'
+					});
+					
+					const daysLeft = getDaysUntilEarlySettlement(availableDate);
+					const dayText = daysLeft === 1 ? 'day' : 'days';
+					
+					errorMessage = `Lock-in period active. Available in ${daysLeft} ${dayText} (${formattedDate}).`;
+				}
+			}
+			
+			setEarlySettlementError(errorMessage);
+		}
+	};
+
+	// Helper function to check if early settlement might be available
+	const isEarlySettlementLikelyAvailable = (loan: Loan) => {
+		if (!loan.disbursedAt) return false;
+		// Assume 3 months lock-in period (this is just for UI hint, actual check is done on server)
+		const disbursedDate = new Date(loan.disbursedAt);
+		const lockInEndDate = new Date(disbursedDate);
+		lockInEndDate.setMonth(lockInEndDate.getMonth() + 3);
+		return new Date() >= lockInEndDate;
+	};
+
+	// Helper function to calculate days until early settlement becomes available
+	const getDaysUntilEarlySettlement = (availableDate: string) => {
+		const available = new Date(availableDate);
+		const now = new Date();
+		const diffTime = available.getTime() - now.getTime();
+		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+		return Math.max(0, diffDays);
 	};
 
 	const downloadReceipt = async (loanId: string, receiptId: string, receiptNumber: string) => {
@@ -1035,13 +1186,20 @@ function LoansPageContent() {
 						Active
 					</span>
 				);
-			case "PENDING_DISCHARGE":
-				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 font-body">
-						<ClockIcon className="h-3 w-3 mr-1" />
-						Pending Discharge
-					</span>
-				);
+		case "PENDING_DISCHARGE":
+			return (
+				<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 font-body">
+					<ClockIcon className="h-3 w-3 mr-1" />
+					Pending Discharge
+				</span>
+			);
+		case "PENDING_EARLY_SETTLEMENT":
+			return (
+				<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200 font-body">
+					<ClockIcon className="h-3 w-3 mr-1" />
+					Early Settlement Pending
+				</span>
+			);
 			case "DISCHARGED":
 				return (
 					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 border border-purple-200 font-body">
@@ -1144,7 +1302,9 @@ function LoansPageContent() {
 			return;
 		}
 
-		if (numAmount > loan.outstandingBalance) {
+		// Skip outstanding balance validation for early settlement
+		// Early settlement amounts can legitimately exceed outstanding balance due to fees
+		if (!isEarlySettlement && numAmount > loan.outstandingBalance) {
 			setRepaymentError(
 				`Amount cannot exceed outstanding balance of ${formatCurrency(
 					loan.outstandingBalance
@@ -1480,8 +1640,8 @@ function LoansPageContent() {
 				}>(`/api/loan-applications/${app.id}/signing-url`);
 
 				if (signingResponse?.success && signingResponse?.data?.signingUrl) {
-					// Open existing signing URL
-					window.open(signingResponse.data.signingUrl, '_blank');
+					// Navigate to existing signing URL
+					window.location.href = signingResponse.data.signingUrl;
 					return;
 				}
 			} catch (error) {
@@ -1508,19 +1668,8 @@ function LoansPageContent() {
 			});
 
 			if (response?.success && response?.data?.signUrl) {
-				// Open DocuSeal signing URL in a new tab
-				window.open(response.data.signUrl, '_blank');
-				
-				// Update application status locally to reflect signing initiated
-				setApplications(prev => 
-					prev.map(application => 
-						application.id === app.id 
-							? { ...application, status: 'PENDING_SIGNATURE' }
-							: application
-					)
-				);
-
-				// Success - new tab opened automatically
+				// Navigate to DocuSeal signing URL
+				window.location.href = response.data.signUrl;
 			} else {
 				throw new Error(response?.message || 'Failed to initiate document signing');
 			}
@@ -1883,8 +2032,10 @@ function LoansPageContent() {
 
 											// Determine payment status
 											if (repayment.status === "COMPLETED") {
-														const principalPaid = Number(repayment.principalPaid ?? 
-															(repayment.status === "COMPLETED" ? (repayment.amount || 0) : 0)) || 0;
+														// For early settlement, use actualAmount as it includes all fees
+														const principalPaid = Number(repayment.paymentType === "EARLY_SETTLEMENT" 
+															? (repayment.actualAmount || 0)
+															: (repayment.principalPaid ?? (repayment.amount || 0))) || 0;
 												monthData.totalPrincipalPaid += principalPaid;
 
 														if (repaymentLateFees > 0) {
@@ -1906,8 +2057,10 @@ function LoansPageContent() {
 														repayment.paymentType === "PARTIAL" &&
 														(repayment.actualAmount ?? 0) > 0)
 													) {
-														const principalPaid = Number(repayment.principalPaid ?? 
-															(repayment.actualAmount || 0)) || 0;
+														// For early settlement, use actualAmount as it includes all fees
+														const principalPaid = Number(repayment.paymentType === "EARLY_SETTLEMENT" 
+															? (repayment.actualAmount || 0)
+															: (repayment.principalPaid ?? (repayment.actualAmount || 0))) || 0;
 
 												monthData.totalPrincipalPaid += principalPaid;
 														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
@@ -2248,6 +2401,7 @@ function LoansPageContent() {
 											[
 												"ACTIVE",
 												"PENDING_DISCHARGE",
+												"PENDING_EARLY_SETTLEMENT",
 											].includes(
 												loan.status.toUpperCase()
 											)
@@ -2258,6 +2412,7 @@ function LoansPageContent() {
 														[
 															"ACTIVE",
 															"PENDING_DISCHARGE",
+															"PENDING_EARLY_SETTLEMENT",
 														].includes(
 															loan.status.toUpperCase()
 														)
@@ -2416,9 +2571,11 @@ function LoansPageContent() {
 											([
 												"ACTIVE",
 												"PENDING_DISCHARGE",
+												"PENDING_EARLY_SETTLEMENT",
 											].includes(status) &&
 												loan.outstandingBalance > 0) ||
-											status === "PENDING_DISCHARGE"
+											status === "PENDING_DISCHARGE" ||
+											status === "PENDING_EARLY_SETTLEMENT"
 										);
 									});
 
@@ -2473,6 +2630,12 @@ function LoansPageContent() {
 																						Pending Discharge
 																					</span>
 																				)}
+																				{loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" && (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200 font-body">
+																						<ClockIcon className="h-3 w-3 mr-1" />
+																						Early Settlement Pending
+																					</span>
+																				)}
 																			</div>
 																			<p className="text-sm lg:text-base text-blue-600 font-semibold font-body">
 																				ID: {loan.id
@@ -2513,14 +2676,23 @@ function LoansPageContent() {
 																			
 																	if (loan.repayments) {
 																		loan.repayments.forEach(repayment => {
-																			const principalPaid = repayment.principalPaid ?? 
-																				(repayment.status === "COMPLETED" ? repayment.amount : 
-																				 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0);
+																			// For early settlement, use actualAmount as it includes all fees
+																			const principalPaid = repayment.paymentType === "EARLY_SETTLEMENT" 
+																				? (repayment.actualAmount || 0)
+																				: (repayment.principalPaid ?? 
+																					(repayment.status === "COMPLETED" ? repayment.amount : 
+																					 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0));
 																			totalPrincipalPaid += principalPaid;
 																		});
 																	}
 																	
-																			const progressPercent = totalOriginalAmount > 0 
+																		// Handle special cases for PENDING_EARLY_SETTLEMENT and PENDING_DISCHARGE
+																		const isPendingEarlySettlement = loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT";
+																		const isPendingDischarge = loan.status.toUpperCase() === "PENDING_DISCHARGE";
+																		
+																		const progressPercent = (isPendingEarlySettlement || isPendingDischarge)
+																			? 100 // Show as complete for early settlement and pending discharge
+																			: totalOriginalAmount > 0 
 																				? Math.min(100, Math.max(0, Math.round((totalPrincipalPaid / totalOriginalAmount) * 100)))
 																				: 0;
 																			
@@ -2562,21 +2734,32 @@ function LoansPageContent() {
 																						{/* Percentage in center */}
 																						<div className="absolute inset-0 flex items-center justify-center">
 																							<div className="text-center">
-																								<div className="text-xl lg:text-2xl font-heading font-bold text-gray-700">
-																									{progressPercent}%
+																				<div className="text-xl lg:text-2xl font-heading font-bold text-gray-700">
+																					{(isPendingEarlySettlement || isPendingDischarge) ? "✓" : `${progressPercent}%`}
 																			</div>
-																								<div className="text-sm text-gray-500 font-body">
-																									Repaid
-																								</div>
+																			<div className="text-sm text-gray-500 font-body">
+																				{isPendingEarlySettlement ? "Settlement Pending" : 
+																				 isPendingDischarge ? "Awaiting Discharge" : "Repaid"}
+																			</div>
 																							</div>
 																						</div>
 																					</div>
 																					<div className="text-center">
 																						<p className="text-lg xl:text-xl font-heading font-bold text-blue-600">
-																					{formatCurrency(totalPrincipalPaid)}
+																					{isPendingEarlySettlement 
+																						? "Early Settlement" 
+																						: isPendingDischarge
+																						? "Loan Settled"
+																						: formatCurrency(totalPrincipalPaid)
+																					}
 																		</p>
 																						<p className="text-sm lg:text-base text-gray-500 font-body">
-																							of {formatCurrency(totalOriginalAmount)} repaid
+																							{isPendingEarlySettlement 
+																								? "Awaiting admin approval" 
+																								: isPendingDischarge
+																								? "Awaiting final discharge"
+																								: `of ${formatCurrency(totalOriginalAmount)} repaid`
+																							}
 																		</p>
 																	</div>
 																				</>
@@ -2587,6 +2770,41 @@ function LoansPageContent() {
 																	{/* Next Payment Amount */}
 																	<div className="text-left">
 																		{(() => {
+																			// Don't show payment info for settled loans
+																			const isSettledLoan = loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" || 
+																			                     loan.status.toUpperCase() === "PENDING_DISCHARGE";
+																			
+																			if (isSettledLoan) {
+																				return (
+																					<div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 h-full flex flex-col p-6">
+																						<div className="flex items-center mb-4">
+																							<div className="w-12 h-12 lg:w-14 lg:h-14 bg-green-600/10 rounded-xl flex items-center justify-center mr-3">
+																								<svg className="h-6 w-6 lg:h-7 lg:w-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+																								</svg>
+																							</div>
+																							<div>
+																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																									{loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" ? "Settlement Status" : "Loan Status"}
+																								</h4>
+																							</div>
+																						</div>
+																						<div className="space-y-4 lg:space-y-6">
+																							<div>
+																								<p className="text-xl lg:text-2xl font-heading font-bold text-green-700 mb-3">
+																									{loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" ? "Settlement Pending" : "Fully Settled"}
+																								</p>
+																							</div>
+																							<div className="text-base lg:text-lg text-green-600 font-body leading-relaxed">
+																								{loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" 
+																									? "Awaiting admin approval" 
+																									: "Awaiting final discharge"}
+																							</div>
+																						</div>
+																					</div>
+																				);
+																			}
+																			
 																			const nextPayment = loan.nextPaymentInfo || {
 																					amount: loan.monthlyPayment,
 																				isOverdue: false,
@@ -2665,6 +2883,41 @@ function LoansPageContent() {
 																	{/* Next Payment Date */}
 																	<div className="text-left">
 																		{(() => {
+																			// Don't show due date for settled loans
+																			const isSettledLoan = loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" || 
+																			                     loan.status.toUpperCase() === "PENDING_DISCHARGE";
+																			
+																			if (isSettledLoan) {
+																				return (
+																					<div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 h-full flex flex-col p-6">
+																						<div className="flex items-center mb-4">
+																							<div className="w-12 h-12 lg:w-14 lg:h-14 bg-green-600/10 rounded-xl flex items-center justify-center mr-3">
+																								<svg className="h-6 w-6 lg:h-7 lg:w-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+																								</svg>
+																							</div>
+																							<div>
+																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																									Completion Status
+																								</h4>
+																							</div>
+																						</div>
+																						<div className="space-y-4 lg:space-y-6">
+																							<div>
+																								<p className="text-xl lg:text-2xl font-heading font-bold text-green-700 mb-3">
+																									No Further Payments
+																								</p>
+																							</div>
+																							<div className="text-base lg:text-lg text-green-600 font-body leading-relaxed">
+																								{loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" 
+																									? "Settlement under review" 
+																									: "Loan fully settled"}
+																							</div>
+																						</div>
+																					</div>
+																				);
+																			}
+																			
 																			// Check for overdue payments for styling
 																			const hasOverduePayments = loan.overdueInfo?.hasOverduePayments;
 																			const maxDaysOverdue = hasOverduePayments && loan.overdueInfo?.overdueRepayments && loan.overdueInfo.overdueRepayments.length > 0
@@ -2775,9 +3028,12 @@ function LoansPageContent() {
 																		if (loan.repayments) {
 																			loan.repayments.forEach(repayment => {
 																					totalLateFeesPaid += repayment.lateFeesPaid || 0;
-																				const principalPaid = repayment.principalPaid ?? 
-																					(repayment.status === "COMPLETED" ? repayment.amount : 
-																					 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0);
+																				// For early settlement, use actualAmount as it includes all fees
+																				const principalPaid = repayment.paymentType === "EARLY_SETTLEMENT" 
+																					? (repayment.actualAmount || 0)
+																					: (repayment.principalPaid ?? 
+																						(repayment.status === "COMPLETED" ? repayment.amount : 
+																						 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0));
 																				totalPrincipalPaid += principalPaid;
 																				});
 																			}
@@ -2792,7 +3048,11 @@ function LoansPageContent() {
 																							Outstanding Balance
 																						</p>
 																						<p className="text-lg font-semibold text-gray-600 font-heading">
-																							{formatCurrency(loan.outstandingBalance || 0)}
+																							{(() => {
+																								const isPendingSettlement = loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" || 
+																															loan.status.toUpperCase() === "PENDING_DISCHARGE";
+																								return formatCurrency(isPendingSettlement ? 0 : (loan.outstandingBalance || 0));
+																							})()}
 																						</p>
 																					</div>
 
@@ -2825,7 +3085,7 @@ function LoansPageContent() {
 																					{/* Total Principal Paid */}
 																					<div className="bg-white p-4 rounded-lg border border-gray-200">
 																						<p className="text-sm text-gray-500 mb-1 font-body">
-																							Principal Paid
+																							Total Paid
 																						</p>
 																						<p className="text-lg font-semibold text-blue-600 font-heading">
 																							{formatCurrency(totalPrincipalPaid)}
@@ -2877,9 +3137,12 @@ function LoansPageContent() {
 																									const isOverdue = repayment.status === "PENDING" && new Date(repayment.dueDate) < new Date();
 																									
 																									// Calculate payment amounts
-																									const principalPaid = repayment.principalPaid ?? 
-																										(repayment.status === "COMPLETED" ? (repayment.amount || 0) : 
-																										 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0);
+																									// For early settlement, use actualAmount as it includes all fees
+																									const principalPaid = repayment.paymentType === "EARLY_SETTLEMENT" 
+																										? (repayment.actualAmount || 0)
+																										: (repayment.principalPaid ?? 
+																											(repayment.status === "COMPLETED" ? (repayment.amount || 0) : 
+																											 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0));
 																									const lateFeesPaid = repayment.lateFeesPaid || 0;
 																									const totalPaid = principalPaid + lateFeesPaid;
 																									const remaining = Math.max(0, totalDue - totalPaid);
@@ -2918,60 +3181,75 @@ function LoansPageContent() {
 																												<div className="flex flex-col">
 																													<div className="flex items-center space-x-1">
 																														<span>{formatCurrency(repayment.amount || 0)}</span>
-																														{/* Show prorated interest info for first payment if amount is different from regular monthly payment */}
-																														{(repayment.installmentNumber === 1 || (index === 0 && !repayment.installmentNumber)) && 
-																														 Math.abs((repayment.amount || 0) - loan.monthlyPayment) > 1 && (
+																														{/* Show tooltip for special payment types */}
+																														{repayment.paymentType === "EARLY_SETTLEMENT" ? (
 																															<div className="relative group">
-																																<svg className="h-3 w-3 text-blue-500 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																																<svg className="h-3 w-3 text-green-500 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 																																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 																																</svg>
 																																<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap">
-																																	{(() => {
-																																		// Calculate approximate days based on amount difference
-																																		// Assuming monthly interest rate, estimate daily rate
-																																		const monthlyInterestAmount = loan.principalAmount * (loan.interestRate / 100);
-																																		const dailyInterestAmount = monthlyInterestAmount / 30; // Approximate 30 days per month
-																																		const amountDifference = Math.abs((repayment.amount || 0) - loan.monthlyPayment);
-																																		const estimatedDays = Math.round(amountDifference / dailyInterestAmount);
-																																		
-																																		// Get disbursed date and first due date to calculate actual days
-																																		const disbursedDate = new Date(loan.disbursedAt);
-																																		const firstDueDate = new Date(repayment.dueDate);
-																																		const disbursedDay = disbursedDate.getDate();
-																																		const dueDay = firstDueDate.getDate();
-																																		
-																																		// Calculate actual days in first period
-																																		let actualDays;
-																																		if (disbursedDate.getMonth() === firstDueDate.getMonth()) {
-																																			// Same month disbursement
-																																			actualDays = dueDay - disbursedDay;
-																																		} else {
-																																			// Cross-month disbursement
-																																			const daysInDisbursedMonth = new Date(disbursedDate.getFullYear(), disbursedDate.getMonth() + 1, 0).getDate();
-																																			const remainingDaysInDisbursedMonth = daysInDisbursedMonth - disbursedDay + 1;
-																																			actualDays = remainingDaysInDisbursedMonth + dueDay;
-																																		}
-																																		
-																																		// Use actual days if reasonable, otherwise use estimated
-																																		const daysToShow = (actualDays > 0 && actualDays <= 45) ? actualDays : estimatedDays;
-																																		
-																																		return (repayment.amount || 0) > loan.monthlyPayment ? (
-																																			<>
-																																				This payment includes prorated interest
-																																				<br />
-																																				for {daysToShow} days ({formatCurrency((repayment.amount || 0) - loan.monthlyPayment)} extra)
-																																			</>
-																																		) : (
-																																			<>
-																																				This payment is prorated for {daysToShow} days
-																																				<br />
-																																				({formatCurrency(loan.monthlyPayment - (repayment.amount || 0))} less than regular)
-																																			</>
-																																		);
-																																	})()}
+																																	Early Settlement Payment
+																																	<br />
+																																	Includes remaining principal + fees - discount
 																																	<div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800"></div>
 																																</div>
 																															</div>
+																														) : (
+																															/* Show prorated interest info for first payment if amount is different from regular monthly payment */
+																															(repayment.installmentNumber === 1 || (index === 0 && !repayment.installmentNumber)) && 
+																															 Math.abs((repayment.amount || 0) - loan.monthlyPayment) > 1 && (
+																																<div className="relative group">
+																																	<svg className="h-3 w-3 text-blue-500 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+																																	</svg>
+																																	<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap">
+																																		{(() => {
+																																			// Calculate approximate days based on amount difference
+																																			// Assuming monthly interest rate, estimate daily rate
+																																			const monthlyInterestAmount = loan.principalAmount * (loan.interestRate / 100);
+																																			const dailyInterestAmount = monthlyInterestAmount / 30; // Approximate 30 days per month
+																																			const amountDifference = Math.abs((repayment.amount || 0) - loan.monthlyPayment);
+																																			const estimatedDays = Math.round(amountDifference / dailyInterestAmount);
+																																			
+																																			// Get disbursed date and first due date to calculate actual days
+																																			const disbursedDate = new Date(loan.disbursedAt);
+																																			const firstDueDate = new Date(repayment.dueDate);
+																																			const disbursedDay = disbursedDate.getDate();
+																																			const dueDay = firstDueDate.getDate();
+																																			
+																																			// Calculate actual days in first period
+																																			let actualDays;
+																																			if (disbursedDate.getMonth() === firstDueDate.getMonth()) {
+																																				// Same month disbursement
+																																				actualDays = dueDay - disbursedDay;
+																																			} else {
+																																				// Cross-month disbursement
+																																				const daysInDisbursedMonth = new Date(disbursedDate.getFullYear(), disbursedDate.getMonth() + 1, 0).getDate();
+																																				const remainingDaysInDisbursedMonth = daysInDisbursedMonth - disbursedDay + 1;
+																																				actualDays = remainingDaysInDisbursedMonth + dueDay;
+																																			}
+																																			
+																																			// Use actual days if reasonable, otherwise use estimated
+																																			const daysToShow = (actualDays > 0 && actualDays <= 45) ? actualDays : estimatedDays;
+																																			
+																																			return (repayment.amount || 0) > loan.monthlyPayment ? (
+																																				<>
+																																					This payment includes prorated interest
+																																					<br />
+																																					for {daysToShow} days ({formatCurrency((repayment.amount || 0) - loan.monthlyPayment)} extra)
+																																				</>
+																																			) : (
+																																				<>
+																																					This payment is prorated for {daysToShow} days
+																																					<br />
+																																					({formatCurrency(loan.monthlyPayment - (repayment.amount || 0))} less than regular)
+																																				</>
+																																			);
+																																		})()}
+																																		<div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800"></div>
+																																	</div>
+																																</div>
+																															)
 																														)}
 																													</div>
 																													{totalPaid > 0 && (
@@ -3007,11 +3285,25 @@ function LoansPageContent() {
 																																Paid
 																															</span>
 																														);
+																													} else if (repayment.status === "PAID" || repayment.status === "COMPLETED") {
+																														return (
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+																																<CheckCircleIcon className="h-3 w-3 mr-1" />
+																																Paid
+																															</span>
+																														);
 																													} else if (repayment.status === "PARTIAL") {
 																														return (
 																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
 																																<ClockIcon className="h-3 w-3 mr-1" />
 																																Partial
+																															</span>
+																														);
+																													} else if (repayment.status === "CANCELLED") {
+																														return (
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+																																<XMarkIcon className="h-3 w-3 mr-1" />
+																																Cancelled
 																															</span>
 																														);
 																													} else if (isOverdue) {
@@ -3052,7 +3344,7 @@ function LoansPageContent() {
 																											</td>
 																											{/* Receipt Column */}
 																											<td className="px-4 py-3 text-sm text-gray-700">
-																												{(repayment.status === "COMPLETED" || repayment.status === "PARTIAL") && repayment.receipts && repayment.receipts.length > 0 ? (
+																												{(repayment.status === "COMPLETED" || repayment.status === "PAID" || repayment.status === "PARTIAL" || repayment.status === "CANCELLED") && repayment.receipts && repayment.receipts.length > 0 ? (
 																													<div className="flex flex-wrap items-center gap-1">
 																														{repayment.receipts.map((receipt) => (
 																															<button
@@ -3420,28 +3712,54 @@ function LoansPageContent() {
 																<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 																	{/* Total Repaid */}
 																	<div className="text-left">
-																		<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
-																			<div className="flex items-center mb-4">
-																				<div className="w-12 h-12 lg:w-14 lg:h-14 bg-green-600/10 rounded-xl flex items-center justify-center mr-3">
-																					<CheckCircleIcon className="h-6 w-6 lg:h-7 lg:w-7 text-green-600" />
+																		{(() => {
+																			// Calculate actual total repaid from repayments
+																			const totalRepaid = loan.repayments?.reduce((total, repayment) => {
+																				return total + (repayment.actualAmount || 0);
+																			}, 0) || 0;
+
+																			// Check if this is an early settlement
+																			const hasEarlySettlement = loan.repayments?.some(
+																				repayment => repayment.paymentType === 'EARLY_SETTLEMENT'
+																			) || false;
+
+																			return (
+																				<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
+																					<div className="flex items-center mb-4">
+																						<div className="w-12 h-12 lg:w-14 lg:h-14 bg-green-600/10 rounded-xl flex items-center justify-center mr-3">
+																							<CheckCircleIcon className="h-6 w-6 lg:h-7 lg:w-7 text-green-600" />
+																						</div>
+																						<div className="flex-1">
+																							<div className="flex items-center gap-2 mb-1">
+																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700">
+																									Total Repaid
+																								</h4>
+																								{hasEarlySettlement && (
+																									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+																										Early Settlement
+																									</span>
+																								)}
+																							</div>
+																						</div>
+																					</div>
+																					<div className="space-y-4 lg:space-y-6">
+																						<div>
+																							<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																								{formatCurrency(totalRepaid)}
+																							</p>
+																							{hasEarlySettlement && totalRepaid < loan.totalAmount && (
+																								<p className="text-sm text-blue-600 font-medium">
+																									Saved: {formatCurrency(loan.totalAmount - totalRepaid)} in interest
+																								</p>
+																							)}
+																						</div>
+																						<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+																							{hasEarlySettlement ? "Early settlement completed" : "Loan fully completed"}
+																						</div>
+																					</div>
 																				</div>
-																				<div>
-																					<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
-																						Total Repaid
-																					</h4>
-																				</div>
-																			</div>
-																			<div className="space-y-4 lg:space-y-6">
-																				<div>
-																					<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																						{formatCurrency(loan.totalAmount)}
-																					</p>
-																				</div>
-																				<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
-																					Loan fully completed
-																				</div>
-																			</div>
-																		</div>
+																			);
+																		})()}
 																	</div>
 
 																	{/* Payment Performance */}
@@ -3500,7 +3818,7 @@ function LoansPageContent() {
 																			<div className="space-y-4 lg:space-y-6">
 																				<div>
 																					<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																						{formatDate(loan.disbursedAt)}
+																						{loan.dischargedAt ? formatDate(loan.dischargedAt) : formatDate(loan.disbursedAt)}
 																					</p>
 																				</div>
 																				<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
@@ -5162,6 +5480,10 @@ function LoansPageContent() {
 										setShowLoanRepayModal(false);
 										setSelectedLoan(null);
 										setRepaymentAmount("");
+										setIsEarlySettlement(false);
+										setEarlySettlementQuote(null);
+										setEarlySettlementError("");
+										setEarlySettlementAvailableDate("");
 									}}
 									className="text-gray-500 hover:text-gray-700 transition-colors"
 								>
@@ -5559,28 +5881,26 @@ function LoansPageContent() {
 												{selectedLoan &&
 													selectedLoan.outstandingBalance >
 														0 && (
-														<button
-															onClick={() => {
-																const fullBalance =
-																	(
-																		Math.round(
-																			selectedLoan.outstandingBalance *
-																				100
-																		) / 100
-																	).toFixed(
-																		2
-																	);
-																setRepaymentAmount(
-																	fullBalance
-																);
-																validateRepaymentAmount(
-																	fullBalance,
-																	selectedLoan
-																);
-															}}
-															className="text-sm text-green-600 hover:text-green-700 font-medium font-body"
+															<button
+																onClick={handleEarlySettlementClick}
+																className={`text-sm font-medium font-body ${
+																	earlySettlementError
+																		? "text-blue-600 hover:text-blue-700"
+																		: isEarlySettlementLikelyAvailable(selectedLoan)
+																			? "text-green-600 hover:text-green-700"
+																			: "text-gray-400 hover:text-gray-500"
+																}`}
+																title={
+																	!isEarlySettlementLikelyAvailable(selectedLoan)
+																		? "Early settlement may not be available due to lock-in period"
+																		: "Get a quote for early settlement"
+																}
 														>
-															Full Balance
+															{earlySettlementError 
+																? "Check Again"
+																: isEarlySettlementLikelyAvailable(selectedLoan)
+																	? "Settle Early"
+																	: "Settle Early (Check Availability)"}
 														</button>
 													)}
 											</div>
@@ -5589,12 +5909,17 @@ function LoansPageContent() {
 											type="number"
 											value={repaymentAmount}
 											onChange={(e) =>
-												handleRepaymentAmountChange(
+												!isEarlySettlement && handleRepaymentAmountChange(
 													e.target.value
 												)
 											}
 											placeholder="0.00"
-											className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-gray-700 placeholder-gray-400 bg-white font-body ${
+											readOnly={isEarlySettlement}
+											className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-gray-700 placeholder-gray-400 font-body ${
+												isEarlySettlement 
+													? "bg-gray-100 cursor-not-allowed" 
+													: "bg-white"
+											} ${
 												repaymentError
 													? "border-red-400 focus:border-red-400 focus:ring-red-400"
 													: "border-gray-300"
@@ -5602,12 +5927,18 @@ function LoansPageContent() {
 											min="1"
 											step="0.01"
 											max={
-												selectedLoan.outstandingBalance
+												isEarlySettlement ? undefined : selectedLoan.outstandingBalance
 											}
 										/>
 										{repaymentError && (
 											<p className="mt-2 text-sm text-red-600 font-body">
 												{repaymentError}
+											</p>
+										)}
+										{isEarlySettlement && (
+											<p className="mt-2 text-sm text-blue-600 font-body flex items-center">
+												<span className="mr-1">ℹ️</span>
+												Early settlement amount is calculated and cannot be modified
 											</p>
 										)}
 										{/* Payment Guidance */}
@@ -5639,12 +5970,176 @@ function LoansPageContent() {
 												</div>
 											);
 										})()}
+
+										{/* Early Settlement Breakdown */}
+										{isEarlySettlement && earlySettlementQuote && (
+											<div className="mt-3 text-sm bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 font-body">
+												<div className="flex items-center justify-between mb-3">
+													<h4 className="font-semibold text-green-800 flex items-center">
+														💰 Early Settlement Breakdown
+													</h4>
+													{(() => {
+														const netSavings = earlySettlementQuote.discountAmount - (earlySettlementQuote.feeAmount || 0);
+														return netSavings > 0 && (
+															<span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+																Save {formatCurrency(netSavings)}
+															</span>
+														);
+													})()}
+												</div>
+												
+												<div className="space-y-2">
+													<div className="flex justify-between text-gray-700">
+														<span>Remaining Principal</span>
+														<span className="font-medium">{formatCurrency(earlySettlementQuote.remainingPrincipal)}</span>
+													</div>
+													
+													<div className="flex justify-between text-gray-700">
+														<span>Future Interest (Total)</span>
+														<span className="font-medium">{formatCurrency(earlySettlementQuote.remainingInterest)}</span>
+													</div>
+													
+													{earlySettlementQuote.discountFactor > 0 && (
+														<div className="flex justify-between text-green-700 bg-green-100/50 px-2 py-1 rounded">
+															<span>Interest Discount ({(earlySettlementQuote.discountFactor*100).toFixed(1)}%)</span>
+															<span className="font-medium">- {formatCurrency(earlySettlementQuote.discountAmount)}</span>
+														</div>
+													)}
+													
+													{earlySettlementQuote.feeAmount > 0 && (
+														<div className="flex justify-between text-gray-700">
+															<span>Early Settlement Fee</span>
+															<span className="font-medium">+ {formatCurrency(earlySettlementQuote.feeAmount)}</span>
+														</div>
+													)}
+													
+													{earlySettlementQuote.includeLateFees && earlySettlementQuote.lateFeesAmount > 0 && (
+														<div className="flex justify-between text-orange-700">
+															<span>Unpaid Late Fees</span>
+															<span className="font-medium">+ {formatCurrency(earlySettlementQuote.lateFeesAmount)}</span>
+														</div>
+													)}
+												</div>
+												
+												<div className="border-t border-green-300 mt-3 pt-3">
+													<div className="flex justify-between text-lg font-bold text-green-800">
+														<span>Total Settlement Amount</span>
+														<span>{formatCurrency(earlySettlementQuote.totalSettlement)}</span>
+													</div>
+													
+													{(() => {
+														const netSavings = earlySettlementQuote.discountAmount - (earlySettlementQuote.feeAmount || 0);
+														const originalTotal = earlySettlementQuote.remainingPrincipal + earlySettlementQuote.remainingInterest;
+														
+														return netSavings > 0 && (
+															<div className="mt-2 p-2 bg-green-100 rounded text-center">
+																<p className="text-xs text-green-700 font-medium">
+																	🎉 You save {formatCurrency(netSavings)} by settling early!
+																</p>
+																<p className="text-xs text-green-600 mt-1">
+																	Instead of paying {formatCurrency(originalTotal)}, you only pay {formatCurrency(earlySettlementQuote.totalSettlement)}
+																</p>
+																{earlySettlementQuote.feeAmount > 0 && (
+																	<p className="text-xs text-gray-600 mt-1">
+																		(Interest discount: {formatCurrency(earlySettlementQuote.discountAmount)}, Early settlement fee: {formatCurrency(earlySettlementQuote.feeAmount)})
+																	</p>
+																)}
+															</div>
+														);
+													})()}
+												</div>
+												
+												<p className="mt-3 text-xs text-gray-500 text-center border-t pt-2">
+													Quote generated on {new Date(earlySettlementQuote.computedAt).toLocaleString('en-MY', {
+														year: 'numeric',
+														month: 'short',
+														day: 'numeric',
+														hour: '2-digit',
+														minute: '2-digit'
+													})}
+												</p>
+											</div>
+										)}
+
+										{/* Early Settlement Error Display */}
+										{earlySettlementError && (
+											<div className="mt-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+												<div className="flex items-start">
+													<div className="flex-shrink-0">
+														<svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+															<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+														</svg>
+													</div>
+													<div className="ml-3 flex-1">
+														<h4 className="text-sm font-medium text-red-800 font-body">
+															Early Settlement Not Available
+														</h4>
+														<p className="mt-1 text-sm text-red-700 font-body">
+															{earlySettlementError}
+														</p>
+														{earlySettlementAvailableDate && (
+															<div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+																<div className="flex items-center">
+																	<svg className="h-4 w-4 text-red-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+																	</svg>
+																	<span className="text-sm font-medium text-red-800 font-body">
+																		Available from: {new Date(earlySettlementAvailableDate).toLocaleDateString('en-MY', {
+																			year: 'numeric',
+																			month: 'long',
+																			day: 'numeric'
+																		})}
+																	</span>
+																</div>
+																{(() => {
+																	const daysLeft = getDaysUntilEarlySettlement(earlySettlementAvailableDate);
+																	return (
+																		<div className="mt-1 flex items-center text-xs text-red-600 font-body">
+																			{daysLeft > 0 ? (
+																				<>
+																					<svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+																					</svg>
+																					<span className="font-medium">{daysLeft} day{daysLeft !== 1 ? 's' : ''} remaining</span>
+																				</>
+																			) : (
+																				<>
+																					<svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+																					</svg>
+																					<span className="font-medium">Available now - try again!</span>
+																				</>
+																			)}
+																		</div>
+																	);
+																})()}
+															
+															</div>
+														)}
+														<div className="mt-3 flex justify-end">
+															<button
+																onClick={() => {
+																	setEarlySettlementError("");
+																	setEarlySettlementAvailableDate("");
+																}}
+																className="text-sm text-gray-600 hover:text-gray-800 font-medium font-body underline"
+															>
+																Dismiss
+															</button>
+														</div>
+													</div>
+												</div>
+											</div>
+										)}
+
 										<div className="flex justify-between text-sm text-gray-500 mt-2 font-body">
 											<span>Outstanding Balance</span>
 											<span className="font-medium text-gray-700">
-												{formatCurrency(
-													selectedLoan.outstandingBalance
-												)}
+												{(() => {
+													const isPendingSettlement = selectedLoan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" || 
+																				selectedLoan.status.toUpperCase() === "PENDING_DISCHARGE";
+													return formatCurrency(isPendingSettlement ? 0 : selectedLoan.outstandingBalance);
+												})()}
 											</span>
 										</div>
 									</div>
@@ -5667,8 +6162,8 @@ function LoansPageContent() {
 												!repaymentAmount ||
 												parseFloat(repaymentAmount) <=
 													0 ||
-												parseFloat(repaymentAmount) >
-													selectedLoan.outstandingBalance
+												(!isEarlySettlement && parseFloat(repaymentAmount) >
+													selectedLoan.outstandingBalance)
 											}
 											className="bg-blue-600 text-white flex-1 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
 										>
@@ -5998,7 +6493,7 @@ function LoansPageContent() {
 											Important Information
 										</p>
 										<p className="text-xs text-amber-700 mt-1 font-body">
-											• The document will open in a new tab
+											• You will be redirected to the signing platform
 											<br />
 											• Review all terms carefully before signing
 											<br />

@@ -550,6 +550,45 @@ class WhatsAppService {
 			parameters: [fullName, paymentAmount, loanName]
 		});
 	}
+	// Early Settlement Approved Notification
+	async sendEarlySettlementApproved(
+		to: string,
+		fullName: string,
+		settlementAmount: number
+	): Promise<WhatsAppResponse> {
+		const isEnabled = await this.isNotificationEnabled('WHATSAPP_EARLY_SETTLEMENT_APPROVED');
+		if (!isEnabled) {
+			console.log('Early settlement approved WhatsApp notifications are disabled');
+			return { success: false, error: 'Notifications disabled' };
+		}
+
+		const formattedAmount = `RM ${settlementAmount.toFixed(2)}`;
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'early_settlement_approved',
+			parameters: [fullName, formattedAmount]
+		});
+	}
+
+	// Early Settlement Rejected Notification
+	async sendEarlySettlementRejected(
+		to: string,
+		fullName: string,
+		rejectionReason: string
+	): Promise<WhatsAppResponse> {
+		const isEnabled = await this.isNotificationEnabled('WHATSAPP_EARLY_SETTLEMENT_REJECTED');
+		if (!isEnabled) {
+			console.log('Early settlement rejected WhatsApp notifications are disabled');
+			return { success: false, error: 'Notifications disabled' };
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'early_settlement_rejected',
+			parameters: [fullName, rejectionReason]
+		});
+	}
 }
 
 export default new WhatsAppService(); 

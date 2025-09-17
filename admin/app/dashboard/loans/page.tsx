@@ -176,6 +176,7 @@ function ActiveLoansContent() {
 		all: 0,
 		active: 0,
 		pending_discharge: 0,
+		pending_early_settlement: 0,
 		discharged: 0,
 		late: 0,
 	});
@@ -324,7 +325,7 @@ function ActiveLoansContent() {
 			const response = await fetchWithAdminTokenRefresh<{
 				success: boolean;
 				data: LoanData;
-			}>(`/api/admin/loans/${loanId}/repayments?raw=true`);
+			}>(`/api/admin/loans/${loanId}/repayments?raw=true&t=${Date.now()}`);
 
 			console.log("📊 Repayments API response:", response);
 
@@ -481,6 +482,7 @@ function ActiveLoansContent() {
 			all: loans.length,
 			active: loans.filter((loan) => loan.status === "ACTIVE").length,
 			pending_discharge: loans.filter((loan) => loan.status === "PENDING_DISCHARGE").length,
+			pending_early_settlement: loans.filter((loan) => loan.status === "PENDING_EARLY_SETTLEMENT").length,
 			discharged: loans.filter((loan) => loan.status === "DISCHARGED").length,
 			late: loans.filter((loan) => {
 				if (loan.status !== "ACTIVE") return false;
@@ -509,6 +511,10 @@ function ActiveLoansContent() {
 		} else if (statusFilter === "pending_discharge") {
 			filtered = filtered.filter(
 				(loan) => loan.status === "PENDING_DISCHARGE"
+			);
+		} else if (statusFilter === "pending_early_settlement") {
+			filtered = filtered.filter(
+				(loan) => loan.status === "PENDING_EARLY_SETTLEMENT"
 			);
 		} else if (statusFilter === "discharged") {
 			filtered = filtered.filter((loan) => loan.status === "DISCHARGED");
@@ -995,11 +1001,17 @@ function ActiveLoansContent() {
 					text: "text-yellow-200",
 					border: "border-yellow-400/20",
 				};
-			case "DISCHARGED":
+			case "PENDING_EARLY_SETTLEMENT":
 				return {
 					bg: "bg-blue-500/20",
 					text: "text-blue-200",
 					border: "border-blue-400/20",
+				};
+			case "DISCHARGED":
+				return {
+					bg: "bg-purple-500/20",
+					text: "text-purple-200",
+					border: "border-purple-400/20",
 				};
 			default:
 				return {
@@ -1696,7 +1708,12 @@ function ActiveLoansContent() {
 						outstanding:{" "}
 						{formatCurrency(
 							filteredLoans.reduce(
-								(sum, loan) => sum + loan.outstandingBalance,
+								(sum, loan) => {
+									const isPendingSettlement = loan.status === "PENDING_EARLY_SETTLEMENT" || 
+															   loan.status === "PENDING_DISCHARGE" ||
+															   loan.status === "DISCHARGED";
+									return sum + (isPendingSettlement ? 0 : loan.outstandingBalance);
+								},
 								0
 							)
 						)}
@@ -1806,10 +1823,20 @@ function ActiveLoansContent() {
 						Pending Discharge ({filterCounts.pending_discharge})
 					</button>
 					<button
+						onClick={() => setStatusFilter("pending_early_settlement")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							statusFilter === "pending_early_settlement"
+								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Early Settlement ({filterCounts.pending_early_settlement})
+					</button>
+					<button
 						onClick={() => setStatusFilter("discharged")}
 						className={`px-4 py-2 rounded-lg border transition-colors ${
 							statusFilter === "discharged"
-								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+								? "bg-purple-500/30 text-purple-100 border-purple-400/30"
 								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 						}`}
 					>
@@ -1901,6 +1928,9 @@ function ActiveLoansContent() {
 																"PENDING_DISCHARGE"
 																	? "Pending Discharge"
 																	: loan.status ===
+																	  "PENDING_EARLY_SETTLEMENT"
+																	? "Early Settlement Pending"
+																	: loan.status ===
 																	  "DISCHARGED"
 																	? "Discharged"
 																	: loan.status}
@@ -1911,9 +1941,20 @@ function ActiveLoansContent() {
 															Outstanding:
 														</p>
 														<p className="text-xs font-medium text-white">
-															{formatCurrency(
-																loan.outstandingBalance
-															)}
+															{(() => {
+																const isPendingSettlement = loan.status === "PENDING_EARLY_SETTLEMENT" || 
+																						   loan.status === "PENDING_DISCHARGE" ||
+																						   loan.status === "DISCHARGED";
+																if (isPendingSettlement) {
+																	return (
+																		<span className="text-orange-300">
+																			{formatCurrency(0)} 
+																			<span className="text-xs text-gray-400 ml-1">(settled)</span>
+																		</span>
+																	);
+																}
+																return formatCurrency(loan.outstandingBalance);
+															})()}
 														</p>
 														<p className="text-xs text-blue-300 mt-1">
 															of{" "}
@@ -2044,15 +2085,28 @@ function ActiveLoansContent() {
 								{selectedTab === "details" && (
 									<>
 										{/* Summary Cards */}
-										<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+										<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
 												<p className="text-gray-400 text-sm mb-1">
 													Outstanding Balance
 												</p>
 												<p className="text-2xl font-bold text-white">
-													{formatCurrency(
-														selectedLoan.outstandingBalance
-													)}
+													{(() => {
+														const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
+																				   selectedLoan.status === "PENDING_DISCHARGE" ||
+																				   selectedLoan.status === "DISCHARGED";
+														if (isPendingSettlement) {
+															return (
+																<span className="text-orange-300">
+																	{formatCurrency(0)}
+																	<span className="text-xs text-gray-400 mt-1 font-normal block">
+																		{selectedLoan.status === "DISCHARGED" ? "Discharged" : "Early Settlement"}
+																	</span>
+																</span>
+															);
+														}
+														return formatCurrency(selectedLoan.outstandingBalance);
+													})()}
 												</p>
 												<p className="text-xs text-gray-400 mt-1">
 													of{" "}
@@ -2083,12 +2137,55 @@ function ActiveLoansContent() {
 												</div>
 											</div>
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
+												<p className="text-gray-400 text-sm mb-1">
+													Total Paid
+												</p>
+												<p className="text-2xl font-bold text-white">
+													{(() => {
+														const repayments = selectedLoan.repayments || [];
+														const totalPaid = repayments.reduce((total, repayment) => {
+															// Sum all actualAmount values (actual amount paid by user)
+															// Include CANCELLED repayments as they may have partial payments before cancellation
+															return total + (repayment.actualAmount || 0);
+														}, 0);
+														return formatCurrency(totalPaid);
+													})()}
+												</p>
+												<p className="text-xs text-gray-400 mt-1">
+													Total amount paid to date
+												</p>
+											</div>
+											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
 												{(() => {
 													const nextPayment =
 														getNextPaymentDetails(
 															selectedLoan.repayments ||
 																[]
 														);
+													const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
+																			   selectedLoan.status === "PENDING_DISCHARGE" ||
+																			   selectedLoan.status === "DISCHARGED";
+													if (isPendingSettlement) {
+														return (
+															<>
+																<p className="text-gray-400 text-sm mb-1">
+																	Payment Status
+																</p>
+																<p className="text-2xl font-bold text-orange-300">
+																	{selectedLoan.status === "PENDING_EARLY_SETTLEMENT" ? "Settlement Pending" : 
+																	 selectedLoan.status === "PENDING_DISCHARGE" ? "Fully Settled" : "Discharged"}
+																</p>
+																<p className="text-xs text-gray-400 mt-1">
+																	{selectedLoan.status === "PENDING_EARLY_SETTLEMENT" 
+																		? "Awaiting admin approval" 
+																		: selectedLoan.status === "PENDING_DISCHARGE"
+																		? "Awaiting final discharge"
+																		: "Loan completed"}
+																</p>
+															</>
+														);
+													}
+													
 													return (
 														<>
 															<p className="text-gray-400 text-sm mb-1">
@@ -2238,9 +2335,9 @@ function ActiveLoansContent() {
 																	<>
 																		of {formatCurrency(totalLateFeesAssessed)} assessed
 																		{totalLateFeesAssessed > totalLateFeesPaid && (
-																			<div className="text-xs text-red-400 mt-1">
+																			<span className="text-xs text-red-400 mt-1 block">
 																				{formatCurrency(totalLateFeesAssessed - totalLateFeesPaid)} outstanding
-																			</div>
+																			</span>
 																		)}
 																	</>
 																) : (
@@ -2367,9 +2464,20 @@ function ActiveLoansContent() {
 													<div className="text-right">
 														<p>Outstanding Balance</p>
 														<p className="text-white font-medium">
-															{formatCurrency(
-																selectedLoan.outstandingBalance
-															)}
+															{(() => {
+																const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
+																						   selectedLoan.status === "PENDING_DISCHARGE" ||
+																						   selectedLoan.status === "DISCHARGED";
+																if (isPendingSettlement) {
+																	return (
+																		<span className="text-orange-300">
+																			{formatCurrency(0)} 
+																			<span className="text-xs text-gray-400 block">(settled)</span>
+																		</span>
+																	);
+																}
+																return formatCurrency(selectedLoan.outstandingBalance);
+															})()}
 														</p>
 													</div>
 												</div>
@@ -2930,9 +3038,23 @@ function ActiveLoansContent() {
 																Balance
 															</p>
 															<p className="text-white font-medium text-lg">
-																{formatCurrency(
-																	selectedLoan.outstandingBalance
-																)}
+																{(() => {
+																	const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
+																							   selectedLoan.status === "PENDING_DISCHARGE" ||
+																							   selectedLoan.status === "DISCHARGED";
+																	if (isPendingSettlement) {
+																		return (
+																			<span className="text-orange-300">
+																				{formatCurrency(0)}
+																				<br />
+																				<span className="text-xs text-gray-400">
+																					{selectedLoan.status === "DISCHARGED" ? "Discharged" : "Early Settlement"}
+																				</span>
+																			</span>
+																		);
+																	}
+																	return formatCurrency(selectedLoan.outstandingBalance);
+																})()}
 															</p>
 														</div>
 														<div className="text-center">
@@ -3192,6 +3314,14 @@ function ActiveLoansContent() {
 																	"bg-green-500/20 text-green-200 border border-green-400/20";
 															} else if (
 																repayment.status ===
+																"PAID"
+															) {
+																displayStatus =
+																	"PAID";
+																statusColor =
+																	"bg-green-500/20 text-green-200 border border-green-400/20";
+															} else if (
+																repayment.status ===
 																"PARTIAL" ||
 																repayment.paymentType ===
 																	"PARTIAL"
@@ -3200,6 +3330,14 @@ function ActiveLoansContent() {
 																	"PARTIAL";
 																statusColor =
 																	"bg-blue-500/20 text-blue-200 border border-blue-400/20";
+															} else if (
+																repayment.status ===
+																"CANCELLED"
+															) {
+																displayStatus =
+																	"CANCELLED";
+																statusColor =
+																	"bg-gray-500/20 text-gray-200 border border-gray-400/20";
 															} else if (
 																repayment.status ===
 																	"OVERDUE" ||
@@ -3328,7 +3466,7 @@ function ActiveLoansContent() {
 																					<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
 																						<div>
 																							{(() => {
-																								if (repayment.status === "COMPLETED") {
+																								if (repayment.status === "COMPLETED" || repayment.status === "PAID") {
 																									return <span className="text-green-400">Paid in Full</span>;
 																								}
 																								
@@ -3391,8 +3529,8 @@ function ActiveLoansContent() {
 																						</span>
 																					</td>
 																					<td className="px-4 py-3 text-sm text-gray-300">
-																						{repayment.status ===
-																						"COMPLETED" ? (
+																						{(repayment.status ===
+																						"COMPLETED" || repayment.status === "PAID") ? (
 																							<div>
 																								<div className="text-white">
 																									{formatDate(
@@ -3471,7 +3609,7 @@ function ActiveLoansContent() {
 																					</td>
 																					{/* Receipt Column */}
 																					<td className="px-4 py-3 text-sm text-gray-300">
-																						{(repayment.status === "COMPLETED" || repayment.status === "PARTIAL") && repayment.receipts && repayment.receipts.length > 0 ? (
+																						{(repayment.status === "COMPLETED" || repayment.status === "PAID" || repayment.status === "PARTIAL" || repayment.status === "CANCELLED") && repayment.receipts && repayment.receipts.length > 0 ? (
 																							<div className="flex flex-wrap items-center gap-1">
 																								{repayment.receipts.map((receipt, index) => (
 																									<button
@@ -3915,9 +4053,21 @@ function ActiveLoansContent() {
 											placeholder="0.00"
 											className="w-full px-2 xs:px-3 py-1.5 xs:py-2 bg-gray-800/50 border border-gray-700/30 rounded-md xs:rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 text-xs xs:text-sm sm:text-base"
 										/>
-										{selectedLoan && selectedLoan.outstandingBalance > 0 && (
+										{selectedLoan && (
 											<p className="text-xs text-purple-400 mt-1">
-												Outstanding balance: {formatCurrency(selectedLoan.outstandingBalance)}
+												Outstanding balance: {(() => {
+													const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
+																			   selectedLoan.status === "PENDING_DISCHARGE" ||
+																			   selectedLoan.status === "DISCHARGED";
+													if (isPendingSettlement) {
+														return (
+															<span className="text-orange-300">
+																{formatCurrency(0)} ({selectedLoan.status === "DISCHARGED" ? "discharged" : "early settlement"})
+															</span>
+														);
+													}
+													return formatCurrency(selectedLoan.outstandingBalance);
+												})()}
 											</p>
 										)}
 									</div>
@@ -4070,9 +4220,19 @@ function ActiveLoansContent() {
 									</p>
 									<p className="text-gray-400 text-sm">
 										Outstanding:{" "}
-										{formatCurrency(
-											selectedLoan.outstandingBalance
-										)}
+										{(() => {
+											const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
+																	   selectedLoan.status === "PENDING_DISCHARGE" ||
+																	   selectedLoan.status === "DISCHARGED";
+											if (isPendingSettlement) {
+												return (
+													<span className="text-orange-300">
+														{formatCurrency(0)} ({selectedLoan.status === "DISCHARGED" ? "discharged" : "early settlement"})
+													</span>
+												);
+											}
+											return formatCurrency(selectedLoan.outstandingBalance);
+										})()}
 									</p>
 								</div>
 							)}
