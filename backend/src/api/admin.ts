@@ -11979,8 +11979,16 @@ router.post(
 			const uploadResult = await stampedUploadResponse.json();
 			console.log('✅ Stamped agreement uploaded to orchestrator:', uploadResult);
 
-			// Update loan with stamped PDF URL
+			// Update loan with stamped PDF URL and create audit trail
 			await prisma.$transaction(async (tx) => {
+				// Check if this is a replacement (existing stamped agreement)
+				const existingLoan = await tx.loan.findUnique({
+					where: { id: loanId },
+					select: { pkiStampedPdfUrl: true }
+				});
+				
+				const isReplacement = !!existingLoan?.pkiStampedPdfUrl;
+				
 				await tx.loan.update({
 					where: { id: loanId },
 					data: {
@@ -11989,28 +11997,29 @@ router.post(
 					}
 				});
 
-					// Create audit trail entry
-					await tx.loanApplicationHistory.create({
-						data: {
-							applicationId: loan.applicationId,
-							previousStatus: 'SIGNED_AGREEMENT_UPLOADED',
-							newStatus: 'STAMPED_AGREEMENT_UPLOADED',
-							changedBy: adminUser?.fullName || 'Unknown Admin',
-						changeReason: 'Stamped agreement uploaded',
+				// Create audit trail entry
+				await tx.loanApplicationHistory.create({
+					data: {
+						applicationId: loan.applicationId,
+						previousStatus: isReplacement ? 'STAMPED_AGREEMENT_REPLACED' : 'SIGNED_AGREEMENT_UPLOADED',
+						newStatus: 'STAMPED_AGREEMENT_UPLOADED',
+						changedBy: adminUser?.fullName || 'Unknown Admin',
+						changeReason: isReplacement ? 'Stamped agreement replaced' : 'Stamped agreement uploaded',
 						notes: notes
-							? `Stamped agreement PDF uploaded by ${adminUser?.fullName || 'Unknown Admin'}. Notes: ${notes}`
-							: `Stamped agreement PDF uploaded by ${adminUser?.fullName || 'Unknown Admin'}`,
+							? `Stamped agreement ${isReplacement ? 'replaced' : 'uploaded'} by ${adminUser?.fullName || 'Unknown Admin'}. Notes: ${notes}`
+							: `Stamped agreement ${isReplacement ? 'replaced' : 'uploaded'} by ${adminUser?.fullName || 'Unknown Admin'}`,
 						metadata: {
 							loanId: loanId,
 							originalName: file.originalname,
 							fileSize: file.size,
 							uploadedAt: new Date().toISOString(),
 							uploadedBy: adminUser?.fullName || 'Unknown Admin',
-							notes: notes || null
+							notes: notes || null,
+							isReplacement: isReplacement
 						}
-						}
-					});
+					}
 				});
+			});
 			} catch (orchestratorError) {
 				console.error('❌ Error uploading to signing orchestrator:', orchestratorError);
 				throw new Error(`Failed to upload to signing orchestrator: ${orchestratorError instanceof Error ? orchestratorError.message : 'Unknown error'}`);
@@ -12149,13 +12158,47 @@ router.post(
 				const uploadResult = await uploadResponse.json();
 				console.log('✅ Stamp certificate uploaded to orchestrator:', uploadResult);
 
-				// Update loan with certificate URL
-				await prisma.loan.update({
-					where: { id: loanId },
-					data: {
-						pkiStampCertificateUrl: stampCertificateUrl,
-						updatedAt: new Date()
-					}
+				// Update loan with certificate URL and create audit trail
+				await prisma.$transaction(async (tx) => {
+					// Check if this is a replacement (existing certificate)
+					const existingLoan = await tx.loan.findUnique({
+						where: { id: loanId },
+						select: { pkiStampCertificateUrl: true }
+					});
+					
+					const isReplacement = !!existingLoan?.pkiStampCertificateUrl;
+					
+					// Update loan with certificate URL
+					await tx.loan.update({
+						where: { id: loanId },
+						data: {
+							pkiStampCertificateUrl: stampCertificateUrl,
+							updatedAt: new Date()
+						}
+					});
+
+					// Create audit trail entry
+					await tx.loanApplicationHistory.create({
+						data: {
+							applicationId: loan.applicationId,
+							previousStatus: isReplacement ? 'STAMP_CERTIFICATE_REPLACED' : 'STAMPED_AGREEMENT_UPLOADED',
+							newStatus: 'STAMP_CERTIFICATE_UPLOADED',
+							changedBy: adminUser?.fullName || 'Unknown Admin',
+							changeReason: isReplacement ? 'Stamp certificate replaced' : 'Stamp certificate uploaded',
+							notes: notes
+								? `Stamp certificate ${isReplacement ? 'replaced' : 'uploaded'} by ${adminUser?.fullName || 'Unknown Admin'}. Notes: ${notes}`
+								: `Stamp certificate ${isReplacement ? 'replaced' : 'uploaded'} by ${adminUser?.fullName || 'Unknown Admin'}`,
+							metadata: {
+								loanId: loanId,
+								originalName: file.originalname,
+								fileSize: file.size,
+								uploadedAt: new Date().toISOString(),
+								uploadedBy: adminUser?.fullName || 'Unknown Admin',
+								notes: notes || null,
+								isReplacement: isReplacement
+							}
+						}
+					});
 				});
 
 				console.log(`✅ Stamp certificate uploaded for loan ${loanId} by ${adminUser?.fullName || 'Unknown Admin'}`);
