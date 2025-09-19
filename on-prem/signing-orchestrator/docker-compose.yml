@@ -16,8 +16,8 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       
       # Database Configuration
-      - DATABASE_URL=postgresql://agreements_user:agreements_password@agreements-postgres:5432/agreements_db
-      - AGREEMENTS_DB_PASSWORD=agreements_password
+      - DATABASE_URL=${DATABASE_URL}
+      - AGREEMENTS_DB_PASSWORD=${AGREEMENTS_DB_PASSWORD}
       
       # DocuSeal Integration
       - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL:-https://sign.kredit.my:3001}

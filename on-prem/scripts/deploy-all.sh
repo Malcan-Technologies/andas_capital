@@ -357,25 +357,23 @@ setup_environments() {
             cd signing-orchestrator
             echo "🔧 Setting up Signing Orchestrator environment..."
             
-            # Use production environment if available, otherwise development
-            if [ -f env.production ]; then
-                echo "Using production environment for Signing Orchestrator"
-                # Don't overwrite existing .env, just ensure env.production is properly configured
-                if [ ! -f .env ]; then
-                    cp env.production .env
-                fi
+            # Always use production environment for production deployment
+            if [ -f .env.production ]; then
+                echo "🔧 Using production environment for Signing Orchestrator"
+                cp .env.production .env
+                echo "✅ Production environment applied"
+            elif [ -f env.production ]; then
+                echo "🔧 Using legacy production environment for Signing Orchestrator"
+                cp env.production .env
+                echo "✅ Legacy production environment applied"
             elif [ -f env.development ]; then
-                echo "Using development environment for Signing Orchestrator"
-                if [ ! -f .env ]; then
-                    cp env.development .env
-                fi
+                echo "⚠️  Using development environment for Signing Orchestrator (production not found)"
+                cp env.development .env
             elif [ -f env.example ]; then
-                echo "Using example environment for Signing Orchestrator"
-                if [ ! -f .env ]; then
-                    cp env.example .env
-                fi
-            elif [ ! -f .env ]; then
-                echo "⚠️  No .env file found for Signing Orchestrator - please configure manually"
+                echo "⚠️  Using example environment for Signing Orchestrator"
+                cp env.example .env
+            else
+                echo "❌ No environment file found for Signing Orchestrator - deployment may fail"
             fi
             
             # Create necessary directories (preserve existing data)
@@ -498,7 +496,16 @@ deploy_orchestrator() {
                 echo "🏗️  Building and starting Signing Orchestrator..."
                 # Use --force-recreate to handle volume configuration changes safely
                 # Named volumes will persist data even during recreation
-                docker-compose --env-file env.production up -d --build --force-recreate
+                if [ -f .env.production ]; then
+                    echo "🔧 Using .env.production for deployment"
+                    docker-compose --env-file .env.production up -d --build --force-recreate
+                elif [ -f env.production ]; then
+                    echo "🔧 Using legacy env.production for deployment"
+                    docker-compose --env-file env.production up -d --build --force-recreate
+                else
+                    echo "🔧 Using default .env for deployment"
+                    docker-compose up -d --build --force-recreate
+                fi
             else
                 echo "🏗️  Building Signing Orchestrator images..."
                 docker-compose build --no-cache

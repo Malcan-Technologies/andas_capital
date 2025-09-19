@@ -647,7 +647,7 @@ function ActiveLoansContent() {
 			// Use fetch directly for binary downloads with proper authentication
 			const token = localStorage.getItem("adminToken");
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${loanId}/pdf-letters/${filename}/download`,
+				`/api/admin/loans/${loanId}/pdf-letters/${filename}/download`,
 				{
 					method: 'GET',
 					headers: {
@@ -1185,7 +1185,7 @@ function ActiveLoansContent() {
 			// Use fetch directly for binary downloads instead of fetchWithAdminTokenRefresh
 			const token = localStorage.getItem("adminToken");
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/receipts/${receiptId}/download`,
+				`/api/admin/receipts/${receiptId}/download`,
 				{
 					method: 'GET',
 					headers: {
@@ -1217,7 +1217,7 @@ function ActiveLoansContent() {
 		try {
 			const token = localStorage.getItem("adminToken");
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${loanId}/download-agreement`,
+				`/api/admin/loans/${loanId}/download-agreement`,
 				{
 					method: 'GET',
 					headers: {
@@ -1266,7 +1266,7 @@ function ActiveLoansContent() {
 
 			const token = localStorage.getItem("adminToken");
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${loanId}/download-stamped-agreement`,
+				`/api/admin/loans/${loanId}/download-stamped-agreement`,
 				{
 					method: 'GET',
 					headers: {
@@ -1308,7 +1308,7 @@ function ActiveLoansContent() {
 
 			const token = localStorage.getItem("adminToken");
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${loanId}/download-stamp-certificate`,
+				`/api/admin/loans/${loanId}/download-stamp-certificate`,
 				{
 					method: 'GET',
 					headers: {
@@ -1395,7 +1395,7 @@ function ActiveLoansContent() {
 			}
 
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${manualPaymentForm.loanId}/upload-stamped-agreement`,
+				`/api/admin/loans/${manualPaymentForm.loanId}/upload-stamped-agreement`,
 				{
 					method: "POST",
 					headers: {
@@ -1443,7 +1443,7 @@ function ActiveLoansContent() {
 			}
 
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${uploadCertificateLoanId}/upload-stamp-certificate`,
+				`/api/admin/loans/${uploadCertificateLoanId}/upload-stamp-certificate`,
 				{
 					method: "POST",
 					headers: {

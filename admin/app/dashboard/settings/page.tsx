@@ -135,7 +135,7 @@ function SettingsPageContent() {
 			setError(null);
 
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/bank-accounts`, {
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/bank-accounts`, {
 				method: "GET",
 			}) as ApiResponse<BankAccount[]>;
 
@@ -160,7 +160,7 @@ function SettingsPageContent() {
 			setError(null);
 
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/admin/company-settings`, {
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/company-settings`, {
 				method: "GET",
 			}) as ApiResponse<CompanySettings>;
 
@@ -185,7 +185,7 @@ function SettingsPageContent() {
 			setError(null);
 
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/admin/company-settings`, {
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/company-settings`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -265,7 +265,7 @@ function SettingsPageContent() {
 			setError(null);
 
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/bank-accounts/${id}`, {
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/bank-accounts/${id}`, {
 				method: "DELETE",
 			}) as ApiResponse;
 
@@ -290,7 +290,7 @@ function SettingsPageContent() {
 			setError(null);
 
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/bank-accounts/${id}/set-default`, {
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/bank-accounts/${id}/set-default`, {
 				method: "POST",
 			}) as ApiResponse<BankAccount>;
 
@@ -315,7 +315,7 @@ function SettingsPageContent() {
 
 			// Fetch settings directly from backend like the products page
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/settings/categories`, {
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/settings/categories`, {
 				method: "GET",
 			}) as ApiResponse<SettingsData>;
 
@@ -368,7 +368,7 @@ function SettingsPageContent() {
 
 			// Save settings directly to backend like the products page
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/settings`, {
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/settings`, {
 				method: "PUT",
 				headers: {
 					"Content-Type": "application/json",
