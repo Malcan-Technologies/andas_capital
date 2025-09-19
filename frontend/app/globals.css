@@ -1,7 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* stylelint-disable-next-line at-rule-no-unknown */
 @tailwind base;
+/* stylelint-disable-next-line at-rule-no-unknown */
 @tailwind components;
+/* stylelint-disable-next-line at-rule-no-unknown */
 @tailwind utilities;
 
 :root {
@@ -119,11 +122,11 @@
   
   /* Brand Typography Classes */
   .brand-logo {
-    @apply font-logo font-logo text-brand-primary;
+    @apply font-logo text-brand-primary;
   }
   
   .brand-heading {
-    @apply font-heading font-heading;
+    @apply font-heading;
   }
   
   .brand-gradient-text {

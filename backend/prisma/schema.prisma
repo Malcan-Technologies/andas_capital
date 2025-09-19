@@ -36,54 +36,54 @@ model Product {
 }
 
 model User {
-  id                           String              @id @default(cuid())
-  phoneNumber                  String              @unique
+  id                           String               @id @default(cuid())
+  phoneNumber                  String               @unique
   password                     String
   refreshToken                 String?
   fullName                     String?
   dateOfBirth                  DateTime?
-  email                        String?             @unique
+  email                        String?              @unique
   address1                     String?
   address2                     String?
   city                         String?
   state                        String?
-  createdAt                    DateTime            @default(now())
-  updatedAt                    DateTime            @updatedAt
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
   country                      String?
   idExpiry                     DateTime?
   idNumber                     String?
   idType                       String?
   nationality                  String?
-  role                         String              @default("USER")
+  role                         String               @default("USER")
   zipCode                      String?
-  lastLoginAt                  DateTime?           @updatedAt
+  lastLoginAt                  DateTime?            @updatedAt
   accountNumber                String?
   bankName                     String?
   employerName                 String?
   employmentStatus             String?
   monthlyIncome                String?
-  serviceLength                String?
-  isOnboardingComplete         Boolean             @default(false)
-  kycStatus                    Boolean             @default(false)
-  onboardingStep               Int                 @default(0)
+  isOnboardingComplete         Boolean              @default(false)
+  kycStatus                    Boolean              @default(false)
+  onboardingStep               Int                  @default(0)
+  icNumber                     String?
+  icType                       String?
   emergencyContactName         String?
   emergencyContactPhone        String?
   emergencyContactRelationship String?
-  icNumber                     String?
-  icType                       String?
+  serviceLength                String?
+  phoneVerified                Boolean              @default(false)
   educationLevel               String?
-  phoneVerified                Boolean             @default(false)
   resetToken                   String?
   resetTokenExpiry             DateTime?
+  kycSessions                  KycSession[]
   applications                 LoanApplication[]
   loans                        Loan[]
   notifications                Notification[]
+  phoneChangeRequests          PhoneChangeRequest[]
+  phoneVerifications           PhoneVerification[]
   documents                    UserDocument[]
   walletTransactions           WalletTransaction[]
   wallet                       Wallet?
-  phoneVerifications           PhoneVerification[]
-  phoneChangeRequests          PhoneChangeRequest[]
-  kycSessions                  KycSession[]
 
   @@map("users")
 }
@@ -125,70 +125,71 @@ model WalletTransaction {
 }
 
 model Loan {
-  id                 String              @id @default(cuid())
-  userId             String
-  applicationId      String              @unique
-  principalAmount    Float
-  outstandingBalance Float
-  interestRate       Float
-  term               Int
-  monthlyPayment     Float
-  nextPaymentDue     DateTime?
-  status             String              @default("ACTIVE")
-  disbursedAt        DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  dischargedAt       DateTime?
-  totalAmount        Float
-  calculationMethod  String?             // RULE_OF_78 or STRAIGHT_LINE
-  scheduleType       String?             // EXACT_MONTHLY or CUSTOM_DATE  
-  customDueDate         Int?                // For CUSTOM_DATE schedule type
-  prorationCutoffDate   Int?                // For CUSTOM_DATE proration
-  // DocuSeal Integration Fields
-  docusealSubmissionId  String?             // DocuSeal submission ID for tracking
-  agreementStatus       String?             // PENDING_SIGNATURE, COMPANY_SIGNED, BORROWER_SIGNED, WITNESS_SIGNED, SIGNED, SIGNATURE_EXPIRED, SIGNATURE_DECLINED, SIGNATURE_FAILED
-  agreementSignedAt     DateTime?           // When the loan agreement was signed
-  docusealSignUrl       String?             // DocuSeal signing slug for returning users
-  // Default tracking fields
-  defaultRiskFlaggedAt  DateTime?           // When loan was flagged as potential default (28 days overdue)
-  defaultNoticesSent    Int                 @default(0) // Count of default notices sent during remedy period
-  defaultedAt           DateTime?           // When loan officially defaulted (42 days overdue)
-  lateFee               LateFee?
-  repayments            LoanRepayment[]
-  signatories           LoanSignatory[]     // Individual signatory tracking
-  defaultLogs           LoanDefaultLog[]    // Default processing audit trail
-  application           LoanApplication     @relation(fields: [applicationId], references: [id])
-  user                  User                @relation(fields: [userId], references: [id])
-  walletTransactions    WalletTransaction[]
+  id                     String              @id @default(cuid())
+  userId                 String
+  applicationId          String              @unique
+  principalAmount        Float
+  outstandingBalance     Float
+  interestRate           Float
+  term                   Int
+  monthlyPayment         Float
+  nextPaymentDue         DateTime?
+  status                 String              @default("ACTIVE")
+  disbursedAt            DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  dischargedAt           DateTime?
+  totalAmount            Float
+  calculationMethod      String?
+  customDueDate          Int?
+  prorationCutoffDate    Int?
+  scheduleType           String?
+  agreementSignedAt      DateTime?
+  agreementStatus        String?
+  docusealSubmissionId   String?
+  docusealSignUrl        String?
+  defaultNoticesSent     Int                 @default(0)
+  defaultRiskFlaggedAt   DateTime?
+  defaultedAt            DateTime?
+  pkiSignedPdfUrl        String?
+  pkiStampedPdfUrl       String?
+  pkiStampCertificateUrl String?
+  lateFee                LateFee?
+  defaultLogs            LoanDefaultLog[]
+  repayments             LoanRepayment[]
+  signatories            LoanSignatory[]
+  application            LoanApplication     @relation(fields: [applicationId], references: [id])
+  user                   User                @relation(fields: [userId], references: [id])
+  walletTransactions     WalletTransaction[]
 
   @@map("loans")
 }
 
 model LoanRepayment {
-  id                String          @id @default(cuid())
+  id                String           @id @default(cuid())
   loanId            String
   amount            Float
   principalAmount   Float
   interestAmount    Float
-  status            String          @default("PENDING")
+  status            String           @default("PENDING")
   dueDate           DateTime
   paidAt            DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   actualAmount      Float?
-  daysEarly         Int?            @default(0)
-  daysLate          Int?            @default(0)
+  daysEarly         Int?             @default(0)
+  daysLate          Int?             @default(0)
   installmentNumber Int?
   parentRepaymentId String?
   paymentType       String?
   scheduledAmount   Float?
-  lateFeeAmount     Float           @default(0)
-  lateFeesPaid      Float           @default(0)
-  principalPaid     Float           @default(0)
-  loan              Loan            @relation(fields: [loanId], references: [id])
-  parentRepayment   LoanRepayment?  @relation("PartialPayments", fields: [parentRepaymentId], references: [id])
-  partialPayments   LoanRepayment[] @relation("PartialPayments")
-  receipts          PaymentReceipt[] // Changed from single receipt to multiple receipts
+  lateFeeAmount     Float            @default(0)
+  lateFeesPaid      Float            @default(0)
+  principalPaid     Float            @default(0)
+  loan              Loan             @relation(fields: [loanId], references: [id])
+  parentRepayment   LoanRepayment?   @relation("PartialPayments", fields: [parentRepaymentId], references: [id])
+  partialPayments   LoanRepayment[]  @relation("PartialPayments")
+  receipts          PaymentReceipt[]
 
   @@index([installmentNumber])
   @@index([paymentType])
@@ -198,59 +199,57 @@ model LoanRepayment {
 }
 
 model LoanApplication {
-  id                       String                   @id @default(cuid())
-  userId                   String
-  productId                String
-  amount                   Float?
-  term                     Int?
-  status                   String                   @default("INCOMPLETE")
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
-  acceptTerms              Boolean                  @default(false)
-  appStep                  Int                      @default(0)
-  applicationFee           Float?
-  interestRate             Float?
-  lateFee                  Float?
-  legalFee                 Float?
-  monthlyRepayment         Float?
-  netDisbursement          Float?
-  originationFee           Float?
-  paidAppFee               Boolean                  @default(false)
-  purpose                  String?
-  urlLink                  String?                  @unique
-  attestationCompleted     Boolean                  @default(false)
-  attestationDate          DateTime?
-  attestationNotes         String?
-  attestationTermsAccepted Boolean                  @default(false)
-  attestationType          String?
-  attestationVideoWatched  Boolean                  @default(false)
-  meetingCompletedAt       DateTime?
-  meetingScheduledAt       DateTime?
-  // Fresh offer fields
-  freshOfferAmount         Float?
-  freshOfferTerm           Int?
-  freshOfferInterestRate   Float?
-  freshOfferMonthlyRepayment Float?
-  freshOfferNetDisbursement Float?
-  freshOfferOriginationFee Float?
-  freshOfferLegalFee       Float?
-  freshOfferApplicationFee Float?
-  freshOfferNotes          String?
-  freshOfferSubmittedAt    DateTime?
-  freshOfferSubmittedBy    String?
-  // Original offer backup fields
-  originalOfferAmount      Float?
-  originalOfferTerm        Int?
-  originalOfferInterestRate Float?
+  id                            String                   @id @default(cuid())
+  userId                        String
+  productId                     String
+  amount                        Float?
+  term                          Int?
+  status                        String                   @default("INCOMPLETE")
+  createdAt                     DateTime                 @default(now())
+  updatedAt                     DateTime                 @updatedAt
+  acceptTerms                   Boolean                  @default(false)
+  appStep                       Int                      @default(0)
+  applicationFee                Float?
+  interestRate                  Float?
+  lateFee                       Float?
+  legalFee                      Float?
+  monthlyRepayment              Float?
+  netDisbursement               Float?
+  originationFee                Float?
+  paidAppFee                    Boolean                  @default(false)
+  purpose                       String?
+  urlLink                       String?                  @unique
+  attestationCompleted          Boolean                  @default(false)
+  attestationDate               DateTime?
+  attestationNotes              String?
+  attestationTermsAccepted      Boolean                  @default(false)
+  attestationType               String?
+  attestationVideoWatched       Boolean                  @default(false)
+  meetingCompletedAt            DateTime?
+  meetingScheduledAt            DateTime?
+  freshOfferAmount              Float?
+  freshOfferInterestRate        Float?
+  freshOfferMonthlyRepayment    Float?
+  freshOfferNetDisbursement     Float?
+  freshOfferNotes               String?
+  freshOfferSubmittedAt         DateTime?
+  freshOfferSubmittedBy         String?
+  freshOfferTerm                Int?
+  originalOfferAmount           Float?
+  originalOfferInterestRate     Float?
   originalOfferMonthlyRepayment Float?
-  originalOfferNetDisbursement Float?
-  history                  LoanApplicationHistory[]
-  product                  Product                  @relation(fields: [productId], references: [id])
-  user                     User                     @relation(fields: [userId], references: [id])
-  disbursement             LoanDisbursement?
-  loan                     Loan?
-  documents                UserDocument[]
-  kycSessions              KycSession[]
+  originalOfferNetDisbursement  Float?
+  originalOfferTerm             Int?
+  freshOfferApplicationFee      Float?
+  freshOfferLegalFee            Float?
+  freshOfferOriginationFee      Float?
+  kycSessions                   KycSession[]
+  history                       LoanApplicationHistory[]
+  product                       Product                  @relation(fields: [productId], references: [id])
+  user                          User                     @relation(fields: [userId], references: [id])
+  disbursement                  LoanDisbursement?
+  loan                          Loan?
+  documents                     UserDocument[]
 
   @@map("loan_applications")
 }
@@ -348,19 +347,18 @@ model LoanApplicationHistory {
 }
 
 model LateFee {
-  id                     String   @id @default(cuid())
-  status                 String   @default("ACTIVE")
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-  calculationDetails     Json?
-  lastCalculationDate    DateTime @default(now())
-  loanId                 String   @unique
-  totalAccruedFees       Float    @default(0)
-  // Grace period tracking fields
-  gracePeriodDays        Int?     // Current grace period setting when calculated
-  gracePeriodRepayments  Int      @default(0) // Number of repayments in grace period
-  totalGracePeriodFees   Float    @default(0) // Total fees accumulated during grace period (not charged)
-  loan                   Loan     @relation(fields: [loanId], references: [id])
+  id                    String   @id @default(cuid())
+  status                String   @default("ACTIVE")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  calculationDetails    Json?
+  lastCalculationDate   DateTime @default(now())
+  loanId                String   @unique
+  totalAccruedFees      Float    @default(0)
+  gracePeriodDays       Int?
+  gracePeriodRepayments Int      @default(0)
+  totalGracePeriodFees  Float    @default(0)
+  loan                  Loan     @relation(fields: [loanId], references: [id])
 
   @@index([lastCalculationDate])
   @@index([status])
@@ -392,9 +390,9 @@ model PhoneVerification {
   expiresAt   DateTime
   verified    Boolean  @default(false)
   attempts    Int      @default(0)
-  otpType     String   @default("PHONE_VERIFICATION") // OTP type for different purposes
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  otpType     String   @default("PHONE_VERIFICATION")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([phoneNumber])
@@ -423,6 +421,189 @@ model PhoneChangeRequest {
   @@map("phone_change_requests")
 }
 
+model SystemSettings {
+  id                   String    @id @default(cuid())
+  key                  String    @unique
+  category             String
+  name                 String
+  description          String
+  dataType             String
+  value                String
+  options              Json?
+  isActive             Boolean   @default(true)
+  requiresRestart      Boolean   @default(false)
+  affectsExistingLoans Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  lastChangedBy        String?
+  lastChangedAt        DateTime?
+
+  @@map("system_settings")
+}
+
+/// KYC session for e-KYC processing
+model KycSession {
+  id                String           @id @default(cuid())
+  userId            String
+  applicationId     String?
+  status            String           @default("PENDING")
+  ocrData           Json?
+  faceMatchScore    Float?
+  livenessScore     Float?
+  retryCount        Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  completedAt       DateTime?
+  ctosData          Json?
+  ctosExpiredAt     DateTime?
+  ctosOnboardingId  String?
+  ctosOnboardingUrl String?
+  ctosResult        Int?
+  ctosStatus        Int?
+  documents         KycDocument[]
+  application       LoanApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([ctosOnboardingId])
+  @@map("kyc_sessions")
+}
+
+/// KYC documents associated with a session
+model KycDocument {
+  id         String     @id @default(cuid())
+  kycId      String
+  type       String
+  storageUrl String
+  hashSha256 String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now()) @updatedAt
+  kycSession KycSession @relation(fields: [kycId], references: [id], onDelete: Cascade)
+
+  @@unique([kycId, type], name: "kycId_type")
+  @@index([kycId])
+  @@map("kyc_documents")
+}
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  bankName      String
+  accountName   String
+  accountNumber String
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+
+  @@map("bank_accounts")
+}
+
+/// Log of sent notifications to prevent duplicates
+model NotificationLog {
+  id               String   @id @default(cuid())
+  notificationKey  String
+  messageId        String?
+  status           String   @default("SENT")
+  notificationType String
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([notificationKey])
+  @@index([createdAt])
+  @@index([notificationType])
+  @@map("notification_logs")
+}
+
+/// Payment receipts generated for loan repayments
+model PaymentReceipt {
+  id            String        @id @default(cuid())
+  repaymentId   String
+  receiptNumber String        @unique
+  filePath      String
+  fileUrl       String?
+  generatedBy   String
+  generatedAt   DateTime      @default(now())
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  repayment     LoanRepayment @relation(fields: [repaymentId], references: [id], onDelete: Cascade)
+
+  @@index([receiptNumber])
+  @@index([generatedAt])
+  @@index([repaymentId])
+  @@map("payment_receipts")
+}
+
+/// Company settings for receipt generation
+model CompanySettings {
+  id             String   @id @default(cuid())
+  companyName    String   @default("Kredit.my")
+  companyAddress String   @default("Kuala Lumpur, Malaysia")
+  companyRegNo   String?
+  contactPhone   String?
+  contactEmail   String?
+  footerNote     String?
+  taxLabel       String   @default("SST 6%")
+  companyLogo    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+  licenseNo      String?
+
+  @@map("company_settings")
+}
+
+/// Individual loan signatory tracking
+model LoanSignatory {
+  id                  String    @id @default(cuid())
+  loanId              String
+  signatoryType       String
+  name                String
+  email               String
+  role                String
+  status              String    @default("PENDING")
+  signedAt            DateTime?
+  docusealSubmitterId String?
+  docusealUuid        String?
+  signingUrl          String?
+  slug                String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  signingSlug         String?
+  loan                Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, signatoryType])
+  @@index([loanId])
+  @@index([status])
+  @@index([signatoryType])
+  @@map("loan_signatories")
+}
+
+model LoanDefaultLog {
+  id                String   @id @default(cuid())
+  loanId            String
+  eventType         String
+  daysOverdue       Int
+  outstandingAmount Float
+  totalLateFees     Float
+  noticeType        String?
+  whatsappMessageId String?
+  pdfLetterPath     String?
+  metadata          Json?
+  processedAt       DateTime
+  createdAt         DateTime @default(now())
+  loan              Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+  @@index([eventType])
+  @@index([processedAt])
+  @@map("loan_default_logs")
+}
+
 enum WalletTransactionStatus {
   PENDING
   APPROVED
@@ -443,197 +624,13 @@ enum NotificationPriority {
 }
 
 enum LoanCalculationMethod {
-  PROPORTIONAL  // Use actual average days per period (current method)
-  RULE_OF_78    // Use Rule of 78 calculation
-  FIXED_30_DAY  // Use fixed 30-day assumption (legacy)
+  PROPORTIONAL
+  RULE_OF_78
+  FIXED_30_DAY
 }
 
 enum PaymentScheduleType {
-  FIRST_OF_MONTH     // Current: 1st of month with 20th cutoff
-  EXACT_MONTHLY      // Legacy: Exact monthly intervals from disbursement
-  CUSTOM_DAY         // Future: Custom day of month
-}
-
-model SystemSettings {
-  id                    String                @id @default(cuid())
-  key                   String                @unique
-  category              String                // e.g., "LOAN_CALCULATION", "PAYMENT_SCHEDULE", "GENERAL"
-  name                  String                // Human-readable name
-  description           String                // Description of what this setting does
-  dataType              String                // "ENUM", "BOOLEAN", "STRING", "NUMBER"
-  value                 String                // JSON-serialized value
-  options               Json?                 // Available options for enum types
-  isActive              Boolean               @default(true)
-  requiresRestart       Boolean               @default(false)  // If changing requires system restart
-  affectsExistingLoans  Boolean               @default(false)  // If this affects existing loans
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  lastChangedBy         String?               // Admin user who last changed this
-  lastChangedAt         DateTime?             // When it was last changed
-
-  @@map("system_settings")
-}
-
-/// KYC session for e-KYC processing
-model KycSession {
-  id            String           @id @default(cuid())
-  userId        String
-  applicationId String?
-  status        String           @default("PENDING") // PENDING, IN_PROGRESS, APPROVED, REJECTED, MANUAL_REVIEW, FAILED
-  ocrData       Json?
-  faceMatchScore Float?
-  livenessScore Float?
-  retryCount    Int              @default(0)
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  completedAt   DateTime?
-  // CTOS Integration Fields
-  ctosOnboardingId String?        // CTOS onboarding ID for tracking
-  ctosOnboardingUrl String?       // CTOS onboarding URL for user
-  ctosStatus    Int?             // CTOS status: 0=Not Opened, 1=Processing, 2=Completed, 3=Expired
-  ctosResult    Int?             // CTOS result: 0=Rejected, 1=Approved, 2=Not Available
-  ctosExpiredAt DateTime?        // When CTOS session expires
-  ctosData      Json?            // Raw CTOS response data
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  application   LoanApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  documents     KycDocument[]
-
-  @@index([userId])
-  @@index([applicationId])
-  @@index([ctosOnboardingId])
-  @@map("kyc_sessions")
-}
-
-/// KYC documents associated with a session
-model KycDocument {
-  id         String      @id @default(cuid())
-  kycId      String
-  type       String      // 'front' | 'back' | 'selfie'
-  storageUrl String
-  hashSha256 String
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt @default(now())
-  kycSession KycSession  @relation(fields: [kycId], references: [id], onDelete: Cascade)
-
-  @@unique([kycId, type], name: "kycId_type")
-  @@index([kycId])
-  @@map("kyc_documents")
-}
-
-model BankAccount {
-  id            String   @id @default(cuid())
-  bankName      String   // e.g., "HSBC Bank Malaysia Berhad"
-  accountName   String   // e.g., "OPG Capital Holdings Sdn. Bhd."
-  accountNumber String   // e.g., "001866001878013"
-  isActive      Boolean  @default(true)
-  isDefault     Boolean  @default(false) // For primary bank account
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  createdBy     String?  // Admin user who created this
-  
-  @@map("bank_accounts")
-}
-
-/// Log of sent notifications to prevent duplicates
-model NotificationLog {
-  id               String   @id @default(cuid())
-  notificationKey  String   // Unique key for the notification (e.g., "upcoming_payment_scheduleId_7days")
-  messageId        String?  // WhatsApp message ID if applicable
-  status           String   @default("SENT") // SENT, FAILED, PENDING
-  notificationType String   // Type of notification (e.g., "UPCOMING_PAYMENT", "LATE_FEE", etc.)
-  metadata         Json?    // Additional data about the notification
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([notificationKey])
-  @@index([createdAt])
-  @@index([notificationType])
-  @@map("notification_logs")
-}
-
-/// Payment receipts generated for loan repayments
-model PaymentReceipt {
-  id            String        @id @default(cuid())
-  repaymentId   String        // Removed @unique to allow multiple receipts per repayment
-  receiptNumber String        @unique // Sequential receipt number (e.g., "RCP-2024-001")
-  filePath      String        // Path to the generated PDF file
-  fileUrl       String?       // Optional URL for accessing the receipt
-  generatedBy   String        // Admin user who approved the payment
-  generatedAt   DateTime      @default(now())
-  metadata      Json?         // Additional receipt data (company info at time of generation)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  repayment     LoanRepayment @relation(fields: [repaymentId], references: [id], onDelete: Cascade)
-
-  @@index([receiptNumber])
-  @@index([generatedAt])
-  @@index([repaymentId])
-  @@map("payment_receipts")
-}
-
-/// Company settings for receipt generation
-model CompanySettings {
-  id            String   @id @default(cuid())
-  companyName   String   @default("Kredit.my")
-  companyAddress String  @default("Kuala Lumpur, Malaysia")
-  companyRegNo  String?  // Company registration number
-  licenseNo     String?  // Company license number
-  contactPhone  String?  // Contact phone number
-  contactEmail  String?  // Contact email
-  footerNote    String?  // Footer note for receipts
-  taxLabel      String   @default("SST 6%") // Tax label (e.g., "SST 6%", "GST 6%")
-  companyLogo   String?  // Path to company logo file
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  createdBy     String?  // Admin user who created/updated settings
-  
-  @@map("company_settings")
-}
-
-/// Individual loan signatory tracking
-model LoanSignatory {
-  id                  String    @id @default(cuid())
-  loanId              String
-  signatoryType       String    // 'USER', 'COMPANY', 'WITNESS'
-  name                String
-  email               String
-  role                String    // DocuSeal role (e.g., 'Borrower', 'Company', 'Witness')
-  status              String    @default("PENDING") // 'PENDING', 'PENDING_PKI_SIGNING', 'SIGNED', 'DECLINED', 'EXPIRED'
-  signedAt            DateTime?
-  docusealSubmitterId String?   // DocuSeal submitter ID
-  docusealUuid        String?   // DocuSeal submitter UUID
-  signingUrl          String?   // Direct signing URL for this signatory (deprecated)
-  signingSlug         String?   // DocuSeal slug for generating URLs dynamically
-  slug                String?   // DocuSeal slug for this signatory
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  loan                Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
-
-  @@unique([loanId, signatoryType])
-  @@index([loanId])
-  @@index([status])
-  @@index([signatoryType])
-  @@map("loan_signatories")
-}
-
-model LoanDefaultLog {
-  id                String   @id @default(cuid())
-  loanId            String
-  eventType         String   // RISK_FLAGGED, NOTICE_SENT, DEFAULTED, RECOVERED, PDF_GENERATED
-  daysOverdue       Int
-  outstandingAmount Float
-  totalLateFees     Float
-  noticeType        String?  // INITIAL_WARNING, REMINDER, FINAL_NOTICE
-  whatsappMessageId String?  // WhatsApp message ID for tracking
-  pdfLetterPath     String?  // Path to generated PDF letter
-  metadata          Json?
-  processedAt       DateTime
-  createdAt         DateTime @default(now())
-  loan              Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
-
-  @@index([loanId])
-  @@index([eventType])
-  @@index([processedAt])
-  @@map("loan_default_logs")
+  FIRST_OF_MONTH
+  EXACT_MONTHLY
+  CUSTOM_DAY
 }

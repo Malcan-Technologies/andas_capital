@@ -26,23 +26,29 @@ model SignedAgreement {
   originalFilePath      String                // Path to original unsigned PDF
   signedFilePath        String?               // Path to MTSA signed PDF
   stampedFilePath       String?               // Path to final stamped PDF (admin uploaded)
+  certificateFilePath   String?               // Path to stamp certificate PDF (admin uploaded)
   originalFileHash      String                // SHA256 hash of original file
   signedFileHash        String?               // SHA256 hash of signed file
   stampedFileHash       String?               // SHA256 hash of stamped file
+  certificateFileHash   String?               // SHA256 hash of certificate file
   
   // Metadata
   originalFileName      String                // Original file name
   signedFileName        String?               // Signed file name
   stampedFileName       String?               // Stamped file name (company seal)
+  certificateFileName   String?               // Certificate file name
   fileSizeBytes         Int                   // Original file size
   signedFileSizeBytes   Int?                  // Signed file size
   stampedFileSizeBytes  Int?                  // Stamped file size
+  certificateFileSizeBytes Int?               // Certificate file size
   
   // Admin Operations
   downloadedBy          String?               // Admin who downloaded from MTSA
   downloadedAt          DateTime?             // When admin downloaded signed file
   stampedUploadedBy     String?               // Admin who uploaded stamped version
   stampedUploadedAt     DateTime?             // When stamped version was uploaded
+  certificateUploadedBy String?               // Admin who uploaded certificate
+  certificateUploadedAt DateTime?             // When certificate was uploaded
   
   // Status Tracking
   status                String                @default("INITIATED") // INITIATED, MTSA_SIGNED, DOWNLOADED, STAMPED, COMPLETED
@@ -73,7 +79,7 @@ model AgreementDownload {
   id                String          @id @default(cuid())
   agreementId       String
   downloadedBy      String          // Admin user ID/name
-  downloadType      String          // SIGNED, STAMPED, ORIGINAL
+  downloadType      String          // SIGNED, STAMPED, CERTIFICATE, ORIGINAL
   downloadedAt      DateTime        @default(now())
   ipAddress         String?
   userAgent         String?
@@ -90,7 +96,7 @@ model AgreementUpload {
   id                String          @id @default(cuid())
   agreementId       String
   uploadedBy        String          // Admin user ID/name
-  uploadType        String          // STAMPED, REPLACEMENT
+  uploadType        String          // STAMPED, CERTIFICATE, REPLACEMENT
   originalFileName  String
   fileSize          Int
   fileHash          String          // SHA256 hash

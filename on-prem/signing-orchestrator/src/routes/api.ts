@@ -1083,6 +1083,498 @@ router.post('/pki/sign-pdf', verifyApiKey, async (req, res) => {
 });
 
 /**
+ * Upload stamped agreement
+ * POST /api/admin/agreements/:applicationId/upload/stamped
+ */
+router.post('/admin/agreements/:applicationId/upload/stamped', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { applicationId } = req.params;
+    const originalFilename = req.get('X-Original-Filename') || 'stamped-agreement.pdf';
+    const uploadedBy = req.get('X-Uploaded-By') || 'Unknown Admin';
+    const notes = req.get('X-Notes');
+    
+    if (!applicationId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Application ID is required',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Check if we have PDF data
+    if (!req.body || req.body.length === 0) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'No PDF data provided',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+    
+    log.info('Processing stamped agreement upload', { 
+      applicationId, 
+      uploadedBy,
+      fileSize: fileBuffer.length,
+      originalName: originalFilename
+    });
+    
+    // Check if agreement exists in database
+    const existingAgreement = await prisma.signedAgreement.findUnique({
+      where: { loanId: applicationId }
+    });
+    
+    if (!existingAgreement) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'No signed agreement found for this application',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Generate stamped file path
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const stampedFileName = `stamped_${applicationId}_${timestamp}.pdf`;
+    const stampedFilePath = `/data/stamped/${stampedFileName}`;
+    
+    // Save the stamped PDF file
+    await storageManager.saveStampedPdf(
+      fileBuffer.toString('base64'),
+      applicationId,
+      stampedFileName,
+      req.correlationId
+    );
+    
+    // Update database with stamped file info
+    const updatedAgreement = await prisma.signedAgreement.update({
+      where: { loanId: applicationId },
+      data: {
+        stampedFilePath: stampedFilePath,
+        stampedFileName: stampedFileName,
+        stampedFileHash: require('crypto').createHash('sha256').update(fileBuffer).digest('hex'),
+        stampedFileSizeBytes: fileBuffer.length,
+        updatedAt: new Date()
+      }
+    });
+    
+    // Create upload audit record
+    await prisma.agreementUpload.create({
+      data: {
+        agreementId: existingAgreement.id,
+        uploadedBy: uploadedBy,
+        uploadType: 'STAMPED',
+        originalFileName: originalFilename,
+        fileSize: fileBuffer.length,
+        fileHash: require('crypto').createHash('sha256').update(fileBuffer).digest('hex'),
+        notes: notes || null,
+        ipAddress: req.ip
+      }
+    });
+    
+    // Create audit log entry
+    await prisma.agreementAuditLog.create({
+      data: {
+        agreementId: existingAgreement.id,
+        action: 'UPLOADED',
+        performedBy: uploadedBy,
+        details: `Stamped agreement uploaded: ${originalFilename}`,
+        metadata: {
+          uploadType: 'STAMPED',
+          fileName: stampedFileName,
+          fileSize: fileBuffer.length,
+          originalName: originalFilename,
+          notes: notes || null
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+    
+    log.info('Stamped agreement uploaded successfully', {
+      applicationId,
+      stampedFilePath,
+      uploadedBy
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Stamped agreement uploaded successfully',
+      data: {
+        applicationId,
+        stampedFilePath,
+        fileName: stampedFileName,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: uploadedBy
+      },
+      correlationId: req.correlationId,
+    });
+    
+  } catch (error) {
+    log.error('Stamped agreement upload failed', { 
+      error: error instanceof Error ? error.message : String(error),
+      applicationId: req.params.applicationId
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to upload stamped agreement',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * Upload stamp certificate
+ * POST /api/admin/agreements/:applicationId/upload/certificate
+ */
+router.post('/admin/agreements/:applicationId/upload/certificate', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { applicationId } = req.params;
+    const originalFilename = req.get('X-Original-Filename') || 'stamp-certificate.pdf';
+    const uploadedBy = req.get('X-Uploaded-By') || 'Unknown Admin';
+    const notes = req.get('X-Notes');
+    
+    if (!applicationId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Application ID is required',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Check if we have PDF data
+    if (!req.body || req.body.length === 0) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'No PDF data provided',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+    
+    log.info('Processing certificate upload', { 
+      applicationId, 
+      uploadedBy,
+      fileSize: fileBuffer.length,
+      originalName: originalFilename
+    });
+    
+    // Check if agreement exists in database
+    const existingAgreement = await prisma.signedAgreement.findUnique({
+      where: { loanId: applicationId }
+    });
+    
+    if (!existingAgreement) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'No signed agreement found for this application',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Generate certificate file path
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const certificateFileName = `certificate_${applicationId}_${timestamp}.pdf`;
+    const certificateFilePath = `/data/stamped/${certificateFileName}`;
+    
+    // Save the certificate PDF file
+    await storageManager.saveStampedPdf(
+      fileBuffer.toString('base64'),
+      applicationId,
+      certificateFileName,
+      req.correlationId
+    );
+    
+    // Update database with certificate file info
+    const updatedAgreement = await prisma.signedAgreement.update({
+      where: { loanId: applicationId },
+      data: {
+        certificateFilePath: certificateFilePath,
+        certificateFileName: certificateFileName,
+        certificateFileHash: require('crypto').createHash('sha256').update(fileBuffer).digest('hex'),
+        certificateFileSizeBytes: fileBuffer.length,
+        certificateUploadedBy: uploadedBy,
+        certificateUploadedAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+    
+    // Create upload audit record
+    await prisma.agreementUpload.create({
+      data: {
+        agreementId: existingAgreement.id,
+        uploadedBy: uploadedBy,
+        uploadType: 'CERTIFICATE',
+        originalFileName: originalFilename,
+        fileSize: fileBuffer.length,
+        fileHash: require('crypto').createHash('sha256').update(fileBuffer).digest('hex'),
+        notes: notes || null,
+        ipAddress: req.ip
+      }
+    });
+    
+    // Create audit log entry
+    await prisma.agreementAuditLog.create({
+      data: {
+        agreementId: existingAgreement.id,
+        action: 'UPLOADED',
+        performedBy: uploadedBy,
+        details: `Certificate uploaded: ${originalFilename}`,
+        metadata: {
+          uploadType: 'CERTIFICATE',
+          fileName: certificateFileName,
+          fileSize: fileBuffer.length,
+          originalName: originalFilename,
+          notes: notes || null
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+    
+    log.info('Certificate uploaded successfully', {
+      applicationId,
+      certificateFilePath,
+      uploadedBy
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Certificate uploaded successfully',
+      data: {
+        applicationId,
+        certificateFileName,
+        certificateFilePath,
+        fileSize: fileBuffer.length,
+        uploadedBy,
+        uploadedAt: new Date().toISOString()
+      },
+      correlationId: req.correlationId,
+    });
+  } catch (error) {
+    log.error('Certificate upload failed', { 
+      error: error instanceof Error ? error.message : String(error),
+      applicationId: req.params.applicationId
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to upload certificate',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * Download stamp certificate
+ * GET /api/admin/agreements/:applicationId/download/certificate
+ */
+router.get('/admin/agreements/:applicationId/download/certificate', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { applicationId } = req.params;
+    
+    log.info('Processing certificate download', { applicationId });
+    
+    // Find the agreement in database
+    const agreement = await prisma.signedAgreement.findUnique({
+      where: { loanId: applicationId }
+    });
+    
+    if (!agreement || !agreement.certificateFilePath) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'No certificate found for this application',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Check if file exists
+    const fileExists = await storageManager.fileExists(agreement.certificateFilePath);
+    if (!fileExists) {
+      log.error('Certificate file not found on disk', { 
+        applicationId, 
+        filePath: agreement.certificateFilePath 
+      });
+      
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Certificate file not found on disk',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Read and serve the file
+    const fileBuffer = await storageManager.readFile(agreement.certificateFilePath);
+    
+    // Create download audit record
+    await prisma.agreementDownload.create({
+      data: {
+        agreementId: agreement.id,
+        downloadedBy: 'Admin User', // Could be enhanced to get actual user
+        downloadType: 'CERTIFICATE',
+        ipAddress: req.ip
+      }
+    });
+    
+    // Create audit log entry
+    await prisma.agreementAuditLog.create({
+      data: {
+        agreementId: agreement.id,
+        action: 'DOWNLOADED',
+        performedBy: 'Admin User',
+        details: `Certificate downloaded: ${agreement.certificateFileName}`,
+        metadata: {
+          downloadType: 'CERTIFICATE',
+          fileName: agreement.certificateFileName,
+          fileSize: agreement.certificateFileSizeBytes
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+    
+    log.info('Certificate downloaded successfully', {
+      applicationId,
+      fileName: agreement.certificateFileName
+    });
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${agreement.certificateFileName || `certificate_${applicationId}.pdf`}"`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    
+    // Send the file
+    res.send(fileBuffer);
+    
+  } catch (error) {
+    log.error('Certificate download failed', { 
+      error: error instanceof Error ? error.message : String(error),
+      applicationId: req.params.applicationId
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to download certificate',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * Download stamped agreement
+ * GET /api/admin/agreements/:applicationId/download/stamped
+ */
+router.get('/admin/agreements/:applicationId/download/stamped', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { applicationId } = req.params;
+    
+    log.info('Processing stamped agreement download', { applicationId });
+    
+    // Find the agreement in database
+    const agreement = await prisma.signedAgreement.findUnique({
+      where: { loanId: applicationId }
+    });
+    
+    if (!agreement || !agreement.stampedFilePath) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'No stamped agreement found for this application',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Check if file exists
+    const fileExists = await storageManager.fileExists(agreement.stampedFilePath);
+    if (!fileExists) {
+      log.error('Stamped file not found on disk', { 
+        applicationId, 
+        filePath: agreement.stampedFilePath 
+      });
+      
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Stamped agreement file not found on disk',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Read and serve the file
+    const fileBuffer = await storageManager.readFile(agreement.stampedFilePath);
+    
+    // Create download audit record
+    await prisma.agreementDownload.create({
+      data: {
+        agreementId: agreement.id,
+        downloadedBy: 'Admin User', // Could be enhanced to get actual user
+        downloadType: 'STAMPED',
+        ipAddress: req.ip
+      }
+    });
+    
+    // Create audit log entry
+    await prisma.agreementAuditLog.create({
+      data: {
+        agreementId: agreement.id,
+        action: 'DOWNLOADED',
+        performedBy: 'Admin User',
+        details: `Stamped agreement downloaded: ${agreement.stampedFileName}`,
+        metadata: {
+          downloadType: 'STAMPED',
+          fileName: agreement.stampedFileName,
+          fileSize: agreement.stampedFileSizeBytes
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+    
+    log.info('Stamped agreement downloaded successfully', {
+      applicationId,
+      fileName: agreement.stampedFileName
+    });
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${agreement.stampedFileName || `stamped_${applicationId}.pdf`}"`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    
+    // Send the file
+    res.send(fileBuffer);
+    
+  } catch (error) {
+    log.error('Stamped agreement download failed', { 
+      error: error instanceof Error ? error.message : String(error),
+      applicationId: req.params.applicationId
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to download stamped agreement',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
  * PKI Sign PDF with PIN (for internal users)
  * POST /api/pki/sign-pdf-pin
  */

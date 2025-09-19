@@ -54,7 +54,17 @@ export class StorageManager {
     try {
       await this.initialize(correlationId);
       
-      const filePath = this.generateSignedPdfPath(packetId, signerId);
+      // For progressive signing, use consistent filename without timestamp
+      let filePath: string;
+      if (signerId === 'progressive') {
+        // Use consistent filename for progressive signing (one PDF per loan)
+        const filename = `${packetId}_signed.pdf`;
+        filePath = path.join(this.signedFilesDir, filename);
+      } else {
+        // Use timestamped filename for regular signing
+        filePath = this.generateSignedPdfPath(packetId, signerId);
+      }
+      
       const buffer = Buffer.from(base64Data, 'base64');
       
       await fs.writeFile(filePath, buffer);
@@ -63,7 +73,8 @@ export class StorageManager {
         filePath, 
         packetId, 
         signerId,
-        fileSize: buffer.length 
+        fileSize: buffer.length,
+        isProgressive: signerId === 'progressive'
       });
       
       return filePath;
@@ -72,6 +83,45 @@ export class StorageManager {
         error: error instanceof Error ? error.message : String(error),
         packetId,
         signerId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Save stamped PDF from base64 data
+   */
+  async saveStampedPdf(
+    base64Data: string,
+    applicationId: string,
+    fileName: string,
+    correlationId?: string
+  ): Promise<string> {
+    const log = correlationId ? createCorrelatedLogger(correlationId) : logger;
+    
+    try {
+      // Ensure stamped files directory exists
+      const stampedFilesDir = config.storage.stampedFilesDir || '/data/stamped';
+      await fs.ensureDir(stampedFilesDir);
+      
+      const filePath = path.join(stampedFilesDir, fileName);
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      await fs.writeFile(filePath, buffer);
+      
+      log.info('Stamped PDF saved successfully', { 
+        filePath, 
+        applicationId, 
+        fileName,
+        fileSize: buffer.length
+      });
+      
+      return filePath;
+    } catch (error) {
+      log.error('Failed to save stamped PDF', { 
+        error: error instanceof Error ? error.message : String(error),
+        applicationId,
+        fileName 
       });
       throw error;
     }

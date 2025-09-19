@@ -85,6 +85,8 @@ services:
     depends_on:
       agreements-postgres:
         condition: service_healthy
+      mtsa-pilot:
+        condition: service_healthy
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
@@ -128,9 +130,25 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # MyTrustSigner Agent services will be deployed manually
-  # MTSA Pilot expected on: localhost:8081
-  # MTSA Prod expected on: localhost:8082
+  # MTSA Pilot Service (Production)
+  mtsa-pilot:
+    build:
+      context: ../mtsa
+      dockerfile: Dockerfile
+    container_name: mtsa-pilot-prod
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Asia/Kuala_Lumpur
+    networks:
+      - mtsa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   signed-pdfs:

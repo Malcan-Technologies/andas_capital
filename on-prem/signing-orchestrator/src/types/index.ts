@@ -307,6 +307,7 @@ export interface OrchestratorConfig {
   };
   storage: {
     signedFilesDir: string;
+    stampedFilesDir: string;
     maxUploadMB: number;
   };
   mtsa: {

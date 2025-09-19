@@ -50,7 +50,17 @@ app.use(limiter);
 // Global middleware
 app.use(correlationIdMiddleware);
 
-// Body parsing middleware
+// Raw body parsing for PDF uploads (must come before general body parsing)
+app.use('/api/admin/agreements/:applicationId/upload/stamped', express.raw({ 
+  type: 'application/pdf', 
+  limit: `${config.storage.maxUploadMB}mb` 
+}));
+app.use('/api/admin/agreements/:applicationId/upload/certificate', express.raw({ 
+  type: 'application/pdf', 
+  limit: `${config.storage.maxUploadMB}mb` 
+}));
+
+// General body parsing middleware
 app.use(express.json({ limit: `${config.storage.maxUploadMB}mb` }));
 app.use(express.urlencoded({ extended: true, limit: `${config.storage.maxUploadMB}mb` }));
 

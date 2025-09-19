@@ -471,8 +471,27 @@ deploy_orchestrator() {
                 echo "ℹ️  No existing PostgreSQL volume found - first deployment"
             fi
             
-            # Use the automated deployment script if available
-            if [ -f deploy-auto.sh ]; then
+            # Check if MTSA development compose file exists (includes MTSA + Orchestrator)
+            if [ -f docker-compose.mtsa-prod.yml ]; then
+                echo "🚀 Using production MTSA + Orchestrator deployment..."
+                echo "🏗️  Building and starting Signing Orchestrator with MTSA..."
+                # Use production compose file that includes both orchestrator and MTSA on same network
+                docker-compose -f docker-compose.mtsa-prod.yml up -d --build --force-recreate
+                
+                echo "⏳ Waiting for all services to start..."
+                sleep 20
+                
+                echo "🔗 Ensuring MTSA network connectivity..."
+                # Verify MTSA container is accessible from orchestrator
+                if docker exec signing-orchestrator ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+                    echo "✅ MTSA network connectivity verified"
+                else
+                    echo "⚠️  MTSA network connectivity issue detected - attempting fix..."
+                    # Connect MTSA container to orchestrator network if needed
+                    docker network connect signing-orchestrator_mtsa-network mtsa-pilot-prod 2>/dev/null || true
+                fi
+                
+            elif [ -f deploy-auto.sh ]; then
                 echo "🚀 Using automated deployment script..."
                 chmod +x deploy-auto.sh
                 # Run a simplified version that doesn't do file copying
@@ -517,12 +536,59 @@ deploy_mtsa() {
     print_section "Checking MTSA Deployment"
     
     ssh $REMOTE_HOST << 'EOF'
-        if [ -d mtsa-pilot-docker ]; then
+        # First check if MTSA was deployed with Signing Orchestrator
+        if docker ps | grep -q "mtsa-pilot"; then
+            echo "✅ MTSA container is running (deployed with Signing Orchestrator)"
+            echo "📊 MTSA container details:"
+            docker ps | grep mtsa
+            
+            # Test MTSA health
+            echo "🧪 Testing MTSA WSDL endpoint..."
+            if curl -f http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl >/dev/null 2>&1; then
+                echo "✅ MTSA WSDL endpoint is accessible"
+                
+                # Verify network connectivity from orchestrator
+                echo "🔗 Testing MTSA network connectivity from Signing Orchestrator..."
+                if docker exec signing-orchestrator ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+                    echo "✅ MTSA network connectivity verified"
+                else
+                    echo "⚠️  MTSA network connectivity issue - attempting to fix..."
+                    # Try to connect MTSA to orchestrator network
+                    mtsa_container=$(docker ps --format "{{.Names}}" | grep mtsa | head -1)
+                    if [ ! -z "$mtsa_container" ]; then
+                        docker network connect signing-orchestrator_mtsa-network "$mtsa_container" 2>/dev/null || echo "Network connection failed or already exists"
+                        # Test again
+                        if docker exec signing-orchestrator ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+                            echo "✅ MTSA network connectivity fixed"
+                        else
+                            echo "❌ MTSA network connectivity still failing"
+                        fi
+                    fi
+                fi
+            else
+                echo "❌ MTSA WSDL endpoint not accessible"
+                # Try to restart MTSA container
+                mtsa_container=$(docker ps --format "{{.Names}}" | grep mtsa | head -1)
+                if [ ! -z "$mtsa_container" ]; then
+                    echo "🔄 Restarting MTSA container: $mtsa_container"
+                    docker restart "$mtsa_container" 2>/dev/null || echo "⚠️  Failed to restart MTSA container"
+                    sleep 10
+                    # Test again after restart
+                    if curl -f http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl >/dev/null 2>&1; then
+                        echo "✅ MTSA WSDL endpoint accessible after restart"
+                    else
+                        echo "❌ MTSA WSDL endpoint still not accessible after restart"
+                    fi
+                fi
+            fi
+            
+        elif [ -d mtsa-pilot-docker ]; then
+            # Fallback to standalone MTSA deployment
             cd mtsa-pilot-docker
             
-            echo "🔍 Checking MTSA container status..."
+            echo "🔍 Checking standalone MTSA container status..."
             if docker ps | grep -q "mtsapilot-container"; then
-                echo "✅ MTSA container is already running"
+                echo "✅ Standalone MTSA container is running"
                 echo "📊 MTSA container details:"
                 docker ps | grep mtsa
                 
@@ -530,6 +596,10 @@ deploy_mtsa() {
                 echo "🧪 Testing MTSA WSDL endpoint..."
                 if curl -f http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl >/dev/null 2>&1; then
                     echo "✅ MTSA WSDL endpoint is accessible"
+                    
+                    # Ensure network connectivity to orchestrator
+                    echo "🔗 Ensuring MTSA network connectivity to Signing Orchestrator..."
+                    docker network connect signing-orchestrator_mtsa-network mtsapilot-container 2>/dev/null || echo "Network connection already exists or failed"
                 else
                     echo "❌ MTSA WSDL endpoint not accessible, restarting..."
                     docker restart mtsapilot-container 2>/dev/null || echo "⚠️  Failed to restart MTSA container"
@@ -545,6 +615,13 @@ deploy_mtsa() {
                     # Use existing startup command or docker-compose if available
                     if [ -f docker-compose.yml ]; then
                         docker-compose up -d
+                        sleep 10
+                        # Connect to orchestrator network after startup
+                        echo "🔗 Connecting MTSA to Signing Orchestrator network..."
+                        mtsa_container=$(docker ps --format "{{.Names}}" | grep mtsa | head -1)
+                        if [ ! -z "$mtsa_container" ]; then
+                            docker network connect signing-orchestrator_mtsa-network "$mtsa_container" 2>/dev/null || echo "Network connection failed or already exists"
+                        fi
                     else
                         echo "ℹ️  Manual MTSA container start may be required"
                     fi
@@ -555,7 +632,8 @@ deploy_mtsa() {
             
             cd ..
         else
-            echo "⚠️  MTSA directory not found, skipping MTSA deployment"
+            echo "⚠️  MTSA directory not found and no MTSA container running"
+            echo "ℹ️  MTSA should be deployed with Signing Orchestrator using docker-compose.mtsa-prod.yml"
         fi
 EOF
     
@@ -599,6 +677,29 @@ show_deployment_status() {
             echo "✅ Healthy"
         else
             echo "❌ Unhealthy"
+        fi
+        
+        # Network connectivity check
+        echo ""
+        echo "🔗 Network Connectivity Checks:"
+        
+        # Check if orchestrator can reach MTSA
+        echo -n "Orchestrator → MTSA: "
+        if docker exec signing-orchestrator ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+            echo "✅ Connected"
+        else
+            echo "❌ Disconnected"
+            echo "   ⚠️  MTSA network connectivity issue detected!"
+            echo "   🔧 Run: ./deploy-all.sh restart to fix network issues"
+        fi
+        
+        # Check Docker networks
+        echo -n "Docker Networks: "
+        network_count=$(docker network ls | grep -E "(docuseal|mtsa|signing)" | wc -l)
+        if [ "$network_count" -gt 0 ]; then
+            echo "✅ $network_count networks active"
+        else
+            echo "❌ No service networks found"
         fi
         
         echo ""
@@ -685,6 +786,22 @@ restart_services() {
                     echo "✅ Signing Orchestrator restarted"
                     cd ..
                 fi
+                
+                # Fix MTSA network connectivity after restart
+                echo "🔗 Ensuring MTSA network connectivity..."
+                sleep 5
+                mtsa_container=\$(docker ps --format "{{.Names}}" | grep mtsa | head -1)
+                if [ ! -z "\$mtsa_container" ]; then
+                    docker network connect signing-orchestrator_mtsa-network "\$mtsa_container" 2>/dev/null || echo "Network already connected or connection failed"
+                    # Verify connectivity
+                    if docker exec signing-orchestrator ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+                        echo "✅ MTSA network connectivity verified after restart"
+                    else
+                        echo "⚠️  MTSA network connectivity still has issues"
+                    fi
+                else
+                    echo "ℹ️  No MTSA container found to connect"
+                fi
                 ;;
         esac
         
@@ -768,6 +885,89 @@ deploy_all() {
     echo "   $0 backup                    - Create comprehensive backup"
 }
 
+# Function to fix network connectivity issues
+fix_network() {
+    print_section "Fixing Network Connectivity Issues"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        echo "🔗 Diagnosing and fixing network connectivity issues..."
+        
+        # List all containers
+        echo "📊 Current containers:"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+        
+        # List networks
+        echo ""
+        echo "🌐 Current networks:"
+        docker network ls | grep -E "(docuseal|mtsa|signing)"
+        
+        # Find MTSA container
+        mtsa_container=$(docker ps --format "{{.Names}}" | grep mtsa | head -1)
+        orchestrator_container=$(docker ps --format "{{.Names}}" | grep orchestrator | head -1)
+        
+        if [ -z "$mtsa_container" ]; then
+            echo "❌ No MTSA container found running"
+            exit 1
+        fi
+        
+        if [ -z "$orchestrator_container" ]; then
+            echo "❌ No Signing Orchestrator container found running"
+            exit 1
+        fi
+        
+        echo ""
+        echo "🔍 Found containers:"
+        echo "   MTSA: $mtsa_container"
+        echo "   Orchestrator: $orchestrator_container"
+        
+        # Check current network connectivity
+        echo ""
+        echo "🧪 Testing current connectivity..."
+        if docker exec "$orchestrator_container" ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+            echo "✅ Network connectivity is already working"
+        else
+            echo "❌ Network connectivity broken - attempting fix..."
+            
+            # Try to connect MTSA to orchestrator network
+            echo "🔧 Connecting MTSA to Signing Orchestrator network..."
+            docker network connect signing-orchestrator_mtsa-network "$mtsa_container" 2>/dev/null || echo "Network connection failed or already exists"
+            
+            # Wait a moment for network to settle
+            sleep 3
+            
+            # Test again
+            echo "🧪 Testing connectivity after fix..."
+            if docker exec "$orchestrator_container" ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+                echo "✅ Network connectivity fixed successfully!"
+            else
+                echo "❌ Network connectivity still broken"
+                echo ""
+                echo "🔍 Network diagnostics:"
+                echo "Networks for $mtsa_container:"
+                docker inspect "$mtsa_container" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+                echo "Networks for $orchestrator_container:"
+                docker inspect "$orchestrator_container" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+            fi
+        fi
+        
+        echo ""
+        echo "🧪 Final connectivity test:"
+        if docker exec "$orchestrator_container" ping -c 2 mtsa-pilot >/dev/null 2>&1; then
+            echo "✅ MTSA network connectivity: WORKING"
+        else
+            echo "❌ MTSA network connectivity: FAILED"
+        fi
+        
+        if curl -f -s http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl >/dev/null 2>&1; then
+            echo "✅ MTSA WSDL endpoint: ACCESSIBLE"
+        else
+            echo "❌ MTSA WSDL endpoint: NOT ACCESSIBLE"
+        fi
+EOF
+    
+    print_success "Network connectivity fix completed"
+}
+
 # Parse command line arguments
 case "${1:-deploy}" in
     "deploy")
@@ -794,8 +994,11 @@ case "${1:-deploy}" in
     "sync")
         check_remote_connection && sync_docuseal && sync_orchestrator && sync_mtsa
         ;;
+    "fix-network")
+        check_remote_connection && fix_network
+        ;;
     *)
-        echo "Usage: $0 [deploy|status|logs|restart|cleanup|backup|restore|sync]"
+        echo "Usage: $0 [deploy|status|logs|restart|cleanup|backup|restore|sync|fix-network]"
         echo ""
         echo "Commands:"
         echo "  deploy              - Full deployment (default)"
@@ -806,6 +1009,7 @@ case "${1:-deploy}" in
         echo "  backup              - Create comprehensive backup (database + volumes + files)"
         echo "  restore <name>      - Restore from backup (lists available if no name given)"
         echo "  sync                - Sync files only (no Docker rebuild)"
+        echo "  fix-network         - Fix MTSA network connectivity issues"
         echo ""
         echo "Examples:"
         echo "  $0 deploy           - Deploy both systems"
@@ -813,6 +1017,7 @@ case "${1:-deploy}" in
         echo "  $0 restore full-backup-20250830_120000 - Restore from specific backup"
         echo "  $0 logs docuseal    - Show DocuSeal logs"
         echo "  $0 restart orchestrator - Restart only Signing Orchestrator"
+        echo "  $0 fix-network      - Fix MTSA connectivity issues"
         exit 1
         ;;
 esac

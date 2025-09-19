@@ -22,6 +22,7 @@ import {
 	DocumentArrowDownIcon,
 	ReceiptPercentIcon,
 	PencilIcon,
+	PlusIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -121,6 +122,10 @@ interface LoanData {
 	agreementStatus?: string | null; // PENDING_SIGNATURE, SIGNED, SIGNATURE_EXPIRED, SIGNATURE_DECLINED, SIGNATURE_FAILED
 	agreementSignedAt?: string | null;
 	docusealSignUrl?: string | null;
+	// PKI Integration fields
+	pkiSignedPdfUrl?: string | null;
+	pkiStampedPdfUrl?: string | null;
+	pkiStampCertificateUrl?: string | null;
 	application?: {
 		id: string;
 		amount: number;
@@ -194,6 +199,7 @@ function ActiveLoansContent() {
 		active: 0,
 		pending_discharge: 0,
 		pending_early_settlement: 0,
+		pending_stamped: 0,
 		discharged: 0,
 		late: 0,
 		potential_default: 0,
@@ -248,6 +254,39 @@ function ActiveLoansContent() {
 		paymentDate: "",
 	});
 	const [processingManualPayment, setProcessingManualPayment] = useState(false);
+
+	// Stamped agreement upload states
+	const [showUploadStampedModal, setShowUploadStampedModal] = useState(false);
+	const [showStampedConfirmModal, setShowStampedConfirmModal] = useState(false);
+	const [uploadStampedFile, setUploadStampedFile] = useState<File | null>(null);
+	const [uploadStampedNotes, setUploadStampedNotes] = useState("");
+	const [uploadStampedLoading, setUploadStampedLoading] = useState(false);
+
+	// Certificate upload states
+	const [showUploadCertificateModal, setShowUploadCertificateModal] = useState(false);
+	const [showCertificateConfirmModal, setShowCertificateConfirmModal] = useState(false);
+	const [uploadCertificateFile, setUploadCertificateFile] = useState<File | null>(null);
+	const [uploadCertificateNotes, setUploadCertificateNotes] = useState("");
+	const [uploadCertificateLoading, setUploadCertificateLoading] = useState(false);
+	const [uploadCertificateLoanId, setUploadCertificateLoanId] = useState<string | null>(null);
+
+	// Get user role from API
+	const [userRole, setUserRole] = useState<string>("");
+
+	useEffect(() => {
+		const fetchUserRole = async () => {
+			try {
+				const userData = await fetchWithAdminTokenRefresh<{
+					role: string;
+				}>("/api/admin/me");
+				setUserRole(userData.role || "");
+			} catch (error) {
+				console.error("Error fetching user role:", error);
+				setUserRole("");
+			}
+		};
+		fetchUserRole();
+	}, []);
 
 	useEffect(() => {
 		fetchActiveLoans();
@@ -653,6 +692,7 @@ function ActiveLoansContent() {
 			}).length,
 			pending_discharge: loans.filter((loan) => loan.status === "PENDING_DISCHARGE").length,
 			pending_early_settlement: loans.filter((loan) => loan.status === "PENDING_EARLY_SETTLEMENT").length,
+			pending_stamped: loans.filter((loan) => loan.pkiSignedPdfUrl && (!loan.pkiStampedPdfUrl || !loan.pkiStampCertificateUrl) && loan.status !== "DEFAULT").length,
 			discharged: loans.filter((loan) => loan.status === "DISCHARGED").length,
 			late: loans.filter((loan) => {
 				// Priority: DEFAULT > Default Risk > Late
@@ -713,6 +753,10 @@ function ActiveLoansContent() {
 		} else if (statusFilter === "pending_early_settlement") {
 			filtered = filtered.filter(
 				(loan) => loan.status === "PENDING_EARLY_SETTLEMENT"
+			);
+		} else if (statusFilter === "pending_stamped") {
+			filtered = filtered.filter(
+				(loan) => loan.pkiSignedPdfUrl && (!loan.pkiStampedPdfUrl || !loan.pkiStampCertificateUrl) && loan.status !== "DEFAULT"
 			);
 		} else if (statusFilter === "discharged") {
 			filtered = filtered.filter((loan) => loan.status === "DISCHARGED");
@@ -1166,6 +1210,269 @@ function ActiveLoansContent() {
 		} catch (error) {
 			console.error('Error downloading receipt:', error);
 			alert('Failed to download receipt');
+		}
+	};
+
+	const downloadSignedAgreement = async (loanId: string) => {
+		try {
+			const token = localStorage.getItem("adminToken");
+			const response = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${loanId}/download-agreement`,
+				{
+					method: 'GET',
+					headers: {
+						"Authorization": `Bearer ${token}`,
+					},
+				}
+			);
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			
+			// Extract filename from Content-Disposition header or use default
+			const contentDisposition = response.headers.get('Content-Disposition');
+			let filename = `loan-agreement-${loanId.substring(0, 8)}.pdf`;
+			if (contentDisposition) {
+				const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+				if (filenameMatch) {
+					filename = filenameMatch[1];
+				}
+			}
+			
+			link.download = filename;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('Error downloading signed agreement:', error);
+			alert(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	};
+
+	const downloadStampedAgreement = async (loanId: string) => {
+		try {
+			const loan = loans.find(l => l.id === loanId);
+			if (!loan?.pkiStampedPdfUrl) {
+				throw new Error("No stamped agreement available for download");
+			}
+
+			const token = localStorage.getItem("adminToken");
+			const response = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${loanId}/download-stamped-agreement`,
+				{
+					method: 'GET',
+					headers: {
+						"Authorization": `Bearer ${token}`,
+					},
+				}
+			);
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			// Get the PDF blob and create download link
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `stamped-agreement-${loanId.substring(0, 8)}.pdf`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+
+			console.log("✅ Stamped agreement downloaded successfully");
+
+		} catch (error) {
+			console.error("❌ Error downloading stamped agreement:", error);
+			alert(error instanceof Error ? error.message : "Failed to download stamped agreement");
+		}
+	};
+
+	const downloadStampCertificate = async (loanId: string) => {
+		try {
+			const loan = loans.find(l => l.id === loanId);
+			if (!loan?.pkiStampCertificateUrl) {
+				throw new Error("No stamp certificate available for download");
+			}
+
+			const token = localStorage.getItem("adminToken");
+			const response = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${loanId}/download-stamp-certificate`,
+				{
+					method: 'GET',
+					headers: {
+						"Authorization": `Bearer ${token}`,
+					},
+				}
+			);
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			// Get the PDF blob and create download link
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `stamp-certificate-${loanId.substring(0, 8)}.pdf`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+
+			console.log("✅ Stamp certificate downloaded successfully");
+
+		} catch (error) {
+			console.error("❌ Error downloading stamp certificate:", error);
+			alert(error instanceof Error ? error.message : "Failed to download stamp certificate");
+		}
+	};
+
+	const handleUploadStampedAgreement = (loanId: string) => {
+		const loan = loans.find(l => l.id === loanId);
+		setManualPaymentForm(prev => ({ ...prev, loanId }));
+		
+		// Check if stamped PDF already exists
+		if (loan?.pkiStampedPdfUrl) {
+			setShowStampedConfirmModal(true);
+		} else {
+			setShowUploadStampedModal(true);
+		}
+	};
+
+	const handleUploadStampCertificate = (loanId: string) => {
+		const loan = loans.find(l => l.id === loanId);
+		setUploadCertificateLoanId(loanId);
+		
+		// Check if certificate already exists
+		if (loan?.pkiStampCertificateUrl) {
+			setShowCertificateConfirmModal(true);
+		} else {
+			setShowUploadCertificateModal(true);
+		}
+	};
+
+	const resetUploadStampedModals = () => {
+		setShowUploadStampedModal(false);
+		setShowStampedConfirmModal(false);
+		setUploadStampedFile(null);
+		setUploadStampedNotes("");
+	};
+
+	const resetUploadCertificateModals = () => {
+		setShowUploadCertificateModal(false);
+		setShowCertificateConfirmModal(false);
+		setUploadCertificateFile(null);
+		setUploadCertificateNotes("");
+		setUploadCertificateLoanId(null);
+	};
+
+	const handleUploadStampedSubmit = async () => {
+		if (!uploadStampedFile || !manualPaymentForm.loanId) {
+			alert("Please select a PDF file to upload");
+			return;
+		}
+
+		setUploadStampedLoading(true);
+		try {
+			const formData = new FormData();
+			formData.append('stampedPdf', uploadStampedFile);
+			if (uploadStampedNotes.trim()) {
+				formData.append('notes', uploadStampedNotes.trim());
+			}
+
+			const response = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${manualPaymentForm.loanId}/upload-stamped-agreement`,
+				{
+					method: "POST",
+					headers: {
+						"Authorization": `Bearer ${localStorage.getItem("adminToken") || ""}`
+					},
+					body: formData
+				}
+			);
+
+			const result = await response.json();
+
+			if (!result.success) {
+				throw new Error(result.message || "Failed to upload stamped agreement");
+			}
+
+			console.log("✅ Stamped agreement uploaded successfully");
+			alert("Stamped agreement uploaded successfully!");
+
+			// Reset form and close modal
+			resetUploadStampedModals();
+			
+			// Refresh loans to show updated data
+			await fetchActiveLoans();
+
+		} catch (error) {
+			console.error("❌ Error uploading stamped agreement:", error);
+			alert(error instanceof Error ? error.message : "Failed to upload stamped agreement");
+		} finally {
+			setUploadStampedLoading(false);
+		}
+	};
+
+	const handleUploadCertificateSubmit = async () => {
+		if (!uploadCertificateFile || !uploadCertificateLoanId) {
+			alert("Please select a PDF file to upload");
+			return;
+		}
+
+		setUploadCertificateLoading(true);
+		try {
+			const formData = new FormData();
+			formData.append('stampCertificate', uploadCertificateFile);
+			if (uploadCertificateNotes.trim()) {
+				formData.append('notes', uploadCertificateNotes.trim());
+			}
+
+			const response = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/loans/${uploadCertificateLoanId}/upload-stamp-certificate`,
+				{
+					method: "POST",
+					headers: {
+						"Authorization": `Bearer ${localStorage.getItem("adminToken") || ""}`
+					},
+					body: formData
+				}
+			);
+
+			const result = await response.json();
+
+			if (!result.success) {
+				throw new Error(result.message || "Failed to upload stamp certificate");
+			}
+
+			console.log("✅ Stamp certificate uploaded successfully");
+			alert("Stamp certificate uploaded successfully!");
+
+			// Reset form and close modal
+			resetUploadCertificateModals();
+			
+			// Refresh loans to show updated data
+			await fetchActiveLoans();
+
+		} catch (error) {
+			console.error("❌ Error uploading stamp certificate:", error);
+			alert(error instanceof Error ? error.message : "Failed to upload stamp certificate");
+		} finally {
+			setUploadCertificateLoading(false);
 		}
 	};
 
@@ -2081,6 +2388,16 @@ function ActiveLoansContent() {
 						}`}
 					>
 						Early Settlement ({filterCounts.pending_early_settlement})
+					</button>
+					<button
+						onClick={() => setStatusFilter("pending_stamped")}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							statusFilter === "pending_stamped"
+								? "bg-teal-500/30 text-teal-100 border-teal-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Pending Stamped ({filterCounts.pending_stamped})
 					</button>
 					<button
 						onClick={() => setStatusFilter("discharged")}
@@ -3074,19 +3391,6 @@ function ActiveLoansContent() {
 															</p>
 														</div>
 													)}
-													{selectedLoan.agreementStatus === 'SIGNED' && selectedLoan.docusealSignUrl && (
-														<div className="pt-3 border-t border-gray-700/30">
-															<a
-																href={`${process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'http://localhost:3001'}/s/${selectedLoan.docusealSignUrl}`}
-																target="_blank"
-																rel="noopener noreferrer"
-																className="inline-flex items-center px-3 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-sm"
-															>
-																<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
-																Download Signed Agreement
-															</a>
-														</div>
-													)}
 												</div>
 											</div>
 										</div>
@@ -4024,23 +4328,80 @@ function ActiveLoansContent() {
 										) : signaturesData ? (
 											<div>
 												<div className="mb-6">
-													<div className="flex items-center justify-between mb-4">
-														<h4 className="text-white font-medium flex items-center">
+													<div className="mb-4">
+														<h4 className="text-white font-medium flex items-center mb-3">
 															<PencilIcon className="h-5 w-5 mr-2 text-purple-400" />
 															Document Signature Status
 														</h4>
-														{/* Download Loan Agreement Button */}
-														{selectedLoan?.docusealSignUrl && (
-															<a
-																href={`${process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'http://localhost:3001'}/s/${selectedLoan.docusealSignUrl}`}
-																target="_blank"
-																rel="noopener noreferrer"
-																className="inline-flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-																title="Download signed loan agreement"
-															>
-																<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
-																Download Agreement
-															</a>
+														
+														{/* Download Section */}
+														<div className="mb-4">
+															<h5 className="text-gray-300 text-sm font-medium mb-2">Download Documents</h5>
+															<div className="flex flex-wrap gap-2">
+																{/* Download Signed Agreement Button */}
+																{selectedLoan?.agreementStatus === 'SIGNED' && selectedLoan?.pkiSignedPdfUrl && (
+																	<button
+																		onClick={() => downloadSignedAgreement(selectedLoan.id)}
+																		className="inline-flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+																		title="Download signed loan agreement"
+																	>
+																		<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+																		Download Signed
+																	</button>
+																)}
+																
+																{/* Download Stamped Agreement Button */}
+																{selectedLoan?.pkiStampedPdfUrl && (
+																	<button
+																		onClick={() => downloadStampedAgreement(selectedLoan.id)}
+																		className="inline-flex items-center px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition-colors"
+																		title="Download stamped loan agreement"
+																	>
+																		<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+																		Download Stamped
+																	</button>
+																)}
+
+																{/* Download Certificate Button */}
+																{selectedLoan?.pkiStampCertificateUrl && (
+																	<button
+																		onClick={() => downloadStampCertificate(selectedLoan.id)}
+																		className="inline-flex items-center px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+																		title="Download stamp certificate"
+																	>
+																		<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+																		Download Certificate
+																	</button>
+																)}
+															</div>
+														</div>
+
+														{/* Upload Section - ADMIN ONLY */}
+														{(userRole === "ADMIN" || userRole === "admin") && selectedLoan?.agreementStatus === 'SIGNED' && selectedLoan?.pkiSignedPdfUrl && (
+															<div>
+																<h5 className="text-gray-300 text-sm font-medium mb-2">Upload Documents (Admin Only)</h5>
+																<div className="flex flex-wrap gap-2">
+																	{/* Upload Stamped Agreement Button */}
+																	<button
+																		onClick={() => handleUploadStampedAgreement(selectedLoan.id)}
+																		className="inline-flex items-center px-3 py-2 border-2 border-orange-500 text-orange-500 hover:bg-orange-50 hover:border-orange-600 hover:text-orange-600 text-sm font-medium rounded-lg transition-colors"
+																		title={selectedLoan?.pkiStampedPdfUrl ? "Replace stamped agreement" : "Upload stamped agreement"}
+																	>
+																		<PlusIcon className="h-4 w-4 mr-2" />
+																		{selectedLoan?.pkiStampedPdfUrl ? "Replace Stamped" : "Upload Stamped"}
+																	</button>
+
+																	{/* Upload Certificate Button */}
+																	<button
+																		onClick={() => handleUploadStampCertificate(selectedLoan.id)}
+																		className="inline-flex items-center px-3 py-2 border-2 border-purple-500 text-purple-500 hover:bg-purple-50 hover:border-purple-600 hover:text-purple-600 text-sm font-medium rounded-lg transition-colors"
+																		title={selectedLoan?.pkiStampCertificateUrl ? "Replace stamp certificate" : "Upload stamp certificate"}
+																	>
+																		<PlusIcon className="h-4 w-4 mr-2" />
+																		{selectedLoan?.pkiStampCertificateUrl ? "Replace Certificate" : "Upload Certificate"}
+																	</button>
+																</div>
+															</div>
 														)}
 													</div>
 													<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4 mb-4">
@@ -4796,6 +5157,312 @@ function ActiveLoansContent() {
 									"Approve Discharge"}
 								{dischargeAction === "reject" &&
 									"Reject Request"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Stamped Agreement Confirmation Modal */}
+			{showStampedConfirmModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-medium text-white">
+								Replace Existing Stamped Agreement
+							</h3>
+							<button
+								onClick={() => setShowStampedConfirmModal(false)}
+								className="text-gray-400 hover:text-white"
+							>
+								<XMarkIcon className="h-6 w-6" />
+							</button>
+						</div>
+
+						<div className="mb-6">
+							<div className="flex items-center mb-4">
+								<ExclamationTriangleIcon className="h-12 w-12 text-amber-500 mr-4" />
+								<div>
+									<p className="text-white font-medium mb-1">
+										Stamped Agreement Already Exists
+									</p>
+									<p className="text-gray-400 text-sm">
+										This loan already has a stamped agreement. Do you want to replace it with a new one?
+									</p>
+								</div>
+							</div>
+							
+							<div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-3">
+								<p className="text-amber-200 text-sm">
+									<strong>Warning:</strong> The existing stamped agreement will be replaced and cannot be recovered.
+								</p>
+							</div>
+						</div>
+
+						<div className="flex gap-3">
+							<button
+								onClick={() => setShowStampedConfirmModal(false)}
+								className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={() => {
+									setShowStampedConfirmModal(false);
+									setShowUploadStampedModal(true);
+								}}
+								className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500 transition-colors"
+							>
+								Replace Agreement
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Certificate Confirmation Modal */}
+			{showCertificateConfirmModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-medium text-white">
+								Replace Existing Certificate
+							</h3>
+							<button
+								onClick={() => setShowCertificateConfirmModal(false)}
+								className="text-gray-400 hover:text-white"
+							>
+								<XMarkIcon className="h-6 w-6" />
+							</button>
+						</div>
+
+						<div className="mb-6">
+							<div className="flex items-center mb-4">
+								<ExclamationTriangleIcon className="h-12 w-12 text-amber-500 mr-4" />
+								<div>
+									<p className="text-white font-medium mb-1">
+										Certificate Already Exists
+									</p>
+									<p className="text-gray-400 text-sm">
+										This loan already has a stamp certificate. Do you want to replace it with a new one?
+									</p>
+								</div>
+							</div>
+							
+							<div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-3">
+								<p className="text-amber-200 text-sm">
+									<strong>Warning:</strong> The existing certificate will be replaced and cannot be recovered.
+								</p>
+							</div>
+						</div>
+
+						<div className="flex gap-3">
+							<button
+								onClick={() => setShowCertificateConfirmModal(false)}
+								className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={() => {
+									setShowCertificateConfirmModal(false);
+									setShowUploadCertificateModal(true);
+								}}
+								className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors"
+							>
+								Replace Certificate
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Upload Stamped Agreement Modal */}
+			{showUploadStampedModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-medium text-white">
+								Upload Stamped Agreement
+							</h3>
+							<button
+								onClick={() => {
+									setShowUploadStampedModal(false);
+									setUploadStampedFile(null);
+									setUploadStampedNotes("");
+								}}
+								className="text-gray-400 hover:text-white"
+							>
+								<XMarkIcon className="h-6 w-6" />
+							</button>
+						</div>
+
+						<div className="mb-4">
+							<p className="text-gray-300 text-sm mb-4">
+								Upload the stamped version of the signed agreement. Only PDF files are allowed.
+							</p>
+
+							<div className="mb-4">
+								<label className="block text-sm font-medium text-gray-300 mb-2">
+									Stamped PDF File *
+								</label>
+								<input
+									type="file"
+									accept=".pdf"
+									onChange={(e) => {
+										const file = e.target.files?.[0];
+										if (file) {
+											if (file.type !== 'application/pdf') {
+												alert('Please select a PDF file');
+												e.target.value = '';
+												return;
+											}
+											setUploadStampedFile(file);
+										}
+									}}
+									className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+								/>
+								{uploadStampedFile && (
+									<p className="text-teal-400 text-sm mt-1">
+										Selected: {uploadStampedFile.name}
+									</p>
+								)}
+							</div>
+
+							<div className="mb-4">
+								<label className="block text-sm font-medium text-gray-300 mb-2">
+									Notes (Optional)
+								</label>
+								<textarea
+									value={uploadStampedNotes}
+									onChange={(e) => setUploadStampedNotes(e.target.value)}
+									placeholder="Add any notes about the stamped agreement..."
+									className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+									rows={3}
+								/>
+							</div>
+						</div>
+
+						<div className="flex gap-3">
+							<button
+								onClick={() => {
+									setShowUploadStampedModal(false);
+									setUploadStampedFile(null);
+									setUploadStampedNotes("");
+								}}
+								className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={handleUploadStampedSubmit}
+								disabled={!uploadStampedFile || uploadStampedLoading}
+								className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center ${
+									!uploadStampedFile || uploadStampedLoading
+										? "bg-gray-600 text-gray-400 cursor-not-allowed"
+										: "bg-orange-600 text-white hover:bg-orange-500"
+								}`}
+							>
+								{uploadStampedLoading && (
+									<div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+								)}
+								Upload Agreement
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Upload Certificate Modal */}
+			{showUploadCertificateModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-medium text-white">
+								Upload Stamp Certificate
+							</h3>
+							<button
+								onClick={() => {
+									setShowUploadCertificateModal(false);
+									setUploadCertificateFile(null);
+									setUploadCertificateNotes("");
+								}}
+								className="text-gray-400 hover:text-white"
+							>
+								<XMarkIcon className="h-6 w-6" />
+							</button>
+						</div>
+
+						<div className="mb-4">
+							<p className="text-gray-300 text-sm mb-4">
+								Upload the stamp certificate PDF. Only PDF files are allowed.
+							</p>
+
+							<div className="mb-4">
+								<label className="block text-sm font-medium text-gray-300 mb-2">
+									Certificate PDF File *
+								</label>
+								<input
+									type="file"
+									accept=".pdf"
+									onChange={(e) => {
+										const file = e.target.files?.[0];
+										if (file) {
+											if (file.type !== 'application/pdf') {
+												alert('Please select a PDF file');
+												e.target.value = '';
+												return;
+											}
+											setUploadCertificateFile(file);
+										}
+									}}
+									className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+								/>
+								{uploadCertificateFile && (
+									<p className="text-purple-400 text-sm mt-1">
+										Selected: {uploadCertificateFile.name}
+									</p>
+								)}
+							</div>
+
+							<div className="mb-4">
+								<label className="block text-sm font-medium text-gray-300 mb-2">
+									Notes (Optional)
+								</label>
+								<textarea
+									value={uploadCertificateNotes}
+									onChange={(e) => setUploadCertificateNotes(e.target.value)}
+									placeholder="Add any notes about the certificate..."
+									className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+									rows={3}
+								/>
+							</div>
+						</div>
+
+						<div className="flex gap-3">
+							<button
+								onClick={() => {
+									setShowUploadCertificateModal(false);
+									setUploadCertificateFile(null);
+									setUploadCertificateNotes("");
+								}}
+								className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={handleUploadCertificateSubmit}
+								disabled={!uploadCertificateFile || uploadCertificateLoading}
+								className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center ${
+									!uploadCertificateFile || uploadCertificateLoading
+										? "bg-gray-600 text-gray-400 cursor-not-allowed"
+										: "bg-purple-600 text-white hover:bg-purple-500"
+								}`}
+							>
+								{uploadCertificateLoading && (
+									<div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+								)}
+								Upload Certificate
 							</button>
 						</div>
 					</div>

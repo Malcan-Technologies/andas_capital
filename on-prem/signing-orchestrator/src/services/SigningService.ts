@@ -5,6 +5,7 @@ import { mtsaClient } from './MTSAClient';
 import { storageManager } from '../utils/storage';
 import { prisma } from '../utils/database';
 import { createHash } from 'crypto';
+import { PDFDocument } from 'pdf-lib';
 import {
   SigningRequest,
   SigningResponse,
@@ -106,7 +107,7 @@ export class SigningService {
       const currentPdfBase64 = await this.downloadCurrentPDFVersion(session, correlationId);
       
       // Step 3: Extract signature coordinates for current signatory
-      const signatureCoordinates = this.extractSignatureCoordinates(session.currentSubmitter.signatureFields);
+      const signatureCoordinates = await this.extractSignatureCoordinates(session.currentSubmitter.signatureFields, currentPdfBase64);
       
       // Step 4: Sign PDF with MTSA
       const signedResult = await this.signPDFWithMTSA(
@@ -227,43 +228,58 @@ export class SigningService {
   /**
    * Extract signature coordinates from DocuSeal fields
    */
-  private extractSignatureCoordinates(signatureFields: any[]): any {
+  private async extractSignatureCoordinates(signatureFields: any[], pdfBase64?: string): Promise<any> {
+    const defaultNormalized = { x: 0.16, y: 0.10, w: 0.40, h: 0.08, page: 1 };
+    
     if (!signatureFields || signatureFields.length === 0) {
       // Return default coordinates if none found
-      return {
-        pageNo: 1,
-        x1: 100,
-        y1: 200,
-        x2: 300,
-        y2: 250
-      };
+      if (pdfBase64) {
+        try {
+          const { width, height } = await this.getPageSizeFromPdf(pdfBase64, defaultNormalized.page);
+          return this.convertNormalizedToPoints(defaultNormalized, width, height);
+        } catch (error) {
+          // Fallback to A4 if PDF reading fails
+          return this.convertNormalizedToPixels(defaultNormalized);
+        }
+      }
+      return this.convertNormalizedToPixels(defaultNormalized);
     }
     
     const field = signatureFields[0];
     const area = field.areas?.[0];
     
     if (area) {
-      // Convert DocuSeal normalized coordinates to MTSA pixel coordinates
-      const PDF_WIDTH = 595; // A4 width in points
-      const PDF_HEIGHT = 842; // A4 height in points
-      
-      return {
-        pageNo: (area.page || 0) + 1, // Convert 0-based to 1-based
-        x1: Math.round(area.x * PDF_WIDTH),
-        y1: Math.round(area.y * PDF_HEIGHT),
-        x2: Math.round((area.x + area.w) * PDF_WIDTH),
-        y2: Math.round((area.y + area.h) * PDF_HEIGHT)
+      const normalized = {
+        x: area.x,
+        y: area.y,
+        w: area.w,
+        h: area.h,
+        page: (area.page || 0) + 1  // convert to 1-based
       };
+      
+      if (pdfBase64) {
+        try {
+          const { width, height } = await this.getPageSizeFromPdf(pdfBase64, normalized.page);
+          return this.convertNormalizedToPoints(normalized, width, height);
+        } catch (error) {
+          // Fallback to A4 if PDF reading fails
+          return this.convertNormalizedToPixels(normalized);
+        }
+      }
+      return this.convertNormalizedToPixels(normalized);
     }
     
     // Fallback to default coordinates
-    return {
-      pageNo: 1,
-      x1: 100,
-      y1: 200,
-      x2: 300,
-      y2: 250
-    };
+    if (pdfBase64) {
+      try {
+        const { width, height } = await this.getPageSizeFromPdf(pdfBase64, defaultNormalized.page);
+        return this.convertNormalizedToPoints(defaultNormalized, width, height);
+      } catch (error) {
+        // Fallback to A4 if PDF reading fails
+        return this.convertNormalizedToPixels(defaultNormalized);
+      }
+    }
+    return this.convertNormalizedToPixels(defaultNormalized);
   }
   
   /**
@@ -929,32 +945,64 @@ export class SigningService {
         documentUrl: document.url
       });
       
-      // Step 2: Download the PDF from the document URL (fix localhost for container)
-      const containerDocumentUrl = document.url.replace('http://localhost:3001', config.docuseal.baseUrl);
-      log.info('Downloading PDF from DocuSeal document URL', { 
-        originalUrl: document.url,
-        containerUrl: containerDocumentUrl 
+      // Step 2: Determine which PDF to use as base for signing
+      let pdfBase64: string;
+      let isProgressiveSigning = false;
+      
+      // Check if there's already a signed PDF for this loan (progressive signing)
+      const existingSignedAgreement = await prisma.signedAgreement.findUnique({
+        where: { loanId: applicationId }
       });
       
-      const pdfResponse = await axios.get(containerDocumentUrl, {
-        headers: {
-          'X-Auth-Token': config.docuseal.apiToken,
-          'Accept': 'application/pdf'
-        },
-        responseType: 'arraybuffer',
-        timeout: config.network.timeoutMs
-      });
+      if (existingSignedAgreement?.signedFilePath && existingSignedAgreement.mtsaStatus === 'SIGNED') {
+        // Use the current signed PDF as base for next signature
+        try {
+          const existingPdfBuffer = await storageManager.readFile(existingSignedAgreement.signedFilePath);
+          pdfBase64 = existingPdfBuffer.toString('base64');
+          isProgressiveSigning = true;
+          
+          log.info('Using existing signed PDF for progressive signing', {
+            existingFilePath: existingSignedAgreement.signedFilePath,
+            pdfSizeKB: Math.round(existingPdfBuffer.length / 1024),
+            previousSigner: existingSignedAgreement.mtsaSignedBy
+          });
+        } catch (error) {
+          log.warn('Failed to read existing signed PDF, falling back to DocuSeal original', {
+            error: error instanceof Error ? error.message : String(error),
+            existingFilePath: existingSignedAgreement.signedFilePath
+          });
+          isProgressiveSigning = false;
+        }
+      }
       
-      const pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
-      log.info('PDF downloaded successfully', { 
-        pdfSizeKB: Math.round(pdfResponse.data.byteLength / 1024) 
-      });
+      if (!isProgressiveSigning) {
+        // Download original PDF from DocuSeal (first signing or fallback)
+        const containerDocumentUrl = document.url.replace('http://localhost:3001', config.docuseal.baseUrl);
+        log.info('Downloading original PDF from DocuSeal', { 
+          originalUrl: document.url,
+          containerUrl: containerDocumentUrl 
+        });
+        
+        const pdfResponse = await axios.get(containerDocumentUrl, {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Accept': 'application/pdf'
+          },
+          responseType: 'arraybuffer',
+          timeout: config.network.timeoutMs
+        });
+        
+        pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
+        log.info('Original PDF downloaded successfully', { 
+          pdfSizeKB: Math.round(pdfResponse.data.byteLength / 1024) 
+        });
+      }
       
       // Step 3: Get signature coordinates and image using hardcoded positions
       log.info('Getting signature coordinates and image', { submissionId, userId, submitterUuid: currentSubmitter?.uuid });
       
       // Get coordinates and signature image for current user
-      const { coordinates, signatureImage } = await this.getSignatureDataForUser(currentSubmitter?.uuid, submissionId);
+      const { coordinates, signatureImage } = await this.getSignatureDataForUser(currentSubmitter?.uuid, submissionId, pdfBase64);
       
       log.info('Retrieved signature data', {
         userId,
@@ -996,7 +1044,7 @@ export class SigningService {
           x2: coordinates.x2,
           y2: coordinates.y2,
           pageNo: coordinates.pageNo,
-          ...(signatureImage && { sigImageInBase64: signatureImage })
+          sigImageInBase64: signatureImage || ''
         }
       };
       
@@ -1041,10 +1089,13 @@ export class SigningService {
       // Step 5: Store signed PDF and update database
       
       log.info('Storing signed PDF to file system');
+      
+      // Use consistent filename for progressive signing (one PDF per loan)
+      const loanPacketId = `loan_${applicationId}`;
       const signedPdfPath = await storageManager.saveSignedPdf(
         signedResult.signedPdfInBase64,
-        submissionId, // Use submission ID as packet ID
-        userId,
+        loanPacketId, // Use loan ID for consistent naming
+        'progressive', // Use consistent signer ID for progressive signing
         correlationId
       );
       
@@ -1058,7 +1109,7 @@ export class SigningService {
       log.info('Creating/updating SignedAgreement database record');
       
       // Calculate file hashes for integrity verification
-      const originalPdfBase64 = document.url; // This is the base64 from DocuSeal
+      const originalPdfBase64 = pdfBase64; // Use the downloaded PDF base64, not the URL
       const originalFileHash = createHash('sha256').update(originalPdfBase64, 'base64').digest('hex');
       const signedFileHash = createHash('sha256').update(signedResult.signedPdfInBase64, 'base64').digest('hex');
       const signedFileSize = Buffer.from(signedResult.signedPdfInBase64, 'base64').length;
@@ -1189,7 +1240,7 @@ export class SigningService {
   /**
    * Get signature coordinates and image for a specific user based on their role and DocuSeal template
    */
-  private async getSignatureDataForUser(submitterUuid: string | undefined, submissionId: string): Promise<{
+  private async getSignatureDataForUser(submitterUuid: string | undefined, submissionId: string, pdfBase64?: string): Promise<{
     coordinates: { x1: number; y1: number; x2: number; y2: number; pageNo: number };
     signatureImage?: string;
   }> {
@@ -1244,7 +1295,7 @@ export class SigningService {
             y: 0.7620533496946855,
             w: 0.2708661060019362,
             h: 0.1025646269633508,
-            page: 4
+            page: 4 // Page 4 for borrower (working correctly)
           }
         };
         break;
@@ -1252,11 +1303,12 @@ export class SigningService {
         matchingField = {
           fieldName: 'Signature Field 2', 
           normalizedCoords: {
-            x: 0.6303923644724104,
-            y: 0.5620533496946855, // Different Y position for witness
-            w: 0.2708661060019362,
-            h: 0.1025646269633508,
-            page: 5
+            // WITNESS (mid-upper)
+            x: 0.3682614351403679,
+            y: 0.3162864622288706,
+            w: 0.2633788117134560,
+            h: 0.06914968212415862,
+            page: 5 // Page 5 for witness
           }
         };
         break;
@@ -1264,11 +1316,12 @@ export class SigningService {
         matchingField = {
           fieldName: 'company_signature',
           normalizedCoords: {
-            x: 0.6303923644724104,
-            y: 0.3620533496946855, // Different Y position for company
-            w: 0.2708661060019362,
-            h: 0.1025646269633508,
-            page: 5
+            // COMPANY (top section)
+            x: 0.6262102601156070,
+            y: 0.07948891509598544,
+            w: 0.2899201127819548,
+            h: 0.09560044635889309,
+            page: 5 // Page 5 for company
           }
         };
         break;
@@ -1282,13 +1335,83 @@ export class SigningService {
       page: matchingField.normalizedCoords.page
     });
 
-    // Convert normalized coordinates to pixel coordinates
-    const coordinates = this.convertNormalizedToPixels(matchingField.normalizedCoords);
+    // Convert normalized coordinates to pixel coordinates using actual PDF page size
+    let coordinates;
+    try {
+      // Get the PDF from the submission to determine actual page size
+      const documentsResponse = await axios.get(
+        `${config.docuseal.baseUrl}/api/submissions/${submissionId}/documents`,
+        {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Accept': 'application/json'
+          },
+          timeout: config.network.timeoutMs
+        }
+      );
+      
+      const submissionData = documentsResponse.data;
+      if (submissionData?.documents?.[0]?.url) {
+        const actualDocumentUrl = submissionData.documents[0].url.replace('http://localhost:3001', config.docuseal.baseUrl);
+        const pdfResponse = await axios.get(actualDocumentUrl, {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Accept': 'application/pdf'
+          },
+          responseType: 'arraybuffer',
+          timeout: config.network.timeoutMs
+        });
+        
+        const pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
+        const { width, height } = await this.getPageSizeFromPdf(pdfBase64, matchingField.normalizedCoords.page);
+        coordinates = this.convertNormalizedToPoints(matchingField.normalizedCoords, width, height);
+        
+        log.info('Using actual PDF page size for coordinates', {
+          page: matchingField.normalizedCoords.page,
+          width,
+          height,
+          coordinates
+        });
+      } else {
+        throw new Error('No PDF document found');
+      }
+    } catch (error) {
+      log.warn('Failed to get actual PDF page size, using A4 fallback', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      coordinates = this.convertNormalizedToPixels(matchingField.normalizedCoords);
+    }
+    
+    log.debug('MTSA coordinates (points)', coordinates);
 
     // Get signature image from DocuSeal submission values
     let signatureImage: string | undefined;
     try {
+      log.info('Attempting to get signature image from submission', {
+        fieldName: matchingField.fieldName,
+        submitterRole,
+        submitterUuid,
+        submissionId
+      });
+      
       signatureImage = await this.getSignatureImageFromSubmission(matchingField.fieldName, submissionId);
+      
+      if (signatureImage) {
+        log.info('Successfully retrieved signature image', {
+          fieldName: matchingField.fieldName,
+          submitterRole,
+          hasSignatureImage: true,
+          signatureImageLength: signatureImage.length,
+          signatureImagePreview: signatureImage.substring(0, 50) + '...'
+        });
+      } else {
+        log.warn('No signature image found in submission', {
+          fieldName: matchingField.fieldName,
+          submitterRole,
+          submitterUuid,
+          submissionId
+        });
+      }
     } catch (error) {
       log.warn('Failed to get signature image from submission', {
         error: error instanceof Error ? error.message : String(error),
@@ -1305,27 +1428,39 @@ export class SigningService {
   }
 
   /**
-   * Convert normalized coordinates (0-1) to pixel coordinates for MTSA
+   * Get page size (points) for a 1-based page number
    */
-  private convertNormalizedToPixels(normalizedCoords: {
-    x: number; y: number; w: number; h: number; page: number;
-  }): { x1: number; y1: number; x2: number; y2: number; pageNo: number } {
-    // Assuming standard PDF page size (612x792 points)
-    const pageWidth = 612;
-    const pageHeight = 792;
+  private async getPageSizeFromPdf(pdfBase64: string, pageNo: number): Promise<{ width: number; height: number }> {
+    const bytes = Buffer.from(pdfBase64, 'base64');
+    const pdf = await PDFDocument.load(bytes);
+    const page = pdf.getPage(pageNo - 1);
+    const { width, height } = page.getSize();
+    return { width, height };
+  }
 
-    const x1 = Math.round(normalizedCoords.x * pageWidth);
-    const y1 = Math.round((1 - normalizedCoords.y - normalizedCoords.h) * pageHeight); // PDF coordinates are bottom-up
-    const x2 = Math.round((normalizedCoords.x + normalizedCoords.w) * pageWidth);
-    const y2 = Math.round((1 - normalizedCoords.y) * pageHeight);
+  /**
+   * Convert normalized (top-left) -> PDF points (bottom-left) using provided size
+   */
+  private convertNormalizedToPoints(
+    normalized: { x: number; y: number; w: number; h: number; page: number },
+    pageWidth: number,
+    pageHeight: number
+  ): { x1: number; y1: number; x2: number; y2: number; pageNo: number } {
+    const x1 = Math.round(normalized.x * pageWidth);
+    const x2 = Math.round((normalized.x + normalized.w) * pageWidth);
+    const y2 = Math.round((1 - normalized.y) * pageHeight);     // flip Y
+    const y1 = Math.round(y2 - (normalized.h * pageHeight));
+    return { x1, y1, x2, y2, pageNo: normalized.page };
+  }
 
-    return {
-      x1,
-      y1,
-      x2,
-      y2,
-      pageNo: normalizedCoords.page
-    };
+  /**
+   * Convert normalized coordinates using A4 page size (fallback)
+   */
+  private convertNormalizedToPixels(normalized: { x: number; y: number; w: number; h: number; page: number }): { x1: number; y1: number; x2: number; y2: number; pageNo: number } {
+    // A4 size (595 × 842 points) - fallback when PDF size detection fails
+    const pageWidth = 595;
+    const pageHeight = 842;
+    return this.convertNormalizedToPoints(normalized, pageWidth, pageHeight);
   }
 
   /**
@@ -1392,7 +1527,28 @@ export class SigningService {
 
       // Look through all submitters for the signature field value
       for (const submitter of submission?.submitters || []) {
+        log.info('Checking submitter for signature field', {
+          submitterUuid: submitter.uuid,
+          submitterRole: submitter.role,
+          hasValues: !!submitter.values,
+          valuesCount: submitter.values?.length || 0,
+          fieldName
+        });
+        
         if (submitter.values) {
+          // Log all available fields for debugging
+          const availableFields = submitter.values.map((v: any) => ({
+            field: v.field,
+            hasValue: !!v.value,
+            valueType: typeof v.value,
+            isFileUrl: typeof v.value === 'string' && v.value.includes('/file/')
+          }));
+          
+          log.info('Available fields in submitter values', {
+            submitterRole: submitter.role,
+            availableFields
+          });
+          
           // Find the signature field in this submitter's values
           const signatureValue = submitter.values.find((value: any) => 
             value.field === fieldName && 
@@ -1404,10 +1560,17 @@ export class SigningService {
           if (signatureValue) {
             log.info('Found signature field in submitter values', {
               submitterUuid: submitter.uuid,
+              submitterRole: submitter.role,
               fieldName,
               signatureUrl: signatureValue.value
             });
             return signatureValue.value;
+          } else {
+            log.warn('Signature field not found in submitter values', {
+              submitterRole: submitter.role,
+              fieldName,
+              availableFieldNames: submitter.values.map((v: any) => v.field)
+            });
           }
         }
       }
@@ -1594,76 +1757,153 @@ export class SigningService {
         throw new Error(`DocuSeal document URL not found for submission ${submissionId}.`);
       }
       
-      // Step 2: Download the PDF from DocuSeal
-      // Fix DocuSeal URL for container environment
-      const actualDocumentUrl = document.url.replace('http://localhost:3001', config.docuseal.baseUrl);
-      log.info('Downloading PDF from DocuSeal', { 
-        originalUrl: document.url,
-        actualUrl: actualDocumentUrl 
+      // Step 2: Determine which PDF to use as base for signing (same logic as OTP signing)
+      let base64Pdf: string;
+      let isProgressiveSigning = false;
+      
+      // Check if there's already a signed PDF for this loan (progressive signing)
+      const existingSignedAgreement = await prisma.signedAgreement.findUnique({
+        where: { loanId: applicationId }
       });
       
-      const pdfResponse = await axios.get(actualDocumentUrl, {
-        responseType: 'arraybuffer',
-        timeout: config.network.timeoutMs
-      });
+      if (existingSignedAgreement?.signedFilePath && existingSignedAgreement.mtsaStatus === 'SIGNED') {
+        // Use the current signed PDF as base for next signature
+        try {
+          const existingPdfBuffer = await storageManager.readFile(existingSignedAgreement.signedFilePath);
+          base64Pdf = existingPdfBuffer.toString('base64');
+          isProgressiveSigning = true;
+          
+          log.info('Using existing signed PDF for progressive PIN signing', {
+            existingFilePath: existingSignedAgreement.signedFilePath,
+            pdfSizeKB: Math.round(existingPdfBuffer.length / 1024),
+            previousSigner: existingSignedAgreement.mtsaSignedBy,
+            signatoryType
+          });
+        } catch (error) {
+          log.warn('Failed to read existing signed PDF for PIN signing, falling back to DocuSeal original', {
+            error: error instanceof Error ? error.message : String(error),
+            existingFilePath: existingSignedAgreement.signedFilePath
+          });
+          isProgressiveSigning = false;
+        }
+      }
       
-      const pdfBuffer = Buffer.from(pdfResponse.data);
-      log.info('Downloaded PDF from DocuSeal', { 
-        size: pdfBuffer.length,
-        sizeKB: Math.round(pdfBuffer.length / 1024)
-      });
+      if (!isProgressiveSigning) {
+        // Download original PDF from DocuSeal (first signing or fallback)
+        const actualDocumentUrl = document.url.replace('http://localhost:3001', config.docuseal.baseUrl);
+        log.info('Downloading original PDF from DocuSeal for PIN signing', { 
+          originalUrl: document.url,
+          actualUrl: actualDocumentUrl 
+        });
+        
+        const pdfResponse = await axios.get(actualDocumentUrl, {
+          responseType: 'arraybuffer',
+          timeout: config.network.timeoutMs
+        });
+        
+        const pdfBuffer = Buffer.from(pdfResponse.data);
+        base64Pdf = pdfBuffer.toString('base64');
+        log.info('Original PDF downloaded for PIN signing', { 
+          size: pdfBuffer.length,
+          sizeKB: Math.round(pdfBuffer.length / 1024)
+        });
+      }
       
-      // Step 3: Convert PDF to Base64 for MTSA
-      const base64Pdf = pdfBuffer.toString('base64');
-      log.info('Converted PDF to Base64', { 
-        originalSize: pdfBuffer.length,
-        base64Size: base64Pdf.length 
-      });
+      // Step 4: Get signature coordinates and image for PIN-based signing
+      log.info('Getting signature coordinates and image for PIN signing', { submissionId, userId, signatoryType });
       
-      // Step 4: Sign the PDF with MTSA PKI (using PIN as authentication instead of OTP)
-      log.info('Calling MTSA to sign PDF with PIN', { userId, signatoryType });
+      // Get signature image from DocuSeal submission using the same logic as OTP signing
+      let signatureImage: string | undefined;
+      let fieldName: string;
+      
+      // Map signatory type to field name (same as in getSignatureDataForUser)
+      switch (signatoryType) {
+        case 'BORROWER':
+          fieldName = 'Signature Field 1';
+          break;
+        case 'WITNESS':
+          fieldName = 'Signature Field 2';
+          break;
+        case 'COMPANY':
+          fieldName = 'company_signature';
+          break;
+        default:
+          fieldName = 'Signature Field 1';
+      }
+      
+      try {
+        log.info('Attempting to get signature image from submission for PIN signing', {
+          fieldName,
+          signatoryType,
+          submissionId
+        });
+        
+        signatureImage = await this.getSignatureImageFromSubmission(fieldName, submissionId);
+        
+        if (signatureImage) {
+          log.info('Successfully retrieved signature image for PIN signing', {
+            fieldName,
+            signatoryType,
+            hasSignatureImage: true,
+            signatureImageLength: signatureImage.length,
+            signatureImagePreview: signatureImage.substring(0, 50) + '...'
+          });
+        } else {
+          log.warn('No signature image found in submission for PIN signing', {
+            fieldName,
+            signatoryType,
+            submissionId
+          });
+        }
+      } catch (error) {
+        log.warn('Failed to get signature image from submission for PIN signing', {
+          error: error instanceof Error ? error.message : String(error),
+          fieldName,
+          signatoryType
+        });
+      }
+      
+      // Step 5: Sign the PDF with MTSA PKI (using PIN as authentication instead of OTP)
+      log.info('Calling MTSA to sign PDF with PIN', { userId, signatoryType, hasSignatureImage: !!signatureImage });
       
       try {
         // Get proper signature coordinates based on signatory type
-        let coordinates;
+        let normalized;
         switch (signatoryType) {
           case 'BORROWER':
-            coordinates = {
-              x1: Math.round(0.6303923644724104 * 612), // Convert normalized to pixels
-              y1: Math.round(0.7620533496946855 * 792),
-              x2: Math.round((0.6303923644724104 + 0.2708661060019362) * 612),
-              y2: Math.round((0.7620533496946855 + 0.1025646269633508) * 792),
-              pageNo: 5 // Page 5 for borrower
-            };
+            normalized = { x: 0.6303923644724104, y: 0.7620533496946855, w: 0.2708661060019362, h: 0.1025646269633508, page: 4 };
             break;
           case 'WITNESS':
-            coordinates = {
-              x1: Math.round(0.6303923644724104 * 612),
-              y1: Math.round(0.5620533496946855 * 792),
-              x2: Math.round((0.6303923644724104 + 0.2708661060019362) * 612),
-              y2: Math.round((0.5620533496946855 + 0.1025646269633508) * 792),
-              pageNo: 6 // Page 6 for witness
-            };
+            // WITNESS (mid-upper)
+            normalized = { x: 0.3682614351403679, y: 0.3162864622288706, w: 0.2633788117134560, h: 0.06914968212415862, page: 5 };
             break;
           case 'COMPANY':
-            coordinates = {
-              x1: Math.round(0.6303923644724104 * 612),
-              y1: Math.round(0.3620533496946855 * 792), // Different Y for company
-              x2: Math.round((0.6303923644724104 + 0.2708661060019362) * 612),
-              y2: Math.round((0.3620533496946855 + 0.1025646269633508) * 792),
-              pageNo: 7 // Page 7 for company
-            };
+            // COMPANY (top section)
+            normalized = { x: 0.6262102601156070, y: 0.07948891509598544, w: 0.2899201127819548, h: 0.09560044635889309, page: 5 };
             break;
           default:
-            // Fallback to default coordinates
-            coordinates = {
-              x1: 100,
-              y1: 600,
-              x2: 350,
-              y2: 700,
-              pageNo: 1
-            };
+            normalized = { x: 0.16, y: 0.10, w: 0.40, h: 0.08, page: 1 };
         }
+        // Get actual page size from the PDF for accurate coordinate conversion
+        let coordinates;
+        try {
+          const { width, height } = await this.getPageSizeFromPdf(base64Pdf, normalized.page);
+          coordinates = this.convertNormalizedToPoints(normalized, width, height);
+          
+          log.info('Using actual PDF page size for PIN signing coordinates', {
+            page: normalized.page,
+            width,
+            height,
+            coordinates
+          });
+        } catch (error) {
+          log.warn('Failed to get actual PDF page size for PIN signing, using A4 fallback', {
+            error: error instanceof Error ? error.message : String(error)
+          });
+          coordinates = this.convertNormalizedToPixels(normalized);
+        }
+        
+        log.debug('MTSA coordinates (points)', coordinates);
         
         const signRequest: any = {
           UserID: userId,
@@ -1677,7 +1917,8 @@ export class SigningService {
             y1: coordinates.y1,
             x2: coordinates.x2,
             y2: coordinates.y2,
-            pageNo: coordinates.pageNo
+            pageNo: coordinates.pageNo,
+            sigImageInBase64: signatureImage || '' // Add signature image for PIN signing
           }
         };
         
@@ -1703,21 +1944,23 @@ export class SigningService {
         
         log.info('MTSA PKI signing successful');
         
-        // Step 5: Save the signed PDF
+        // Step 5: Save the signed PDF using progressive signing logic
         const signedPdfBuffer = Buffer.from(mtsaResult.signedPdfInBase64, 'base64');
         
-        // Generate a unique filename for the signed PDF
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '').split('T')[0] + '_' + 
-                         new Date().toISOString().replace(/[:.]/g, '').split('T')[1].split('Z')[0];
-        const filename = `${timestamp}_${applicationId}_${userId}_${signatoryType || 'signed'}.pdf`;
-        
-        // Save the signed PDF  
+        // Use consistent filename for progressive signing (one PDF per loan)
+        const loanPacketId = `loan_${applicationId}`;
         const savedPath = await storageManager.saveSignedPdf(
           mtsaResult.signedPdfInBase64,
-          `${applicationId}_${signatoryType}`, // Use application ID and signatory type as packet ID
+          loanPacketId, // Use loan ID for consistent naming
+          'progressive', // Use consistent signer ID for progressive signing
           correlationId
         );
-        log.info('Saved signed PDF', { filename, path: savedPath });
+        log.info('Saved signed PDF for progressive signing', { 
+          path: savedPath, 
+          signatoryType, 
+          isProgressive: true,
+          previousSigning: isProgressiveSigning
+        });
         
         // Step 6: Calculate file hash for integrity verification
         const fileHash = createHash('sha256').update(signedPdfBuffer).digest('hex');
@@ -1775,8 +2018,8 @@ export class SigningService {
             signedFilePath: savedPath,
             originalFileHash: fileHash,
             signedFileHash: fileHash,
-            originalFileName: filename,
-            signedFileName: filename,
+            originalFileName: `loan_${applicationId}_signed.pdf`,
+            signedFileName: `loan_${applicationId}_signed.pdf`,
             fileSizeBytes: signedPdfBuffer.length,
             signedFileSizeBytes: signedPdfBuffer.length,
             status: 'MTSA_SIGNED',

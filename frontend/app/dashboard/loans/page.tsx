@@ -115,6 +115,10 @@ interface Loan {
 	agreementStatus?: string | null;
 	agreementSignedAt?: string | null;
 	docusealSignUrl?: string | null;
+	// PKI Integration fields
+	pkiSignedPdfUrl?: string | null;
+	pkiStampedPdfUrl?: string | null;
+	pkiStampCertificateUrl?: string | null;
 	application: {
 		id: string;
 		product: {
@@ -1036,19 +1040,129 @@ function LoansPageContent() {
 
 	const downloadSignedAgreement = async (loan: Loan) => {
 		try {
-			// Use the slug directly from the loans table for backwards compatibility and reduced database reads
-			if (!loan.docusealSignUrl) {
-				throw new Error('No signed document available for this loan');
+			// Check if agreement is signed and PKI URL is available
+			if (loan.agreementStatus !== 'SIGNED' || !loan.pkiSignedPdfUrl) {
+				throw new Error('Agreement is not yet signed by all parties or not available for download');
 			}
 
-					// Open DocuSeal signed document directly using the slug from loans table
-		const docusealBaseUrl = process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'http://localhost:3001';
-		const docusealUrl = `${docusealBaseUrl}/s/${loan.docusealSignUrl}`;
-		window.open(docusealUrl, '_blank', 'noopener,noreferrer');
+			// Use direct backend download endpoint
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+			const response = await fetch(`${backendUrl}/api/loans/${loan.id}/download-agreement`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${TokenStorage.getAccessToken()}`,
+				},
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || 'Failed to download signed agreement');
+			}
+
+			// Create blob from response
+			const blob = await response.blob();
+			
+			// Extract filename from Content-Disposition header or use default
+			const contentDisposition = response.headers.get('Content-Disposition');
+			let filename = `loan-agreement-${loan.id.substring(0, 8)}.pdf`;
+			if (contentDisposition) {
+				const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+				if (filenameMatch) {
+					filename = filenameMatch[1];
+				}
+			}
+			
+			// Create download link
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = filename;
+			document.body.appendChild(link);
+			link.click();
+			
+			// Cleanup
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
 			
 		} catch (error) {
-			console.error('Error accessing signed agreement:', error);
-			alert('Failed to access signed agreement. Please try again.');
+			console.error('Error downloading signed agreement:', error);
+			alert(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	};
+
+	const downloadStampedAgreement = async (loan: Loan) => {
+		try {
+			// Check if stamped agreement is available
+			if (!loan.pkiStampedPdfUrl) {
+				throw new Error('Stamped agreement is not yet available for download');
+			}
+
+			// Use direct backend download endpoint with authentication
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+			const response = await fetch(`${backendUrl}/api/loans/${loan.id}/download-stamped-agreement`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${TokenStorage.getAccessToken()}`,
+				},
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			// Get the PDF blob and create download link
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `stamped-agreement-${loan.id.substring(0, 8)}.pdf`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+
+		} catch (error) {
+			console.error('Error downloading stamped agreement:', error);
+			alert(`Failed to download stamped agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	};
+
+	const downloadStampCertificate = async (loan: Loan) => {
+		try {
+			// Check if certificate is available
+			if (!loan.pkiStampCertificateUrl) {
+				throw new Error('Stamp certificate is not yet available for download');
+			}
+
+			// Use direct backend download endpoint with authentication
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+			const response = await fetch(`${backendUrl}/api/loans/${loan.id}/download-stamp-certificate`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${TokenStorage.getAccessToken()}`,
+				},
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			// Get the PDF blob and create download link
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `stamp-certificate-${loan.id.substring(0, 8)}.pdf`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+
+		} catch (error) {
+			console.error('Error downloading stamp certificate:', error);
+			alert(`Failed to download stamp certificate: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -3678,17 +3792,47 @@ function LoansPageContent() {
 																							</span>
 																						</div>
 																					)}
-																					{loan.agreementStatus === 'SIGNED' && loan.docusealSubmissionId && (
+																					{loan.agreementStatus === 'SIGNED' && (
 																						<div className="pt-3 border-t border-gray-100">
-																							<button
-																								onClick={() => downloadSignedAgreement(loan)}
-																								className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-																							>
-																								<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-																								</svg>
-																								Download Signed Agreement
-																							</button>
+																							{(loan.pkiStampedPdfUrl || loan.pkiStampCertificateUrl) ? (
+																								<div className="flex flex-wrap gap-2">
+																									{loan.pkiStampedPdfUrl && (
+																										<button
+																											onClick={() => downloadStampedAgreement(loan)}
+																											className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+																										>
+																											<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																											</svg>
+																											Download Stamped Agreement
+																										</button>
+																									)}
+																									
+																									{loan.pkiStampCertificateUrl && (
+																										<button
+																											onClick={() => downloadStampCertificate(loan)}
+																											className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+																										>
+																											<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																											</svg>
+																											Download Certificate
+																										</button>
+																									)}
+																								</div>
+																							) : (
+																								<div className="flex items-center p-3 bg-amber-50 border border-amber-200 rounded-lg">
+																									<ClockIcon className="h-5 w-5 text-amber-600 mr-3" />
+																									<div>
+																										<p className="text-sm font-medium text-amber-800">
+																											Waiting for loan stamping
+																										</p>
+																										<p className="text-xs text-amber-600 mt-1">
+																											Your agreement has been signed and is being processed for final stamping.
+																										</p>
+																									</div>
+																								</div>
+																							)}
 																						</div>
 																					)}
 																				</div>
@@ -4160,17 +4304,47 @@ function LoansPageContent() {
 																							</span>
 																						</div>
 																					)}
-																					{loan.agreementStatus === 'SIGNED' && loan.docusealSubmissionId && (
+																					{loan.agreementStatus === 'SIGNED' && (
 																						<div className="pt-3 border-t border-gray-100">
-																							<button
-																								onClick={() => downloadSignedAgreement(loan)}
-																								className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-																							>
-																								<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-																								</svg>
-																								Download Signed Agreement
-																							</button>
+																							{(loan.pkiStampedPdfUrl || loan.pkiStampCertificateUrl) ? (
+																								<div className="flex flex-wrap gap-2">
+																									{loan.pkiStampedPdfUrl && (
+																										<button
+																											onClick={() => downloadStampedAgreement(loan)}
+																											className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+																										>
+																											<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																											</svg>
+																											Download Stamped Agreement
+																										</button>
+																									)}
+																									
+																									{loan.pkiStampCertificateUrl && (
+																										<button
+																											onClick={() => downloadStampCertificate(loan)}
+																											className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+																										>
+																											<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																											</svg>
+																											Download Certificate
+																										</button>
+																									)}
+																								</div>
+																							) : (
+																								<div className="flex items-center p-3 bg-amber-50 border border-amber-200 rounded-lg">
+																									<ClockIcon className="h-5 w-5 text-amber-600 mr-3" />
+																									<div>
+																										<p className="text-sm font-medium text-amber-800">
+																											Waiting for loan stamping
+																										</p>
+																										<p className="text-xs text-amber-600 mt-1">
+																											Your agreement has been signed and is being processed for final stamping.
+																										</p>
+																									</div>
+																								</div>
+																							)}
 																						</div>
 																					)}
 																				</div>

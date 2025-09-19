@@ -31,6 +31,7 @@ export const config: OrchestratorConfig = {
   },
   storage: {
     signedFilesDir: process.env.SIGNED_FILES_DIR || '/data/signed',
+    stampedFilesDir: process.env.STAMPED_FILES_DIR || '/data/stamped',
     maxUploadMB: parseInt(process.env.MAX_UPLOAD_MB || '50', 10),
   },
   mtsa: {
