@@ -11421,20 +11421,31 @@ router.post(
 				});
 			}
 
-			// Find the signatory by type (since we don't have signatoryId anymore)
-			const signatory = await prisma.loanSignatory.findFirst({
-				where: { 
-					loanId: application.loan.id,
-					signatoryType: signatoryType
-				}
-			});
-
-			if (!signatory) {
-				return res.status(404).json({
-					success: false,
-					message: `${signatoryType} signatory not found`
-				});
+		// Find the signatory by type (since we don't have signatoryId anymore)
+		// Convert signatoryType to uppercase to match database values
+		const normalizedSignatoryType = signatoryType.toUpperCase();
+		
+		console.log(`Looking for signatory with type: ${normalizedSignatoryType} for loan: ${application.loan.id}`);
+		
+		const signatory = await prisma.loanSignatory.findFirst({
+			where: { 
+				loanId: application.loan.id,
+				signatoryType: normalizedSignatoryType
 			}
+		});
+
+		// Debug: Log all signatories for this loan
+		const debugSignatories = await prisma.loanSignatory.findMany({
+			where: { loanId: application.loan.id }
+		});
+		console.log(`All signatories for loan ${application.loan.id}:`, debugSignatories.map(s => ({ type: s.signatoryType, status: s.status })));
+
+		if (!signatory) {
+			return res.status(404).json({
+				success: false,
+				message: `${normalizedSignatoryType} signatory not found`
+			});
+		}
 
 			// Check if already signed
 			if (signatory.status === "SIGNED") {
@@ -11446,7 +11457,7 @@ router.post(
 
 			// TODO: Validate PIN against stored PIN/credentials (implement your PIN validation logic here)
 			// For now, we'll assume PIN validation passes
-			console.log(`PIN signing attempt for ${signatoryType} with PIN: ${pin}`);
+			console.log(`PIN signing attempt for ${normalizedSignatoryType} with PIN: ${pin}`);
 
 			// Call signing orchestrator for PKI signing
 			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
@@ -11488,14 +11499,14 @@ router.post(
 						'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
 					},
 					body: JSON.stringify({
-						userId: userInfo?.userId || `${signatoryType}_DEFAULT`, // IC number for MTSA
-						vpsUserId: userInfo?.vpsUserId || `${signatoryType}_${applicationId}`, // Unique identifier for database
+						userId: userInfo?.userId || `${normalizedSignatoryType}_DEFAULT`, // IC number for MTSA
+						vpsUserId: userInfo?.vpsUserId || `${normalizedSignatoryType}_${applicationId}`, // Unique identifier for database
 						pin: pin, // PIN instead of OTP
 						submissionId: application.loan.docusealSubmissionId,
 						applicationId: applicationId,
 						docusealSubmitterId: signatory.docusealSubmitterId,
-						userFullName: userInfo?.fullName || `${signatoryType} Representative`,
-						signatoryType: signatoryType
+						userFullName: userInfo?.fullName || `${normalizedSignatoryType} Representative`,
+						signatoryType: normalizedSignatoryType
 					})
 				});
 
@@ -11513,7 +11524,7 @@ router.post(
 					});
 				}
 
-				console.log(`PKI signing successful for ${signatoryType} - updating database`);
+				console.log(`PKI signing successful for ${normalizedSignatoryType} - updating database`);
 
 			} catch (orchestratorError) {
 				console.error("Error calling signing orchestrator:", orchestratorError);
@@ -11537,7 +11548,7 @@ router.post(
 
 			// Add audit trail entry for PIN-based PKI signing completion
 			try {
-				const roleDisplayName = signatoryType === 'COMPANY' ? 'Company' : 'Witness';
+				const roleDisplayName = normalizedSignatoryType === 'COMPANY' ? 'Company' : 'Witness';
 				const signerName = adminUser?.fullName || 'Unknown Admin';
 				await prisma.loanApplicationHistory.create({
 					data: {
@@ -11549,7 +11560,7 @@ router.post(
 						notes: `${roleDisplayName} completed PKI digital signing using PIN method. Signed by ${signerName}.`,
 						metadata: {
 							loanId: application.loan.id,
-							signatoryType: signatoryType,
+							signatoryType: normalizedSignatoryType,
 							signedAt: new Date().toISOString(),
 							pkiSigningMethod: 'admin_pin_signing',
 							adminUserId: req.user?.userId,
@@ -11558,7 +11569,7 @@ router.post(
 						}
 					}
 				});
-				console.log(`✅ Audit trail entry created for ${signatoryType} PIN-based PKI signing completion`);
+				console.log(`✅ Audit trail entry created for ${normalizedSignatoryType} PIN-based PKI signing completion`);
 			} catch (auditError) {
 				console.error('❌ Failed to create audit trail entry for PIN-based PKI signing:', auditError);
 				// Don't fail the main operation for audit trail issues
