@@ -143,7 +143,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       });
 
       // Build completion URL from BASE_URL environment variable  
-      const baseUrl = process.env.BASE_URL || 'https://kredit.my';
+      const baseUrl = process.env.BASE_URL || 'https://creditxpress.com.my';
       const completionUrl = `${baseUrl}/kyc-complete`;
 
       const ctosResponse = await ctosService.createTransaction({

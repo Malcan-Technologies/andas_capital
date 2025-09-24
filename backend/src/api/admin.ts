@@ -11460,7 +11460,7 @@ router.post(
 			console.log(`PIN signing attempt for ${normalizedSignatoryType} with PIN: ${pin}`);
 
 			// Call signing orchestrator for PKI signing
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 			
 			// Get the IC number and full name of the currently logged-in admin user
 			const adminUserId = req.user?.userId;
@@ -11585,7 +11585,7 @@ router.post(
 			// If all parties have signed, update loan and application status to PENDING_DISBURSEMENT
 			if (allSigned) {
 				// Construct the signed PDF URL from the signing orchestrator
-				const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+				const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 				const signedPdfUrl = `${orchestratorUrl}/api/signed/${applicationId}/download`;
 				
 				await prisma.$transaction([
@@ -11709,7 +11709,7 @@ router.get("/loans/:loanId/download-agreement", authenticateToken, requireAdminO
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 			const signedPdfUrl = `${orchestratorUrl}/api/signed/${loan.applicationId}/download`;
 			
 			console.log('Admin downloading PKI PDF from:', signedPdfUrl);
@@ -11800,7 +11800,7 @@ router.get("/loans/:loanId/download-stamped-agreement", authenticateToken, requi
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 			const stampedPdfUrl = `${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/stamped`;
 			
 			console.log('Admin downloading stamped PDF from:', stampedPdfUrl);
@@ -11962,7 +11962,7 @@ router.post(
 			}
 
 			// Upload to signing orchestrator
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
 			
 			// Generate URLs pointing to orchestrator
@@ -12141,7 +12141,7 @@ router.post(
 			}
 
 			// Upload to signing orchestrator
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
 			
 			// Generate the certificate URL pointing to orchestrator
@@ -12386,22 +12386,22 @@ router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (re
 
 		// Define service URLs - these are configurable based on environment
 		const isProduction = process.env.NODE_ENV === 'production';
-		const baseHost = isProduction ? 'sign.kredit.my' : 'host.docker.internal';
+		const baseHost = isProduction ? 'sign.creditxpress.com.my' : 'host.docker.internal';
 		
 		const services = [
 			{
 				name: 'docuseal',
-				url: isProduction ? 'https://sign.kredit.my/' : `http://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
+				url: isProduction ? 'https://sign.creditxpress.com.my/' : `http://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
 				timeout: 5000
 			},
 			{
 				name: 'signingOrchestrator', 
-				url: isProduction ? 'https://sign.kredit.my/orchestrator/health' : `http://${baseHost}:4010/health`,
+				url: isProduction ? 'https://sign.creditxpress.com.my/orchestrator/health' : `http://${baseHost}:4010/health`,
 				timeout: 5000
 			},
 			{
 				name: 'mtsa',
-				url: isProduction ? 'https://sign.kredit.my/mtsa/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
+				url: isProduction ? 'https://sign.creditxpress.com.my/mtsa/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
 				timeout: 5000
 			}
 		];

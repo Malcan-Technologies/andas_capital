@@ -2437,7 +2437,7 @@ router.get("/:loanId/pki-pdf", authenticateAndVerifyPhone, async (req: AuthReque
         }
 
         // Proxy request to signing orchestrator
-        const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+        const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
         const signedPdfUrl = `${orchestratorUrl}/api/signed/${loan.applicationId}/download`;
         
         console.log('Proxying PKI PDF request to:', signedPdfUrl);

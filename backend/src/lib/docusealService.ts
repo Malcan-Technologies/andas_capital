@@ -432,7 +432,7 @@ class DocuSealService {
         submitters: [
           {
             name: 'Kredit.my Sdn Bhd',
-            email: process.env.COMPANY_SIGNING_EMAIL || 'admin@kredit.my',
+            email: process.env.COMPANY_SIGNING_EMAIL || 'admin@creditxpress.com.my',
             role: 'Company',
             fields: companyFields, // Company gets pre-filled data but must sign manually
             completed_redirect_url: `${process.env.ADMIN_BASE_URL || 'http://localhost:3002'}/pki-signing?application=${applicationId}&signatory=COMPANY`
@@ -459,7 +459,7 @@ class DocuSealService {
           },
           {
             name: process.env.WITNESS_NAME || 'Legal Representative',
-            email: process.env.WITNESS_EMAIL || 'legal@kredit.my',
+            email: process.env.WITNESS_EMAIL || 'legal@creditxpress.com.my',
             role: 'Witness',
             completed_redirect_url: `${process.env.ADMIN_BASE_URL || 'http://localhost:3002'}/pki-signing?application=${applicationId}&signatory=WITNESS`
             // No fields array - witness signs but doesn't need pre-filled data

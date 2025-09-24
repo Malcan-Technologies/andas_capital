@@ -48,7 +48,7 @@ router.get('/cert-info/:userId', authenticateToken, adminOrAttestorMiddleware, a
     console.log('Admin getting certificate info for user:', { userId, adminUserId: req.user?.userId });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/cert/${userId}`, {
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/cert/${userId}`, {
       method: 'GET',
       headers: {
         'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
@@ -141,7 +141,7 @@ router.post('/verify-cert-pin', authenticateToken, adminOrAttestorMiddleware, as
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/verify-cert-pin`, {
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/verify-cert-pin`, {
       method: 'POST',
       headers: {
         'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
@@ -235,7 +235,7 @@ router.post('/request-otp', authenticateToken, adminOrAttestorMiddleware, async 
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/otp`, {
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/otp`, {
       method: 'POST',
       headers: {
         'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
@@ -420,7 +420,7 @@ router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware
     });
 
     // Make request to signing orchestrator with userType = 2 for internal users
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/certificate`, {
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/certificate`, {
       method: 'POST',
       headers: {
         'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
@@ -646,7 +646,7 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/revoke`, {
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/revoke`, {
       method: 'POST',
       headers: {
         'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',

@@ -45,6 +45,7 @@ services:
             - JWT_SECRET=${JWT_SECRET}
             - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
             - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+            - CORS_ORIGIN=${CORS_ORIGIN}
             - PORT=${PORT:-4001}
             - BASE_URL=${BASE_URL}
             - DOCUMENT_STORAGE_PATH=${DOCUMENT_STORAGE_PATH}
@@ -65,7 +66,7 @@ services:
             - WITNESS_EMAIL=${WITNESS_EMAIL}
             - WITNESS_NAME=${WITNESS_NAME}
             # MTSA/Signing Orchestrator Configuration
-            - SIGNING_ORCHESTRATOR_URL=${SIGNING_ORCHESTRATOR_URL:-https://sign.kredit.my}
+            - SIGNING_ORCHESTRATOR_URL=${SIGNING_ORCHESTRATOR_URL:-https://sign.creditxpress.com.my}
             - SIGNING_ORCHESTRATOR_API_KEY=${SIGNING_ORCHESTRATOR_API_KEY}
             # CTOS eKYC Configuration
             - CTOS_API_KEY=${CTOS_API_KEY}

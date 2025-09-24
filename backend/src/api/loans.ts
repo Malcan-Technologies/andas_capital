@@ -1442,7 +1442,7 @@ router.get("/:loanId/download-agreement", authenticateAndVerifyPhone, async (req
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 			const signedPdfUrl = `${orchestratorUrl}/api/signed/${loan.applicationId}/download`;
 			
 			console.log('User downloading PKI PDF from:', signedPdfUrl);
@@ -1539,7 +1539,7 @@ router.get("/:loanId/download-stamped-agreement", authenticateAndVerifyPhone, as
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 			const stampedPdfUrl = `${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/stamped`;
 			
 			console.log('User downloading stamped PDF from:', stampedPdfUrl);
