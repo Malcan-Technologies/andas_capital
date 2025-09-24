@@ -52,9 +52,7 @@ export const TokenStorage = {
 			const cookieDomain = getCookieDomain();
 			Cookies.set("token", token, { 
 				expires: expiresInDays,
-				...(cookieDomain && { domain: cookieDomain }),
-				secure: true,
-				sameSite: 'lax'
+				...(cookieDomain && { domain: cookieDomain })
 			});
 			console.log("[TokenStorage] Access token stored in cookies");
 		} catch (error) {
@@ -104,9 +102,7 @@ export const TokenStorage = {
 			const cookieDomain = getCookieDomain();
 			Cookies.set("refreshToken", token, { 
 				expires: expiresInDays,
-				...(cookieDomain && { domain: cookieDomain }),
-				secure: true,
-				sameSite: 'lax'
+				...(cookieDomain && { domain: cookieDomain })
 			});
 			console.log("[TokenStorage] Refresh token stored in cookies");
 		} catch (error) {
