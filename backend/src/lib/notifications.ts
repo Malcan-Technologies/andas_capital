@@ -117,15 +117,18 @@ export class NotificationService {
 	// Get notifications for a user
 	static async getUserNotifications(userId: string, page = 1, limit = 20) {
 		try {
+			// Define the where clause to ensure both queries use the same filter
+			const whereClause = {
+				userId,
+				OR: [
+					{ expiresAt: null },
+					{ expiresAt: { gt: new Date() } },
+				],
+			};
+
 			const [notifications, total] = await Promise.all([
 				prisma.notification.findMany({
-					where: {
-						userId,
-						OR: [
-							{ expiresAt: null },
-							{ expiresAt: { gt: new Date() } },
-						],
-					},
+					where: whereClause,
 					select: {
 						id: true,
 						userId: true,
@@ -146,7 +149,7 @@ export class NotificationService {
 					take: limit,
 				}),
 				prisma.notification.count({
-					where: { userId },
+					where: whereClause, // Use the same filter for accurate count
 				}),
 			]);
 
@@ -168,13 +171,15 @@ export class NotificationService {
 	// Mark notifications as read
 	static async markAsRead(userId: string, notificationIds: string[]) {
 		try {
-			await prisma.notification.updateMany({
+			const result = await prisma.notification.updateMany({
 				where: {
 					userId,
 					id: { in: notificationIds },
+					isRead: false, // Only update notifications that are currently unread
 				},
 				data: { isRead: true },
 			});
+			return { updatedCount: result.count };
 		} catch (error) {
 			logger.error("Error marking notifications as read:", error);
 			throw error;

@@ -100,8 +100,14 @@ router.patch(
 					.json({ error: "Invalid notification IDs" });
 			}
 
-			await NotificationService.markAsRead(userId, notificationIds);
-			return res.json({ success: true });
+			const result = await NotificationService.markAsRead(userId, notificationIds);
+			return res.json({ 
+				success: result.updatedCount > 0,
+				updatedCount: result.updatedCount,
+				message: result.updatedCount > 0 
+					? `${result.updatedCount} notification(s) marked as read`
+					: "No notifications were updated (they may already be read or don't exist)"
+			});
 		} catch (error) {
 			console.error("Error marking notifications as read:", error);
 			return res
@@ -149,14 +155,25 @@ router.delete(
 			const { id } = req.params;
 
 			// Delete the notification
-			await prisma.notification.deleteMany({
+			const result = await prisma.notification.deleteMany({
 				where: {
 					id,
 					userId, // Ensure the notification belongs to the user
 				},
 			});
 
-			return res.json({ success: true });
+			if (result.count === 0) {
+				return res.status(404).json({ 
+					success: false, 
+					error: "Notification not found or doesn't belong to user" 
+				});
+			}
+
+			return res.json({ 
+				success: true, 
+				deletedCount: result.count,
+				message: "Notification deleted successfully"
+			});
 		} catch (error) {
 			console.error("Error deleting notification:", error);
 			return res
