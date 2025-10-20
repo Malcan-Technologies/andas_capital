@@ -1725,26 +1725,37 @@ router.get("/:loanId/download-disbursement-slip", authenticateAndVerifyPhone, as
 			});
 		}
 
-		// Check if disbursement exists and has payment slip
-		if (!loan.application.disbursement?.paymentSlipUrl) {
-			console.log(`⚠️ No payment slip available for loan ${loanId}`);
-			return res.status(404).json({
-				success: false,
-				message: 'Payment slip is not yet available for this loan'
-			});
-		}
+	// Check if disbursement exists and has payment slip
+	if (!loan.application.disbursement?.paymentSlipUrl) {
+		console.log(`⚠️ No payment slip available for loan ${loanId}`);
+		return res.status(404).json({
+			success: false,
+			message: 'Payment slip is not yet available for this loan'
+		});
+	}
 
-		// Read payment slip from local file system
-		const slipPath = path.join(__dirname, '../../', loan.application.disbursement.paymentSlipUrl);
-		console.log(`📁 Reading payment slip from: ${slipPath}`);
+	// Try the correct path first (process.cwd() for new uploads)
+	let slipPath = path.join(process.cwd(), loan.application.disbursement.paymentSlipUrl);
+	console.log(`📁 Checking payment slip at: ${slipPath}`);
 
-		if (!fs.existsSync(slipPath)) {
-			console.error(`❌ Payment slip file not found at: ${slipPath}`);
+	// Fall back to old path (__dirname) for legacy files uploaded before the fix
+	if (!fs.existsSync(slipPath)) {
+		const legacyPath = path.join(__dirname, '../../', loan.application.disbursement.paymentSlipUrl);
+		console.log(`📁 File not found, checking legacy path: ${legacyPath}`);
+		
+		if (fs.existsSync(legacyPath)) {
+			slipPath = legacyPath;
+			console.log(`✅ Found payment slip at legacy path`);
+		} else {
+			console.error(`❌ Payment slip file not found at either path`);
 			return res.status(404).json({
 				success: false,
 				message: 'Payment slip file not found on server'
 			});
 		}
+	} else {
+		console.log(`✅ Found payment slip at current path`);
+	}
 
 		// Send the file
 		res.setHeader('Content-Type', 'application/pdf');
