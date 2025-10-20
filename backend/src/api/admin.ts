@@ -11923,7 +11923,7 @@ const stampCertUpload = multer({
 const disbursementSlipUpload = multer({
 	storage: (multer as any).diskStorage({
 		destination: (_req: any, _file: any, cb: any) => {
-			const uploadDir = path.join(__dirname, '../../uploads/disbursement-slips');
+			const uploadDir = path.join(process.cwd(), 'uploads/disbursement-slips');
 			if (!fs.existsSync(uploadDir)) {
 				fs.mkdirSync(uploadDir, { recursive: true });
 			}
