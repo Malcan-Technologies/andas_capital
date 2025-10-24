@@ -31,6 +31,11 @@ interface DisbursementData {
 	status: string;
 	createdAt: string;
 	updatedAt: string;
+	disbursedByUser?: {
+		id: string;
+		fullName: string | null;
+		email: string | null;
+	} | null;
 	application: {
 		id: string;
 		amount: number | null;
@@ -464,6 +469,15 @@ function DisbursementsContent() {
 																		.name
 																}
 															</p>
+															{disbursement.application.loan?.id && (
+																<Link
+																	href={`/dashboard/loans?loanId=${disbursement.application.loan.id}`}
+																	className="text-xs text-blue-400 hover:text-blue-300 hover:underline mt-1 block"
+																	onClick={(e) => e.stopPropagation()}
+																>
+																	Loan: {disbursement.application.loan.id.substring(0, 8)}...
+																</Link>
+															)}
 														</div>
 														<div className="text-right ml-4">
 															<span
@@ -652,11 +666,23 @@ function DisbursementsContent() {
 													Disbursed By
 												</p>
 												<p className="text-white">
-													{
-														selectedDisbursement.disbursedBy
-													}
+													{selectedDisbursement.disbursedByUser?.fullName || 
+														selectedDisbursement.disbursedBy}
 												</p>
 											</div>
+											{selectedDisbursement.application.loan?.id && (
+												<div>
+													<p className="text-gray-400 text-sm">
+														Loan ID
+													</p>
+													<Link
+														href={`/dashboard/loans?loanId=${selectedDisbursement.application.loan.id}`}
+														className="text-blue-400 hover:text-blue-300 hover:underline font-mono text-sm"
+													>
+														{selectedDisbursement.application.loan.id.substring(0, 16)}...
+													</Link>
+												</div>
+											)}
 										</div>
 									</div>
 								</div>
@@ -772,3 +798,4 @@ export default function DisbursementsPage() {
 		</Suspense>
 	);
 }
+

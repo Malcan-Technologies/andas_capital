@@ -6787,9 +6787,33 @@ router.get(
 				skip: offset,
 			});
 
+			// Fetch admin users for disbursedBy field
+			const adminUserIds = [...new Set(disbursements.map(d => d.disbursedBy))];
+			const adminUsers = await prisma.user.findMany({
+				where: {
+					id: {
+						in: adminUserIds
+					}
+				},
+				select: {
+					id: true,
+					fullName: true,
+					email: true,
+				}
+			});
+
+			// Create a map of admin users
+			const adminUserMap = new Map(adminUsers.map(u => [u.id, u]));
+
+			// Enhance disbursements with admin user info
+			const enhancedDisbursements = disbursements.map(d => ({
+				...d,
+				disbursedByUser: adminUserMap.get(d.disbursedBy) || null
+			}));
+
 			return res.json({
 				success: true,
-				data: disbursements,
+				data: enhancedDisbursements,
 				total,
 				limit,
 				offset,
@@ -13370,18 +13394,48 @@ router.get(
 									name: true,
 									code: true
 								}
-							}
+							},
+							loan: {
+								select: {
+									id: true,
+									status: true,
+								},
+							},
 						}
-					}
+					},
 				},
 				orderBy: {
 					disbursedAt: 'desc'
 				}
 			});
 
+			// Fetch admin users for disbursedBy field
+			const adminUserIds = [...new Set(disbursements.map(d => d.disbursedBy))];
+			const adminUsers = await prisma.user.findMany({
+				where: {
+					id: {
+						in: adminUserIds
+					}
+				},
+				select: {
+					id: true,
+					fullName: true,
+					email: true,
+				}
+			});
+
+			// Create a map of admin users
+			const adminUserMap = new Map(adminUsers.map(u => [u.id, u]));
+
+			// Enhance disbursements with admin user info
+			const enhancedDisbursements = disbursements.map(d => ({
+				...d,
+				disbursedByUser: adminUserMap.get(d.disbursedBy) || null
+			}));
+
 			return res.json({
 				success: true,
-				data: disbursements
+				data: enhancedDisbursements
 			});
 		} catch (error) {
 			console.error('Error fetching disbursements:', error);

@@ -30,9 +30,13 @@ export function parseUserAgent(userAgent: string): {
   }
 
   // OS detection
+  // NOTE: Modern browsers deliberately freeze/obscure OS versions for privacy (User-Agent Client Hints).
+  // Windows 11 reports as "Windows NT 10.0" (same as Win 10) and macOS often reports as 10.15.7
+  // regardless of actual version. This is intentional browser behavior, not a parsing error.
   let os = 'Unknown';
   if (userAgent.includes('Windows NT 10.0')) {
-    os = 'Windows 10';
+    // Both Windows 10 and 11 report as NT 10.0
+    os = 'Windows 10/11';
   } else if (userAgent.includes('Windows NT 6.3')) {
     os = 'Windows 8.1';
   } else if (userAgent.includes('Windows NT 6.2')) {
@@ -43,6 +47,7 @@ export function parseUserAgent(userAgent: string): {
     os = 'Windows';
   } else if (userAgent.includes('Mac OS X')) {
     const match = userAgent.match(/Mac OS X (\d+[._]\d+)/);
+    // Note: Modern browsers often freeze macOS version at 10.15.7 for privacy
     os = match ? `macOS ${match[1].replace('_', '.')}` : 'macOS';
   } else if (userAgent.includes('Linux')) {
     os = 'Linux';

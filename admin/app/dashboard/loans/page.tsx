@@ -199,6 +199,11 @@ interface Disbursement {
 	notes: string | null;
 	status: string;
 	paymentSlipUrl: string | null;
+	disbursedByUser?: {
+		id: string;
+		fullName: string | null;
+		email: string | null;
+	} | null;
 	application: {
 		id: string;
 		user: {
@@ -209,6 +214,10 @@ interface Disbursement {
 		product: {
 			name: string;
 		};
+		loan?: {
+			id: string;
+			status: string;
+		} | null;
 	};
 }
 
@@ -326,6 +335,9 @@ function ActiveLoansContent() {
 	useEffect(() => {
 		const loanIdParam = searchParams.get("loanId");
 		if (loanIdParam) {
+			// Switch to loans tab if currently on disbursements
+			setViewMode("loans");
+			
 			// Set the search term to the loan ID so it filters the list
 			setSearchTerm(loanIdParam);
 			setStatusFilter("all"); // Show all statuses
@@ -506,6 +518,21 @@ function ActiveLoansContent() {
 		const file = fileInput.files?.[0];
 		if (!file) return;
 
+		// Check file size (10MB limit set by backend Multer)
+		const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+		if (file.size > MAX_FILE_SIZE) {
+			alert(`File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds the maximum limit of 10MB. Please compress the file or use a smaller file.`);
+			fileInput.value = ''; // Clear file input
+			return;
+		}
+
+		// Check file type
+		if (file.type !== 'application/pdf') {
+			alert('Only PDF files are allowed for payment slips.');
+			fileInput.value = ''; // Clear file input
+			return;
+		}
+
 		setUploadingSlipFor(applicationId);
 		try {
 			const formData = new FormData();
@@ -523,8 +550,20 @@ function ActiveLoansContent() {
 			);
 
 			if (!response.ok) {
-				const error = await response.json();
-				throw new Error(error.message || 'Upload failed');
+				let errorMessage = 'Upload failed';
+				try {
+					const error = await response.json();
+					errorMessage = error.message || error.error || errorMessage;
+				} catch (e) {
+					// If response is not JSON, try to get text
+					const errorText = await response.text();
+					if (errorText.includes('File too large')) {
+						errorMessage = 'File size exceeds the 10MB limit. Please use a smaller file.';
+					} else if (errorText) {
+						errorMessage = errorText;
+					}
+				}
+				throw new Error(errorMessage);
 			}
 
 			const data = await response.json();
@@ -537,7 +576,9 @@ function ActiveLoansContent() {
 			await fetchDisbursements();
 		} catch (error) {
 			console.error('Error uploading payment slip:', error);
-			alert(error instanceof Error ? error.message : 'Failed to upload payment slip');
+			const errorMessage = error instanceof Error ? error.message : 'Failed to upload payment slip';
+			alert(`❌ Upload Failed\n\n${errorMessage}`);
+			fileInput.value = ''; // Clear file input on error
 		} finally {
 			setUploadingSlipFor(null);
 		}
@@ -4783,8 +4824,20 @@ function ActiveLoansContent() {
 																							? "bg-blue-400" 
 																							: event.data.changedBy && (
 																								event.data.changedBy.startsWith('admin_') || 
+																								event.data.changedBy === 'Unknown Admin' ||
 																								event.data.changeReason?.toLowerCase().includes('admin') ||
-																								event.data.notes?.toLowerCase().includes('admin')
+																								event.data.changeReason?.toLowerCase().includes('stamped agreement uploaded') ||
+																								event.data.changeReason?.toLowerCase().includes('stamped agreement replaced') ||
+																								event.data.changeReason?.toLowerCase().includes('stamp certificate uploaded') ||
+																								event.data.changeReason?.toLowerCase().includes('stamp certificate replaced') ||
+																								event.data.changeReason?.toLowerCase().includes('payment slip uploaded') ||
+																								event.data.changeReason?.toLowerCase().includes('payment slip replaced') ||
+																								event.data.changeReason?.toLowerCase().includes('payment_slip_uploaded') ||
+																								event.data.changeReason?.toLowerCase().includes('payment_slip_replaced') ||
+																								event.data.notes?.toLowerCase().includes('admin') ||
+																								event.data.notes?.toLowerCase().includes('stamped agreement') ||
+																								event.data.notes?.toLowerCase().includes('stamp certificate') ||
+																								event.data.notes?.toLowerCase().includes('payment slip')
 																							)
 																							? "bg-amber-400"
 																							: "bg-purple-500"
@@ -5668,6 +5721,9 @@ function ActiveLoansContent() {
 											Bank Details
 										</th>
 										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											Loan ID
+										</th>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 											Disbursed
 										</th>
 										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -5708,13 +5764,25 @@ function ActiveLoansContent() {
 												</div>
 											</td>
 											<td className="px-6 py-4 whitespace-nowrap">
+												{d.application.loan?.id ? (
+													<Link
+														href={`/dashboard/loans?loanId=${d.application.loan.id}`}
+														className="text-sm text-blue-400 hover:text-blue-300 hover:underline font-mono"
+													>
+														{d.application.loan.id.substring(0, 12)}...
+													</Link>
+												) : (
+													<div className="text-sm text-gray-500">N/A</div>
+												)}
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
 												<div className="text-sm text-gray-300">
 													{formatDateTime(d.disbursedAt)}
 												</div>
 											</td>
 											<td className="px-6 py-4 whitespace-nowrap">
 												<div className="text-sm text-gray-400">
-													{d.disbursedBy}
+													{d.disbursedByUser?.fullName || d.disbursedBy}
 												</div>
 											</td>
 											<td className="px-6 py-4 whitespace-nowrap">

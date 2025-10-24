@@ -90,9 +90,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       if (source === 'VPS') {
         where.source = 'VPS_UPLOADS';
       } else if (source === 'ONPREM') {
-        where.source = {
-          in: ['ONPREM_SIGNED', 'ONPREM_STAMPED', 'ONPREM_CERTIFICATE'],
-        };
+        where.source = 'ONPREM';
       }
     }
 
@@ -181,9 +179,7 @@ router.get('/export', authenticateToken, async (req: AuthRequest, res: Response)
       if (source === 'VPS') {
         where.source = 'VPS_UPLOADS';
       } else if (source === 'ONPREM') {
-        where.source = {
-          in: ['ONPREM_SIGNED', 'ONPREM_STAMPED', 'ONPREM_CERTIFICATE'],
-        };
+        where.source = 'ONPREM';
       }
     }
 

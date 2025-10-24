@@ -81,4 +81,39 @@ postgres_data/
 
 # On-premises deployment files (keep separate from cloud deployments)
 # Note: These files are tracked in git but should not be deployed to cloud servers
-# Use deploy-onprem.sh for on-prem deployments only 
+# Use deploy-onprem.sh for on-prem deployments only
+
+# Security audit files - NEVER commit to git
+# These contain sensitive infrastructure information
+ssl_cert_audit_*.txt
+ssl_certs_*/
+ssh_access_audit_*.txt
+*_SHAREABLE.txt
+*_REDACTED.txt
+
+# Audit archives
+docs/ssl-audits/
+docs/ssh-audits/
+
+# SSL certificates and keys - NEVER commit
+*.crt
+*.key
+*.pem
+*.cer
+*.p12
+*.pfx
+
+# SSH keys - NEVER commit
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+id_ecdsa
+id_ecdsa.pub
+authorized_keys
+known_hosts
+*.ppk
+
+# Security incident logs
+docs/ssl_cert_incident_log.txt
+docs/ssh_access_log.txt 
