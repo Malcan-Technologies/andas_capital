@@ -228,7 +228,7 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
     try {
       // Create CTOS transaction
       console.log('Starting CTOS transaction for admin with params:', {
-        ref_id: req.user?.userId,
+        ref_id: kycSession.id,
         document_name: documentName,
         document_number: documentNumber,
         platform,
@@ -240,7 +240,7 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
       const completionUrl = `${baseUrl}/kyc-complete`;
 
       const ctosResponse = await ctosService.createTransaction({
-        ref_id: req.user?.userId!, // Use admin user UUID as ref_id
+        ref_id: kycSession.id, // Use kycSession.id as ref_id
         document_name: documentName,
         document_number: documentNumber,
         platform,
@@ -548,22 +548,22 @@ router.get('/admin-ctos-status', authenticateToken, adminOrAttestorMiddleware, a
       
       console.log(`🔍 Calling CTOS API for admin session ${kycSession.id}`);
       
-      // Try with OPG-Capital prefix first, fallback to original userId (same as user KYC)
+      // Try with OPG-Capital prefix first, fallback to original session id (CTOS appends prefix)
       let ctosStatus;
       try {
-        console.log(`🔍 Trying CTOS with OPG-Capital prefix: OPG-Capital${userId}`);
+        console.log(`🔍 Trying CTOS with OPG-Capital prefix: OPG-Capital${kycSession.id}`);
         ctosStatus = await ctosService.getStatus({
-          ref_id: `OPG-Capital${userId}`,
+          ref_id: `OPG-Capital${kycSession.id}`,
           onboarding_id: kycSession.ctosOnboardingId,
           platform: 'Web',
           mode: 2 // Detail mode
         });
         console.log(`✅ CTOS Response with prefix:`, { status: ctosStatus.status, result: ctosStatus.result });
       } catch (error) {
-        console.log('❌ Failed with OPG-Capital prefix, trying original userId...');
-        console.log(`🔍 Trying CTOS with original userId: ${userId}`);
+        console.log('❌ Failed with OPG-Capital prefix, trying original session id...');
+        console.log(`🔍 Trying CTOS with original session id: ${kycSession.id}`);
         ctosStatus = await ctosService.getStatus({
-          ref_id: userId,
+          ref_id: kycSession.id,
           onboarding_id: kycSession.ctosOnboardingId,
           platform: 'Web',
           mode: 2 // Detail mode

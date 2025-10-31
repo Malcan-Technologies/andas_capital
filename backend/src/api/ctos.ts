@@ -52,7 +52,7 @@ router.post('/create-transaction', async (req, res) => {
     let ctosResponse;
     try {
       ctosResponse = await ctosService.createTransaction({
-        ref_id: userId, // Use user UUID as ref_id
+        ref_id: kycSession.id, // Use kycSession.id as ref_id
         document_name: documentName,
         document_number: documentNumber,
         platform,
@@ -227,7 +227,7 @@ router.post('/status', async (req, res) => {
 
     // Get status from CTOS
     const ctosStatus = await ctosService.getStatus({
-      ref_id: kycSession.userId,
+      ref_id: kycSession.id,
       onboarding_id: kycSession.ctosOnboardingId,
       platform: 'Web',
       mode: 2 // Detailed mode
@@ -316,50 +316,64 @@ router.post('/webhook', async (req, res) => {
       }
     });
 
-    // Find KYC session by ref_id (user ID) and onboarding_id
-      // CTOS may add a prefix to ref_id, so we need to handle both cases
-      let kycSession = null;
-      let cleanUserId = webhookData.ref_id;
+    // Find KYC session by ref_id (now kycSession.id, not userId)
+    // Primary: Direct lookup by id (ref_id is now kycSession.id for new sessions)
+    // Fallback: Legacy lookup by userId (for old sessions)
+    let kycSession = null;
+    let cleanRefId = webhookData.ref_id;
 
-      // First, try with the original ref_id and onboarding_id
+    // Primary lookup: Try direct id match (new system)
+    kycSession = await prisma.kycSession.findUnique({
+      where: {
+        id: webhookData.ref_id
+      },
+      include: { user: true }
+    });
+
+    // If not found and ref_id contains OPG-Capital prefix, try without prefix (new system)
+    if (!kycSession && webhookData.ref_id.startsWith('OPG-Capital')) {
+      cleanRefId = webhookData.ref_id.replace('OPG-Capital', '');
+      kycSession = await prisma.kycSession.findUnique({
+        where: {
+          id: cleanRefId
+        },
+        include: { user: true }
+      });
+    }
+
+    // Fallback: Legacy lookup by userId (for old sessions created before this change)
+    if (!kycSession) {
+      console.log(`Session not found by id, trying legacy userId lookup: ${webhookData.ref_id}`);
       kycSession = await prisma.kycSession.findFirst({
         where: {
           userId: webhookData.ref_id,
           ctosOnboardingId: webhookData.onboarding_id
         },
         include: { user: true },
-        orderBy: { createdAt: 'desc' } // Get the most recent if multiple exist
+        orderBy: { createdAt: 'desc' }
       });
 
-      // If not found and ref_id contains a hyphen, try removing potential prefix
-      if (!kycSession && webhookData.ref_id.includes('-')) {
-        // Handle OPG-Capital prefix specifically
-        if (webhookData.ref_id.startsWith('OPG-Capital')) {
-          cleanUserId = webhookData.ref_id.replace('OPG-Capital', '');
-        } else {
-          // Extract the part after the last hyphen (assuming format: PREFIX-actualUserId)
-          const parts = webhookData.ref_id.split('-');
-          if (parts.length >= 2) {
-            cleanUserId = parts.slice(-1)[0]; // Get the last part
-          }
-        }
-
+      // Legacy: Handle OPG-Capital prefix with userId lookup
+      if (!kycSession && webhookData.ref_id.startsWith('OPG-Capital')) {
+        cleanRefId = webhookData.ref_id.replace('OPG-Capital', '');
         kycSession = await prisma.kycSession.findFirst({
           where: {
-            userId: cleanUserId,
+            userId: cleanRefId,
             ctosOnboardingId: webhookData.onboarding_id
           },
           include: { user: true },
           orderBy: { createdAt: 'desc' }
         });
+      }
 
-        // If still not found, try removing everything before the first underscore (format: PREFIX_actualUserId)
-        if (!kycSession && webhookData.ref_id.includes('_')) {
-          cleanUserId = webhookData.ref_id.split('_').slice(-1)[0];
-
+      // Legacy: Handle other prefix formats
+      if (!kycSession && webhookData.ref_id.includes('-') && !webhookData.ref_id.startsWith('OPG-Capital')) {
+        const parts = webhookData.ref_id.split('-');
+        if (parts.length >= 2) {
+          cleanRefId = parts.slice(-1)[0];
           kycSession = await prisma.kycSession.findFirst({
             where: {
-              userId: cleanUserId,
+              userId: cleanRefId,
               ctosOnboardingId: webhookData.onboarding_id
             },
             include: { user: true },
@@ -367,11 +381,25 @@ router.post('/webhook', async (req, res) => {
           });
         }
       }
+
+      // Legacy: Handle underscore format
+      if (!kycSession && webhookData.ref_id.includes('_')) {
+        cleanRefId = webhookData.ref_id.split('_').slice(-1)[0];
+        kycSession = await prisma.kycSession.findFirst({
+          where: {
+            userId: cleanRefId,
+            ctosOnboardingId: webhookData.onboarding_id
+          },
+          include: { user: true },
+          orderBy: { createdAt: 'desc' }
+        });
+      }
+    }
     
-    console.log(`Looking for KYC session: original ref_id=${webhookData.ref_id}, final userId=${cleanUserId}, found=${!!kycSession}, onboarding_id=${webhookData.onboarding_id}`);
+    console.log(`Looking for KYC session: original ref_id=${webhookData.ref_id}, cleaned ref_id=${cleanRefId}, found=${!!kycSession}, onboarding_id=${webhookData.onboarding_id}`);
 
     if (!kycSession) {
-      console.error(`KYC session not found for original ref_id=${webhookData.ref_id}, cleaned userId=${cleanUserId}, onboarding ID=${webhookData.onboarding_id}`);
+      console.error(`KYC session not found for original ref_id=${webhookData.ref_id}, cleaned ref_id=${cleanRefId}, onboarding ID=${webhookData.onboarding_id}`);
       return res.status(404).json({ error: 'KYC session not found' });
     }
 
