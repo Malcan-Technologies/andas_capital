@@ -195,6 +195,25 @@ function AdminApplicationsPageContent() {
 	};
 
 	// Initialize filters based on URL parameter
+	// Define all filters array as constant for reuse
+	const ALL_FILTERS = [
+		"PENDING_APP_FEE",
+		"PENDING_PROFILE_CONFIRMATION",
+		"PENDING_KYC",
+		"PENDING_KYC_VERIFICATION",
+		"PENDING_CERTIFICATE_OTP",
+		"PENDING_APPROVAL",
+		"PENDING_FRESH_OFFER",
+		"PENDING_ATTESTATION",
+		"PENDING_SIGNATURE",
+		"PENDING_PKI_SIGNING",
+		"PENDING_SIGNING_COMPANY_WITNESS",
+		"PENDING_SIGNING_OTP_DS",
+		"PENDING_STAMPING",
+		"PENDING_DISBURSEMENT",
+		"COLLATERAL_REVIEW",
+	];
+
 	const getInitialFilters = () => {
 		if (filterParam === "pending-approval") {
 			return ["PENDING_APPROVAL", "COLLATERAL_REVIEW"];
@@ -210,25 +229,11 @@ function AdminApplicationsPageContent() {
 			return ["PENDING_WITNESS_SIGNATURE"];
 		} else if (filterParam === "pending_kyc") {
 			return ["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"];
+		} else if (filterParam === "pending-stamping") {
+			return ["PENDING_STAMPING"];
 		} else {
 		// Default "All Applications" view - show active workflow statuses, exclude rejected/withdrawn/incomplete
-		return [
-			"PENDING_APP_FEE",
-			"PENDING_PROFILE_CONFIRMATION",
-			"PENDING_KYC",
-			"PENDING_KYC_VERIFICATION",
-			"PENDING_CERTIFICATE_OTP",
-			"PENDING_APPROVAL",
-			"PENDING_FRESH_OFFER",
-			"PENDING_ATTESTATION",
-			"PENDING_SIGNATURE",
-			"PENDING_PKI_SIGNING",
-			"PENDING_SIGNING_COMPANY_WITNESS",
-			"PENDING_SIGNING_OTP_DS",
-			"PENDING_STAMPING",
-			"PENDING_DISBURSEMENT",
-			"COLLATERAL_REVIEW",
-		];
+		return ALL_FILTERS;
 		}
 	};
 
@@ -784,7 +789,9 @@ function AdminApplicationsPageContent() {
 		// Filter by search term
 		const searchTerm = search.toLowerCase();
 		const matchesSearch =
+			(app.id?.toLowerCase() || "").includes(searchTerm) ||
 			(app.user?.fullName?.toLowerCase() || "").includes(searchTerm) ||
+			(app.user?.email?.toLowerCase() || "").includes(searchTerm) ||
 			(app.purpose?.toLowerCase() || "").includes(searchTerm) ||
 			(app.product?.name?.toLowerCase() || "").includes(searchTerm) ||
 			(app.status?.toLowerCase() || "").includes(searchTerm);
@@ -853,6 +860,14 @@ function AdminApplicationsPageContent() {
 		} else {
 			setSelectedFilters([...selectedFilters, status]);
 		}
+	};
+
+	// Check if current filters match "All Applications" state
+	const isAllFiltersSelected = () => {
+		if (selectedFilters.length !== ALL_FILTERS.length) {
+			return false;
+		}
+		return ALL_FILTERS.every(filter => selectedFilters.includes(filter));
 	};
 
 	// Handle view application details
@@ -1893,45 +1908,15 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 			<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
 				<div className="flex flex-wrap gap-2">
 						<button
-							onClick={() => setSelectedFilters([
-								"PENDING_APP_FEE",
-								"PENDING_PROFILE_CONFIRMATION",
-								"PENDING_KYC",
-								"PENDING_KYC_VERIFICATION",
-								"PENDING_CERTIFICATE_OTP",
-								"PENDING_APPROVAL",
-								"PENDING_FRESH_OFFER",
-								"PENDING_ATTESTATION",
-								"PENDING_SIGNATURE",
-								"PENDING_PKI_SIGNING",
-								"PENDING_SIGNING_COMPANY_WITNESS",
-								"PENDING_SIGNING_OTP_DS",
-								"PENDING_DISBURSEMENT",
-								"COLLATERAL_REVIEW",
-							])}
+							onClick={() => setSelectedFilters(ALL_FILTERS)}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 14 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW") && selectedFilters.includes("PENDING_FRESH_OFFER") && selectedFilters.includes("PENDING_PKI_SIGNING") && selectedFilters.includes("PENDING_ATTESTATION")
+								isAllFiltersSelected()
 									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
 							All ({applications.filter(app => 
-								[
-									"PENDING_APP_FEE",
-									"PENDING_PROFILE_CONFIRMATION",
-									"PENDING_KYC",
-									"PENDING_KYC_VERIFICATION",
-									"PENDING_CERTIFICATE_OTP",
-									"PENDING_APPROVAL",
-									"PENDING_FRESH_OFFER",
-									"PENDING_ATTESTATION",
-									"PENDING_SIGNATURE",
-									"PENDING_PKI_SIGNING",
-									"PENDING_SIGNING_COMPANY_WITNESS",
-									"PENDING_SIGNING_OTP_DS",
-									"PENDING_DISBURSEMENT",
-									"COLLATERAL_REVIEW",
-								].includes(app.status || "")
+								ALL_FILTERS.includes(app.status || "")
 							).length})
 						</button>
 						<button

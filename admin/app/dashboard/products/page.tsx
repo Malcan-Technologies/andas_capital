@@ -126,17 +126,84 @@ export default function AdminProductsPage() {
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+		setError(null); // Clear previous errors
+		
 		try {
-			// Convert repayment terms to numbers before submitting
+			// Validate required fields
+			const validationErrors: string[] = [];
+
+			if (!formData.code?.trim()) {
+				validationErrors.push("Product Code is required");
+			}
+			if (!formData.name?.trim()) {
+				validationErrors.push("Product Name is required");
+			}
+			if (!formData.description?.trim()) {
+				validationErrors.push("Description is required");
+			}
+			if (formData.minAmount === undefined || formData.minAmount === null || formData.minAmount < 0) {
+				validationErrors.push("Minimum Amount must be a valid positive number");
+			}
+			if (formData.maxAmount === undefined || formData.maxAmount === null || formData.maxAmount <= 0) {
+				validationErrors.push("Maximum Amount must be greater than 0");
+			}
+			if (formData.minAmount !== undefined && formData.maxAmount !== undefined && formData.minAmount > formData.maxAmount) {
+				validationErrors.push("Minimum Amount cannot be greater than Maximum Amount");
+			}
+			if (formData.interestRate === undefined || formData.interestRate === null || formData.interestRate < 0) {
+				validationErrors.push("Interest Rate must be a valid positive number or 0");
+			}
+			if (formData.lateFeeRate === undefined || formData.lateFeeRate === null || formData.lateFeeRate < 0) {
+				validationErrors.push("Late Fee Rate must be a valid positive number or 0");
+			}
+			if (formData.lateFeeFixedAmount === undefined || formData.lateFeeFixedAmount === null || formData.lateFeeFixedAmount < 0) {
+				validationErrors.push("Fixed Late Fee Amount must be a valid positive number or 0");
+			}
+			if (formData.lateFeeFrequencyDays === undefined || formData.lateFeeFrequencyDays === null || formData.lateFeeFrequencyDays <= 0) {
+				validationErrors.push("Fixed Fee Frequency must be greater than 0");
+			}
+			if (formData.originationFee === undefined || formData.originationFee === null || formData.originationFee < 0) {
+				validationErrors.push("Origination Fee must be a valid positive number or 0");
+			}
+			if (formData.legalFee === undefined || formData.legalFee === null || formData.legalFee < 0) {
+				validationErrors.push("Legal Fee must be a valid positive number or 0");
+			}
+			if (formData.applicationFee === undefined || formData.applicationFee === null || formData.applicationFee < 0) {
+				validationErrors.push("Application Fee must be a valid positive number or 0");
+			}
+			
+			// Validate repayment terms
+			const validTerms = formData.repaymentTerms
+				?.map((term) => {
+					const num = parseInt(term.trim());
+					return isNaN(num) ? null : num;
+				})
+				.filter((num): num is number => num !== null) || [];
+			
+			if (validTerms.length === 0) {
+				validationErrors.push("At least one Repayment Term is required");
+			}
+
+			// If there are validation errors, show them and stop submission
+			if (validationErrors.length > 0) {
+				setError(validationErrors.join(" • "));
+				return;
+			}
+
+			// Convert repayment terms to numbers and handle undefined numeric values
 			const submissionData = {
 				...formData,
-				repaymentTerms:
-					formData.repaymentTerms
-						?.map((term) => {
-							const num = parseInt(term.trim());
-							return isNaN(num) ? null : num;
-						})
-						.filter((num): num is number => num !== null) || [],
+				// Convert undefined to 0 for numeric fields
+				minAmount: formData.minAmount ?? 0,
+				maxAmount: formData.maxAmount ?? 0,
+				interestRate: formData.interestRate ?? 0,
+				lateFeeRate: formData.lateFeeRate ?? 0,
+				lateFeeFixedAmount: formData.lateFeeFixedAmount ?? 0,
+				lateFeeFrequencyDays: formData.lateFeeFrequencyDays ?? 7,
+				originationFee: formData.originationFee ?? 0,
+				legalFee: formData.legalFee ?? 0,
+				applicationFee: formData.applicationFee ?? 0,
+				repaymentTerms: validTerms,
 			};
 
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -153,6 +220,7 @@ export default function AdminProductsPage() {
 			});
 
 			setIsModalOpen(false);
+			setSuccess(editingProduct ? "Product updated successfully" : "Product created successfully");
 			fetchProducts();
 		} catch (err) {
 			console.error("Error saving product:", err);
@@ -208,6 +276,55 @@ export default function AdminProductsPage() {
 
 	const formatPercentage = (value: number) => {
 		return `${value.toFixed(2)}%`;
+	};
+
+	// Prevent non-numeric input in number fields
+	const handleNumericKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, allowDecimal: boolean = true) => {
+		// Allow: backspace, delete, tab, escape, enter
+		if (
+			e.key === 'Backspace' ||
+			e.key === 'Delete' ||
+			e.key === 'Tab' ||
+			e.key === 'Escape' ||
+			e.key === 'Enter' ||
+			e.key === 'ArrowLeft' ||
+			e.key === 'ArrowRight' ||
+			e.key === 'ArrowUp' ||
+			e.key === 'ArrowDown' ||
+			e.key === 'Home' ||
+			e.key === 'End'
+		) {
+			return; // Let it happen
+		}
+
+		// Allow Ctrl/Cmd + A, C, V, X (Select All, Copy, Paste, Cut)
+		if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'c' || e.key === 'v' || e.key === 'x')) {
+			return;
+		}
+
+		// Allow decimal point only if allowDecimal is true and only one decimal point
+		if (allowDecimal && e.key === '.') {
+			const input = e.currentTarget;
+			if (input.value.includes('.')) {
+				e.preventDefault(); // Already has a decimal point
+			}
+			return;
+		}
+
+		// Allow minus sign only at the start for negative numbers
+		if (e.key === '-') {
+			const input = e.currentTarget;
+			if (input.selectionStart === 0 && !input.value.includes('-')) {
+				return;
+			}
+			e.preventDefault();
+			return;
+		}
+
+		// Prevent if not a number (0-9)
+		if (!/^[0-9]$/.test(e.key)) {
+			e.preventDefault();
+		}
 	};
 
 	// Filter products based on search and status
@@ -540,12 +657,31 @@ export default function AdminProductsPage() {
 								{editingProduct ? "Edit Product" : "Create New Product"}
 							</h3>
 							<button
-								onClick={() => setIsModalOpen(false)}
+								onClick={() => {
+									setIsModalOpen(false);
+									setError(null); // Clear errors when closing modal
+								}}
 								className="text-gray-400 hover:text-white transition-colors"
 							>
 								<XMarkIcon className="h-6 w-6" />
 							</button>
 						</div>
+
+						{/* Validation Error Display */}
+						{error && (
+							<div className="mb-6 bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded-lg">
+								<div className="flex items-start">
+									<XMarkIcon className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+									<div className="flex-1">
+										<p className="font-medium mb-1">Please fix the following errors:</p>
+										<p className="text-sm">{error}</p>
+									</div>
+									<button onClick={() => setError(null)} className="ml-2">
+										<XMarkIcon className="h-4 w-4" />
+									</button>
+								</div>
+							</div>
+						)}
 
 						<form onSubmit={handleSubmit}>
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -603,13 +739,14 @@ export default function AdminProductsPage() {
 									</label>
 									<input
 										type="number"
-										value={formData.minAmount || 0}
+										value={formData.minAmount ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												minAmount: parseFloat(e.target.value),
+												minAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 									/>
 								</div>
@@ -619,13 +756,14 @@ export default function AdminProductsPage() {
 									</label>
 									<input
 										type="number"
-										value={formData.maxAmount || 0}
+										value={formData.maxAmount ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												maxAmount: parseFloat(e.target.value),
+												maxAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 									/>
 								</div>
@@ -636,13 +774,14 @@ export default function AdminProductsPage() {
 									<input
 										type="number"
 										step="0.01"
-										value={formData.interestRate || 0}
+										value={formData.interestRate ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												interestRate: parseFloat(e.target.value),
+												interestRate: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 									/>
 								</div>
@@ -653,13 +792,14 @@ export default function AdminProductsPage() {
 									<input
 										type="number"
 										step="0.001"
-										value={formData.lateFeeRate || 0}
+										value={formData.lateFeeRate ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												lateFeeRate: parseFloat(e.target.value),
+												lateFeeRate: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										placeholder="0.1 (for 0.1% per day)"
 									/>
@@ -671,13 +811,14 @@ export default function AdminProductsPage() {
 									<input
 										type="number"
 										step="0.01"
-										value={formData.lateFeeFixedAmount || 0}
+										value={formData.lateFeeFixedAmount ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												lateFeeFixedAmount: parseFloat(e.target.value),
+												lateFeeFixedAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										placeholder="250 (fixed fee amount)"
 									/>
@@ -688,13 +829,14 @@ export default function AdminProductsPage() {
 									</label>
 									<input
 										type="number"
-										value={formData.lateFeeFrequencyDays || 7}
+										value={formData.lateFeeFrequencyDays ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												lateFeeFrequencyDays: parseInt(e.target.value),
+												lateFeeFrequencyDays: e.target.value === "" ? undefined : parseInt(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, false)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										placeholder="7 (every 7 days)"
 									/>
@@ -706,13 +848,14 @@ export default function AdminProductsPage() {
 									<input
 										type="number"
 										step="0.01"
-										value={formData.originationFee || 0}
+										value={formData.originationFee ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												originationFee: parseFloat(e.target.value),
+												originationFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 									/>
 								</div>
@@ -722,13 +865,15 @@ export default function AdminProductsPage() {
 									</label>
 									<input
 										type="number"
-										value={formData.legalFee || 0}
+										step="0.01"
+										value={formData.legalFee ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												legalFee: parseFloat(e.target.value),
+												legalFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 									/>
 								</div>
@@ -738,13 +883,15 @@ export default function AdminProductsPage() {
 									</label>
 									<input
 										type="number"
-										value={formData.applicationFee || 0}
+										step="0.01"
+										value={formData.applicationFee ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												applicationFee: parseFloat(e.target.value),
+												applicationFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
+										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 									/>
 								</div>
@@ -891,7 +1038,10 @@ export default function AdminProductsPage() {
 							<div className="flex justify-end space-x-4">
 								<button
 									type="button"
-									onClick={() => setIsModalOpen(false)}
+									onClick={() => {
+										setIsModalOpen(false);
+										setError(null); // Clear errors when cancelling
+									}}
 									className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
 								>
 									Cancel
