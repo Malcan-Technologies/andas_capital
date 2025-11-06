@@ -18,6 +18,13 @@ export async function POST(request: Request) {
 		const forwardedFor = request.headers.get("x-forwarded-for");
 		const realIp = request.headers.get("x-real-ip");
 		const clientIp = forwardedFor || realIp || request.headers.get("x-client-ip") || "";
+		
+		console.log("[Login Route] Client IP detection:", {
+			forwardedFor,
+			realIp,
+			clientIp,
+			allHeaders: Object.fromEntries(request.headers.entries())
+		});
 
 		// Fetch login token first
 		let loginToken: string | null = null;
@@ -40,8 +47,9 @@ export async function POST(request: Request) {
 			if (tokenResponse.ok) {
 				const tokenData = await tokenResponse.json();
 				loginToken = tokenData.loginToken || tokenResponse.headers.get("X-Login-Token");
+				console.log("[Login Route] Token fetched successfully:", { loginToken: loginToken?.substring(0, 10) + "..." });
 			} else {
-				console.warn("[Login Route] Failed to fetch login token, proceeding without token");
+				console.warn("[Login Route] Failed to fetch login token, status:", tokenResponse.status);
 			}
 		} catch (tokenError) {
 			console.error("[Login Route] Error fetching login token:", tokenError);
@@ -60,6 +68,9 @@ export async function POST(request: Request) {
 
 		if (loginToken) {
 			loginBody.loginToken = loginToken;
+			console.log("[Login Route] Including token in request body");
+		} else {
+			console.error("[Login Route] NO TOKEN TO INCLUDE!");
 		}
 
 		// Forward IP address to backend for consistent token validation
