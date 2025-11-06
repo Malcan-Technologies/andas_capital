@@ -66,6 +66,10 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4001;
 
+// Trust proxy for correct IP detection behind reverse proxy/load balancer
+// This is required for rate limiting and token validation to work correctly in production
+app.set('trust proxy', true);
+
 // Determine if we're in development mode
 const isDevelopment = process.env.NODE_ENV !== "production";
 

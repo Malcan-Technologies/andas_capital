@@ -14,14 +14,26 @@ export async function POST(request: Request) {
 		const body = await request.json();
 		const { phoneNumber, password } = body;
 
+		// Forward user's IP address for consistent token generation and validation
+		const forwardedFor = request.headers.get("x-forwarded-for");
+		const realIp = request.headers.get("x-real-ip");
+		const clientIp = forwardedFor || realIp || request.headers.get("x-client-ip") || "";
+
 		// Fetch login token first
 		let loginToken: string | null = null;
 		try {
+			const tokenHeaders: Record<string, string> = {
+				"Content-Type": "application/json",
+			};
+			
+			// Forward IP address to backend for consistent token storage
+			if (clientIp) {
+				tokenHeaders["X-Forwarded-For"] = clientIp;
+			}
+
 			const tokenResponse = await fetch(`${BACKEND_URL}/api/auth/login-token`, {
 				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-				},
+				headers: tokenHeaders,
 				cache: "no-store",
 			});
 
@@ -50,12 +62,22 @@ export async function POST(request: Request) {
 			loginBody.loginToken = loginToken;
 		}
 
+		// Forward IP address to backend for consistent token validation
+		const loginHeaders: Record<string, string> = {
+			"Content-Type": "application/json",
+		};
+		
+		if (clientIp) {
+			loginHeaders["X-Forwarded-For"] = clientIp;
+		}
+		
+		if (loginToken) {
+			loginHeaders["X-Login-Token"] = loginToken;
+		}
+
 		const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				...(loginToken && { "X-Login-Token": loginToken }),
-			},
+			headers: loginHeaders,
 			body: JSON.stringify(loginBody),
 			cache: "no-store",
 			next: { revalidate: 0 },

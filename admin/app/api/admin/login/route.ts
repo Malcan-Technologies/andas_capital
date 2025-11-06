@@ -12,14 +12,26 @@ export async function POST(request: Request) {
 
 		console.log("Admin API Route - Backend URL:", BACKEND_URL);
 
+		// Extract user's IP address for consistent token generation and validation
+		const forwardedFor = request.headers.get("x-forwarded-for");
+		const realIp = request.headers.get("x-real-ip");
+		const clientIp = forwardedFor || realIp || "";
+
 		// Fetch login token first
 		let loginToken: string | null = null;
 		try {
+			const tokenHeaders: Record<string, string> = {
+				"Content-Type": "application/json",
+			};
+			
+			// Forward IP address to backend for consistent token storage
+			if (clientIp) {
+				tokenHeaders["X-Forwarded-For"] = clientIp;
+			}
+
 			const tokenResponse = await fetch(`${BACKEND_URL}/api/admin/login-token`, {
 				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-				},
+				headers: tokenHeaders,
 			});
 
 			if (tokenResponse.ok) {
@@ -44,14 +56,9 @@ export async function POST(request: Request) {
 			headers["User-Agent"] = userAgent;
 		}
 		
-		// Forward X-Forwarded-For or use direct IP
-		const forwardedFor = request.headers.get("x-forwarded-for");
-		const realIp = request.headers.get("x-real-ip");
-		
-		if (forwardedFor) {
-			headers["X-Forwarded-For"] = forwardedFor;
-		} else if (realIp) {
-			headers["X-Forwarded-For"] = realIp;
+		// Forward X-Forwarded-For for consistent token validation (use same IP as token generation)
+		if (clientIp) {
+			headers["X-Forwarded-For"] = clientIp;
 		}
 
 		// Include login token in headers if available

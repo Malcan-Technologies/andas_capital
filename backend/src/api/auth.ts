@@ -568,11 +568,38 @@ router.post("/verify-otp", async (req, res) => {
 	// Save refresh token
 	await user.updateRefreshToken(refreshToken);
 
-	// Get user's role for admin verification
+	// Get user's role and full details for admin verification and logging
 	const userWithRole = await prisma.user.findUnique({
 		where: { id: user.id },
-		select: { role: true }
+		select: { 
+			role: true,
+			fullName: true
+		}
 	});
+
+	// Log admin access if user is admin or attestor
+	if (userWithRole?.role === 'ADMIN' || userWithRole?.role === 'ATTESTOR') {
+		const { logAdminAccess } = require("../lib/accessLogger");
+		const userName = userWithRole.fullName || 'Unknown';
+		
+		try {
+			await logAdminAccess(
+				user.id,
+				userName,
+				user.phoneNumber,
+				userWithRole.role,
+				req
+			);
+			console.log('Admin access logged after OTP verification:', {
+				userId: user.id,
+				userName,
+				role: userWithRole.role
+			});
+		} catch (error) {
+			console.error('Failed to log admin access after OTP verification:', error);
+			// Don't fail login if logging fails
+		}
+	}
 
 	return res.json({
 		message: "Phone number verified successfully",

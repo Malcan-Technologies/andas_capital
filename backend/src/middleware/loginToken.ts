@@ -11,7 +11,8 @@ interface TokenStore {
 const tokenStore = new Map<string, TokenStore>();
 
 // Token configuration
-const TOKEN_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+// Token expiry matches rate limit window (5 minutes) + 1 minute buffer for cleanup
+const TOKEN_EXPIRY_MS = 6 * 60 * 1000; // 6 minutes (5 min rate limit + 1 min buffer)
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
