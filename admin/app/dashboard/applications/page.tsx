@@ -874,6 +874,7 @@ function AdminApplicationsPageContent() {
 		}
 	}, [selectedApplication?.id, selectedApplication?.loan?.pkiStampCertificateUrl]);
 
+
 	// Handle filter toggle
 	const toggleFilter = (status: string) => {
 		if (selectedFilters.includes(status)) {
@@ -1943,19 +1944,19 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 								ALL_FILTERS.includes(app.status || "")
 							).length})
 						</button>
-						<button
-							onClick={() => {
-								setSelectedFilters(["PENDING_APPROVAL"])
-								router.push("/dashboard/applications?filter=pending-approval")
-							}}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("PENDING_APPROVAL")
-									? "bg-amber-500/30 text-amber-100 border-amber-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending Approval ({applications.filter(app => app.status === "PENDING_APPROVAL").length})
-						</button>
+					<button
+						onClick={() => {
+							setSelectedFilters(["PENDING_APPROVAL", "COLLATERAL_REVIEW"])
+							router.push("/dashboard/applications?filter=pending-approval")
+						}}
+						className={`px-4 py-2 rounded-lg border transition-colors ${
+							selectedFilters.length === 2 && selectedFilters.includes("PENDING_APPROVAL") && selectedFilters.includes("COLLATERAL_REVIEW")
+								? "bg-amber-500/30 text-amber-100 border-amber-400/30"
+								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+						}`}
+					>
+						Pending Approval ({applications.filter(app => app.status === "PENDING_APPROVAL" || app.status === "COLLATERAL_REVIEW").length})
+					</button>
 					<button
 						onClick={() => {
 							setSelectedFilters(["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"]);
