@@ -84,7 +84,7 @@ async function scanDirectory(dirPath: string, baseDir: string): Promise<FileMeta
 }
 
 /**
- * Match file to database records
+ * Match file to database records and infer document type if UNKNOWN
  */
 async function matchFileToDatabase(file: FileMetadata): Promise<{
   userId?: string;
@@ -92,6 +92,7 @@ async function matchFileToDatabase(file: FileMetadata): Promise<{
   loanId?: string;
   applicationId?: string;
   isOrphaned: boolean;
+  inferredDocumentType?: string;
 }> {
   // Try to match via UserDocument
   const userDoc = await prisma.userDocument.findFirst({
@@ -122,6 +123,7 @@ async function matchFileToDatabase(file: FileMetadata): Promise<{
       loanId: undefined,
       applicationId: userDoc.applicationId || undefined,
       isOrphaned: false,
+      inferredDocumentType: 'KYC', // UserDocument files are KYC documents
     };
   }
 
@@ -158,6 +160,7 @@ async function matchFileToDatabase(file: FileMetadata): Promise<{
       loanId: disbursement.application.loan?.id,
       applicationId: disbursement.applicationId,
       isOrphaned: false,
+      inferredDocumentType: 'DISBURSEMENT_SLIP',
     };
   }
 
@@ -186,12 +189,21 @@ async function matchFileToDatabase(file: FileMetadata): Promise<{
   });
 
   if (loan) {
+    // Determine which PKI field matched
+    let inferredType = 'SIGNED_AGREEMENT';
+    if (loan.pkiStampedPdfUrl?.includes(file.fileName)) {
+      inferredType = 'STAMPED_AGREEMENT';
+    } else if (loan.pkiStampCertificateUrl?.includes(file.fileName)) {
+      inferredType = 'STAMP_CERTIFICATE';
+    }
+    
     return {
       userId: loan.userId,
       userName: loan.user.fullName || undefined,
       loanId: loan.id,
       applicationId: loan.applicationId,
       isOrphaned: false,
+      inferredDocumentType: inferredType,
     };
   }
 
@@ -233,6 +245,7 @@ async function matchFileToDatabase(file: FileMetadata): Promise<{
       loanId: receipt.repayment.loanId,
       applicationId: receipt.repayment.loan.applicationId,
       isOrphaned: false,
+      inferredDocumentType: 'PAYMENT_RECEIPT',
     };
   }
 
@@ -368,6 +381,7 @@ async function matchOnPremFile(metadata: any): Promise<{
   loanId?: string;
   applicationId?: string;
   isOrphaned: boolean;
+  inferredDocumentType?: string;
 }> {
   try {
     const { loanId, userId } = metadata;
@@ -398,6 +412,7 @@ async function matchOnPremFile(metadata: any): Promise<{
           loanId: loan.id,
           applicationId: loan.applicationId,
           isOrphaned: false,
+          inferredDocumentType: undefined, // On-prem files already have document type from metadata
         };
       }
     }
@@ -433,6 +448,7 @@ async function matchOnPremFile(metadata: any): Promise<{
           loanId: recentLoan?.id,
           applicationId: recentLoan?.applicationId,
           isOrphaned: !recentLoan, // Only orphaned if user has no loans at all
+          inferredDocumentType: undefined, // On-prem files already have document type from metadata
         };
       }
     }
@@ -538,6 +554,12 @@ export async function scanAndIndexDocuments(): Promise<ScanStats> {
           matchResult = await matchFileToDatabase(file);
         }
 
+        // Use inferred document type if original was UNKNOWN and we found a match
+        const finalDocumentType = 
+          file.documentType === 'UNKNOWN' && matchResult.inferredDocumentType
+            ? matchResult.inferredDocumentType
+            : file.documentType;
+
         // Create document audit log entry
         await prisma.documentAuditLog.create({
           data: {
@@ -545,7 +567,7 @@ export async function scanAndIndexDocuments(): Promise<ScanStats> {
             fileName: file.fileName,
             fileSize: file.fileSize,
             fileType: file.fileType,
-            documentType: file.documentType,
+            documentType: finalDocumentType,
             userId: matchResult.userId,
             userName: matchResult.userName,
             loanId: matchResult.loanId,

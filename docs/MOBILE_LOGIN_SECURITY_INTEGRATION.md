@@ -49,10 +49,10 @@ POST /api/auth/login
 |--------|-------|--------|
 | **403** | `Missing login token` | Fetch new token and retry |
 | **403** | `Invalid or expired login token` | Fetch new token and retry |
-| **429** | `Too many login attempts` | Wait 15 minutes. Response includes `retryAfter` (seconds) |
+| **429** | `Too many login attempts` | Wait 5 minutes. Response includes `retryAfter` (seconds) |
 | **400** | Input validation errors | Check phone/password format |
 
-**Rate Limit:** 5 attempts per 15 minutes per IP (both successful and failed attempts count)
+**Rate Limit:** 5 attempts per 5 minutes per IP (both successful and failed attempts count)
 
 ---
 
@@ -70,8 +70,8 @@ POST /api/auth/login
 ## Important Notes
 
 - ✅ Token is **one-time use** - fetch new token for each login attempt
-- ✅ Token expires after **10 minutes**
-- ✅ Rate limit: **5 attempts per 15 minutes** per IP
+- ✅ Token expires after **6 minutes**
+- ✅ Rate limit: **5 attempts per 5 minutes** per IP
 - ⚠️ Token fetch failure = login will fail (backend rejects without token)
 
 ---
