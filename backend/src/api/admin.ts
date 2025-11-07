@@ -13055,15 +13055,53 @@ router.get(
 				});
 			}
 
-			if (!application.loan.pkiStampCertificateUrl) {
+			const certificateUrl = application.loan.pkiStampCertificateUrl;
+
+			if (!certificateUrl) {
 				return res.status(400).json({
 					success: false,
 					message: "No stamp certificate available for this loan"
 				});
 			}
 
-			// Read the certificate file from disk
-			const certificatePath = path.join(__dirname, '../../', application.loan.pkiStampCertificateUrl);
+			const downloadFileName = `stamp-certificate-${applicationId.substring(0, 8)}.pdf`;
+
+			if (certificateUrl.startsWith('http://') || certificateUrl.startsWith('https://')) {
+				const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
+
+				try {
+					const downloadResponse = await fetch(certificateUrl, {
+						headers: {
+							'X-API-Key': orchestratorApiKey,
+						}
+					});
+
+					if (!downloadResponse.ok) {
+						const errorText = await downloadResponse.text();
+						throw new Error(`Certificate download failed: ${downloadResponse.status} - ${errorText}`);
+					}
+
+					const pdfArrayBuffer = await downloadResponse.arrayBuffer();
+					const pdfBuffer = Buffer.from(pdfArrayBuffer);
+
+					res.setHeader('Content-Type', 'application/pdf');
+					res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+					res.setHeader('Content-Length', pdfBuffer.length.toString());
+
+					res.send(pdfBuffer);
+					return;
+				} catch (remoteError) {
+					console.error('❌ Error downloading stamp certificate from orchestrator:', remoteError);
+					return res.status(500).json({
+						success: false,
+						message: "Error retrieving stamp certificate from orchestrator",
+						error: remoteError instanceof Error ? remoteError.message : 'Unknown error'
+					});
+				}
+			}
+
+			// Legacy disk-based storage
+			const certificatePath = path.join(__dirname, '../../', certificateUrl);
 
 			if (!fs.existsSync(certificatePath)) {
 				return res.status(404).json({
@@ -13072,13 +13110,11 @@ router.get(
 				});
 			}
 
-		// Send the file
-		res.setHeader('Content-Type', 'application/pdf');
-		res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${applicationId.substring(0, 8)}.pdf"`);
-		
-		const fileStream = fs.createReadStream(certificatePath);
-		fileStream.pipe(res);
-		return;
+			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+			const fileStream = fs.createReadStream(certificatePath);
+			fileStream.pipe(res);
+			return;
 
 	} catch (error) {
 			console.error('❌ Error downloading stamp certificate:', error);
