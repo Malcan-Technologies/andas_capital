@@ -135,6 +135,7 @@ function AdminApplicationsPageContent() {
   const filterParam = searchParams.get("filter");
   const tabParam = searchParams.get("tab");
   const signedParam = searchParams.get("signed");
+  const applicationParam = searchParams.get("application");
 
   const [applications, setApplications] = useState<LoanApplication[]>([]);
   const [loading, setLoading] = useState(true);
@@ -863,6 +864,15 @@ function AdminApplicationsPageContent() {
 
   // Auto-select the first application when filtered results change
   useEffect(() => {
+    // If application ID is provided in URL, try to select that application first
+    if (applicationParam && filteredApplications.length > 0) {
+      const appFromUrl = filteredApplications.find((app) => app.id === applicationParam);
+      if (appFromUrl) {
+        setSelectedApplication(appFromUrl);
+        return;
+      }
+    }
+    
     // Auto-select the first application if there are results and no application is currently selected or selected application is not in filtered results
     if (
       filteredApplications.length > 0 &&
