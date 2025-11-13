@@ -4452,9 +4452,9 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   // Refresh application data
                                   console.log("🔄 Refreshing applications...");
                                   await fetchApplications();
-
-                                  // Switch to disbursement tab
-                                  setSelectedTab("disbursement");
+								  setSelectedTab("disbursement");
+								  setSelectedFilters(["PENDING_DISBURSEMENT"]);
+								  router.push("/dashboard/applications?filter=pending-disbursement");
                                 } catch (error) {
                                   console.error(
                                     "❌ Error confirming stamping:",
