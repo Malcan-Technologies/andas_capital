@@ -45,12 +45,16 @@ export const TokenStorage = {
 		try {
 			if (typeof window !== "undefined") {
 				localStorage.setItem("token", token);
+				console.log(
+					"[TokenStorage] Access token stored in localStorage"
+				);
 			}
 			const cookieDomain = getCookieDomain();
 			Cookies.set("token", token, { 
 				expires: expiresInDays,
 				...(cookieDomain && { domain: cookieDomain })
 			});
+			console.log("[TokenStorage] Access token stored in cookies");
 		} catch (error) {
 			console.error(
 				"[TokenStorage] Failed to store access token:",
@@ -66,6 +70,7 @@ export const TokenStorage = {
 			}
 			const cookieDomain = getCookieDomain();
 			Cookies.remove("token", cookieDomain ? { domain: cookieDomain } : {});
+			console.log("[TokenStorage] Access token removed");
 		} catch (error) {
 			console.error(
 				"[TokenStorage] Failed to remove access token:",
@@ -90,12 +95,16 @@ export const TokenStorage = {
 		try {
 			if (typeof window !== "undefined") {
 				localStorage.setItem("refreshToken", token);
+				console.log(
+					"[TokenStorage] Refresh token stored in localStorage"
+				);
 			}
 			const cookieDomain = getCookieDomain();
 			Cookies.set("refreshToken", token, { 
 				expires: expiresInDays,
 				...(cookieDomain && { domain: cookieDomain })
 			});
+			console.log("[TokenStorage] Refresh token stored in cookies");
 		} catch (error) {
 			console.error(
 				"[TokenStorage] Failed to store refresh token:",
@@ -111,6 +120,7 @@ export const TokenStorage = {
 			}
 			const cookieDomain = getCookieDomain();
 			Cookies.remove("refreshToken", cookieDomain ? { domain: cookieDomain } : {});
+			console.log("[TokenStorage] Refresh token removed");
 		} catch (error) {
 			console.error(
 				"[TokenStorage] Failed to remove refresh token:",
@@ -218,12 +228,14 @@ export const fetchWithTokenRefresh = async <T>(
 		
 		try {
 			const errorData = await response.json();
+			console.log("fetchWithTokenRefresh - Error data received:", errorData);
 			// Prioritize message over error object, and handle error object properly
 			errorMessage = errorData.message || 
 						  (typeof errorData.error === 'string' ? errorData.error : errorData.error?.details) || 
 						  errorMessage;
+			console.log("fetchWithTokenRefresh - Final error message:", errorMessage);
 		} catch (parseError) {
-			console.error("fetchWithTokenRefresh - Failed to parse error response:", parseError);
+			console.log("fetchWithTokenRefresh - Failed to parse error response:", parseError);
 			// If we can't parse the error response, use the generic message
 			// Keep the default errorMessage
 		}
@@ -233,6 +245,7 @@ export const fetchWithTokenRefresh = async <T>(
 	// Check for cross-device sync trigger header
 	const profileUpdated = response.headers.get('X-Profile-Updated');
 	if (profileUpdated === 'true') {
+		console.log("fetchWithTokenRefresh - Profile updated, triggering cross-device sync");
 		// Set localStorage flag to trigger cross-tab/cross-device updates
 		try {
 			localStorage.setItem('profile_updated', Date.now().toString());
@@ -265,29 +278,38 @@ export const checkAuth = async (): Promise<boolean> => {
 
 		// If no access token available, try to refresh using refresh token
 		if (!accessToken) {
+			console.log("checkAuth - No access token found, attempting refresh");
 			
 			if (!refreshToken) {
+				console.log("checkAuth - No refresh token available, authentication failed");
 				return false;
 			}
 
 			const newToken = await refreshAccessToken();
 			if (!newToken) {
+				console.log("checkAuth - Token refresh failed, authentication failed");
 				return false;
 			}
+			
+			console.log("checkAuth - Token refreshed successfully");
 			return true;
 		}
 
 		// Verify token validity by making a request to /api/users/me
 		try {
 			await fetchWithTokenRefresh("/api/users/me");
+			console.log("checkAuth - Token validation successful");
 			return true;
 		} catch (error) {
-			console.error("checkAuth - Token validation failed, attempting refresh");
+			console.log("checkAuth - Token validation failed, attempting refresh");
 			// Token is invalid, try to refresh
 			const newToken = await refreshAccessToken();
 			if (!newToken) {
+				console.log("checkAuth - Token refresh after validation failure failed");
 				return false;
 			}
+			
+			console.log("checkAuth - Token refreshed successfully after validation failure");
 			return true;
 		}
 	} catch (error) {

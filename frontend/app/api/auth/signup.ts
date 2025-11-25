@@ -8,6 +8,7 @@ export const signup = async (
 	phoneNumber: string,
 	password: string
 ): Promise<SignupResponse> => {
+	console.log("Signup - Attempting signup with phone:", phoneNumber);
 
 	const response = await fetch(
 		`${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`,
@@ -27,5 +28,6 @@ export const signup = async (
 		throw new Error(data.message || "Failed to sign up");
 	}
 
+	console.log("Signup - Successful");
 	return data;
 };

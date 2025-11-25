@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('Admin requesting OTP for user:', userId);
+
     // Forward request to backend MTSA API
     const response = await fetch(`${BACKEND_URL}/api/mtsa/request-otp`, {
       method: 'POST',

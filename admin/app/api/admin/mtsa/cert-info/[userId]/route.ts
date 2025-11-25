@@ -38,6 +38,8 @@ export async function GET(
       );
     }
 
+    console.log('Admin checking certificate for user:', userId);
+
     // Forward request to backend MTSA API
     const response = await fetch(`${BACKEND_URL}/api/mtsa/cert-info/${userId}`, {
       method: 'GET',

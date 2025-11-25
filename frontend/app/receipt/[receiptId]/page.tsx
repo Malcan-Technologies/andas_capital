@@ -13,6 +13,8 @@ export default function ReceiptRedirect() {
 			const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.kredit.my';
 			const downloadUrl = `${apiUrl}/api/loans/receipt/${receiptId}`;
 			
+			console.log(`Redirecting to receipt download: ${downloadUrl}`);
+			
 			// Redirect to the API endpoint
 			window.location.href = downloadUrl;
 		}

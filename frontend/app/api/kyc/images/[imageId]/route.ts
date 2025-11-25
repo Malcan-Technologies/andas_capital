@@ -9,11 +9,12 @@ export async function GET(
 	{ params }: { params: { imageId: string } }
 ) {
 	try {
+		console.log("KYC Image - Starting request for imageId:", params.imageId);
 
 		// Get the authorization header
 		const authHeader = request.headers.get("authorization");
 		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			console.error("KYC Image - Invalid auth header format");
+			console.log("KYC Image - Invalid auth header format");
 			return NextResponse.json(
 				{ error: "Invalid authorization header" },
 				{ status: 401 }
@@ -21,6 +22,7 @@ export async function GET(
 		}
 
 		const url = `${BACKEND_URL}/api/kyc/images/${params.imageId}`;
+		console.log("KYC Image - Forwarding request to backend:", url);
 
 		// Forward the request to the backend API
 		const response = await fetch(url, {
@@ -32,9 +34,15 @@ export async function GET(
 			next: { revalidate: 0 },
 		});
 
+		console.log("KYC Image - Backend response:", {
+			status: response.status,
+			ok: response.ok,
+			contentType: response.headers.get("content-type"),
+		});
+
 		if (!response.ok) {
 			const errorData = await response.text();
-			console.error("KYC Image - Backend error:", errorData);
+			console.log("KYC Image - Backend error:", errorData);
 			return NextResponse.json(
 				{ error: "Failed to fetch KYC image" },
 				{ status: response.status }
@@ -44,6 +52,8 @@ export async function GET(
 		// Stream the image file response
 		const arrayBuffer = await response.arrayBuffer();
 		const contentType = response.headers.get("content-type") || "image/png";
+
+		console.log("KYC Image - Successful response, content-type:", contentType);
 
 		return new NextResponse(arrayBuffer, {
 			status: 200,

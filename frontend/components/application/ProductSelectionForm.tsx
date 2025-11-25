@@ -64,6 +64,7 @@ export default function ProductSelectionForm({
 
 			// If we're in an existing flow, update the application
 			if (applicationId) {
+				console.log("Updating existing application:", applicationId);
 
 					// Determine status based on collateral requirement
 					const newStatus = selectedProduct.collateralRequired ? "COLLATERAL_REVIEW" : "INCOMPLETE";
@@ -99,6 +100,7 @@ export default function ProductSelectionForm({
 				}
 
 				const data = await response.json();
+				console.log("Application updated:", data);
 
 				// Call the onSubmit handler with the updated application
 				onSubmit({ productId: selected });

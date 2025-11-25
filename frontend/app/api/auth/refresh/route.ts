@@ -7,16 +7,22 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: Request) {
 	try {
+		console.log("[Refresh Token Route] Starting token refresh process");
 
 		const body = await request.json();
 		const { refreshToken } = body;
 
 		if (!refreshToken) {
+			console.log("[Refresh Token Route] No refresh token provided");
 			return NextResponse.json(
 				{ error: "Refresh token is required" },
 				{ status: 400 }
 			);
 		}
+
+		console.log(
+			"[Refresh Token Route] Forwarding refresh request to backend"
+		);
 
 		// Forward the request to the backend API
 		const response = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
@@ -28,6 +34,10 @@ export async function POST(request: Request) {
 			cache: "no-store",
 			next: { revalidate: 0 },
 		});
+
+		console.log(
+			`[Refresh Token Route] Received response with status: ${response.status}`
+		);
 
 		// Get the response body
 		const data = await response.json();

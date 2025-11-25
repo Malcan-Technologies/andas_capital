@@ -181,15 +181,18 @@ function ReviewAndSubmitFormContent({
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
+				console.log("Starting to fetch application data...");
 
 				// Verify API URL
 				const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+				console.log("API URL:", apiUrl);
 				if (!apiUrl) {
 					throw new Error("API URL is not configured");
 				}
 
 				// Get application ID from URL params
 				const applicationId = searchParams.get("applicationId");
+				console.log("Application ID from URL:", applicationId);
 
 				if (!applicationId) {
 					throw new Error("Application ID not found in URL");
@@ -197,19 +200,27 @@ function ReviewAndSubmitFormContent({
 
 				// Get token
 				const token = localStorage.getItem("token");
+				console.log("Token available:", !!token);
 				if (!token) {
 					throw new Error("Authentication token not found");
 				}
 
 				// Log the full URL being used
 				const fullUrl = `${apiUrl}/api/loan-applications/${applicationId}`;
+				console.log("Full API URL:", fullUrl);
 
 				// Fetch application data
+				console.log(`Fetching from: ${fullUrl}`);
 				const applicationResponse = await fetch(fullUrl, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 					},
 				});
+
+				console.log(
+					"Application response status:",
+					applicationResponse.status
+				);
 
 				if (!applicationResponse.ok) {
 					throw new Error(
@@ -218,8 +229,10 @@ function ReviewAndSubmitFormContent({
 				}
 
 				const data = await applicationResponse.json();
+				console.log("Raw application data:", data);
 
 				// Validate the data structure
+				console.log("Validating application data structure...");
 				const requiredFields = [
 					"productId",
 					"amount",
@@ -235,6 +248,7 @@ function ReviewAndSubmitFormContent({
 				);
 
 				if (missingFields.length > 0) {
+					console.error("Missing required fields:", missingFields);
 					throw new Error(
 						`Application data is missing required fields: ${missingFields.join(
 							", "
@@ -244,6 +258,9 @@ function ReviewAndSubmitFormContent({
 
 				// Check if product information exists
 				if (!data.product) {
+					console.error(
+						"Product information is missing in the application data"
+					);
 					throw new Error(
 						"Product information is missing in the application data"
 					);
@@ -268,10 +285,12 @@ function ReviewAndSubmitFormContent({
 					},
 				};
 
+				console.log("Transformed application data:", transformedData);
 				setApplicationData(transformedData);
 
 				// Get product code from application data
 				const productCode = data.product?.code;
+				console.log("Product code from application data:", productCode);
 
 				if (!productCode) {
 					console.warn(
@@ -280,6 +299,10 @@ function ReviewAndSubmitFormContent({
 					// Try to use productId as a fallback
 					const fallbackProductId = data.productId;
 					if (fallbackProductId) {
+						console.log(
+							"Using productId as fallback:",
+							fallbackProductId
+						);
 						// Try to fetch product details using productId
 						try {
 							const fallbackProductResponse = await fetch(
@@ -289,6 +312,10 @@ function ReviewAndSubmitFormContent({
 							if (fallbackProductResponse.ok) {
 								const fallbackProductData =
 									await fallbackProductResponse.json();
+								console.log(
+									"Fallback product data:",
+									fallbackProductData
+								);
 								setProductDetails(fallbackProductData);
 								return; // Exit early if we successfully got the product data
 							}
@@ -306,10 +333,14 @@ function ReviewAndSubmitFormContent({
 				}
 
 				// Fetch product details
+				console.log(
+					`Fetching product details for code: ${productCode}`
+				);
 				const productResponse = await fetch(
 					`${process.env.NEXT_PUBLIC_API_URL}/api/products?code=${productCode}`
 				);
 
+				console.log("Product response status:", productResponse.status);
 
 				if (!productResponse.ok) {
 					throw new Error(
@@ -318,6 +349,7 @@ function ReviewAndSubmitFormContent({
 				}
 
 				const productData = await productResponse.json();
+				console.log("Product data:", productData);
 
 				// Check if productData is valid
 				if (!productData) {
@@ -340,6 +372,10 @@ function ReviewAndSubmitFormContent({
 				);
 
 				if (missingProductFields.length > 0) {
+					console.error(
+						"Missing required product fields:",
+						missingProductFields
+					);
 					throw new Error(
 						`Product data is missing required fields: ${missingProductFields.join(
 							", "
@@ -347,6 +383,7 @@ function ReviewAndSubmitFormContent({
 					);
 				}
 
+				console.log("Setting product details:", productData);
 				setProductDetails(productData);
 				return; // Add explicit return statement
 			} catch (err) {
@@ -362,6 +399,16 @@ function ReviewAndSubmitFormContent({
 
 		fetchData();
 	}, [searchParams]);
+
+	// Add this useEffect to verify productDetails is set correctly
+	useEffect(() => {
+		if (productDetails) {
+			console.log(
+				"Product details successfully set in state:",
+				productDetails
+			);
+		}
+	}, [productDetails]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -405,6 +452,7 @@ function ReviewAndSubmitFormContent({
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
+				console.error("Error response:", errorData);
 				throw new Error(
 					errorData?.message || "Failed to submit application"
 				);

@@ -256,6 +256,7 @@ export default function AdminDashboardPage() {
 	const [healthLoading, setHealthLoading] = useState(false);
 
 	const fetchDashboardData = async () => {
+		console.log('🔍 fetchDashboardData - Starting with userRole:', userRole);
 		try {
 			// Fetch admin user data with token refresh
 			try {
@@ -307,6 +308,7 @@ export default function AdminDashboardPage() {
 				monthlyStats = monthlyData.monthlyStats;
 			} catch (error) {
 				console.error("Error fetching monthly stats:", error);
+				console.log("Using fallback mock data for monthly stats");
 				// Fallback to mock data if API fails
 				monthlyStats = [
 					{
@@ -453,6 +455,7 @@ export default function AdminDashboardPage() {
 				dailyStats = dailyData.dailyStats;
 			} catch (error) {
 				console.error("Error fetching daily stats:", error);
+				console.log("Using fallback mock data for daily stats");
 				// Generate mock daily data for last 30 days if API fails
 				const mockDailyStats = [];
 				const now = new Date();
@@ -604,9 +607,11 @@ export default function AdminDashboardPage() {
 
 			// Try to fetch application counts for workflow
 			try {
+				console.log('🔍 Attempting to fetch counts for userRole:', userRole);
 				const countsData = await fetchWithAdminTokenRefresh<any>(
 					"/api/admin/applications/counts"
 				);
+				console.log('🔍 Successfully fetched counts:', countsData);
 
 				// Fetch pending discharge loans count
 				let pendingDischargeCount = 0;

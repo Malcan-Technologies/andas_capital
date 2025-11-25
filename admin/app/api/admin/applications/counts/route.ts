@@ -58,6 +58,13 @@ export async function GET(request: Request) {
 
 		if (response.ok) {
 			const data = await response.json();
+			console.log("Raw backend counts data:", data);
+
+			// For debugging, log the pending approval values specifically
+			console.log(
+				"PENDING_APPROVAL count from backend:",
+				data.PENDING_APPROVAL
+			);
 
 			// Map the backend status names to frontend status names
 			const mappedCounts: ApplicationCounts = {
@@ -83,10 +90,12 @@ export async function GET(request: Request) {
 				total: data.total || 0,
 			};
 
+			console.log("Mapped counts:", mappedCounts);
 			return NextResponse.json(mappedCounts);
 		}
 
 		// If the dedicated endpoint fails, fall back to the dashboard endpoint
+		console.log("Counts endpoint failed, falling back to dashboard data");
 		const dashboardResponse = await fetch(
 			`${backendUrl}/api/admin/dashboard`,
 			{
@@ -100,6 +109,7 @@ export async function GET(request: Request) {
 
 		if (!dashboardResponse.ok) {
 			// If both endpoints fail, generate reasonable mock data
+			console.log("Dashboard endpoint also failed, generating mock data");
 			const mockCounts: ApplicationCounts = {
 				INCOMPLETE: 3,
 				PENDING_APP_FEE: 2,

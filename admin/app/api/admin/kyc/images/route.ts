@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log('Admin requesting KYC images for admin user:', decoded.userId);
+
     // Forward request to backend admin KYC API
     const response = await fetch(`${BACKEND_URL}/api/admin/kyc/images`, {
       method: 'GET',

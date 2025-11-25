@@ -9,9 +9,10 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 export async function GET(request: Request) {
 	try {
 		const authHeader = request.headers.get("authorization");
+		console.log("Users/me - Auth header:", authHeader);
 
 		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			console.error("Users/me - Invalid auth header format");
+			console.log("Users/me - Invalid auth header format");
 			return NextResponse.json(
 				{ error: "Invalid authorization header" },
 				{ status: 401 }
@@ -19,13 +20,23 @@ export async function GET(request: Request) {
 		}
 
 		// Forward the request to the backend API
+		console.log(
+			"Users/me - Forwarding request to backend:",
+			`${BACKEND_URL}/api/users/me`
+		);
 		const backendResponse = await fetch(`${BACKEND_URL}/api/users/me`, {
 			headers: {
 				Authorization: authHeader,
 			},
 		});
+
+		console.log("Users/me - Backend response:", {
+			status: backendResponse.status,
+			ok: backendResponse.ok,
+		});
+
 		if (!backendResponse.ok) {
-			console.error("Users/me - Error response from backend");
+			console.log("Users/me - Error response from backend");
 			return NextResponse.json(
 				{ error: "Authentication failed" },
 				{ status: backendResponse.status }
@@ -33,7 +44,10 @@ export async function GET(request: Request) {
 		}
 
 		const data = await backendResponse.json();
+		console.log("Users/me - Backend data:", data);
+
 		// Return the user data with no-cache headers
+		console.log("Users/me - Successful response");
 		const response = NextResponse.json(data);
 		response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 		response.headers.set('Pragma', 'no-cache');
@@ -51,9 +65,10 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
 	try {
 		const authHeader = request.headers.get("authorization");
+		console.log("Users/me PUT - Auth header:", authHeader);
 
 		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			console.error("Users/me PUT - Invalid auth header format");
+			console.log("Users/me PUT - Invalid auth header format");
 			return NextResponse.json(
 				{ error: "Invalid authorization header" },
 				{ status: 401 }
@@ -62,8 +77,13 @@ export async function PUT(request: Request) {
 
 		// Get the request body
 		const body = await request.json();
+		console.log("Users/me PUT - Request body:", body);
 
 		// Forward the request to the backend API
+		console.log(
+			"Users/me PUT - Forwarding request to backend:",
+			`${BACKEND_URL}/api/users/me`
+		);
 		const backendResponse = await fetch(`${BACKEND_URL}/api/users/me`, {
 			method: "PUT",
 			headers: {
@@ -73,17 +93,22 @@ export async function PUT(request: Request) {
 			body: JSON.stringify(body),
 		});
 
+		console.log("Users/me PUT - Backend response:", {
+			status: backendResponse.status,
+			ok: backendResponse.ok,
+		});
+
 		if (!backendResponse.ok) {
-			console.error("Users/me PUT - Error response from backend");
+			console.log("Users/me PUT - Error response from backend");
 			
 			// Try to extract the specific error message from backend
 			let errorMessage = "Failed to update user data";
 			try {
 				const errorData = await backendResponse.json();
-				console.error("Users/me PUT - Backend error data:", errorData);
+				console.log("Users/me PUT - Backend error data:", errorData);
 				errorMessage = errorData.message || errorData.error || errorMessage;
 			} catch (parseError) {
-				console.error("Users/me PUT - Failed to parse backend error:", parseError);
+				console.log("Users/me PUT - Failed to parse backend error:", parseError);
 			}
 			
 			return NextResponse.json(
@@ -93,7 +118,10 @@ export async function PUT(request: Request) {
 		}
 
 		const data = await backendResponse.json();
+		console.log("Users/me PUT - Backend data:", data);
+
 		// Return the updated user data with no-cache headers
+		console.log("Users/me PUT - Successful response");
 		const response = NextResponse.json(data);
 		response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 		response.headers.set('Pragma', 'no-cache');

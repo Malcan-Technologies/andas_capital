@@ -69,12 +69,18 @@ export default function WalletPage() {
 
 				// If no tokens available, immediately redirect to login
 				if (!accessToken && !refreshToken) {
+					console.log(
+						"Wallet - No tokens available, redirecting to login"
+					);
 					router.push("/login");
 					return;
 				}
 
 				const isAuthenticated = await checkAuth();
 				if (!isAuthenticated) {
+					console.log(
+						"Wallet - Auth check failed, redirecting to login"
+					);
 					// Clear any invalid tokens
 					TokenStorage.clearTokens();
 					router.push("/login");

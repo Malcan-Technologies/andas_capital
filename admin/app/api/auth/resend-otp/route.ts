@@ -7,9 +7,16 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: Request) {
 	try {
+		console.log(
+			`[Resend OTP Route] Starting resend OTP process with backend URL: ${BACKEND_URL}`
+		);
 
 		const body = await request.json();
 		const { phoneNumber } = body;
+
+		console.log(
+			`[Resend OTP Route] Forwarding resend OTP request for phone: ${phoneNumber}`
+		);
 
 		// Forward the request to the backend API
 		const response = await fetch(`${BACKEND_URL}/api/auth/resend-otp`, {
@@ -22,8 +29,18 @@ export async function POST(request: Request) {
 			next: { revalidate: 0 },
 		});
 
+		console.log(
+			`[Resend OTP Route] Received response with status: ${response.status}`
+		);
+
 		// Get the response body
 		const data = await response.json();
+		console.log(
+			`[Resend OTP Route] Response data:`,
+			data.message
+				? { message: data.message }
+				: { error: data.error || "Unknown error" }
+		);
 
 		if (!response.ok) {
 			return NextResponse.json(

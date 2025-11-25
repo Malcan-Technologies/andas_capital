@@ -124,7 +124,6 @@ function getStatusColor(status: string) {
 
 function PaymentsContent() {
 	const searchParams = useSearchParams();
-	const [allPayments, setAllPayments] = useState<Payment[]>([]);
 	const [payments, setPayments] = useState<Payment[]>([]);
 	const [filteredPayments, setFilteredPayments] = useState<Payment[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -202,11 +201,11 @@ function PaymentsContent() {
 
 		try {
 			// Add cache-busting parameter to ensure fresh data
-			// Always fetch all payments without status filtering
 			const cacheBuster = bustCache ? `?_t=${Date.now()}` : "";
+			const statusParam = statusFilter === "all" ? "" : `&status=${statusFilter}`;
 			const url = cacheBuster ? 
-				`/api/admin/repayments${cacheBuster}` : 
-				`/api/admin/repayments`;
+				`/api/admin/repayments${cacheBuster}${statusParam}` : 
+				`/api/admin/repayments?status=${statusFilter}`;
 			
 			const data = await fetchWithAdminTokenRefresh<{
 				success: boolean;
@@ -214,39 +213,28 @@ function PaymentsContent() {
 			}>(url);
 
 			if (data.success && data.data) {
-				const allPaymentsData = data.data;
-				setAllPayments(allPaymentsData);
+				setPayments(data.data);
 				setLastRefresh(new Date());
 				
-				// Calculate filter counts from the full dataset
+				// Calculate filter counts
 				const counts = {
-					all: allPaymentsData.length,
-					PENDING: allPaymentsData.filter((p: Payment) => p.status === "PENDING").length,
-					APPROVED: allPaymentsData.filter((p: Payment) => p.status === "APPROVED").length,
-					REJECTED: allPaymentsData.filter((p: Payment) => p.status === "REJECTED").length,
+					all: data.data.length,
+					PENDING: data.data.filter((p: Payment) => p.status === "PENDING").length,
+					APPROVED: data.data.filter((p: Payment) => p.status === "APPROVED").length,
+					REJECTED: data.data.filter((p: Payment) => p.status === "REJECTED").length,
 				};
 				setFilterCounts(counts);
-				// Note: Status filtering is handled by useEffect that watches allPayments and statusFilter
 			} else {
 				throw new Error("Failed to fetch payments");
 			}
 		} catch (error) {
 			console.error("Error fetching payments:", error);
-			setAllPayments([]);
 			setPayments([]);
 		} finally {
 			setLoading(false);
 			setRefreshing(false);
 		}
-	}, []);
-
-	// Apply status filter to allPayments whenever statusFilter or allPayments changes
-	useEffect(() => {
-		const statusFiltered = statusFilter === "all" 
-			? allPayments 
-			: allPayments.filter((p: Payment) => p.status === statusFilter);
-		setPayments(statusFiltered);
-	}, [statusFilter, allPayments]);
+	}, [statusFilter]);
 
 	// Setup auto-refresh with cleanup
 	const setupAutoRefresh = useCallback(() => {
@@ -267,7 +255,7 @@ function PaymentsContent() {
 		return null;
 	}, [refreshInterval, fetchPayments, statusFilter]);
 
-	// Initial fetch and auto-refresh setup
+	// Auto-refresh every 30 seconds to keep data fresh and re-fetch when status filter changes
 	useEffect(() => {
 		fetchPayments();
 		const interval = setupAutoRefresh();
@@ -277,7 +265,7 @@ function PaymentsContent() {
 				clearInterval(interval);
 			}
 		};
-	}, [fetchPayments, setupAutoRefresh]);
+	}, [statusFilter]);
 
 	// Clean up interval on unmount
 	useEffect(() => {

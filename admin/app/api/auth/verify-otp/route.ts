@@ -6,9 +6,17 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: Request) {
 	try {
+		console.log(
+			`[Verify OTP Route] Starting verify OTP process with backend URL: ${BACKEND_URL}`
+		);
 
 		const body = await request.json();
 		const { phoneNumber, otp } = body;
+
+		console.log(
+			`[Verify OTP Route] Forwarding verify OTP request for phone: ${phoneNumber}`
+		);
+
 		// Forward the request to the backend API
 		const response = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
 			method: "POST",
@@ -20,9 +28,18 @@ export async function POST(request: Request) {
 			next: { revalidate: 0 },
 		});
 
+		console.log(
+			`[Verify OTP Route] Received response with status: ${response.status}`
+		);
 
 		// Get the response body
 		const data = await response.json();
+		console.log(
+			`[Verify OTP Route] Response data:`,
+			data.message
+				? { message: data.message }
+				: { error: data.error || "Unknown error" }
+		);
 
 		if (!response.ok) {
 			return NextResponse.json(

@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
+		console.log("Fetching user wallet");
 		const response = await fetch(`${backendUrl}/api/users/me/wallet`, {
 			method: "GET",
 			headers: {

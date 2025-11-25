@@ -49,6 +49,7 @@ function AdminPKISigningContent() {
     try {
       setLoading(true);
       setError('');
+      console.log('🔐 Initializing admin PKI session...', { applicationId, signatoryType });
 
       // For now, we'll create a mock session since DocuSeal signing is already done
       // In a full implementation, this would check the signing orchestrator for the session
@@ -85,6 +86,7 @@ function AdminPKISigningContent() {
     setStep('signing');
 
     try {
+      console.log('🔐 Submitting PIN for PKI signing...', { applicationId, signatoryType });
 
       const response = await fetchWithAdminTokenRefresh<{
         success: boolean;

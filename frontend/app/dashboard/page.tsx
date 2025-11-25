@@ -73,7 +73,7 @@ export default function DashboardPage() {
 
 				// If no tokens available, immediately redirect to login
 				if (!accessToken && !refreshToken) {
-					console.error(
+					console.log(
 						"Dashboard - No tokens available, redirecting to login"
 					);
 					router.push("/login");
@@ -84,7 +84,7 @@ export default function DashboardPage() {
 				const isAuthenticated = await checkAuth();
 
 				if (!isAuthenticated) {
-					console.error(
+					console.log(
 						"Dashboard - Auth check failed, redirecting to login"
 					);
 					// Clear any invalid tokens
@@ -95,22 +95,47 @@ export default function DashboardPage() {
 
 				// Fetch user data with automatic token refresh
 				const data = await fetchWithTokenRefresh<any>("/api/users/me");
+				console.log("Dashboard - Auth check data:", data);
 
 				// Set user profile for completeness check
 				setUserProfile(data);
+
+				// Skip onboarding check - all users go directly to dashboard
+				// if (!data?.isOnboardingComplete) {
+				// 	console.log(
+				// 		"Dashboard - User has not completed onboarding, redirecting to onboarding"
+				// 	);
+				// 	router.push("/onboarding");
+				// 	return;
+				// }
 
 				// Load wallet data
 				fetchWalletData();
 
 				// Set user name from the response data
+				console.log("User data for name extraction:", {
+					firstName: data.firstName,
+					fullName: data.fullName,
+					allData: data,
+				});
+
 				if (data.firstName) {
 					setUserName(data.firstName);
+					console.log(
+						"Setting userName to firstName:",
+						data.firstName
+					);
 				} else if (data.fullName) {
 					const firstPart = data.fullName.split(" ")[0];
 					setUserName(firstPart);
+					console.log(
+						"Setting userName to first part of fullName:",
+						firstPart
+					);
 				} else {
 					// If no name is available, use a generic greeting
 					setUserName("Guest");
+					console.log("Setting userName to Guest (no name found)");
 				}
 
 				// Fetch incomplete applications and loans
@@ -200,11 +225,14 @@ export default function DashboardPage() {
 
 	const fetchLoanSummary = async () => {
 		try {
+			console.log("Dashboard - Fetching loan summary...");
 			const data = await fetchWithTokenRefresh<any>("/api/wallet");
+			console.log("Dashboard - Wallet API response:", data);
 			if (data?.loanSummary) {
+				console.log("Dashboard - Loan Summary Data:", data.loanSummary);
 				setLoanSummary(data.loanSummary);
 			} else {
-				console.error("Dashboard - No loan summary in response");
+				console.log("Dashboard - No loan summary in response");
 			}
 		} catch (error) {
 			console.error("Error fetching loan summary:", error);

@@ -98,13 +98,20 @@ export default function AdminLayout({
 		// Check if user is authenticated
 		const checkAuthentication = async () => {
 			try {
+				console.log("AdminLayout - Starting authentication check");
 				const accessToken = AdminTokenStorage.getAccessToken();
 				const refreshToken = AdminTokenStorage.getRefreshToken();
 
+				console.log("AdminLayout - Tokens exist:", {
+					accessToken: !!accessToken,
+					refreshToken: !!refreshToken,
+				});
+
 				const isAuthenticated = await checkAdminAuth();
+				console.log("AdminLayout - isAuthenticated:", isAuthenticated);
 
 				if (!isAuthenticated) {
-					console.error(
+					console.log(
 						"AdminLayout - Not authenticated, redirecting to login"
 					);
 					router.push("/login");
@@ -113,9 +120,11 @@ export default function AdminLayout({
 
 				// Fetch admin user information
 				try {
+					console.log("AdminLayout - Fetching user data");
 					const userData = await fetchWithAdminTokenRefresh<any>(
 						"/api/admin/me"
 					);
+					console.log("AdminLayout - User data:", userData);
 
 					if (userData.fullName) {
 						setAdminName(userData.fullName);

@@ -10,6 +10,7 @@ export async function POST(
 ) {
 	try {
 		const { id } = params;
+		console.log("Admin API: Approving repayment:", id);
 
 		// Get the authorization header from the request
 		const authHeader = request.headers.get("authorization");
@@ -33,6 +34,7 @@ export async function POST(
 
 		// Get request body
 		const body = await request.json();
+		console.log("Admin API: Approval request body:", body);
 
 		// Make request to backend
 		const response = await fetch(
@@ -46,6 +48,8 @@ export async function POST(
 				body: JSON.stringify(body),
 			}
 		);
+
+		console.log("Admin API: Backend response status:", response.status);
 
 		if (!response.ok) {
 			let errorData;
@@ -67,6 +71,7 @@ export async function POST(
 		}
 
 		const data = await response.json();
+		console.log("Admin API: Successfully approved repayment");
 
 		return NextResponse.json(data);
 	} catch (error) {

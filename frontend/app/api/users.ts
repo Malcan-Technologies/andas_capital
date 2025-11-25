@@ -11,6 +11,11 @@ export async function getCurrentUser(accessToken: string): Promise<User> {
 		throw new Error("No access token provided");
 	}
 
+	console.log(
+		"getCurrentUser - Making API call with token:",
+		accessToken.substring(0, 10) + "..."
+	);
+
 	try {
 		const response = await fetch(
 			`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
@@ -38,6 +43,7 @@ export async function getCurrentUser(accessToken: string): Promise<User> {
 		}
 
 		const data = await response.json();
+		console.log("getCurrentUser - API call successful:", { data });
 		return data;
 	} catch (error) {
 		console.error("getCurrentUser - Error:", error);

@@ -49,7 +49,7 @@ export function NotificationsDropdown() {
 			// Check if we have an access token first
 			const token = TokenStorage.getAccessToken();
 			if (!token) {
-				console.error("No access token available for notifications");
+				console.log("No access token available for notifications");
 				setError(true);
 				setLoading(false);
 				return;
@@ -60,6 +60,7 @@ export function NotificationsDropdown() {
 				notifications: Notification[];
 			}>("/api/notifications?limit=5");
 
+			console.log("Raw notifications response:", data);
 			
 			// Sort notifications by createdAt date (latest first)
 			const sortedNotifications = (data.notifications || []).sort((a, b) => 
@@ -164,8 +165,11 @@ export function NotificationsDropdown() {
 
 	const handleNotificationClick = async (notification: Notification) => {
 		try {
+			console.log("Notification clicked:", notification);
+			console.log("Link value:", notification.link);
 
 			if (!notification.link) {
+				console.log("No link found, marking as read only");
 				if (!notification.isRead) {
 					await markAsRead([notification.id]);
 				}
@@ -173,14 +177,18 @@ export function NotificationsDropdown() {
 			}
 
 			setOpen(false);
+			console.log("Navigating to:", notification.link);
 
 			if (notification.link.startsWith("http")) {
+				console.log("External link detected, using window.location");
 				window.location.href = notification.link;
 			} else {
+				console.log("Internal link detected, using router.push");
 				router.push(notification.link);
 			}
 
 			if (!notification.isRead) {
+				console.log("Marking as read in background");
 				await markAsRead([notification.id]).catch(console.error);
 			}
 

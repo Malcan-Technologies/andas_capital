@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log('Admin checking CTOS status and updating database for user:', decoded.userId);
+
     // Forward request to backend admin KYC API - calls CTOS and updates database
     const response = await fetch(`${BACKEND_URL}/api/admin/kyc/admin-ctos-status`, {
       method: 'GET',

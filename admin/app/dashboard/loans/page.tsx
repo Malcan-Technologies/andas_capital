@@ -438,9 +438,27 @@ function ActiveLoansContent() {
 				
 				// Store system settings for displaying calculation methods
 				if (response.systemSettings) {
+					console.log("📋 System settings loaded:", response.systemSettings);
 					// Store in state if needed, or use directly in rendering
 					(window as any).loanSystemSettings = response.systemSettings;
 				}
+				
+				// Debug: Log overdue info for each loan
+				console.log("🔍 DEBUG: Loans data received:", response.data.length);
+				response.data.forEach((loan, index) => {
+					if (loan.overdueInfo) {
+						console.log(`🔍 Loan ${index + 1} (${loan.id.substring(0, 8)}):`, {
+							hasOverduePayments: loan.overdueInfo.hasOverduePayments,
+							totalOverdueAmount: loan.overdueInfo.totalOverdueAmount,
+							totalLateFees: loan.overdueInfo.totalLateFees,
+							overdueRepaymentsCount: loan.overdueInfo.overdueRepayments.length,
+							status: loan.status,
+							nextPaymentDue: loan.nextPaymentDue
+						});
+					} else {
+						console.log(`❌ Loan ${index + 1} (${loan.id.substring(0, 8)}): No overdueInfo`);
+					}
+				});
 			} else {
 				setError("Failed to load loans data");
 			}
@@ -549,6 +567,7 @@ function ActiveLoansContent() {
 			}
 
 			const data = await response.json();
+			console.log('✅ Payment slip uploaded:', data);
 			
 			alert('Payment slip uploaded successfully');
 			fileInput.value = ''; // Clear file input
@@ -568,13 +587,47 @@ function ActiveLoansContent() {
 	const fetchLoanRepayments = async (loanId: string) => {
 		try {
 			setLoadingRepayments(true);
+			console.log("🔍 Fetching repayments for loan ID:", loanId);
 			const response = await fetchWithAdminTokenRefresh<{
 				success: boolean;
 				data: LoanData;
 			}>(`/api/admin/loans/${loanId}/repayments?raw=true&t=${Date.now()}`);
 
+			console.log("📊 Repayments API response:", response);
 
 			if (response.success && response.data) {
+				console.log("✅ Repayments data received:", {
+					totalRepayments: response.data.repayments?.length || 0,
+					totalPaid: response.data.totalPaid,
+					remainingPrepayment: response.data.remainingPrepayment,
+					firstRepayment: response.data.repayments?.[0],
+					lastRepayment:
+						response.data.repayments?.[
+							response.data.repayments.length - 1
+						],
+				});
+
+				// Debug: Check if any repayments have contributingPayments
+				const repaymentsWithPayments =
+					response.data.repayments?.filter(
+						(r: any) =>
+							r.contributingPayments &&
+							r.contributingPayments.length > 0
+					) || [];
+				console.log("🔍 Repayments with contributing payments:", {
+					count: repaymentsWithPayments.length,
+					examples: repaymentsWithPayments
+						.slice(0, 3)
+						.map((r: any) => ({
+							id: r.id,
+							amount: r.amount,
+							status: r.status,
+							contributingPayments:
+								r.contributingPayments?.length || 0,
+							actualPaymentDate: r.actualPaymentDate,
+							paidAt: r.paidAt,
+						})),
+				});
 
 				// Update the selected loan with repayments data
 				setSelectedLoan((prev) =>
@@ -583,7 +636,7 @@ function ActiveLoansContent() {
 						: null
 				);
 			} else {
-				console.error("❌ Failed to get repayments data:", response);
+				console.log("❌ Failed to get repayments data:", response);
 			}
 		} catch (error) {
 			console.error("Error fetching loan repayments:", error);
@@ -595,15 +648,23 @@ function ActiveLoansContent() {
 	const fetchWalletTransactions = async (loanId: string) => {
 		try {
 			setLoadingTransactions(true);
+			console.log("🔍 Fetching wallet transactions for loan ID:", loanId);
 			const response = await fetchWithAdminTokenRefresh<{
 				success: boolean;
 				data: WalletTransaction[];
 			}>(`/api/admin/loans/${loanId}/transactions`);
 
+			console.log("📊 Wallet transactions API response:", response);
+
 			if (response.success && response.data) {
+				console.log("✅ Wallet transactions data received:", {
+					totalTransactions: response.data.length,
+					transactions: response.data,
+				});
+
 				setWalletTransactions(response.data);
 			} else {
-				console.error(
+				console.log(
 					"❌ Failed to get wallet transactions data:",
 					response
 				);
@@ -620,6 +681,7 @@ function ActiveLoansContent() {
 	const fetchApplicationHistory = async (applicationId: string) => {
 		try {
 			setLoadingApplicationHistory(true);
+			console.log("🔍 Fetching application history for application ID:", applicationId);
 			const response = await fetchWithAdminTokenRefresh<
 				| {
 						applicationId: string;
@@ -628,6 +690,8 @@ function ActiveLoansContent() {
 				  }
 				| LoanApplicationHistory[]
 			>(`/api/admin/applications/${applicationId}/history`);
+
+			console.log("📊 Application history API response:", response);
 
 			// Handle both old array format and new object format
 			let history: LoanApplicationHistory[] = [];
@@ -642,6 +706,11 @@ function ActiveLoansContent() {
 				// New format - object with timeline property
 				history = response.timeline || [];
 			}
+
+			console.log("✅ Application history data received:", {
+				totalHistory: history.length,
+				history: history,
+			});
 
 			setApplicationHistory(history);
 		} catch (error) {
@@ -742,6 +811,7 @@ function ActiveLoansContent() {
 			});
 			
 			if (data.success) {
+				alert("PDF letter generated successfully!");
 				fetchPDFLetters(loanId); // Refresh the list
 			} else {
 				throw new Error(data.message || "Failed to generate PDF letter");
@@ -1021,12 +1091,21 @@ function ActiveLoansContent() {
 
 	// Fetch repayments when repayments tab is selected
 	useEffect(() => {
+		console.log("🎯 Repayments useEffect triggered:", {
+			selectedTab,
+			hasSelectedLoan: !!selectedLoan,
+			selectedLoanId: selectedLoan?.id,
+			fetchedRepaymentsForLoan,
+			hasRepayments: !!selectedLoan?.repayments,
+			repaymentsCount: selectedLoan?.repayments?.length || 0,
+		});
 
 		if (
 			selectedTab === "repayments" &&
 			selectedLoan &&
 			fetchedRepaymentsForLoan !== selectedLoan.id
 		) {
+			console.log("🚀 Triggering fetchLoanRepayments for full data");
 			setFetchedRepaymentsForLoan(selectedLoan.id);
 			fetchLoanRepayments(selectedLoan.id);
 			// Also fetch wallet transactions to match payment details
@@ -1232,6 +1311,8 @@ function ActiveLoansContent() {
 			});
 
 			if (data.success) {
+				alert(data.message || "Manual payment created successfully!");
+				
 				// Reset form
 				setManualPaymentForm({
 					loanId: "",
@@ -1393,6 +1474,9 @@ function ActiveLoansContent() {
 			link.click();
 			document.body.removeChild(link);
 			window.URL.revokeObjectURL(url);
+
+			console.log("✅ Stamped agreement downloaded successfully");
+
 		} catch (error) {
 			console.error("❌ Error downloading stamped agreement:", error);
 			alert(error instanceof Error ? error.message : "Failed to download stamped agreement");
@@ -1432,6 +1516,8 @@ function ActiveLoansContent() {
 			link.click();
 			document.body.removeChild(link);
 			window.URL.revokeObjectURL(url);
+
+			console.log("✅ Stamp certificate downloaded successfully");
 
 		} catch (error) {
 			console.error("❌ Error downloading stamp certificate:", error);
@@ -1509,6 +1595,9 @@ function ActiveLoansContent() {
 				throw new Error(result.message || "Failed to upload stamped agreement");
 			}
 
+			console.log("✅ Stamped agreement uploaded successfully");
+			alert("Stamped agreement uploaded successfully!");
+
 			// Reset form and close modal
 			resetUploadStampedModals();
 			
@@ -1554,6 +1643,9 @@ function ActiveLoansContent() {
 				throw new Error(result.message || "Failed to upload stamp certificate");
 			}
 
+			console.log("✅ Stamp certificate uploaded successfully");
+			alert("Stamp certificate uploaded successfully!");
+
 			// Reset form and close modal
 			resetUploadCertificateModals();
 			
@@ -1598,11 +1690,13 @@ function ActiveLoansContent() {
 		if (loan.overdueInfo?.hasOverduePayments && loan.overdueInfo.overdueRepayments.length > 0) {
 			// Return the maximum days overdue from all overdue repayments
 			const maxDaysLate = Math.max(...loan.overdueInfo.overdueRepayments.map(r => r.daysOverdue));
+			console.log(`🔍 getDaysLate for loan ${loan.id.substring(0, 8)}: Using overdueInfo, maxDaysLate=${maxDaysLate}`);
 			return maxDaysLate;
 		}
 		
 		// Fallback to nextPaymentDue check for backward compatibility
 		const fallbackDays = getDaysLateFromDate(loan.nextPaymentDue);
+		console.log(`🔍 getDaysLate for loan ${loan.id.substring(0, 8)}: Using fallback, days=${fallbackDays}, hasOverdueInfo=${!!loan.overdueInfo}, hasOverduePayments=${loan.overdueInfo?.hasOverduePayments}`);
 		return fallbackDays;
 	};
 
@@ -1897,6 +1991,7 @@ function ActiveLoansContent() {
 						) as any;
 						// The API returns the timeline directly as an array
 						history = Array.isArray(historyData) ? historyData : (historyData.timeline || historyData.history || []);
+						console.log(`CSV Export - Fetched ${history.length} history entries for loan ${loan.id}`);
 					} catch (error) {
 						console.error('Error fetching history for CSV:', error);
 					}
@@ -1968,6 +2063,7 @@ function ActiveLoansContent() {
 
 				// Add audit trail data as separate rows (application history only for bulk export to avoid too much data)
 				if (history.length > 0) {
+					console.log(`CSV Export - Bulk - Adding ${history.length} history entries for loan ${loan.id}`);
 					history.forEach(historyEntry => {
 						csvData.push([
 							...baseLoanData,
@@ -1984,7 +2080,7 @@ function ActiveLoansContent() {
 						]);
 					});
 				} else {
-					console.error(`CSV Export - Bulk - No history entries found for loan ${loan.id}`);
+					console.log(`CSV Export - Bulk - No history entries found for loan ${loan.id}`);
 				}
 			}
 
@@ -2095,16 +2191,22 @@ function ActiveLoansContent() {
 			let history: LoanApplicationHistory[] = [];
 			if (loan.applicationId) {
 				try {
+					console.log(`CSV Export - Fetching history for application ID: ${loan.applicationId}`);
 					const historyData = await fetchWithAdminTokenRefresh(
 						`/api/admin/applications/${loan.applicationId}/history`
 					) as any;
+					console.log(`CSV Export - Raw history response:`, historyData);
 					// The API returns the timeline directly as an array
 					history = Array.isArray(historyData) ? historyData : (historyData.timeline || historyData.history || []);
+					console.log(`CSV Export - Individual Loan - Fetched ${history.length} history entries for loan ${loan.id}`);
+					if (history.length > 0) {
+						console.log(`CSV Export - First history entry:`, history[0]);
+					}
 				} catch (error) {
 					console.error('Error fetching history for CSV:', error);
 				}
 			} else {
-				console.error(`CSV Export - No application ID for loan ${loan.id}`);
+				console.log(`CSV Export - No application ID for loan ${loan.id}`);
 			}
 
 			// Base loan data
@@ -2174,9 +2276,11 @@ function ActiveLoansContent() {
 			// Fetch wallet transactions for audit trail
 			let walletTransactions: WalletTransaction[] = [];
 			try {
+				console.log(`CSV Export - Fetching transactions for loan ID: ${loan.id}`);
 				const transactionsData = await fetchWithAdminTokenRefresh(
 					`/api/admin/loans/${loan.id}/transactions`
 				) as any;
+				console.log(`CSV Export - Raw transactions response:`, transactionsData);
 				// Handle different response structures
 				if (transactionsData.success && transactionsData.data) {
 					walletTransactions = transactionsData.data;
@@ -2186,6 +2290,10 @@ function ActiveLoansContent() {
 					walletTransactions = transactionsData;
 				} else {
 					walletTransactions = [];
+				}
+				console.log(`CSV Export - Extracted ${walletTransactions.length} wallet transactions`);
+				if (walletTransactions.length > 0) {
+					console.log(`CSV Export - First transaction:`, walletTransactions[0]);
 				}
 			} catch (error) {
 				console.error('Error fetching wallet transactions for CSV:', error);
@@ -2209,12 +2317,15 @@ function ActiveLoansContent() {
 				}))
 			].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+			console.log(`CSV Export - Individual Loan - Total audit events: ${allAuditEvents.length} (${history.length} history + ${walletTransactions.length} transactions)`);
 
 			// Add audit trail entries as separate rows
 			if (allAuditEvents.length > 0) {
+				console.log(`CSV Export - Individual Loan - Adding ${allAuditEvents.length} audit trail entries`);
 				allAuditEvents.forEach((event, index) => {
 					if (event.type === 'application') {
 						const historyData = event.data as LoanApplicationHistory;
+						console.log(`CSV Export - Adding application history event ${index + 1}: ${historyData.previousStatus} -> ${historyData.newStatus}`);
 						csvData.push([
 							...baseLoanData,
 							'--- REPAYMENTS ---',
@@ -2230,6 +2341,7 @@ function ActiveLoansContent() {
 						]);
 					} else {
 						const transactionData = event.data as WalletTransaction;
+						console.log(`CSV Export - Adding transaction event ${index + 1}: ${transactionData.type} - ${formatCurrency(Math.abs(transactionData.amount))}`);
 						
 						// Create a more descriptive transaction description
 						let transactionDescription = '';
@@ -2269,7 +2381,7 @@ function ActiveLoansContent() {
 					}
 				});
 			} else {
-				console.error(`CSV Export - Individual Loan - No audit trail events found for loan ${loan.id}`);
+				console.log(`CSV Export - Individual Loan - No audit trail events found for loan ${loan.id}`);
 			}
 
 			// Convert to CSV string
@@ -3558,6 +3670,19 @@ function ActiveLoansContent() {
 								{selectedTab === "repayments" && (
 									<div>
 										{(() => {
+											console.log(
+												"🎯 Repayments tab rendering:",
+												{
+													loadingRepayments,
+													hasRepayments:
+														!!selectedLoan.repayments,
+													repaymentsCount:
+														selectedLoan.repayments
+															?.length || 0,
+													selectedLoanId:
+														selectedLoan.id,
+												}
+											);
 											return null;
 										})()}
 										{loadingRepayments ? (
@@ -3962,6 +4087,33 @@ function ActiveLoansContent() {
 																			repayment,
 																			index
 																		) => {
+																			// Debug logging for table rendering
+																			if (
+																				index ===
+																				0
+																			) {
+																				console.log(
+																					"📋 Rendering repayments table:",
+																					{
+																						totalRepayments:
+																							selectedLoan
+																								.repayments
+																								?.length ||
+																							0,
+																						firstRepayment:
+																							selectedLoan
+																								.repayments?.[0],
+																						lastRepayment:
+																							selectedLoan
+																								.repayments?.[
+																								selectedLoan
+																									.repayments
+																									.length -
+																									1
+																							],
+																					}
+																				);
+																			}
 																			const daysOverdue =
 																				getDaysOverdue(
 																					repayment.dueDate

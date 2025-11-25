@@ -12,6 +12,11 @@ export async function GET(
 		// Get authorization header (sent from frontend)
 		const authHeader = request.headers.get("authorization");
 		
+		console.log('🔐 Unsigned agreement request:', {
+			applicationId: id,
+			hasAuthHeader: !!authHeader,
+		});
+		
 		if (!authHeader) {
 			console.error('❌ No authorization header found');
 			return NextResponse.json(
@@ -21,6 +26,7 @@ export async function GET(
 		}
 
 		const backendUrl = `${API_URL}/api/loan-applications/${id}/unsigned-agreement`;
+		console.log('📡 Calling backend:', backendUrl);
 
 		const response = await fetch(backendUrl, {
 			method: "GET",
@@ -28,6 +34,8 @@ export async function GET(
 				Authorization: authHeader,
 			},
 		});
+
+		console.log('📥 Backend response status:', response.status);
 
 		if (!response.ok) {
 			const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
@@ -40,6 +48,7 @@ export async function GET(
 
 		// Backend returns JSON with DocuSeal URL, not PDF
 		const data = await response.json();
+		console.log('✅ Success, returning URL:', data.url);
 		
 		return NextResponse.json(data, {
 			status: 200,

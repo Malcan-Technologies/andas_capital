@@ -21,6 +21,17 @@ export async function POST(request: Request) {
 		const body = await request.json();
 		const { amount, method, description } = body;
 
+		console.log("Wallet Deposit - Auth header:", `Bearer ${token}`);
+		console.log("Wallet Deposit - Request body:", {
+			amount,
+			method,
+			description,
+		});
+		console.log(
+			"Wallet Deposit - Forwarding request to backend:",
+			`${BACKEND_URL}/api/wallet/deposit`
+		);
+
 		// Forward the request to the backend API
 		const response = await fetch(`${BACKEND_URL}/api/wallet/deposit`, {
 			method: "POST",
@@ -33,8 +44,14 @@ export async function POST(request: Request) {
 			next: { revalidate: 0 },
 		});
 
+		console.log("Wallet Deposit - Backend response:", {
+			status: response.status,
+			ok: response.ok,
+		});
+
 		// Get the response body
 		const data = await response.json();
+		console.log("Wallet Deposit - Backend data:", data);
 
 		if (!response.ok) {
 			return NextResponse.json(
@@ -43,6 +60,7 @@ export async function POST(request: Request) {
 			);
 		}
 
+		console.log("Wallet Deposit - Successful response");
 		return NextResponse.json(data);
 	} catch (error) {
 		console.error("Wallet Deposit - Error details:", error);

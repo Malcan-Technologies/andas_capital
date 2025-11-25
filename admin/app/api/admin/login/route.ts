@@ -8,6 +8,9 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 export async function POST(request: Request) {
 	try {
 		const body = await request.json();
+		console.log("Admin API Route - Attempting login with:", body);
+
+		console.log("Admin API Route - Backend URL:", BACKEND_URL);
 
 		// Extract user's IP address for consistent token generation and validation
 		const forwardedFor = request.headers.get("x-forwarded-for");
@@ -112,7 +115,7 @@ export async function POST(request: Request) {
 
 		return jsonResponse;
 	} catch (error) {
-		console.error("Admin API Route - Error details:", error);
+		console.log("Admin API Route - Error details:", error);
 		return NextResponse.json(
 			{ error: "Failed to authenticate" },
 			{ status: 500 }

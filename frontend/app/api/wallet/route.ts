@@ -18,6 +18,12 @@ export async function GET(request: Request) {
 			);
 		}
 
+		console.log("Wallet - Auth header:", `Bearer ${token}`);
+		console.log(
+			"Wallet - Forwarding request to backend:",
+			`${BACKEND_URL}/api/wallet`
+		);
+
 		// Forward the request to the backend API
 		const response = await fetch(`${BACKEND_URL}/api/wallet`, {
 			method: "GET",
@@ -29,8 +35,14 @@ export async function GET(request: Request) {
 			next: { revalidate: 0 },
 		});
 
+		console.log("Wallet - Backend response:", {
+			status: response.status,
+			ok: response.ok,
+		});
+
 		// Get the response body
 		const data = await response.json();
+		console.log("Wallet - Backend data:", data);
 
 		if (!response.ok) {
 			return NextResponse.json(
@@ -39,6 +51,7 @@ export async function GET(request: Request) {
 			);
 		}
 
+		console.log("Wallet - Successful response");
 		return NextResponse.json(data);
 	} catch (error) {
 		console.error("Wallet - Error details:", error);

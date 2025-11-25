@@ -6,6 +6,7 @@ const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: NextRequest) {
 	try {
+		console.log("Admin API: Processing CSV batch approval request");
 
 		// Get the authorization header from the request
 		const authHeader = request.headers.get("authorization");
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest) {
 
 		// Get the request body
 		const body = await request.json();
+		
+		console.log("Admin API: Forwarding batch approval to backend");
 
 		// Make request to backend
 		const response = await fetch(
@@ -42,6 +45,8 @@ export async function POST(request: NextRequest) {
 				body: JSON.stringify(body),
 			}
 		);
+
+		console.log("Admin API: Backend response status:", response.status);
 
 		if (!response.ok) {
 			let errorData;
@@ -63,6 +68,11 @@ export async function POST(request: NextRequest) {
 		}
 
 		const data = await response.json();
+		console.log(
+			"Admin API: Successfully processed batch approval:",
+			data.data?.summary || "No summary available"
+		);
+
 		return NextResponse.json(data);
 	} catch (error) {
 		console.error("Error processing batch approval:", error);

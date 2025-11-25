@@ -97,6 +97,8 @@ export default function SigningOTPVerificationPage() {
 
 		setCertCheckLoading(true);
 		try {
+			// For UI testing - simulate checking but show new user flow to test OTP UI
+			console.log("UI Testing: Simulating certificate check - showing new user flow for OTP testing");
 			
 			setCertStatus("new_user");
 			setOtpStep("request_otp");
@@ -118,6 +120,8 @@ export default function SigningOTPVerificationPage() {
 
 		setOtpSending(true);
 		try {
+			// For UI testing - simulate OTP request without actual API call
+			console.log("UI Testing: Simulating OTP request for Digital Signing");
 			
 			// Simulate API delay
 			await new Promise(resolve => setTimeout(resolve, 1000));
@@ -140,6 +144,8 @@ export default function SigningOTPVerificationPage() {
 
 		setOtpVerifying(true);
 		try {
+			// For UI testing - simulate OTP verification without actual API call
+			console.log("UI Testing: Simulating OTP verification - any code will work");
 			
 			// Simulate API delay
 			await new Promise(resolve => setTimeout(resolve, 1000));

@@ -189,7 +189,7 @@ function SettingsPageContent() {
 				setCompanySettings(response.data);
 			} else {
 				// If no settings exist, keep default values
-				console.error("No company settings found, using defaults");
+				console.log("No company settings found, using defaults");
 			}
 		} catch (err) {
 			console.error("Error loading company settings:", err);
@@ -219,6 +219,7 @@ function SettingsPageContent() {
 					setCompanySettings(response.data);
 				}
 				// Show success message (you might want to add a success state)
+				console.log("Company settings saved successfully");
 			} else {
 				throw new Error(response.message || "Failed to save company settings");
 			}
@@ -345,6 +346,7 @@ function SettingsPageContent() {
 
 			if (response.success) {
 				setSettings(response.data || {});
+				console.log("Settings loaded successfully:", response.data);
 			} else {
 				throw new Error(response.message || "Failed to load settings");
 			}
@@ -445,6 +447,7 @@ function SettingsPageContent() {
 
 			if (result.success) {
 				setManualTriggerResult(result.data);
+				console.log('Manual trigger successful:', result.data);
 			} else {
 				throw new Error(result.message || "Failed to trigger notifications");
 			}

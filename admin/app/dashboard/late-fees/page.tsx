@@ -152,6 +152,11 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 			});
 
 			if (response.success && response.data) {
+				console.log(
+					"Late fees data refreshed:",
+					response.data.length,
+					"records"
+				);
 				setLateFees(response.data);
 				
 				// Calculate filter counts

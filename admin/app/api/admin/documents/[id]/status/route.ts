@@ -29,6 +29,10 @@ export async function PATCH(
 			);
 		}
 
+		// Update document status in backend
+		console.log(
+			`API /admin/documents/${id}/status - Updating status to ${status}`
+		);
 
 		try {
 			const response = await fetch(
@@ -56,6 +60,9 @@ export async function PATCH(
 			}
 
 			const updatedDocument = await response.json();
+			console.log(
+				`API /admin/documents/${id}/status - Successfully updated document status`
+			);
 
 			return NextResponse.json(updatedDocument);
 		} catch (fetchError) {

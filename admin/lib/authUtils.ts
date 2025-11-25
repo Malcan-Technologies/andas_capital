@@ -88,12 +88,17 @@ export const AdminTokenStorage = {
 export const refreshAdminAccessToken = async (): Promise<string | null> => {
 	try {
 		const refreshToken = AdminTokenStorage.getRefreshToken();
+		console.log(
+			"refreshAdminAccessToken - Refresh token exists:",
+			!!refreshToken
+		);
 
 		if (!refreshToken) {
 			console.error("No refresh token available");
 			return null;
 		}
 
+		console.log("refreshAdminAccessToken - Calling /api/admin/refresh");
 		const response = await fetch("/api/admin/refresh", {
 			method: "POST",
 			headers: {
@@ -101,6 +106,11 @@ export const refreshAdminAccessToken = async (): Promise<string | null> => {
 			},
 			body: JSON.stringify({ refreshToken }),
 		});
+
+		console.log(
+			"refreshAdminAccessToken - Response status:",
+			response.status
+		);
 
 		if (!response.ok) {
 			console.error(
@@ -116,6 +126,10 @@ export const refreshAdminAccessToken = async (): Promise<string | null> => {
 		}
 
 		const data = await response.json();
+		console.log("refreshAdminAccessToken - Got new tokens:", {
+			accessToken: !!data.accessToken,
+			refreshToken: !!data.refreshToken,
+		});
 
 		// Store the new tokens
 		AdminTokenStorage.setAccessToken(data.accessToken);
@@ -185,6 +199,8 @@ export const fetchWithAdminTokenRefresh = async <T>(
 		}
 	}
 
+	console.log(`Fetching: ${fullUrl}`);
+
 	// Make the initial request
 	let response = await fetch(fullUrl, { ...options, headers });
 
@@ -231,15 +247,19 @@ export const checkAdminAuth = async (): Promise<boolean> => {
 	try {
 		// Try to use current token
 		const accessToken = AdminTokenStorage.getAccessToken();
+		console.log("checkAdminAuth - Access token exists:", !!accessToken);
 
 		if (!accessToken) {
 			// No access token available, try to refresh
+			console.log("checkAdminAuth - No access token, trying refresh");
 			const newToken = await refreshAdminAccessToken();
+			console.log("checkAdminAuth - Refresh result:", !!newToken);
 			return !!newToken;
 		}
 
 		// Verify token validity by making a request to /api/admin/me
 		try {
+			console.log("checkAdminAuth - Verifying token with /api/admin/me");
 			interface UserData {
 				id: string;
 				fullName?: string;
@@ -251,14 +271,23 @@ export const checkAdminAuth = async (): Promise<boolean> => {
 			const userData = await fetchWithAdminTokenRefresh<UserData>(
 				"/api/admin/me"
 			);
+			console.log("checkAdminAuth - User data:", userData);
 
 			// Verify that the user has ADMIN or ATTESTOR role
 			const hasAdminAccess = userData.role === "ADMIN" || userData.role === "ATTESTOR";
+			console.log(
+				"checkAdminAuth - Has admin access:",
+				hasAdminAccess,
+				"role:",
+				userData.role
+			);
 			return hasAdminAccess;
 		} catch (error) {
 			console.error("checkAdminAuth - User data fetch error:", error);
 			// Token is invalid, try to refresh
+			console.log("checkAdminAuth - Token invalid, trying refresh");
 			const newToken = await refreshAdminAccessToken();
+			console.log("checkAdminAuth - Refresh result:", !!newToken);
 			return !!newToken;
 		}
 	} catch (error) {

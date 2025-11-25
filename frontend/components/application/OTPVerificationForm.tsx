@@ -74,6 +74,7 @@ export default function OTPVerificationForm({
 			setCheckingCertificate(true);
 			
 			// For UI testing - simulate certificate check
+			console.log("UI Testing: Simulating certificate check");
 			await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
 			
 			// Simulate no existing certificate to show the enrollment flow
@@ -101,6 +102,8 @@ export default function OTPVerificationForm({
 			setRequestingOtp(true);
 			setError(null);
 
+			// For UI testing - simulate OTP request
+			console.log("UI Testing: Simulating OTP request");
 			await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
 
 			// Always succeed for UI testing

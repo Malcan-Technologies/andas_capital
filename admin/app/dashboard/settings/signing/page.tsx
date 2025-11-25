@@ -147,9 +147,13 @@ export default function AdminSigningSettingsPage() {
       setCheckingCertificate(true);
       setError(null);
       
+      console.log('Checking certificate status for admin user:', userId);
+      
       const response = await fetchWithAdminTokenRefresh<any>(
         `/api/admin/mtsa/cert-info/${userId}`
       );
+      
+      console.log('Certificate check response:', response);
       
       if (response.success && response.data?.certStatus === 'Valid') {
         setCertificateStatus({
@@ -160,9 +164,12 @@ export default function AdminSigningSettingsPage() {
         });
       } else {
         // Check if user already has approved KYC before showing KYC step
+        console.log('Checking existing KYC status for admin user...');
         
         try {
           const kycStatusResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/status');
+          
+          console.log('KYC status response:', kycStatusResponse);
           
           if (kycStatusResponse.success && kycStatusResponse.isAlreadyApproved) {
             setCertificateStatus({
@@ -255,7 +262,9 @@ export default function AdminSigningSettingsPage() {
     try {
       setKycInProgress(true);
       setError(null);
-
+      
+      // Check if user already has approved KYC before starting new one
+      console.log('Checking existing KYC status before starting new KYC...');
       const kycStatusResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/status');
       
       if (kycStatusResponse.success && kycStatusResponse.isAlreadyApproved) {
@@ -268,6 +277,8 @@ export default function AdminSigningSettingsPage() {
         setKycInProgress(false);
         return;
       }
+      
+      console.log('Starting KYC for admin user:', currentUser.icNumber);
       
       const response = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/start-ctos', {
         method: 'POST',
@@ -418,6 +429,8 @@ export default function AdminSigningSettingsPage() {
       setSubmittingCertificate(true);
       setError(null);
 
+      console.log('Requesting certificate enrollment for admin user:', currentUser.icNumber);
+
       // Get KYC images
       const kycResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/images');
 
@@ -459,6 +472,8 @@ export default function AdminSigningSettingsPage() {
         }),
       });
 
+      console.log('Certificate enrollment response:', certificateResponse);
+
       if (certificateResponse.success) {
         // Success - refresh certificate status
         await checkCertificate(currentUser.icNumber);
@@ -486,6 +501,8 @@ export default function AdminSigningSettingsPage() {
       setRequestingOtp(true);
       setError(null);
 
+      console.log('Requesting OTP for certificate revocation...');
+
       const response = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/request-otp', {
         method: 'POST',
         headers: {
@@ -500,6 +517,8 @@ export default function AdminSigningSettingsPage() {
 
       if (response.success) {
         setOtpRequested(true);
+        // Show success message or notification
+        console.log('OTP sent successfully for certificate revocation');
       } else {
         throw new Error(response.message || 'Failed to request OTP');
       }
@@ -527,6 +546,7 @@ export default function AdminSigningSettingsPage() {
       setError(null);
       setPinVerificationResult(null);
 
+      console.log('Verifying certificate PIN for admin user:', currentUser.icNumber);
 
       const response = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/verify-cert-pin', {
         method: 'POST',
@@ -540,6 +560,7 @@ export default function AdminSigningSettingsPage() {
         }),
       });
 
+      console.log('PIN verification response:', response);
 
       setPinVerificationResult({
         success: response.success,
@@ -577,6 +598,8 @@ export default function AdminSigningSettingsPage() {
       setRevokingCertificate(true);
       setError(null);
 
+      console.log('Revoking certificate for admin user:', currentUser.icNumber);
+
       // Get KYC images for revocation request
       const kycResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/images');
 
@@ -607,6 +630,8 @@ export default function AdminSigningSettingsPage() {
           nricBackUrl: back.url,
         }),
       });
+
+      console.log('Certificate revocation response:', revokeResponse);
 
       if (revokeResponse.success) {
         // Success - refresh certificate status

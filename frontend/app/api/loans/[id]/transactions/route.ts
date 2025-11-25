@@ -23,6 +23,12 @@ export async function GET(
 
 		const { id } = params;
 
+		console.log("Loan Transactions - Auth header:", `Bearer ${token}`);
+		console.log(
+			"Loan Transactions - Forwarding request to backend:",
+			`${BACKEND_URL}/api/loans/${id}/transactions`
+		);
+
 		// Forward the request to the backend API
 		const response = await fetch(
 			`${BACKEND_URL}/api/loans/${id}/transactions`,
@@ -37,8 +43,14 @@ export async function GET(
 			}
 		);
 
+		console.log("Loan Transactions - Backend response:", {
+			status: response.status,
+			ok: response.ok,
+		});
+
 		// Get the response body
 		const data = await response.json();
+		console.log("Loan Transactions - Backend data:", data);
 
 		if (!response.ok) {
 			return NextResponse.json(
@@ -47,6 +59,7 @@ export async function GET(
 			);
 		}
 
+		console.log("Loan Transactions - Successful response");
 		return NextResponse.json(data);
 	} catch (error) {
 		console.error("Loan Transactions - Error details:", error);

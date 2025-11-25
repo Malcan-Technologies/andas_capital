@@ -3,9 +3,12 @@ import { fetchWithTokenRefresh } from "@/lib/authUtils";
 
 export async function POST(request: Request) {
 	try {
+		console.log(`[Verify Current Phone Route] Starting request`);
 
 		const body = await request.json();
 		const { changeToken, otp } = body;
+
+		console.log(`[Verify Current Phone Route] Forwarding verification request`);
 
 		// Use fetchWithTokenRefresh to include auth headers
 		const data = await fetchWithTokenRefresh<any>(
@@ -18,6 +21,8 @@ export async function POST(request: Request) {
 				body: JSON.stringify({ changeToken, otp }),
 			}
 		);
+
+		console.log(`[Verify Current Phone Route] Success`);
 
 		return NextResponse.json(data);
 

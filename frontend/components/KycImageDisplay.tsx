@@ -141,6 +141,7 @@ export default function KycImageDisplay({ imageId, kycToken }: KycImageDisplayPr
 				src={imageUrl}
 				alt="KYC Document"
 				className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-sm"
+				onLoad={() => console.log("KYC image loaded successfully")}
 				onError={() => setError("Failed to display image")}
 			/>
 		</div>

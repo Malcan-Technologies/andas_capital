@@ -9,9 +9,10 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 export async function GET(request: Request) {
 	try {
 		const authHeader = request.headers.get("authorization");
+		console.log("Onboarding GET - Auth header:", authHeader);
 
 		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			console.error("Onboarding GET - Invalid auth header format");
+			console.log("Onboarding GET - Invalid auth header format");
 			return NextResponse.json(
 				{ error: "Invalid authorization header" },
 				{ status: 401 }
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
 		}
 
 		// Forward the request to the backend API
+		console.log("Onboarding GET - Forwarding request to backend");
 		const response = await fetch(`${BACKEND_URL}/api/onboarding`, {
 			headers: {
 				Authorization: authHeader,
@@ -26,7 +28,7 @@ export async function GET(request: Request) {
 		});
 
 		if (!response.ok) {
-			console.error(
+			console.log(
 				"Onboarding GET - Error response from backend:",
 				response.status
 			);
@@ -37,6 +39,7 @@ export async function GET(request: Request) {
 		}
 
 		const data = await response.json();
+		console.log("Onboarding GET - Success response");
 		const nextResponse = NextResponse.json(data);
 		nextResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 		nextResponse.headers.set('Pragma', 'no-cache');
@@ -54,9 +57,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
 	try {
 		const authHeader = request.headers.get("authorization");
+		console.log("Onboarding POST - Auth header:", authHeader);
 
 		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			console.error("Onboarding POST - Invalid auth header format");
+			console.log("Onboarding POST - Invalid auth header format");
 			return NextResponse.json(
 				{ error: "Invalid authorization header" },
 				{ status: 401 }
@@ -66,6 +70,7 @@ export async function POST(request: Request) {
 		const body = await request.json();
 
 		// Forward the request to the backend API
+		console.log("Onboarding POST - Forwarding request to backend");
 		const response = await fetch(`${BACKEND_URL}/api/onboarding`, {
 			method: "POST",
 			headers: {
@@ -76,7 +81,7 @@ export async function POST(request: Request) {
 		});
 
 		if (!response.ok) {
-			console.error(
+			console.log(
 				"Onboarding POST - Error response from backend:",
 				response.status
 			);
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
 		}
 
 		const data = await response.json();
+		console.log("Onboarding POST - Success response");
 		const nextResponse = NextResponse.json(data);
 		nextResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 		nextResponse.headers.set('Pragma', 'no-cache');

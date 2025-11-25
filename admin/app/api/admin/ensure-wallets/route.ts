@@ -15,6 +15,7 @@ export async function POST(request: Request) {
 			);
 		}
 
+		console.log("Ensuring wallets for all users");
 		const response = await fetch(`${backendUrl}/api/admin/ensure-wallets`, {
 			method: "POST",
 			headers: {

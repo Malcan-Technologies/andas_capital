@@ -99,16 +99,22 @@ export default function CertCheckPage() {
 				
 				setApplication(data);
 				
+				// Debug logging
+				console.log("User data:", data.user);
+				console.log("IC Number:", data.user?.icNumber);
 				if (data.user?.fullName) {
 					setUserName((prev) => prev || data.user!.fullName.split(" ")[0]);
 				}
 				
 				// Auto-start certificate check - only use icNumber, ignore idNumber
 				const userId = data.user?.icNumber;
+				console.log("Final userId (icNumber only):", userId);
 				
 				if (userId) {
+					console.log("Starting certificate check with userId:", userId);
 					checkCertificate(userId);
 				} else {
+					console.log("No IC number found, showing IC input form");
 					// Show IC input form if no IC number found
 					setShowIcInput(true);
 					setLoading(false);
@@ -261,6 +267,8 @@ export default function CertCheckPage() {
 		// Go back to loans dashboard applications tab (after attestation completion)
 		router.push("/dashboard/loans?tab=applications");
 	};
+
+	console.log("Render states:", { loading, checking, showIcInput, error, application: !!application });
 
 	if (loading || checking) {
 		return (
@@ -445,7 +453,7 @@ export default function CertCheckPage() {
 					return;
 				}
 			} catch (error) {
-				console.error('No existing signing URL found, will initiate new signing process');
+				console.log('No existing signing URL found, will initiate new signing process');
 			}
 			
 			// If no existing signing URL, initiate new document signing with DocuSeal

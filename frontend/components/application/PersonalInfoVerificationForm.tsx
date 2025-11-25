@@ -75,8 +75,11 @@ function PersonalInfoVerificationFormContent({
 					throw new Error("Application ID not found in URL");
 				}
 
+				console.log("Fetching user data");
+
 				// Fetch user data using token refresh utility
 				const userData = await fetchWithTokenRefresh<any>("/api/users/me");
+				console.log("User data:", userData);
 
 				// Set form values from user data if available
 				if (userData) {
