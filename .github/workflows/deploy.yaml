@@ -96,13 +96,19 @@ jobs:
           echo "${{ secrets.FRONTEND_ENV }}" > frontend/.env
           echo "${{ secrets.ADMIN_ENV }}" > admin/.env.local
           echo "${{ secrets.BACKEND_ENV }}" > backend/.env
-
-          # Add CTOS_B2B_PRIVATE_KEY to backend .env if it doesn't exist
-          # Use heredoc to properly handle multi-line private key
-          # The double quotes ensure the entire multi-line value is treated as a single string
-          cat >> backend/.env << DEPLOY_CTOS_KEY_EOF
-          CTOS_B2B_PRIVATE_KEY="${{ secrets.CTOS_B2B_PRIVATE_KEY }}"
-          DEPLOY_CTOS_KEY_EOF
+          
+          # Add CTOS_B2B_PRIVATE_KEY to backend .env from separate secret
+          # For multi-line RSA keys, we need to base64 encode or use escaped format
+          # The key in GitHub Secrets should be the raw PEM format
+          if [ -n "${{ secrets.CTOS_B2B_PRIVATE_KEY }}" ]; then
+            echo "Adding CTOS_B2B_PRIVATE_KEY to backend/.env..."
+            # Base64 encode the private key to safely store it as a single-line value
+            # The backend service will decode it when loading
+            ENCODED_KEY=$(echo "${{ secrets.CTOS_B2B_PRIVATE_KEY }}" | base64 -w 0 2>/dev/null || echo "${{ secrets.CTOS_B2B_PRIVATE_KEY }}" | base64)
+            echo "CTOS_B2B_PRIVATE_KEY=${ENCODED_KEY}" >> backend/.env
+          else
+            echo "⚠️  Warning: CTOS_B2B_PRIVATE_KEY secret is not set. CTOS B2B features will be disabled."
+          fi
 
           # Make sure CORS_ALLOWED_ORIGINS is set in the backend .env file
           if ! grep -q "CORS_ALLOWED_ORIGINS" backend/.env; then
