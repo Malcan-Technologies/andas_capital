@@ -102,32 +102,35 @@ export default function CreditReportCard({
 				method: "GET",
 			});
 
-			if (result.success && result.data) {
-				setReport(result.data);
-				setRequestStatus(result.data.requestStatus || null);
-				if (onReportFetched) {
-					onReportFetched(result.data);
-				}
-			} else {
-				// No cached report - show info message
-				setError("No cached report available. Please request a fresh report.");
+		if (result.success && result.data) {
+			setReport(result.data);
+			setRequestStatus(result.data.requestStatus || null);
+			if (onReportFetched) {
+				onReportFetched(result.data);
 			}
-		} catch (err: any) {
-			console.error("Error fetching cached credit report:", err);
-			// Handle 404 as expected case (no cached report)
-			if (err?.response?.status === 404 || err?.status === 404) {
-				setError("No cached report available. Please request a fresh report.");
-			} else {
-				setError(
-					err instanceof Error
-						? err.message
-						: "No cached report available"
-				);
-			}
-		} finally {
-			setLoadingCache(false);
-			setAutoLoaded(true);
+		} else {
+			// No cached report - stay silent on initial load
+			setReport(null);
+			setError(null);
 		}
+	} catch (err: any) {
+		console.error("Error fetching cached credit report:", err);
+		// Handle 404 as expected case (no cached report) - stay silent
+		if (err?.response?.status === 404 || err?.status === 404) {
+			setReport(null);
+			setError(null);
+		} else {
+			// Only show error for actual failures (not 404)
+			setError(
+				err instanceof Error
+					? err.message
+					: "Error loading cached report"
+			);
+		}
+	} finally {
+		setLoadingCache(false);
+		setAutoLoaded(true);
+	}
 	};
 
 	const handleReloadReport = async () => {

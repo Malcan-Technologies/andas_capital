@@ -14271,18 +14271,37 @@ router.get(
 			console.log(`[CACHE] Total reports found for user: ${allReports.length}`);
 			console.log('[CACHE] All reports:', JSON.stringify(allReports, null, 2));
 
-			// Try a direct SQL query to bypass any Prisma caching
-			const directQueryResult = await prisma.$queryRaw`
-				SELECT * FROM credit_reports 
-				WHERE "userId" = ${userId} 
-				AND "requestStatus" = 'COMPLETED'
-				ORDER BY "fetchedAt" DESC
-				LIMIT 1
-			`;
-			console.log('[CACHE] Direct SQL query result:', directQueryResult);
+		// Try a direct SQL query to bypass any Prisma caching (excluding error reports)
+		const directQueryResult = await prisma.$queryRaw`
+			SELECT * FROM credit_reports 
+			WHERE "userId" = ${userId} 
+			AND "requestStatus" = 'COMPLETED'
+			AND ("hasDataError" = false OR "hasDataError" IS NULL)
+			ORDER BY "fetchedAt" DESC
+			LIMIT 1
+		`;
+		console.log('[CACHE] Direct SQL query result:', directQueryResult);
 
-			// Now try the specific query
-			const creditReport = await prisma.creditReport.findFirst({
+		// Query for successful reports first (without data errors)
+		let creditReport = await prisma.creditReport.findFirst({
+			where: {
+				userId,
+				requestStatus: 'COMPLETED',
+				OR: [
+					{ hasDataError: false },
+					{ hasDataError: null }
+				]
+			},
+			orderBy: {
+				fetchedAt: 'desc',
+			},
+		});
+
+		// If no successful report found, try to get the most recent one (even if error)
+		// This is for cases where the user only has error reports
+		if (!creditReport) {
+			console.log('[CACHE] No successful report found, checking for any completed report (including errors)');
+			creditReport = await prisma.creditReport.findFirst({
 				where: {
 					userId,
 					requestStatus: 'COMPLETED',
@@ -14291,16 +14310,18 @@ router.get(
 					fetchedAt: 'desc',
 				},
 			});
+		}
 
-			console.log(`[CACHE] Query result: ${creditReport ? 'FOUND' : 'NOT FOUND'}`);
-			if (creditReport) {
-				console.log('[CACHE] Report details:', {
-					id: creditReport.id,
-					requestStatus: creditReport.requestStatus,
-					fetchedAt: creditReport.fetchedAt,
-					ctosRequestId: creditReport.ctosRequestId,
-				});
-			}
+		console.log(`[CACHE] Query result: ${creditReport ? 'FOUND' : 'NOT FOUND'}`);
+		if (creditReport) {
+			console.log('[CACHE] Report details:', {
+				id: creditReport.id,
+				requestStatus: creditReport.requestStatus,
+				fetchedAt: creditReport.fetchedAt,
+				ctosRequestId: creditReport.ctosRequestId,
+				hasDataError: creditReport.hasDataError,
+			});
+		}
 
 			if (!creditReport) {
 				console.log('[CACHE] No COMPLETED report found, returning 404');
