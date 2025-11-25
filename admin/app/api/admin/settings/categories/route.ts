@@ -15,7 +15,6 @@ export async function GET(request: Request) {
 			);
 		}
 
-		console.log("Admin Settings Categories API - forwarding to backend");
 
 		// Add cache-busting timestamp to ensure fresh data
 		const timestamp = Date.now();
@@ -31,8 +30,6 @@ export async function GET(request: Request) {
 		});
 
 		const data = await response.json();
-		
-		console.log("Backend response:", response.status, data);
 
 		if (!response.ok) {
 			return NextResponse.json(

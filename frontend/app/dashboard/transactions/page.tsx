@@ -50,18 +50,12 @@ export default function TransactionsPage() {
 
 				// If no tokens available, immediately redirect to login
 				if (!accessToken && !refreshToken) {
-					console.log(
-						"Transactions - No tokens available, redirecting to login"
-					);
 					router.push("/login");
 					return;
 				}
 
 				const isAuthenticated = await checkAuth();
 				if (!isAuthenticated) {
-					console.log(
-						"Transactions - Auth check failed, redirecting to login"
-					);
 					// Clear any invalid tokens
 					TokenStorage.clearTokens();
 					router.push("/login");

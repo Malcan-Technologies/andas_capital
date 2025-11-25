@@ -159,7 +159,6 @@ export default function ProfileConfirmationPage() {
 				const appData = await fetchWithTokenRefresh<LoanApplication>(
 					`/api/loan-applications/${params.id}`
 				);
-				console.log("Profile Confirmation Page - Application data:", appData);
 				setApplication(appData);
 
 				// Fetch profile data
@@ -197,8 +196,6 @@ export default function ProfileConfirmationPage() {
 			if (!userId) {
 				throw new Error("User ID (IC Number) is required");
 			}
-
-			console.log("Checking certificate status for user:", userId);
 			
 			const certCheckResponse = await fetchWithTokenRefresh(
 				`/api/mtsa/cert-info/${userId}`,
@@ -207,12 +204,10 @@ export default function ProfileConfirmationPage() {
 				}
 			) as any;
 
-			console.log("Certificate check response:", certCheckResponse);
 
 			// Step 2: Determine next step based on certificate status
 			if (certCheckResponse.success && certCheckResponse.data?.certStatus === "ACTIVE") {
 				// User has valid certificate - skip OTP flow and go directly to signing
-				console.log("User has valid certificate, proceeding directly to document signing");
 				
 				await fetchWithTokenRefresh(
 					`/api/loan-applications/${params.id}`,
@@ -230,7 +225,6 @@ export default function ProfileConfirmationPage() {
 				router.push(`/dashboard/applications/${params.id}/signing`);
 			} else {
 				// User needs new certificate - proceed to KYC verification first
-				console.log("User needs new certificate, proceeding to KYC verification");
 				
 				await fetchWithTokenRefresh(
 					`/api/loan-applications/${params.id}`,

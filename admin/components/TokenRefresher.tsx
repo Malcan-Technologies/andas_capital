@@ -40,9 +40,6 @@ export default function TokenRefresher() {
 				const currentTime = Date.now();
 				// Only try refresh if it's been at least 5 seconds since last attempt
 				if (currentTime - lastRefreshAttempt > 5000) {
-					console.log(
-						"Admin page became visible, checking token status"
-					);
 
 					const token = AdminTokenStorage.getAccessToken();
 					if (!token) {
@@ -67,9 +64,6 @@ export default function TokenRefresher() {
 							expirationTime < currentTime ||
 							expirationTime - currentTime < 10 * 60 * 1000
 						) {
-							console.log(
-								"Admin token expired or expiring soon on visibility change"
-							);
 							handleTokenRefresh();
 						}
 					} catch (error) {
@@ -91,9 +85,6 @@ export default function TokenRefresher() {
 				const currentTime = Date.now();
 				// Only try refresh if it's been at least 5 seconds since last attempt
 				if (currentTime - lastRefreshAttempt > 5000) {
-					console.log(
-						"Network connection restored, checking admin token"
-					);
 
 					const token = AdminTokenStorage.getAccessToken();
 					if (token) {
@@ -109,9 +100,6 @@ export default function TokenRefresher() {
 								expirationTime < currentTime ||
 								expirationTime - currentTime < 10 * 60 * 1000
 							) {
-								console.log(
-									"Admin token expired or expiring soon on network reconnection"
-								);
 								handleTokenRefresh();
 							}
 						} catch (error) {
@@ -147,7 +135,6 @@ export default function TokenRefresher() {
 
 					// If token will expire in the next 5 minutes, refresh it
 					if (expirationTime - currentTime < 5 * 60 * 1000) {
-						console.log("Admin token expiring soon, refreshing...");
 						handleTokenRefresh();
 					}
 				} catch (error) {
@@ -193,7 +180,7 @@ export default function TokenRefresher() {
 
 			// Don't redirect to login on network errors - might be temporary
 			if (error instanceof TypeError && error.message.includes("fetch")) {
-				console.log(
+				console.error(
 					"Network error during admin token refresh, will retry later"
 				);
 			} else {

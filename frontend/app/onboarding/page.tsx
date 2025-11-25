@@ -118,9 +118,6 @@ function OnboardingPageContent() {
 				const isAuthenticated = await checkAuth();
 
 				if (!isAuthenticated) {
-					console.log(
-						"Onboarding - Auth check failed, redirecting to login"
-					);
 					router.push("/login");
 					return;
 				}
@@ -152,8 +149,6 @@ function OnboardingPageContent() {
 					icType: string | null;
 					educationLevel: string | null;
 				}>("/api/onboarding");
-
-				console.log("Onboarding - User data fetched:", userData);
 
 				// Set form data with fetched user data
 				setFormData({
@@ -214,8 +209,6 @@ function OnboardingPageContent() {
 		try {
 			// Clear any previous errors
 			setError(null);
-			
-			console.log("Onboarding - Submitting values:", values);
 
 			// Merge current form data with new values
 			const updatedFormData = { ...formData, ...values };
@@ -258,14 +251,11 @@ function OnboardingPageContent() {
 				body: JSON.stringify(updatedFormData),
 			});
 
-			console.log("Onboarding - Backend response:", response);
-
 			// Update local state
 			setFormData(updatedFormData);
 
 			// Check if onboarding is complete
 			if (response.isOnboardingComplete) {
-				console.log("Onboarding - Complete, redirecting to profile");
 				router.push("/dashboard/profile");
 			} else {
 				// Move to next step

@@ -31,7 +31,6 @@ export async function GET(
 		}
 
 		const backendEndpoint = `${backendUrl}/api/admin/credit-reports/${reportId}/pdf`;
-		console.log(`PDF request: Forwarding to ${backendEndpoint}`);
 
 		// Forward request to backend
 		let response: Response;

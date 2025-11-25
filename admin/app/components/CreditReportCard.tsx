@@ -201,8 +201,6 @@ export default function CreditReportCard({
 					}),
 				});
 
-				console.log(result);
-
 				if (result.success && result.data) {
 					setReport(result.data);
 					setRequestStatus("COMPLETED");
@@ -625,7 +623,7 @@ export default function CreditReportCard({
 							{report.rawResponse && (report.rawResponse as any)?.extractedData?.creditInfoAtGlance && (
 								<div className="bg-gradient-to-br from-gray-800/40 to-gray-800/20 p-6 rounded-xl border border-gray-700/40 shadow-lg">
 									<div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-700/30">
-										<h5 className="text-white font-semibold text-lg">Section 2: Credit Info at a Glance</h5>
+										<h5 className="text-white font-semibold text-lg">Credit Info at a Glance</h5>
 										<Tooltip content="Summary of key credit information from various sources including bankruptcy status, outstanding balances, legal records, credit applications, and special attention accounts. Provides a quick overview of creditworthiness.">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
 									</Tooltip>
@@ -766,7 +764,7 @@ export default function CreditReportCard({
 							{((report.rawResponse && (report.rawResponse as any)?.extractedData?.litigationIndex) || report.litigationIndex) && (
 								<div className="bg-gradient-to-br from-gray-800/40 to-gray-800/20 p-6 rounded-xl border border-gray-700/40 shadow-lg">
 									<div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-700/30">
-										<h5 className="text-white font-semibold text-lg">Section 5: CTOS Litigation Index</h5>
+										<h5 className="text-white font-semibold text-lg">CTOS Litigation Index</h5>
 										<Tooltip content="CTOS Litigation Index is a 4-digit score (0000-9999) indicating legal risk exposure. Lower values (0000) indicate excellent/no litigation risk, while higher values (9999) indicate very high litigation risk. Based on legal cases, court records, and litigation history from CTOS databases.">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
 										</Tooltip>
@@ -846,7 +844,7 @@ export default function CreditReportCard({
 							{report.rawResponse && (report.rawResponse as any)?.extractedData?.ccrisSummary && (
 								<div className="bg-gradient-to-br from-gray-800/40 to-gray-800/20 p-6 rounded-xl border border-gray-700/40 shadow-lg">
 									<div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-700/30">
-										<h5 className="text-white font-semibold text-lg">Section 9: Banking Payment History (CCRIS Summary)</h5>
+										<h5 className="text-white font-semibold text-lg">Banking Payment History (CCRIS Summary)</h5>
 										<Tooltip content="Summary of credit applications and liabilities from CCRIS. Includes approved and pending applications, outstanding balances as borrower and guarantor, legal action status, and special attention accounts.">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
 										</Tooltip>
@@ -1041,7 +1039,7 @@ export default function CreditReportCard({
 							 (report.rawResponse as any).extractedData.ccrisAccounts.length > 0 && (
 								<div className="bg-gradient-to-br from-gray-800/40 to-gray-800/20 p-6 rounded-xl border border-gray-700/40 shadow-lg">
 									<div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-700/30">
-										<h5 className="text-white font-semibold text-lg">Section 10: Banking Payment History (CCRIS Details)</h5>
+										<h5 className="text-white font-semibold text-lg">Banking Payment History (CCRIS Details)</h5>
 										<Tooltip content="Detailed breakdown of each credit facility from CCRIS including facility type, lender, credit limit, outstanding balance, repayment terms, and account status. Provides comprehensive view of individual credit accounts.">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
 										</Tooltip>
@@ -1267,7 +1265,7 @@ export default function CreditReportCard({
 							{report.rawResponse && (report.rawResponse as any)?.extractedData?.ccrisDerivatives && (
 								<div className="bg-gradient-to-br from-gray-800/40 to-gray-800/20 p-6 rounded-xl border border-gray-700/40 shadow-lg">
 									<div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-700/30">
-										<h5 className="text-white font-semibold text-lg">Section 11: CCRIS Derivatives</h5>
+										<h5 className="text-white font-semibold text-lg">CCRIS Derivatives</h5>
 										<Tooltip content="Derived analysis from CCRIS data including earliest known facility, secured and unsecured facilities breakdown. Provides insights into credit history length, facility types, and risk distribution.">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
 										</Tooltip>

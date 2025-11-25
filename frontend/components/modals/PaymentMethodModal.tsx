@@ -25,8 +25,6 @@ export default function PaymentMethodModal({
 	};
 
 	const handleFPXSelect = () => {
-		// Handle FPX payment flow - not implemented yet
-		console.log("FPX payment selected");
 		alert("FPX payment is not implemented yet. Please use Bank Transfer.");
 	};
 

@@ -9,7 +9,6 @@ export async function GET(
 ) {
 	try {
 		const { userId } = await params;
-		console.log("Cache request: Received userId:", userId);
 		
 		if (!userId) {
 			console.error("Cache request: userId is missing");
@@ -20,7 +19,6 @@ export async function GET(
 		}
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
-		console.log("Cache request: Backend URL:", backendUrl);
 		const authHeader = request.headers.get("authorization");
 		const extractedToken = authHeader?.replace(/^Bearer\s+/i, "")?.trim() || authHeader?.split(" ")[1];
 		const token = extractedToken && extractedToken !== "Bearer" ? extractedToken : undefined;
@@ -42,7 +40,6 @@ export async function GET(
 		}
 
 		const backendEndpoint = `${backendUrl}/api/admin/credit-reports/cache/${userId}`;
-		console.log(`Cache request: Forwarding to ${backendEndpoint}`);
 
 		// Forward request to backend
 		let response: Response;

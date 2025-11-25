@@ -142,14 +142,6 @@ export default function KycVerificationPage() {
 					resumeUrl?: string;
 				}>('/api/kyc/user-ctos-status');
 				
-				console.log('CTOS Status Data:', ctosData);
-				console.log('CTOS Status Result Check:', {
-					success: ctosData.success,
-					hasKycSession: ctosData.hasKycSession,
-					ctosResult: ctosData.ctosResult,
-					isAlreadyApproved: ctosData.isAlreadyApproved
-				});
-				
 				if (ctosData.success && ctosData.hasKycSession) {
 					setCtosStatus({
 						status: ctosData.ctosStatus,
@@ -173,7 +165,6 @@ export default function KycVerificationPage() {
 					if (ctosData.ctosResult === 1 || ctosData.isAlreadyApproved) {
 						setKycCompleted(true);
 						setKycInProgress(false);
-						console.log('User has already completed KYC with approved status');
 						
 						// Fetch KYC documents for approved users
 						fetchKycDocuments();
@@ -217,13 +208,6 @@ export default function KycVerificationPage() {
 			
 			if (documentsData.success && documentsData.hasDocuments) {
 				setKycDocuments(documentsData.documents);
-				console.log('Fetched KYC documents:', documentsData.documents);
-				console.log('Document storage URLs:', documentsData.documents.map(doc => ({
-					type: doc.type,
-					hasStorageUrl: !!doc.storageUrl,
-					storageUrlLength: doc.storageUrl?.length,
-					isBase64: doc.storageUrl?.startsWith('data:image/')
-				})));
 			}
 		} catch (err) {
 			console.error('Error fetching KYC documents:', err);
@@ -294,11 +278,6 @@ export default function KycVerificationPage() {
 				
 				// Start lightweight database polling to detect webhook updates
 				startDatabasePolling(response.kycId);
-				
-				// Show message if resuming
-				if (response.resumed) {
-					console.log('Resumed existing KYC session:', response.message);
-				}
 			} else {
 				throw new Error('Failed to create CTOS eKYC session');
 			}
@@ -345,8 +324,6 @@ export default function KycVerificationPage() {
 				}>(`/api/kyc/session-status/${kycSessionId}`);
 
 				if (statusResponse.success && statusResponse.status === 'APPROVED') {
-					// KYC approved - refresh page to show results
-					console.log('KYC approved via webhook, refreshing page...');
 					window.location.reload();
 				}
 			} catch (err) {
@@ -369,7 +346,7 @@ export default function KycVerificationPage() {
 	const handleAcceptKyc = async () => {
 		// Allow continuing if either result is 1 OR if isAlreadyApproved is true
 		if (!ctosStatus || (ctosStatus.result !== 1 && !ctosStatus.isAlreadyApproved)) {
-			console.log('Cannot continue - KYC not approved:', { ctosStatus });
+			console.error('Cannot continue - KYC not approved:', { ctosStatus });
 			return;
 		}
 
@@ -393,7 +370,7 @@ export default function KycVerificationPage() {
 			// Redirect to OTP verification for certificate request
 			router.push(`/dashboard/applications/${params.id}/otp-verification`);
 		} catch (err) {
-			console.log('Error in handleAcceptKyc:', err);
+			console.error('Error in handleAcceptKyc:', err);
 			setKycError(err instanceof Error ? err.message : "Failed to proceed with KYC verification");
 		} finally {
 			setProcessingAccept(false);

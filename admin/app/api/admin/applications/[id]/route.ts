@@ -19,9 +19,6 @@ export async function GET(
 ) {
 	try {
 		const id = params.id;
-		console.log(
-			`API /admin/applications/${id} - Fetching application details`
-		);
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 		const token = request.headers.get("authorization")?.split(" ")[1];
@@ -59,32 +56,6 @@ export async function GET(
 			}
 
 			const application = await response.json();
-
-			console.log(
-				`API /admin/applications/${id} - Successfully fetched application details`
-			);
-			console.log(
-				`API /admin/applications/${id} - Application has ${
-					application.documents?.length || 0
-				} documents`
-			);
-
-			// Log document URLs for debugging
-			if (application.documents && application.documents.length > 0) {
-				console.log(`API /admin/applications/${id} - Documents:`);
-				application.documents.forEach(
-					(
-						doc: { type: string; status: string; fileUrl: string },
-						index: number
-					) => {
-						console.log(
-							`Document ${index + 1}: Type=${doc.type}, Status=${
-								doc.status
-							}, URL=${doc.fileUrl}`
-						);
-					}
-				);
-			}
 
 			return NextResponse.json(application);
 		} catch (fetchError) {

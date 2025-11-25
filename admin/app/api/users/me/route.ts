@@ -8,20 +8,15 @@ export async function GET(request: Request) {
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 		const token = request.headers.get("authorization")?.split(" ")[1];
 
-		console.log("API /users/me - Authorization token exists:", !!token);
 
 		if (!token) {
-			console.log("API /users/me - No token provided");
+			console.error("API /users/me - No token provided");
 			return NextResponse.json(
 				{ error: "Unauthorized" },
 				{ status: 401 }
 			);
 		}
 
-		console.log(
-			"API /users/me - Calling backend:",
-			`${backendUrl}/api/admin/me`
-		);
 		const response = await fetch(`${backendUrl}/api/admin/me`, {
 			method: "GET",
 			headers: {
@@ -30,10 +25,6 @@ export async function GET(request: Request) {
 			},
 		});
 
-		console.log(
-			"API /users/me - Backend response status:",
-			response.status
-		);
 		const data = await response.json();
 
 		if (!response.ok) {
@@ -44,7 +35,6 @@ export async function GET(request: Request) {
 			);
 		}
 
-		console.log("API /users/me - User data retrieved successfully");
 		return NextResponse.json(data);
 	} catch (error) {
 		console.error("API /users/me - Exception:", error);

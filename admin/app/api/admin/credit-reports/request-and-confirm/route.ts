@@ -17,7 +17,6 @@ export async function POST(request: Request) {
 		}
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
-		console.log("Credit report request: Backend URL:", backendUrl);
 		const authHeader = request.headers.get("authorization");
 		const extractedToken = authHeader?.replace(/^Bearer\s+/i, "")?.trim() || authHeader?.split(" ")[1];
 		const token = extractedToken && extractedToken !== "Bearer" ? extractedToken : undefined;
@@ -39,7 +38,6 @@ export async function POST(request: Request) {
 		}
 
 		const backendEndpoint = `${backendUrl}/api/admin/credit-reports/request-and-confirm`;
-		console.log(`Credit report request: Forwarding to ${backendEndpoint}`);
 
 		// Forward request to backend
 		let response: Response;

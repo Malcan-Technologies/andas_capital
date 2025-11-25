@@ -68,15 +68,12 @@ function ApplicationDetailsFormContent({
 
 				// Get application ID from URL params
 				const applicationId = searchParams.get("applicationId");
-				console.log("Application ID from URL:", applicationId);
 
 				// Get product code from URL params
 				const productCode = searchParams.get("productCode");
 				if (!productCode) {
 					throw new Error("Product code not found in URL");
 				}
-
-				console.log("Fetching application data for ID:", applicationId);
 
 				// Fetch application data
 				const token = localStorage.getItem("token");
@@ -94,7 +91,6 @@ function ApplicationDetailsFormContent({
 				}
 
 				const applicationData = await applicationResponse.json();
-				console.log("Application data:", applicationData);
 
 				// Set form values from application data if available
 				if (applicationData) {

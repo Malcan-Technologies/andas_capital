@@ -7,9 +7,6 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: Request) {
 	try {
-		console.log(
-			`[Login Route] Starting login process with backend URL: ${BACKEND_URL}`
-		);
 
 		const body = await request.json();
 		const { phoneNumber, password } = body;
@@ -18,13 +15,6 @@ export async function POST(request: Request) {
 		const forwardedFor = request.headers.get("x-forwarded-for");
 		const realIp = request.headers.get("x-real-ip");
 		const clientIp = forwardedFor || realIp || request.headers.get("x-client-ip") || "";
-		
-		console.log("[Login Route] Client IP detection:", {
-			forwardedFor,
-			realIp,
-			clientIp,
-			allHeaders: Object.fromEntries(request.headers.entries())
-		});
 
 		// Fetch login token first
 		let loginToken: string | null = null;
@@ -47,7 +37,6 @@ export async function POST(request: Request) {
 			if (tokenResponse.ok) {
 				const tokenData = await tokenResponse.json();
 				loginToken = tokenData.loginToken || tokenResponse.headers.get("X-Login-Token");
-				console.log("[Login Route] Token fetched successfully:", { loginToken: loginToken?.substring(0, 10) + "..." });
 			} else {
 				console.warn("[Login Route] Failed to fetch login token, status:", tokenResponse.status);
 			}
@@ -55,10 +44,6 @@ export async function POST(request: Request) {
 			console.error("[Login Route] Error fetching login token:", tokenError);
 			// Continue without token - backend will reject if required
 		}
-
-		console.log(
-			`[Login Route] Forwarding login request for phone: ${phoneNumber}`
-		);
 
 		// Forward the request to the backend API with token
 		const loginBody: { phoneNumber: string; password: string; loginToken?: string } = {
@@ -68,7 +53,6 @@ export async function POST(request: Request) {
 
 		if (loginToken) {
 			loginBody.loginToken = loginToken;
-			console.log("[Login Route] Including token in request body");
 		} else {
 			console.error("[Login Route] NO TOKEN TO INCLUDE!");
 		}
@@ -94,18 +78,8 @@ export async function POST(request: Request) {
 			next: { revalidate: 0 },
 		});
 
-		console.log(
-			`[Login Route] Received response with status: ${response.status}`
-		);
-
 		// Get the response body
 		const data = await response.json();
-		console.log(
-			`[Login Route] Response data:`,
-			data.message
-				? { message: data.message }
-				: { error: data.error || "Unknown error" }
-		);
 
 		if (!response.ok) {
 			// For phone verification errors, pass through all necessary fields

@@ -7,13 +7,11 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: Request) {
 	try {
-		console.log("[Logout Route] Starting logout process");
 
 		// Get the authorization header
 		const authHeader = request.headers.get("authorization");
 
 		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			console.log("[Logout Route] Invalid or missing auth header");
 			return NextResponse.json(
 				{ message: "Logged out" },
 				{ status: 200 }
@@ -30,9 +28,6 @@ export async function POST(request: Request) {
 				cache: "no-store",
 			});
 
-			console.log(
-				"[Logout Route] Successfully invalidated token on server"
-			);
 		} catch (error) {
 			console.error(
 				"[Logout Route] Error invalidating token on server:",

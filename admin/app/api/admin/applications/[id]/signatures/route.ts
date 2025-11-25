@@ -9,9 +9,6 @@ export async function GET(
 ) {
 	try {
 		const applicationId = params.id;
-		console.log(
-			`API /admin/applications/${applicationId}/signatures - Fetching signature status`
-		);
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 		const token = request.headers.get("authorization")?.split(" ")[1];
@@ -44,10 +41,6 @@ export async function GET(
 			);
 			return NextResponse.json(data, { status: response.status });
 		}
-
-		console.log(
-			`API /admin/applications/${applicationId}/signatures - Successfully fetched signature status`
-		);
 
 		return NextResponse.json(data);
 	} catch (error) {

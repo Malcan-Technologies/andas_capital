@@ -101,8 +101,6 @@ function LoginPageContent() {
 		TokenStorage.setAccessToken(data.accessToken);
 		TokenStorage.setRefreshToken(data.refreshToken);
 
-		console.log("Login OTP - Verification successful, redirecting");
-
 		// Check for redirect parameter
 		const redirect = searchParams.get("redirect");
 		if (redirect) {
@@ -274,7 +272,6 @@ function LoginPageContent() {
 		}
 
 		try {
-			console.log("Login - Attempting login with:", { phoneNumber });
 
 			const response = await fetch("/api/auth/login", {
 				method: "POST",
@@ -287,7 +284,6 @@ function LoginPageContent() {
 			if (!response.ok) {
 				// Check if this is a phone verification required error
 				if (response.status === 403 && data.requiresPhoneVerification) {
-					console.log("Login - Phone verification required, showing OTP verification");
 					
 					// Show OTP verification screen
 					setUserDataForOTP({
@@ -305,7 +301,6 @@ function LoginPageContent() {
 			TokenStorage.setAccessToken(data.accessToken);
 			TokenStorage.setRefreshToken(data.refreshToken);
 
-			console.log("Login - Successful, redirecting to appropriate page");
 
 			// Add a small delay to ensure token storage is complete
 			await new Promise((resolve) => setTimeout(resolve, 100));
@@ -331,8 +326,6 @@ function LoginPageContent() {
 						"Failed to store authentication tokens. Please try again."
 					);
 				}
-
-				console.log("Login - Token storage successful after retry");
 			}
 
 			// Check for redirect parameter
@@ -340,7 +333,6 @@ function LoginPageContent() {
 			if (redirect) {
 				// Decode the redirect URL if it's encoded
 				const decodedRedirect = decodeURIComponent(redirect);
-				console.log("Login - Redirecting to:", decodedRedirect);
 
 				// Use window.location for more reliable redirect with auth state
 				window.location.href = decodedRedirect;

@@ -13,14 +13,8 @@ export async function POST(
 			process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 		const token = request.headers.get("authorization")?.split(" ")[1];
 
-		console.log(
-			`Admin API Disburse: Processing disbursement for application ${id}`
-		);
-		console.log(`Disburse Backend URL: ${backendUrl}`);
-		console.log(`Disburse Token available: ${!!token}`);
-
+		
 		if (!token) {
-			console.log("Admin API Disburse: No token provided");
 			return NextResponse.json(
 				{ error: "Unauthorized" },
 				{ status: 401 }
@@ -29,11 +23,9 @@ export async function POST(
 
 		// Get the request body for the disbursement details
 		const body = await request.json();
-		console.log(`Admin API Disburse: Request body:`, body);
 
 		// Validate required fields
 		if (!body.referenceNumber) {
-			console.log("Admin API Disburse: Missing referenceNumber");
 			return NextResponse.json(
 				{ error: "Reference number is required" },
 				{ status: 400 }
@@ -46,14 +38,6 @@ export async function POST(
 			notes: body.notes || "",
 		};
 
-		console.log(
-			`Admin API Disburse: Disbursing application ${id} with reference ${body.referenceNumber}`
-		);
-		console.log(
-			`Disburse API URL: ${backendUrl}/api/admin/applications/${id}/disburse`
-		);
-		console.log("Admin API Disburse: Request payload:", payload);
-
 		// Process the disbursement via the backend API
 		const response = await fetch(
 			`${backendUrl}/api/admin/applications/${id}/disburse`,
@@ -65,10 +49,6 @@ export async function POST(
 				},
 				body: JSON.stringify(payload),
 			}
-		);
-
-		console.log(
-			`Admin API Disburse: Backend response status: ${response.status}`
 		);
 
 		if (!response.ok) {
@@ -102,7 +82,6 @@ export async function POST(
 		}
 
 		const data = await response.json();
-		console.log("Admin API Disburse: Successful response:", data);
 
 		// After successful disbursement, create a history entry
 		try {
@@ -135,8 +114,6 @@ export async function POST(
 					`Loan disbursed with reference: ${body.referenceNumber}`,
 			};
 
-			console.log("Creating disbursement history entry:", historyPayload);
-
 			// Call API to create history entry
 			const historyResponse = await fetch(
 				`${backendUrl}/api/admin/applications/${id}/history`,
@@ -154,8 +131,6 @@ export async function POST(
 				console.warn(
 					"Failed to create disbursement history entry, but disbursement was processed successfully"
 				);
-			} else {
-				console.log("Successfully created disbursement history entry");
 			}
 		} catch (historyError) {
 			// Don't fail the whole request if history creation fails

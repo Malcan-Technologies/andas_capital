@@ -38,8 +38,6 @@ export async function GET(
       );
     }
 
-    console.log('Admin checking KYC session status:', kycSessionId);
-
     // Forward request to backend admin KYC API - use the existing session status endpoint
     const response = await fetch(`${BACKEND_URL}/api/admin/kyc/${kycSessionId}/status`, {
       method: 'GET',

@@ -14,8 +14,6 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
-		console.log("Admin Loans - Fetching loans data");
-
 		const response = await fetch(
 			`${process.env.NEXT_PUBLIC_API_URL}/api/admin/loans`,
 			{
@@ -36,7 +34,6 @@ export async function GET(request: NextRequest) {
 		}
 
 		const data = await response.json();
-		console.log("Admin Loans - Successfully fetched loans");
 		return NextResponse.json(data);
 	} catch (error: any) {
 		console.error("Admin Loans - Fetch exception:", error);

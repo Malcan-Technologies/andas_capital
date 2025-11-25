@@ -112,8 +112,6 @@ export class OpenCVManager {
       // Find contours in the blue regions
       cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-      console.log(`Malaysian ID detection: Found ${contours.size()} blue regions`);
-
       // Find the best blue region and then refine its edges
       let bestBlueRegion: any = null;
       let bestBlueScore = 0;
@@ -141,8 +139,6 @@ export class OpenCVManager {
 
             // Score based on size, aspect ratio, and blue content
             const score = area * (2.0 - Math.abs(aspectRatio - 1.586)) * blueDensity;
-            
-            console.log(`  Blue region ${i}: aspect=${aspectRatio.toFixed(2)}, blueDensity=${blueDensity.toFixed(2)}, score=${score.toFixed(0)}`);
 
             if (score > bestBlueScore && blueDensity > 0.05) { // At least 5% blue content
               bestBlueScore = score;
@@ -190,8 +186,6 @@ export class OpenCVManager {
       // Find contours in the ROI
       cv.findContours(roiEdges, roiContours, roiHierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-      console.log(`Found ${roiContours.size()} edge contours in blue region`);
-
       let bestCardCandidate: any = null;
       let bestScore = 0;
       let bestCorners: Array<{ x: number; y: number }> = [];
@@ -232,7 +226,6 @@ export class OpenCVManager {
               
               if (aspectRatio > 1.2 && aspectRatio < 2.2) {
                 const score = area * (2.0 - Math.abs(aspectRatio - 1.586));
-                console.log(`    Edge candidate: aspect=${aspectRatio.toFixed(2)}, area=${area.toFixed(0)}, score=${score.toFixed(0)}`);
                 
                 if (score > bestScore) {
                   bestScore = score;
@@ -260,7 +253,6 @@ export class OpenCVManager {
 
       // If no precise edges found, fall back to the blue region bounding box
       if (!bestCardCandidate) {
-        console.log('No precise edges found, using blue region bounds');
         bestCorners = [
           { x: bestBlueRect.x, y: bestBlueRect.y },
           { x: bestBlueRect.x + bestBlueRect.width, y: bestBlueRect.y },
@@ -346,9 +338,6 @@ export class OpenCVManager {
         detectionMethod: 'malaysian_color_detection'
       };
 
-      console.log(`Malaysian ID result: confidence=${confidence.toFixed(1)}, blur=${blurScore.toFixed(1)}, aspectRatio=${aspectRatio.toFixed(2)}, valid=${result.isValidCard}`);
-      console.log(`  Scores: size=${sizeScore.toFixed(2)}, aspect=${aspectScore.toFixed(2)}, blue=${blueScore.toFixed(2)}`);
-      
       return result;
 
     } catch (error) {
@@ -407,11 +396,6 @@ export class OpenCVManager {
       // Find contours
       cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-      // Debug: log basic info (less frequent)
-      if (contours.size() > 0) {
-        console.log(`Processing ${contours.size()} contours, image size: ${src.cols}x${src.rows}`);
-      }
-
       // Find the largest rectangular contour (potential ID card)
       let bestContour: any = null;
       let maxArea = 0;
@@ -424,11 +408,6 @@ export class OpenCVManager {
         // Calculate image area for relative sizing
         const imageArea = src.rows * src.cols;
         const areaRatio = area / imageArea;
-        
-        // Log significant contours less frequently
-        if (area > 5000) {
-          console.log(`Large contour ${i}: area=${area.toFixed(0)}, areaRatio=${(areaRatio*100).toFixed(1)}%`);
-        }
 
         // ID card can be any reasonable size - just needs to be visible
         if (area > 1000 && areaRatio > 0.01 && areaRatio < 0.9) {
@@ -458,12 +437,6 @@ export class OpenCVManager {
           }
           
           if (!bestApproxForContour) continue;
-
-          // Debug: log all polygon approximations
-          console.log(`  Contour ${i}: ${bestCornerCount} corners, area=${area.toFixed(0)}`);
-          
-          // Work with the best approximation we found (prefer 4 corners but accept 3-6)
-          console.log(`Found ${bestCornerCount}-sided polygon: area=${area.toFixed(0)}, areaRatio=${(areaRatio*100).toFixed(1)}%`);
           
           // Extract corners for aspect ratio calculation
           const corners: Array<{ x: number; y: number }> = [];
@@ -516,8 +489,6 @@ export class OpenCVManager {
               if (convexity > 0.7) {
                 // Score this candidate
                 const score = area * rectangularity * convexity * (2.0 - Math.abs(aspectRatio - 1.586));
-                
-                console.log(`  Candidate: aspectRatio=${aspectRatio.toFixed(2)}, rectangularity=${rectangularity.toFixed(2)}, convexity=${convexity.toFixed(2)}, score=${score.toFixed(0)}`);
                 
                 if (score > maxArea) {
                   maxArea = score;
@@ -633,9 +604,6 @@ export class OpenCVManager {
         detectionMethod: 'edge_detection' as string
       };
 
-      console.log(`Final result: confidence=${confidence.toFixed(1)}, blur=${blurScore.toFixed(1)}, aspectRatio=${aspectRatio.toFixed(2)}, valid=${result.isValidCard}`);
-      console.log(`Validation: shape=${hasGoodShape}, quality=${hasGoodQuality}, confidence=${hasReasonableConfidence}`);
-
       return result;
 
     } catch (error) {
@@ -659,12 +627,8 @@ export class OpenCVManager {
     const malaysianResult = this.detectMalaysianIDCard(imageElement);
     
     if (malaysianResult.isValidCard || (malaysianResult.confidence || 0) > 40) {
-      console.log('Using Malaysian ID detection result');
       return malaysianResult;
     }
-    
-    // Fall back to edge detection
-    console.log('Falling back to edge detection');
     const edgeResult = this.detectCardEdges(imageElement);
     
     // Return the better result
@@ -810,7 +774,6 @@ export class OpenCVManager {
       cv.imshow(enhancedCanvas, enhanced);
       const enhancedDataUrl = enhancedCanvas.toDataURL('image/jpeg', 0.98);
 
-      console.log('Text enhancement applied successfully');
       return enhancedDataUrl;
 
     } catch (error) {

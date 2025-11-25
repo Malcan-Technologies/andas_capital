@@ -37,8 +37,6 @@ export default function Home() {
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		// Handle form submission
-		console.log("Form submitted:", formData);
 		// Reset form
 		setFormData({ email: "", phone: "", message: "" });
 		alert("Thank you for your message. We'll get back to you soon!");

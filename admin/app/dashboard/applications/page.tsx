@@ -703,9 +703,6 @@ function AdminApplicationsPageContent() {
         setApplications(applicationsWithHistory);
       } catch (appError) {
         console.error("Error fetching applications:", appError);
-
-        // Fallback to dashboard data
-        console.log("Falling back to dashboard data for applications");
         try {
           const dashboardData =
             await fetchWithAdminTokenRefresh<DashboardStats>(
@@ -1001,22 +998,6 @@ function AdminApplicationsPageContent() {
   useEffect(() => {
     setCreditReport(null);
   }, [selectedApplication?.id]);
-
-  useEffect(() => {
-    if (selectedApplication?.user) {
-      console.log("Selected application user:", {
-        id: selectedApplication.userId,
-        fullName: selectedApplication.user.fullName,
-        icNumber: selectedApplication.user.icNumber,
-        idNumber: selectedApplication.user.idNumber,
-      });
-    }
-  }, [
-    selectedApplication?.id,
-    selectedApplication?.user?.fullName,
-    selectedApplication?.user?.icNumber,
-    selectedApplication?.user?.idNumber,
-  ]);
 
   // Handle filter toggle
   const toggleFilter = (status: string) => {
@@ -1393,8 +1374,6 @@ function AdminApplicationsPageContent() {
           )
         );
       }
-
-      console.log(`Document ${documentId} status updated to ${newStatus}`);
     } catch (error) {
       console.error("Error updating document status:", error);
       alert(
@@ -1592,11 +1571,6 @@ function AdminApplicationsPageContent() {
 
     setProcessingDisbursement(true);
     try {
-      console.log("Disbursement request:", {
-        applicationId: selectedApplication.id,
-        referenceNumber: disbursementReference,
-        notes: disbursementNotes || "Loan disbursed by admin",
-      });
 
       const response = await fetch(
         `/api/admin/applications/${selectedApplication.id}/disburse`,
@@ -1613,11 +1587,8 @@ function AdminApplicationsPageContent() {
         }
       );
 
-      console.log("Disbursement response status:", response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log("Disbursement success:", data);
         // Refresh the application data
         await fetchApplications();
         await fetchApplicationHistory(selectedApplication.id);
@@ -1669,7 +1640,6 @@ function AdminApplicationsPageContent() {
       }
 
       const data = await response.json();
-      console.log("✅ Payment slip uploaded:", data);
 
       alert("Payment slip uploaded successfully");
       setDisbursementSlipFile(null);
@@ -1759,8 +1729,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
           }),
         }
       );
-
-      console.log("Fresh offer submitted successfully");
 
       // Clear form and refresh data
       setShowFreshOfferForm(false);
@@ -4713,10 +4681,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 }
 
                                 const data = await response.json();
-                                console.log(
-                                  "✅ Stamp certificate uploaded:",
-                                  data
-                                );
 
                                 const certificateUrl =
                                   data?.data?.stampCertificateUrl ||
@@ -4750,9 +4714,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 // Refresh application data
                                 await fetchApplications();
 
-                                console.log(
-                                  "✅ Certificate URL set, Confirm button should now appear"
-                                );
                                 const message = replacingStampCertificate
                                   ? 'Stamp certificate replaced successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.'
                                   : 'Stamp certificate uploaded successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.';
@@ -4801,19 +4762,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
                                 setConfirmingStamping(true);
                                 try {
-                                  console.log(
-                                    "🔄 Confirming stamping for application:",
-                                    selectedApplication.id
-                                  );
-                                  console.log(
-                                    "Current status:",
-                                    selectedApplication.status
-                                  );
-                                  console.log(
-                                    "Certificate URL:",
-                                    selectedApplication.loan
-                                      ?.pkiStampCertificateUrl
-                                  );
 
                                   const response = await fetch(
                                     `/api/admin/applications/${selectedApplication.id}/confirm-stamping`,
@@ -4829,11 +4777,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   );
 
                                   const data = await response.json();
-                                  console.log(
-                                    "Response status:",
-                                    response.status
-                                  );
-                                  console.log("Response data:", data);
 
                                   if (!response.ok) {
                                     throw new Error(
@@ -4841,15 +4784,11 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                     );
                                   }
 
-                                  console.log(
-                                    "✅ Stamping confirmed successfully"
-                                  );
                                   alert(
                                     "Stamping confirmed! Application moved to PENDING_DISBURSEMENT."
                                   );
 
                                   // Refresh application data
-                                  console.log("🔄 Refreshing applications...");
                                   await fetchApplications();
 								  setSelectedTab("disbursement");
 								  setSelectedFilters(["PENDING_DISBURSEMENT"]);

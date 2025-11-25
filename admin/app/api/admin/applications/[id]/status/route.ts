@@ -27,12 +27,6 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 			process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 		const token = request.headers.get("authorization")?.split(" ")[1];
 
-		console.log(
-			`Admin API Status: Processing status update for application ${id}`
-		);
-		console.log(`Status Backend URL: ${backendUrl}`);
-		console.log(`Status Token available: ${!!token}`);
-
 		if (!token) {
 			return NextResponse.json(
 				{ error: "Unauthorized" },
@@ -42,7 +36,6 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 
 		// Get the request body for the status update
 		const body = await request.json();
-		console.log(`Admin API Status: Request body:`, body);
 
 		// Map frontend status names to backend status names if needed
 		let backendStatus = body.status;
@@ -60,14 +53,6 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 			payload.referenceNumber = body.referenceNumber;
 		}
 
-		console.log(
-			`Admin API Status: Updating application ${id} to status ${backendStatus}`
-		);
-		console.log(
-			`Status API URL: ${backendUrl}/api/admin/applications/${id}/status`
-		);
-		console.log("Admin API Status: Request payload:", payload);
-
 		// Update the application status via the backend API
 		const response = await fetch(
 			`${backendUrl}/api/admin/applications/${id}/status`,
@@ -79,10 +64,6 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 				},
 				body: JSON.stringify(payload),
 			}
-		);
-
-		console.log(
-			`Admin API Status: Backend response status: ${response.status}`
 		);
 
 		if (!response.ok) {
@@ -108,7 +89,6 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 		}
 
 		const data = await response.json();
-		console.log("Admin API Status: Successful response:", data);
 
 		// After updating the status, create a history entry
 		try {
@@ -152,8 +132,6 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 					notes: body.notes || `Status updated to ${backendStatus}`,
 				};
 
-				console.log("Creating history entry:", historyPayload);
-
 				// Call API to create history entry
 				const historyResponse = await fetch(
 					`${backendUrl}/api/admin/applications/${id}/history`,
@@ -172,7 +150,7 @@ async function handleStatusUpdate(request: Request, params: { id: string }) {
 						"Failed to create history entry, but status was updated successfully"
 					);
 				} else {
-					console.log("Successfully created history entry");
+					console.info("Successfully created history entry");
 				}
 			}
 		} catch (historyError) {
