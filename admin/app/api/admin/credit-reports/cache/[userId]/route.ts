@@ -39,18 +39,23 @@ export async function GET(
 			);
 		}
 
-		const backendEndpoint = `${backendUrl}/api/admin/credit-reports/cache/${userId}`;
+	// Add cache-busting timestamp to ensure fresh data
+	const timestamp = Date.now();
+	const backendEndpoint = `${backendUrl}/api/admin/credit-reports/cache/${userId}?_t=${timestamp}`;
 
-		// Forward request to backend
-		let response: Response;
-		try {
-			response = await fetch(backendEndpoint, {
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-			});
+	// Forward request to backend
+	let response: Response;
+	try {
+		response = await fetch(backendEndpoint, {
+			method: "GET",
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Content-Type": "application/json",
+				"Cache-Control": "no-cache, no-store, must-revalidate",
+				"Pragma": "no-cache",
+				"Expires": "0",
+			},
+		});
 		} catch (fetchError) {
 			console.error("Cache request: Network error connecting to backend:", fetchError);
 			return NextResponse.json(
@@ -82,18 +87,25 @@ export async function GET(
 			);
 		}
 
-		if (!response.ok) {
-			console.error(`Cache request: Backend returned error ${response.status}:`, data);
-			return NextResponse.json(
-				{
-					success: false,
-					message: data.message || data.error || "Failed to fetch cached credit report",
-				},
-				{ status: response.status }
-			);
-		}
+	if (!response.ok) {
+		console.error(`Cache request: Backend returned error ${response.status}:`, data);
+		return NextResponse.json(
+			{
+				success: false,
+				message: data.message || data.error || "Failed to fetch cached credit report",
+			},
+			{ status: response.status }
+		);
+	}
 
-		return NextResponse.json(data);
+	// Return response with cache-busting headers
+	return NextResponse.json(data, {
+		headers: {
+			"Cache-Control": "no-cache, no-store, must-revalidate",
+			"Pragma": "no-cache",
+			"Expires": "0",
+		},
+	});
 	} catch (error) {
 		console.error("Error fetching cached credit report:", {
 			error: error instanceof Error ? error.message : String(error),
