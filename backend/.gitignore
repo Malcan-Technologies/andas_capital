@@ -23,6 +23,10 @@
 # misc
 *.pem
 
+# CTOS Private Keys
+rsa-private.pem
+keys/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

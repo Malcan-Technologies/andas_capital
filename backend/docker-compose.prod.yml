@@ -38,6 +38,7 @@ services:
         volumes:
             - /var/www/uploads:/app/uploads
             - /var/www/receipts:/app/receipts
+            - /var/www/keys:/app/keys:ro
             # PDF letters are stored in uploads/default-letters/ (covered by uploads mount)
         environment:
             - NODE_ENV=${NODE_ENV:-production}
@@ -76,6 +77,16 @@ services:
             - CTOS_WEBHOOK_URL=${CTOS_WEBHOOK_URL}
             - CTOS_CIPHERTEXT=${CTOS_CIPHERTEXT}
             - CTOS_CIPHER=${CTOS_CIPHER}
+            # CTOS B2B Configuration
+            - CTOS_B2B_COMPANY_CODE=${CTOS_B2B_COMPANY_CODE}
+            - CTOS_B2B_ACCOUNT_NO=${CTOS_B2B_ACCOUNT_NO}
+            - CTOS_B2B_USER_ID=${CTOS_B2B_USER_ID}
+            - CTOS_B2B_CLIENT_ID=${CTOS_B2B_CLIENT_ID}
+            - CTOS_B2B_SSO_PASSWORD=${CTOS_B2B_SSO_PASSWORD}
+            - CTOS_B2B_SSO_URL=${CTOS_B2B_SSO_URL}
+            - CTOS_B2B_API_URL=${CTOS_B2B_API_URL}
+            - CTOS_B2B_PRIVATE_KEY=${CTOS_B2B_PRIVATE_KEY}
+            - CTOS_B2B_MOCK_MODE=${CTOS_B2B_MOCK_MODE}
         depends_on:
             postgres:
                 condition: service_healthy

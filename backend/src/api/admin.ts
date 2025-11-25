@@ -2631,6 +2631,8 @@ router.put(
 					fullName: true,
 					email: true,
 					phoneNumber: true,
+					icNumber: true,
+					idNumber: true,
 					role: true,
 					createdAt: true,
 				},
@@ -3377,6 +3379,8 @@ router.get(
 							fullName: true,
 							phoneNumber: true,
 							email: true,
+							icNumber: true,
+							idNumber: true,
 							bankName: true,
 							accountNumber: true,
 						},
@@ -13559,6 +13563,1232 @@ router.get(
 			return res.status(500).json({
 				success: false,
 				message: 'Failed to fetch disbursements'
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/credit-reports/fetch:
+ *   post:
+ *     summary: Fetch credit report from CTOS B2B (Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - applicationId
+ *               - userId
+ *               - icNumber
+ *               - fullName
+ *             properties:
+ *               applicationId:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *               icNumber:
+ *                 type: string
+ *               fullName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Credit report fetched successfully
+ *       400:
+ *         description: Invalid request
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to fetch credit report
+ */
+router.post(
+	'/credit-reports/fetch',
+	authenticateToken,
+	requireAdmin,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId, userId, icNumber, fullName } = req.body;
+			const adminUserId = req.user?.userId;
+			const isMockMode =
+				process.env.CTOS_B2B_MOCK_MODE === "true"
+
+			console.log("Mock Mode 2:", isMockMode);
+			console.log("CTOS_B2B_MOCK_MODE 2:", process.env.CTOS_B2B_MOCK_MODE);
+
+			if (!adminUserId) {
+				return res.status(401).json({
+					success: false,
+					message: 'Unauthorized',
+				});
+			}
+
+			// Validate required fields
+			if (!applicationId || !userId || !icNumber || !fullName) {
+				return res.status(400).json({
+					success: false,
+					message: 'Missing required fields: applicationId, userId, icNumber, fullName',
+				});
+			}
+
+			// Verify application exists and belongs to user
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							icNumber: true,
+						},
+					},
+				},
+			});
+
+			if (!application) {
+				if (!isMockMode) {
+					return res.status(404).json({
+						success: false,
+						message: "Application not found",
+					});
+				}
+
+				// Mock mode: allow testing without an actual application/user in the database
+				console.warn(
+					"CTOS B2B: Application not found. Running in mock mode, returning mock response without persistence."
+				);
+
+				const { ctosB2BService } = await import("../lib/ctosB2BService");
+				const result = await ctosB2BService.fetchIndividualCreditReport({
+					icNumber,
+					fullName,
+				});
+
+				if (!result.success) {
+					return res.status(400).json({
+						success: false,
+						message: result.error || "Failed to fetch credit report",
+					});
+				}
+
+				const now = new Date().toISOString();
+				const mockReport = {
+					id: `mock-${Date.now()}`,
+					userId,
+					applicationId,
+					reportType: "INDIVIDUAL",
+					icNumber: icNumber.replace(/[\s-]/g, ""),
+					fullName,
+					fetchedAt: now,
+					fetchedBy: adminUserId,
+					mock: true,
+					...(result.data || {}),
+				};
+
+				return res.json({
+					success: true,
+					data: mockReport,
+					cached: false,
+					mock: true,
+					rawResponse: result.rawResponse,
+				});
+			}
+
+			if (application.userId !== userId) {
+				return res.status(403).json({
+					success: false,
+					message: 'Application does not belong to the specified user',
+				});
+			}
+
+			// Get admin user info for audit log
+			const adminUser = await prisma.user.findUnique({
+				where: { id: adminUserId },
+				select: { fullName: true },
+			});
+
+			// Note: This endpoint now uses the two-step process directly
+			// For cached reports, use GET /api/admin/credit-reports/cache/:userId instead
+			// Create audit log entry for fetch request
+			const auditLog = await prisma.creditReportLog.create({
+				data: {
+					applicationId,
+					userId,
+					action: 'FETCH_REQUESTED',
+					status: 'PENDING',
+					requestedBy: adminUserId,
+					requestedByName: adminUser?.fullName || null,
+					metadata: {
+						icNumber,
+						fullName,
+					},
+				},
+			});
+
+			// Fetch credit report from CTOS B2B
+			// The service now handles authentication (login) automatically
+			const { ctosB2BService } = await import('../lib/ctosB2BService');
+			const result = await ctosB2BService.fetchIndividualCreditReport({
+				icNumber,
+				fullName,
+			});
+
+			if (!result.success) {
+				// Check if it's an authentication error
+				const isAuthError = result.error?.includes('Login') || 
+								   result.error?.includes('authentication') ||
+								   result.error?.includes('Unauthorized');
+				// Update audit log with failure
+				await prisma.creditReportLog.update({
+					where: { id: auditLog.id },
+					data: {
+						action: 'FETCH_FAILED',
+						status: 'FAILED',
+						errorMessage: result.error,
+				},
+			});
+
+				return res.status(isAuthError ? 401 : 400).json({
+					success: false,
+					message: result.error || 'Failed to fetch credit report',
+					errorType: isAuthError ? 'AUTHENTICATION_ERROR' : 'API_ERROR',
+				});
+			}
+
+			// Store credit report in database
+			const creditReport = await prisma.creditReport.create({
+					data: {
+						userId,
+					applicationId,
+					reportType: 'INDIVIDUAL',
+					icNumber: icNumber.replace(/[\s-]/g, ''),
+					fullName,
+					rawResponse: result.rawResponse || {},
+					creditScore: result.data?.creditScore,
+					dueDiligentIndex: result.data?.dueDiligentIndex,
+					riskGrade: result.data?.riskGrade,
+					summaryStatus: result.data?.summaryStatus,
+					totalOutstanding: result.data?.totalOutstanding,
+					activeAccounts: result.data?.activeAccounts,
+					defaultedAccounts: result.data?.defaultedAccounts,
+					legalCases: result.data?.legalCases,
+					bankruptcyRecords: result.data?.bankruptcyRecords,
+					hasDataError: result.data?.hasDataError,
+					errorMessage: result.data?.errorMessage,
+					requestStatus: 'COMPLETED',
+					confirmedAt: new Date(),
+					fetchedBy: adminUserId,
+				},
+			});
+
+			// Update audit log with success
+			await prisma.creditReportLog.update({
+				where: { id: auditLog.id },
+				data: {
+					action: 'FETCH_SUCCESS',
+						status: 'SUCCESS',
+					reportId: creditReport.id,
+					},
+				});
+
+				// Create application history entry
+				await prisma.loanApplicationHistory.create({
+					data: {
+						applicationId,
+						previousStatus: application.status,
+						newStatus: application.status,
+						changedBy: adminUserId,
+						changeReason: 'CREDIT_REPORT_FETCHED',
+					notes: `Credit report fetched from CTOS for ${fullName} (${icNumber})`,
+						metadata: {
+						creditScore: creditReport.creditScore,
+						riskGrade: creditReport.riskGrade,
+						reportId: creditReport.id,
+						},
+					},
+				});
+
+				return res.json({
+					success: true,
+				data: creditReport,
+				cached: false,
+			});
+		} catch (error) {
+			console.error('Error fetching credit report:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to fetch credit report',
+				error: error instanceof Error ? error.message : 'Unknown error',
+				});
+			}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/credit-reports/request:
+ *   post:
+ *     summary: Request credit report from CTOS (Step 1 - Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - applicationId
+ *               - userId
+ *               - icNumber
+ *               - fullName
+ *             properties:
+ *               applicationId:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *               icNumber:
+ *                 type: string
+ *               fullName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Request created successfully
+ *       400:
+ *         description: Invalid request
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to create request
+ */
+router.post(
+	'/credit-reports/request',
+	authenticateToken,
+	requireAdmin,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId, userId, icNumber, fullName } = req.body;
+			const adminUserId = req.user?.userId;
+
+			if (!adminUserId) {
+				return res.status(401).json({
+					success: false,
+					message: 'Unauthorized',
+				});
+			}
+
+			// Validate required fields
+			if (!applicationId || !userId || !icNumber || !fullName) {
+				return res.status(400).json({
+					success: false,
+					message: 'Missing required fields: applicationId, userId, icNumber, fullName',
+				});
+			}
+
+			// Verify application exists and belongs to user
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							icNumber: true,
+						},
+					},
+				},
+			});
+
+			if (!application) {
+				return res.status(404).json({
+					success: false,
+					message: 'Application not found',
+				});
+			}
+
+			if (application.userId !== userId) {
+				return res.status(403).json({
+					success: false,
+					message: 'Application does not belong to the specified user',
+				});
+			}
+
+			// Get admin user info for audit log
+			const adminUser = await prisma.user.findUnique({
+				where: { id: adminUserId },
+				select: { fullName: true },
+			});
+
+			// Call CTOS B2B service to request report (Step 1)
+			// The service now handles authentication (login) automatically
+			const { ctosB2BService } = await import('../lib/ctosB2BService');
+			const result = await ctosB2BService.requestCreditReport({
+				icNumber,
+				fullName,
+			});
+
+			if (!result.success || !result.requestId) {
+				// Check if it's an authentication error
+				const isAuthError = result.error?.includes('Login') || 
+								   result.error?.includes('authentication') ||
+								   result.error?.includes('Unauthorized');
+				
+				return res.status(isAuthError ? 401 : 400).json({
+					success: false,
+					message: result.error || 'Failed to request credit report',
+					errorType: isAuthError ? 'AUTHENTICATION_ERROR' : 'API_ERROR',
+				});
+			}
+
+			// Create CreditReport record with PENDING_REQUEST status
+			const creditReport = await prisma.creditReport.create({
+				data: {
+					userId,
+					applicationId,
+					reportType: 'INDIVIDUAL',
+					icNumber: icNumber.replace(/[\s-]/g, ''),
+					fullName,
+					ctosRequestId: result.requestId,
+					requestStatus: 'PENDING_REQUEST',
+					requestedAt: new Date(),
+					rawResponse: result.rawResponse || {},
+					fetchedBy: adminUserId,
+				},
+			});
+
+			// Create audit log entry
+			await prisma.creditReportLog.create({
+				data: {
+					applicationId,
+					userId,
+					reportId: creditReport.id,
+					action: 'REQUEST_CREATED',
+					status: 'PENDING',
+					requestedBy: adminUserId,
+					requestedByName: adminUser?.fullName || null,
+					metadata: {
+						requestId: result.requestId,
+						icNumber,
+						fullName,
+					},
+				},
+			});
+
+			return res.json({
+				success: true,
+				data: creditReport,
+				requestId: result.requestId,
+			});
+		} catch (error) {
+			console.error('Error requesting credit report:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to request credit report',
+				error: error instanceof Error ? error.message : 'Unknown error',
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/credit-reports/confirm:
+ *   post:
+ *     summary: Confirm credit report request and fetch report (Step 2 - Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reportId
+ *             properties:
+ *               reportId:
+ *                 type: string
+ *                 description: Credit report ID from step 1
+ *     responses:
+ *       200:
+ *         description: Report confirmed and fetched successfully
+ *       400:
+ *         description: Invalid request
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to confirm request
+ */
+router.post(
+	'/credit-reports/confirm',
+	authenticateToken,
+	requireAdmin,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { reportId } = req.body;
+			const adminUserId = req.user?.userId;
+
+			if (!adminUserId) {
+				return res.status(401).json({
+					success: false,
+					message: 'Unauthorized',
+				});
+			}
+
+			if (!reportId) {
+				return res.status(400).json({
+					success: false,
+					message: 'Missing required field: reportId',
+				});
+			}
+
+			// Get the pending report
+			const pendingReport = await prisma.creditReport.findUnique({
+				where: { id: reportId },
+			});
+
+			if (!pendingReport) {
+				return res.status(404).json({
+					success: false,
+					message: 'Credit report request not found',
+				});
+			}
+
+			if (pendingReport.requestStatus !== 'PENDING_REQUEST') {
+				return res.status(400).json({
+					success: false,
+					message: `Report is not in PENDING_REQUEST status. Current status: ${pendingReport.requestStatus}`,
+				});
+			}
+
+			if (!pendingReport.ctosRequestId) {
+				return res.status(400).json({
+					success: false,
+					message: 'No CTOS request ID found for this report',
+				});
+			}
+
+			// Get admin user info
+			const adminUser = await prisma.user.findUnique({
+				where: { id: adminUserId },
+				select: { fullName: true },
+			});
+
+			// Call CTOS B2B service to confirm and fetch report (Step 2)
+			// The service now handles authentication (login) automatically
+			const { ctosB2BService } = await import('../lib/ctosB2BService');
+			const result = await ctosB2BService.confirmCreditReport(
+				pendingReport.ctosRequestId,
+				{
+					icNumber: pendingReport.icNumber || '',
+					fullName: pendingReport.fullName,
+				}
+			);
+
+			if (!result.success) {
+				// Check if it's an authentication error
+				const isAuthError = result.error?.includes('Login') || 
+								   result.error?.includes('authentication') ||
+								   result.error?.includes('Unauthorized');
+				// Update report status to FAILED
+				await prisma.creditReport.update({
+					where: { id: reportId },
+					data: {
+						requestStatus: 'FAILED',
+					},
+				});
+
+				// Update audit log
+				await prisma.creditReportLog.create({
+					data: {
+						applicationId: pendingReport.applicationId || '',
+						userId: pendingReport.userId,
+						reportId: pendingReport.id,
+						action: 'CONFIRM_FAILED',
+						status: 'FAILED',
+						requestedBy: adminUserId,
+						requestedByName: adminUser?.fullName || null,
+						errorMessage: result.error,
+						metadata: {
+							requestId: pendingReport.ctosRequestId,
+						},
+					},
+				});
+
+				return res.status(isAuthError ? 401 : 400).json({
+					success: false,
+					message: result.error || 'Failed to confirm credit report',
+					errorType: isAuthError ? 'AUTHENTICATION_ERROR' : 'API_ERROR',
+				});
+			}
+
+			// Update CreditReport with actual data and COMPLETED status
+			// Merge extractedData into rawResponse for frontend access
+			const rawResponseWithExtractedData = {
+				...(result.rawResponse || {}),
+				extractedData: result.data?.extractedData || {},
+			};
+
+			const creditReport = await prisma.creditReport.update({
+				where: { id: reportId },
+				data: {
+					requestStatus: 'COMPLETED',
+					confirmedAt: new Date(),
+					rawResponse: rawResponseWithExtractedData,
+					creditScore: result.data?.creditScore,
+					dueDiligentIndex: result.data?.dueDiligentIndex,
+					riskGrade: result.data?.riskGrade,
+					litigationIndex: result.data?.litigationIndex,
+					summaryStatus: result.data?.summaryStatus,
+					totalOutstanding: result.data?.totalOutstanding,
+					activeAccounts: result.data?.activeAccounts,
+					defaultedAccounts: result.data?.defaultedAccounts,
+					legalCases: result.data?.legalCases,
+					bankruptcyRecords: result.data?.bankruptcyRecords,
+					hasDataError: result.data?.hasDataError,
+					errorMessage: result.data?.errorMessage,
+					fetchedAt: new Date(),
+				},
+			});
+
+			// Update audit log
+			await prisma.creditReportLog.updateMany({
+				where: {
+					reportId: pendingReport.id,
+					action: 'REQUEST_CREATED',
+				},
+				data: {
+					action: 'CONFIRM_SUCCESS',
+					status: 'SUCCESS',
+				},
+			});
+
+			// Create new audit log entry for confirmation
+			await prisma.creditReportLog.create({
+				data: {
+					applicationId: pendingReport.applicationId || '',
+					userId: pendingReport.userId,
+					reportId: creditReport.id,
+					action: 'CONFIRM_SUCCESS',
+					status: 'SUCCESS',
+					requestedBy: adminUserId,
+					requestedByName: adminUser?.fullName || null,
+					metadata: {
+						requestId: pendingReport.ctosRequestId,
+						creditScore: creditReport.creditScore,
+						riskGrade: creditReport.riskGrade,
+					},
+				},
+			});
+
+			// Create application history entry
+			if (pendingReport.applicationId) {
+				const application = await prisma.loanApplication.findUnique({
+					where: { id: pendingReport.applicationId },
+				});
+
+				if (application) {
+			await prisma.loanApplicationHistory.create({
+				data: {
+							applicationId: pendingReport.applicationId,
+					previousStatus: application.status,
+					newStatus: application.status,
+					changedBy: adminUserId,
+					changeReason: 'CREDIT_REPORT_FETCHED',
+							notes: `Credit report fetched from CTOS for ${pendingReport.fullName} (${pendingReport.icNumber})`,
+					metadata: {
+						creditScore: creditReport.creditScore,
+						riskGrade: creditReport.riskGrade,
+						reportId: creditReport.id,
+					},
+				},
+			});
+				}
+			}
+
+			return res.json({
+				success: true,
+				data: creditReport,
+			});
+		} catch (error) {
+			console.error('Error confirming credit report:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to confirm credit report',
+				error: error instanceof Error ? error.message : 'Unknown error',
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/credit-reports/cache/{userId}:
+ *   get:
+ *     summary: Get cached credit report for a user (Admin only, no time limit)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Cached report retrieved successfully
+ *       404:
+ *         description: No cached report found
+ *       403:
+ *         description: Admin access required
+ */
+router.get(
+	'/credit-reports/cache/:userId',
+	authenticateToken,
+	requireAdmin,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { userId } = req.params;
+
+			const creditReport = await prisma.creditReport.findFirst({
+				where: {
+					userId,
+					requestStatus: 'COMPLETED',
+				},
+				orderBy: {
+					fetchedAt: 'desc',
+				},
+			});
+
+			if (!creditReport) {
+				return res.status(404).json({
+					success: false,
+					message: 'No cached credit report found for this user',
+				});
+			}
+
+			return res.json({
+				success: true,
+				data: creditReport,
+			});
+		} catch (error) {
+			console.error('Error fetching cached credit report:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to fetch cached credit report',
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/credit-reports/{userId}:
+ *   get:
+ *     summary: Get latest credit report for a user (Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Credit report retrieved successfully
+ *       404:
+ *         description: No credit report found
+ *       403:
+ *         description: Admin access required
+ */
+router.get(
+	'/credit-reports/:userId',
+	authenticateToken,
+	requireAdmin,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { userId } = req.params;
+
+			const creditReport = await prisma.creditReport.findFirst({
+				where: {
+					userId,
+				},
+				orderBy: {
+					fetchedAt: 'desc',
+				},
+			});
+
+			if (!creditReport) {
+				return res.status(404).json({
+					success: false,
+					message: 'No credit report found for this user',
+				});
+			}
+
+			return res.json({
+				success: true,
+				data: creditReport,
+			});
+		} catch (error) {
+			console.error('Error fetching credit report:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to fetch credit report',
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/credit-reports/request-and-confirm:
+ *   post:
+ *     summary: Request and confirm credit report in single operation (Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - applicationId
+ *               - userId
+ *               - icNumber
+ *               - fullName
+ *             properties:
+ *               applicationId:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *               icNumber:
+ *                 type: string
+ *               fullName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Report requested, confirmed and fetched successfully
+ *       400:
+ *         description: Invalid request
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to request and confirm credit report
+ */
+router.post(
+	'/credit-reports/request-and-confirm',
+	authenticateToken,
+	requireAdmin,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId, userId, icNumber, fullName } = req.body;
+			const adminUserId = req.user?.userId;
+
+			if (!adminUserId) {
+				return res.status(401).json({
+					success: false,
+					message: 'Unauthorized',
+				});
+			}
+
+			// Validate required fields
+			if (!applicationId || !userId || !icNumber || !fullName) {
+				return res.status(400).json({
+					success: false,
+					message: 'Missing required fields: applicationId, userId, icNumber, fullName',
+				});
+			}
+
+			// Verify application exists and belongs to user
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							icNumber: true,
+						},
+					},
+				},
+			});
+
+			if (!application) {
+				return res.status(404).json({
+					success: false,
+					message: 'Application not found',
+				});
+			}
+
+			if (application.userId !== userId) {
+				return res.status(403).json({
+					success: false,
+					message: 'Application does not belong to the specified user',
+				});
+			}
+
+			// Get admin user info for audit log
+			const adminUser = await prisma.user.findUnique({
+				where: { id: adminUserId },
+				select: { fullName: true },
+			});
+
+			// Step 1: Request credit report from CTOS B2B
+			const { ctosB2BService } = await import('../lib/ctosB2BService');
+			const requestResult = await ctosB2BService.requestCreditReport({
+				icNumber,
+				fullName,
+			});
+
+			if (!requestResult.success || !requestResult.requestId) {
+				// Check if it's an authentication error
+				const isAuthError = requestResult.error?.includes('Login') || 
+								   requestResult.error?.includes('authentication') ||
+								   requestResult.error?.includes('Unauthorized');
+				
+				// Create single audit log entry for failed request
+				await prisma.creditReportLog.create({
+					data: {
+						applicationId,
+						userId,
+						action: 'FETCH_FAILED',
+						status: 'FAILED',
+						requestedBy: adminUserId,
+						requestedByName: adminUser?.fullName || null,
+						errorMessage: requestResult.error || 'Failed to request credit report',
+						metadata: {
+							icNumber,
+							fullName,
+							step: 'request',
+						},
+					},
+				});
+
+				return res.status(isAuthError ? 401 : 400).json({
+					success: false,
+					message: requestResult.error || 'Failed to request credit report',
+					errorType: isAuthError ? 'AUTHENTICATION_ERROR' : 'API_ERROR',
+				});
+			}
+
+			// Step 2: Confirm and fetch the report
+			const confirmResult = await ctosB2BService.confirmCreditReport(
+				requestResult.requestId,
+				{
+					icNumber,
+					fullName,
+				}
+			);
+
+			if (!confirmResult.success) {
+				// Check if it's an authentication error
+				const isAuthError = confirmResult.error?.includes('Login') || 
+								   confirmResult.error?.includes('authentication') ||
+								   confirmResult.error?.includes('Unauthorized');
+
+				// Create CreditReport record with FAILED status
+				const failedReport = await prisma.creditReport.create({
+					data: {
+						userId,
+						applicationId,
+						reportType: 'INDIVIDUAL',
+						icNumber: icNumber.replace(/[\s-]/g, ''),
+						fullName,
+						ctosRequestId: requestResult.requestId,
+						requestStatus: 'FAILED',
+						requestedAt: new Date(),
+						rawResponse: requestResult.rawResponse || {},
+						fetchedBy: adminUserId,
+					},
+				});
+
+				// Create single audit log entry for failed confirmation
+				await prisma.creditReportLog.create({
+					data: {
+						applicationId,
+						userId,
+						reportId: failedReport.id,
+						action: 'FETCH_FAILED',
+						status: 'FAILED',
+						requestedBy: adminUserId,
+						requestedByName: adminUser?.fullName || null,
+						errorMessage: confirmResult.error || 'Failed to confirm credit report',
+						metadata: {
+							requestId: requestResult.requestId,
+							icNumber,
+							fullName,
+							step: 'confirm',
+						},
+					},
+				});
+
+				return res.status(isAuthError ? 401 : 400).json({
+					success: false,
+					message: confirmResult.error || 'Failed to confirm credit report',
+					errorType: isAuthError ? 'AUTHENTICATION_ERROR' : 'API_ERROR',
+				});
+			}
+
+			// Create CreditReport record with COMPLETED status
+			// Merge extractedData into rawResponse for frontend access
+			const rawResponseWithExtractedData = {
+				...(confirmResult.rawResponse || {}),
+				extractedData: confirmResult.data?.extractedData || {},
+			};
+
+			const creditReport = await prisma.creditReport.create({
+				data: {
+					userId,
+					applicationId,
+					reportType: 'INDIVIDUAL',
+					icNumber: icNumber.replace(/[\s-]/g, ''),
+					fullName,
+					ctosRequestId: requestResult.requestId,
+					requestStatus: 'COMPLETED',
+					requestedAt: new Date(),
+					confirmedAt: new Date(),
+					rawResponse: rawResponseWithExtractedData,
+					creditScore: confirmResult.data?.creditScore,
+					dueDiligentIndex: confirmResult.data?.dueDiligentIndex,
+					riskGrade: confirmResult.data?.riskGrade,
+					litigationIndex: confirmResult.data?.litigationIndex,
+					summaryStatus: confirmResult.data?.summaryStatus,
+					totalOutstanding: confirmResult.data?.totalOutstanding,
+					activeAccounts: confirmResult.data?.activeAccounts,
+					defaultedAccounts: confirmResult.data?.defaultedAccounts,
+					legalCases: confirmResult.data?.legalCases,
+					bankruptcyRecords: confirmResult.data?.bankruptcyRecords,
+					hasDataError: confirmResult.data?.hasDataError,
+					errorMessage: confirmResult.data?.errorMessage,
+					fetchedAt: new Date(),
+					fetchedBy: adminUserId,
+				},
+			});
+
+			// Create single audit log entry for successful fetch
+			await prisma.creditReportLog.create({
+				data: {
+					applicationId,
+					userId,
+					reportId: creditReport.id,
+					action: 'FETCH_SUCCESS',
+					status: 'SUCCESS',
+					requestedBy: adminUserId,
+					requestedByName: adminUser?.fullName || null,
+					metadata: {
+						requestId: requestResult.requestId,
+						icNumber,
+						fullName,
+						creditScore: creditReport.creditScore,
+						riskGrade: creditReport.riskGrade,
+					},
+				},
+			});
+
+			// Create application history entry
+			if (application) {
+				await prisma.loanApplicationHistory.create({
+					data: {
+						applicationId,
+						previousStatus: application.status,
+						newStatus: application.status,
+						changedBy: adminUserId,
+						changeReason: 'CREDIT_REPORT_FETCHED',
+						notes: `Credit report fetched from CTOS for ${fullName} (${icNumber.replace(/[\s-]/g, '')})`,
+						metadata: {
+							creditScore: creditReport.creditScore,
+							riskGrade: creditReport.riskGrade,
+							reportId: creditReport.id,
+						},
+					},
+				});
+			}
+
+			return res.json({
+				success: true,
+				data: creditReport,
+			});
+		} catch (error) {
+			console.error('Error requesting and confirming credit report:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to request and confirm credit report',
+				error: error instanceof Error ? error.message : 'Unknown error',
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/credit-reports/{reportId}/pdf:
+ *   get:
+ *     summary: Download credit report as PDF (Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: reportId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: PDF file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Credit report not found
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to generate PDF
+ */
+router.get(
+	'/credit-reports/:reportId/pdf',
+	authenticateToken,
+	requireAdmin,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { reportId } = req.params;
+
+			// Get the credit report
+			const creditReport = await prisma.creditReport.findUnique({
+				where: { id: reportId },
+			});
+
+			if (!creditReport) {
+				return res.status(404).json({
+					success: false,
+					message: 'Credit report not found',
+				});
+			}
+
+			// Extract base64 encoded XML from rawResponse
+			const rawResponse = creditReport.rawResponse as any;
+			const base64Encoded = rawResponse?.base64Encoded;
+
+			if (!base64Encoded) {
+				return res.status(400).json({
+					success: false,
+					message: 'No base64 encoded report data found',
+				});
+			}
+
+			// Convert base64 to buffer
+			const buffer = Buffer.from(base64Encoded, 'base64');
+			
+			// Check if it's already a PDF (starts with PDF magic bytes)
+			const isPDF = buffer.slice(0, 4).toString() === '%PDF';
+			
+			let pdfBuffer: Buffer;
+			if (isPDF) {
+				// Already a PDF, use directly
+				pdfBuffer = buffer;
+			} else {
+				// It's XML, convert it to PDF using pdfkit
+				// Note: pdfkit needs to be installed: npm install pdfkit @types/pdfkit
+				let PDFDocument;
+				try {
+					PDFDocument = require('pdfkit');
+				} catch (error) {
+					throw new Error('pdfkit is not installed. Please run: npm install pdfkit @types/pdfkit');
+				}
+				
+				const chunks: Buffer[] = [];
+				
+				// Create promise to wait for PDF generation
+				const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+					const doc = new PDFDocument({
+						margin: 50,
+						size: 'A4',
+					});
+					
+					doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+					doc.on('end', () => {
+						resolve(Buffer.concat(chunks));
+					});
+					doc.on('error', reject);
+
+					// Decode XML for display
+					const xmlContent = buffer.toString('utf-8');
+					
+					// Add header
+					doc.fontSize(16).font('Helvetica-Bold');
+					doc.text('CTOS Credit Report', { align: 'center' });
+					doc.moveDown();
+					
+					// Add report metadata
+					doc.fontSize(10).font('Helvetica');
+					doc.text(`Report ID: ${creditReport.id}`);
+					doc.text(`IC Number: ${creditReport.icNumber || 'N/A'}`);
+					doc.text(`Full Name: ${creditReport.fullName}`);
+					doc.text(`Fetched At: ${creditReport.fetchedAt.toLocaleString()}`);
+					
+					// Add credit metrics if available
+					if (creditReport.creditScore) {
+						doc.moveDown();
+						doc.fontSize(12).font('Helvetica-Bold');
+						doc.text('Credit Metrics:', { underline: true });
+						doc.fontSize(10).font('Helvetica');
+						doc.text(`Credit Score: ${creditReport.creditScore}`);
+						if (creditReport.riskGrade) doc.text(`Risk Grade: ${creditReport.riskGrade}`);
+						if (creditReport.dueDiligentIndex) doc.text(`Due Diligent Index: ${creditReport.dueDiligentIndex}`);
+					}
+					
+					doc.moveDown();
+					doc.fontSize(10).font('Helvetica-Bold');
+					doc.text('Raw XML Report Data:', { underline: true });
+					doc.moveDown(0.5);
+					doc.fontSize(8).font('Courier');
+					// Limit XML content to avoid PDF size issues
+					const xmlPreview = xmlContent.length > 50000 
+						? xmlContent.substring(0, 50000) + '\n\n... (truncated)'
+						: xmlContent;
+					doc.text(xmlPreview, { 
+						align: 'left',
+						indent: 10,
+					});
+					
+					doc.end();
+				});
+				
+				pdfBuffer = await pdfPromise;
+			}
+
+			// Generate filename
+			const dateStr = creditReport.fetchedAt.toISOString().split('T')[0];
+			const icNumber = creditReport.icNumber?.replace(/[\s-]/g, '') || 'unknown';
+			const filename = `credit-report-${icNumber}-${dateStr}.pdf`;
+
+			// Set response headers
+			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+			res.setHeader('Content-Length', pdfBuffer.length.toString());
+
+			// Send PDF buffer
+			return res.send(pdfBuffer);
+		} catch (error) {
+			console.error('Error generating PDF:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to generate PDF',
+				error: error instanceof Error ? error.message : 'Unknown error',
 			});
 		}
 	}

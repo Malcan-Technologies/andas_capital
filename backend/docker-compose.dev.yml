@@ -28,6 +28,7 @@ services:
             - /app/node_modules
             - /app/swagger
             - ./uploads:/app/uploads
+            - ./keys:/app/keys:ro
         environment:
             - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/kapital?schema=public
             - JWT_SECRET=kapital_nextauth_secret_key_2024_03_secure_789!@#
@@ -62,6 +63,17 @@ services:
             - CTOS_WEBHOOK_URL=${CTOS_WEBHOOK_URL}
             - CTOS_CIPHERTEXT=${CTOS_CIPHERTEXT}
             - CTOS_CIPHER=${CTOS_CIPHER}
+            # CTOS B2B Configuration (UAT2)
+            - CTOS_B2B_COMPANY_CODE=${CTOS_B2B_COMPANY_CODE}
+            - CTOS_B2B_ACCOUNT_NO=${CTOS_B2B_ACCOUNT_NO}
+            - CTOS_B2B_USER_ID=${CTOS_B2B_USER_ID}
+            - CTOS_B2B_USER_NAME=${CTOS_B2B_USER_NAME}
+            - CTOS_B2B_CLIENT_ID=${CTOS_B2B_CLIENT_ID}
+            - CTOS_B2B_SSO_PASSWORD=${CTOS_B2B_SSO_PASSWORD}
+            - CTOS_B2B_SSO_URL=${CTOS_B2B_SSO_URL}
+            - CTOS_B2B_API_URL=${CTOS_B2B_API_URL}
+            - CTOS_B2B_PRIVATE_KEY=${CTOS_B2B_PRIVATE_KEY}
+            - CTOS_B2B_MOCK_MODE=${CTOS_B2B_MOCK_MODE}
         depends_on:
             postgres:
                 condition: service_healthy

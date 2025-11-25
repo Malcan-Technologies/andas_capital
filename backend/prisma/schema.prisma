@@ -84,6 +84,7 @@ model User {
   documents                    UserDocument[]
   walletTransactions           WalletTransaction[]
   wallet                       Wallet?
+  creditReports                CreditReport[]
 
   @@map("users")
 }
@@ -245,6 +246,7 @@ model LoanApplication {
   freshOfferOriginationFee      Float?
   kycSessions                   KycSession[]
   history                       LoanApplicationHistory[]
+  creditReportLogs              CreditReportLog[]
   product                       Product                  @relation(fields: [productId], references: [id])
   user                          User                     @relation(fields: [userId], references: [id])
   disbursement                  LoanDisbursement?
@@ -687,3 +689,89 @@ model DocumentAuditLog {
   @@index([isOrphaned])
   @@map("document_audit_logs")
 }
+
+/// Credit report data from CTOS B2B
+model CreditReport {
+  id                String   @id @default(cuid())
+  userId            String
+  applicationId     String?
+  
+  // Request metadata
+  reportType        String   // "INDIVIDUAL", "COMPANY", "BUSINESS"
+  icNumber          String?  // For individuals
+  brnNumber         String?  // For companies/businesses
+  fullName          String
+  
+  // CTOS Response Data (store raw JSON + parsed fields)
+  rawResponse       Json     // Full CTOS API response
+  
+  // Key Credit Metrics (parsed from response)
+  creditScore       Int?
+  dueDiligentIndex  String?  // DDI score
+  riskGrade         String?
+  summaryStatus     String?
+  litigationIndex   String?  // CTOS Litigation Index (0000-9999)
+  
+  // Error detection fields
+  hasDataError      Boolean?  // True if report returned but has no actual data
+  errorMessage      String?   // Error message from CTOS or detected condition
+  
+  // Financial Information
+  totalOutstanding  Float?
+  activeAccounts    Int?
+  defaultedAccounts Int?
+  
+  // Legal Information
+  legalCases        Int?
+  bankruptcyRecords Int?
+  
+  // Two-step process tracking
+  ctosRequestId     String?  // Request ID from CTOS API step 1
+  requestStatus     String   @default("COMPLETED") // PENDING_REQUEST, PENDING_CONFIRM, COMPLETED, FAILED
+  requestedAt       DateTime? // When the initial request was made
+  confirmedAt       DateTime? // When the request was confirmed and report fetched
+  
+  // Timestamps
+  fetchedAt         DateTime @default(now())
+  fetchedBy         String   // Admin user ID who triggered the request
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([applicationId])
+  @@index([icNumber])
+  @@index([ctosRequestId])
+  @@index([requestStatus])
+  @@map("credit_reports")
+}
+
+/// Audit log for credit report fetches
+model CreditReportLog {
+  id            String   @id @default(cuid())
+  applicationId String
+  userId        String
+  reportId      String?  // Links to CreditReport if successful
+  
+  action        String   // "FETCH_REQUESTED", "FETCH_SUCCESS", "FETCH_FAILED"
+  status        String   // "SUCCESS", "FAILED"
+  errorMessage  String?
+  
+  requestedBy   String   // Admin user ID
+  requestedByName String? // Admin full name
+  
+  metadata      Json?    // Additional context
+  createdAt     DateTime @default(now())
+  
+  application   LoanApplication @relation(fields: [applicationId], references: [id])
+  
+  @@index([applicationId])
+  @@index([userId])
+  @@index([requestedBy])
+  @@index([createdAt])
+  @@map("credit_report_logs")
+}
+
+

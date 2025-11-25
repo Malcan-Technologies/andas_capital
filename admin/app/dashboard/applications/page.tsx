@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 import Link from "next/link";
+import CreditReportCard from "../../components/CreditReportCard";
 import {
   Button,
   Dialog,
@@ -65,6 +66,8 @@ interface LoanApplication {
     city?: string;
     state?: string;
     zipCode?: string;
+    icNumber?: string;
+    idNumber?: string;
   };
   product?: {
     name?: string;
@@ -153,6 +156,10 @@ function AdminApplicationsPageContent() {
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(
     null
   );
+  // IC Number editing states
+  const [editingIcNumber, setEditingIcNumber] = useState(false);
+  const [icNumberValue, setIcNumberValue] = useState("");
+  const [updatingIcNumber, setUpdatingIcNumber] = useState(false);
   // Initialize tab based on URL parameters or filter type
   const getInitialTab = () => {
     if (tabParam) {
@@ -299,6 +306,9 @@ function AdminApplicationsPageContent() {
   const [processingFreshOffer, setProcessingFreshOffer] = useState(false);
   const [statusCheckInterval, setStatusCheckInterval] =
     useState<NodeJS.Timeout | null>(null);
+  
+  // Credit report state
+  const [creditReport, setCreditReport] = useState<any | null>(null);
   const [lastKnownStatus, setLastKnownStatus] = useState<string | null>(null);
   const [showStatusChangeAlert, setShowStatusChangeAlert] = useState(false);
 
@@ -740,6 +750,51 @@ function AdminApplicationsPageContent() {
     }
   };
 
+  // Update user IC number
+  const updateUserIcNumber = async (userId: string, newIcNumber: string) => {
+    try {
+      setUpdatingIcNumber(true);
+      await fetchWithAdminTokenRefresh<any>(
+        `/api/admin/users/${userId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            icNumber: newIcNumber.trim(),
+          }),
+        }
+      );
+
+      // Refresh the application data
+      await fetchApplications();
+      
+      // Update selected application state
+      if (selectedApplication) {
+        setSelectedApplication({
+          ...selectedApplication,
+          user: {
+            ...selectedApplication.user,
+            icNumber: newIcNumber.trim(),
+          },
+        });
+      }
+
+      setEditingIcNumber(false);
+      alert("IC number updated successfully");
+    } catch (error) {
+      console.error("Error updating IC number:", error);
+      alert(
+        `Failed to update IC number: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setUpdatingIcNumber(false);
+    }
+  };
+
   const fetchSignatureStatus = async (applicationId: string) => {
     if (!applicationId) return;
 
@@ -936,6 +991,31 @@ function AdminApplicationsPageContent() {
   }, [
     selectedApplication?.id,
     selectedApplication?.loan?.pkiStampCertificateUrl,
+  ]);
+
+  // Note: Credit reports are NOT auto-fetched to avoid unnecessary CTOS API charges
+  // Reports are only fetched when admin explicitly clicks "Fetch Credit Report" button
+  // The POST endpoint checks for cached reports (7-day TTL) before calling CTOS API
+
+  // Clear credit report when switching applications
+  useEffect(() => {
+    setCreditReport(null);
+  }, [selectedApplication?.id]);
+
+  useEffect(() => {
+    if (selectedApplication?.user) {
+      console.log("Selected application user:", {
+        id: selectedApplication.userId,
+        fullName: selectedApplication.user.fullName,
+        icNumber: selectedApplication.user.icNumber,
+        idNumber: selectedApplication.user.idNumber,
+      });
+    }
+  }, [
+    selectedApplication?.id,
+    selectedApplication?.user?.fullName,
+    selectedApplication?.user?.icNumber,
+    selectedApplication?.user?.idNumber,
   ]);
 
   // Handle filter toggle
@@ -1326,8 +1406,14 @@ function AdminApplicationsPageContent() {
   // Add this function to get a user-friendly action description
   const getHistoryActionDescription = (
     previousStatus: string | null,
-    newStatus: string
+    newStatus: string,
+    changeReason?: string
   ): string => {
+    // Handle credit report fetch
+    if (changeReason === "CREDIT_REPORT_FETCHED") {
+      return "Admin fetched credit report from CTOS";
+    }
+
     if (!previousStatus) {
       return `Application created with status: ${getStatusLabel(newStatus)}`;
     }
@@ -2902,7 +2988,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                       <p className="text-sm font-medium text-white">
                                         {getHistoryActionDescription(
                                           historyItem.previousStatus,
-                                          historyItem.newStatus
+                                          historyItem.newStatus,
+                                          historyItem.changeReason
                                         )}
                                       </p>
                                       <p className="text-xs text-gray-400">
@@ -3167,6 +3254,72 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           <p className="text-sm text-gray-400">
                             {selectedApplication.user?.email}
                           </p>
+                          
+                          {/* IC Number Section */}
+                          <div className="mt-2 flex items-center gap-2">
+                            {!editingIcNumber ? (
+                              <>
+                                <h5 className="text-sm text-white">
+                                  IC Number:
+                                </h5>
+								<p className="text-sm text-white">
+									{selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
+								</p>
+                                <button
+                                  onClick={() => {
+                                    setIcNumberValue(
+                                      selectedApplication.user?.icNumber || 
+                                      selectedApplication.user?.idNumber || 
+                                      ""
+                                    );
+                                    setEditingIcNumber(true);
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  title="Edit IC Number"
+                                >
+                                  <PencilSquareIcon className="h-4 w-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  type="text"
+                                  value={icNumberValue}
+                                  onChange={(e) => setIcNumberValue(e.target.value)}
+                                  placeholder="Enter IC number"
+                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                                  disabled={updatingIcNumber}
+                                />
+                                <button
+                                  onClick={() => {
+                                    if (selectedApplication?.userId) {
+                                      updateUserIcNumber(selectedApplication.userId, icNumberValue);
+                                    }
+                                  }}
+                                  disabled={updatingIcNumber || !icNumberValue.trim()}
+                                  className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Save IC Number"
+                                >
+                                  {updatingIcNumber ? (
+                                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircleIcon className="h-4 w-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingIcNumber(false);
+                                    setIcNumberValue("");
+                                  }}
+                                  disabled={updatingIcNumber}
+                                  className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Cancel"
+                                >
+                                  <XMarkIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <h5 className="text-sm font-medium text-gray-300 mb-2">
@@ -3184,6 +3337,24 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           </p>
                         </div>
                       </div>
+
+                      {/* Credit Report Section - ADMIN only */}
+                      {userRole === "ADMIN" && (
+                        <CreditReportCard
+                          userId={selectedApplication.userId}
+                          applicationId={selectedApplication.id}
+                          userFullName={selectedApplication.user?.fullName || ""}
+                          userIcNumber={selectedApplication.user?.icNumber || selectedApplication.user?.idNumber}
+                          existingReport={creditReport}
+                          onReportFetched={(report) => {
+                            setCreditReport(report);
+                            // Refresh application to get updated history
+                            if (selectedApplication) {
+                              fetchApplications();
+                            }
+                          }}
+                        />
+                      )}
 
                       {/* Decision Notes */}
                       <div className="mb-6">
@@ -3577,6 +3748,69 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           <p className="text-sm text-gray-400">
                             {selectedApplication.user?.email}
                           </p>
+                          
+                          {/* IC Number Section */}
+                          <div className="mt-2 flex items-center gap-2">
+                            {!editingIcNumber ? (
+                              <>
+                                <p className="text-sm text-gray-400">
+                                  IC: {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
+                                </p>
+                                <button
+                                  onClick={() => {
+                                    setIcNumberValue(
+                                      selectedApplication.user?.icNumber || 
+                                      selectedApplication.user?.idNumber || 
+                                      ""
+                                    );
+                                    setEditingIcNumber(true);
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  title="Edit IC Number"
+                                >
+                                  <PencilSquareIcon className="h-4 w-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  type="text"
+                                  value={icNumberValue}
+                                  onChange={(e) => setIcNumberValue(e.target.value)}
+                                  placeholder="Enter IC number"
+                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                                  disabled={updatingIcNumber}
+                                />
+                                <button
+                                  onClick={() => {
+                                    if (selectedApplication?.userId) {
+                                      updateUserIcNumber(selectedApplication.userId, icNumberValue);
+                                    }
+                                  }}
+                                  disabled={updatingIcNumber || !icNumberValue.trim()}
+                                  className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Save IC Number"
+                                >
+                                  {updatingIcNumber ? (
+                                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircleIcon className="h-4 w-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingIcNumber(false);
+                                    setIcNumberValue("");
+                                  }}
+                                  disabled={updatingIcNumber}
+                                  className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Cancel"
+                                >
+                                  <XMarkIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <h5 className="text-sm font-medium text-gray-300 mb-2">
@@ -3709,6 +3943,69 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           <p className="text-sm text-gray-400">
                             {selectedApplication.user?.email}
                           </p>
+                          
+                          {/* IC Number Section */}
+                          <div className="mt-2 flex items-center gap-2">
+                            {!editingIcNumber ? (
+                              <>
+                                <p className="text-sm text-gray-400">
+                                  IC: {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
+                                </p>
+                                <button
+                                  onClick={() => {
+                                    setIcNumberValue(
+                                      selectedApplication.user?.icNumber || 
+                                      selectedApplication.user?.idNumber || 
+                                      ""
+                                    );
+                                    setEditingIcNumber(true);
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  title="Edit IC Number"
+                                >
+                                  <PencilSquareIcon className="h-4 w-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  type="text"
+                                  value={icNumberValue}
+                                  onChange={(e) => setIcNumberValue(e.target.value)}
+                                  placeholder="Enter IC number"
+                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                                  disabled={updatingIcNumber}
+                                />
+                                <button
+                                  onClick={() => {
+                                    if (selectedApplication?.userId) {
+                                      updateUserIcNumber(selectedApplication.userId, icNumberValue);
+                                    }
+                                  }}
+                                  disabled={updatingIcNumber || !icNumberValue.trim()}
+                                  className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Save IC Number"
+                                >
+                                  {updatingIcNumber ? (
+                                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircleIcon className="h-4 w-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingIcNumber(false);
+                                    setIcNumberValue("");
+                                  }}
+                                  disabled={updatingIcNumber}
+                                  className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Cancel"
+                                >
+                                  <XMarkIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <h5 className="text-sm font-medium text-gray-300 mb-2">
@@ -4108,6 +4405,69 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           <p className="text-sm text-gray-400">
                             {selectedApplication.user?.email}
                           </p>
+                          
+                          {/* IC Number Section */}
+                          <div className="mt-2 flex items-center gap-2">
+                            {!editingIcNumber ? (
+                              <>
+                                <p className="text-sm text-gray-400">
+                                  IC: {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
+                                </p>
+                                <button
+                                  onClick={() => {
+                                    setIcNumberValue(
+                                      selectedApplication.user?.icNumber || 
+                                      selectedApplication.user?.idNumber || 
+                                      ""
+                                    );
+                                    setEditingIcNumber(true);
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  title="Edit IC Number"
+                                >
+                                  <PencilSquareIcon className="h-4 w-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  type="text"
+                                  value={icNumberValue}
+                                  onChange={(e) => setIcNumberValue(e.target.value)}
+                                  placeholder="Enter IC number"
+                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                                  disabled={updatingIcNumber}
+                                />
+                                <button
+                                  onClick={() => {
+                                    if (selectedApplication?.userId) {
+                                      updateUserIcNumber(selectedApplication.userId, icNumberValue);
+                                    }
+                                  }}
+                                  disabled={updatingIcNumber || !icNumberValue.trim()}
+                                  className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Save IC Number"
+                                >
+                                  {updatingIcNumber ? (
+                                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircleIcon className="h-4 w-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingIcNumber(false);
+                                    setIcNumberValue("");
+                                  }}
+                                  disabled={updatingIcNumber}
+                                  className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Cancel"
+                                >
+                                  <XMarkIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <h5 className="text-sm font-medium text-gray-300 mb-2">
