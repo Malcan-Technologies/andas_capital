@@ -6,7 +6,6 @@ const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function GET(request: NextRequest) {
 	try {
-		console.log("Admin API: Fetching pending repayments");
 
 		// Get the authorization header from the request
 		const authHeader = request.headers.get("authorization");
@@ -28,7 +27,6 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
-		console.log("Admin API: Making request to backend with token");
 
 		// Make request to backend
 		const response = await fetch(
@@ -44,7 +42,6 @@ export async function GET(request: NextRequest) {
 			}
 		);
 
-		console.log("Admin API: Backend response status:", response.status);
 
 		if (!response.ok) {
 			let errorData;
@@ -68,11 +65,6 @@ export async function GET(request: NextRequest) {
 		}
 
 		const data = await response.json();
-		console.log(
-			"Admin API: Successfully fetched pending repayments:",
-			data.data?.length || 0,
-			"items"
-		);
 
 		const jsonResponse = NextResponse.json(data);
 		jsonResponse.headers.set(

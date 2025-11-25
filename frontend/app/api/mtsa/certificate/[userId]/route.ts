@@ -17,13 +17,8 @@ export async function GET(
       );
     }
 
-    console.log(`Checking certificate for user: ${userId}`);
-    console.log(`Signing orchestrator URL: ${SIGNING_ORCHESTRATOR_URL}`);
-    console.log(`Using API key: ${SIGNING_ORCHESTRATOR_API_KEY ? 'Present' : 'Missing'}`);
-
     // Call the signing orchestrator API to check certificate
     const url = `${SIGNING_ORCHESTRATOR_URL}/cert/${userId}`;
-    console.log(`Making request to: ${url}`);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -32,12 +27,8 @@ export async function GET(
         'Content-Type': 'application/json',
       },
     });
-
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response ok: ${response.ok}`);
     
     const data = await response.json();
-    console.log(`Certificate check response for ${userId}:`, JSON.stringify(data, null, 2));
 
     if (response.ok) {
       return NextResponse.json(data);

@@ -10,7 +10,6 @@ export async function POST(
 ) {
 	try {
 		const { id } = params;
-		console.log("Admin API: Rejecting repayment:", id);
 
 		// Get the authorization header from the request
 		const authHeader = request.headers.get("authorization");
@@ -34,7 +33,6 @@ export async function POST(
 
 		// Get request body
 		const body = await request.json();
-		console.log("Admin API: Rejection request body:", body);
 
 		// Validate required fields
 		if (!body.reason) {
@@ -57,8 +55,6 @@ export async function POST(
 			}
 		);
 
-		console.log("Admin API: Backend response status:", response.status);
-
 		if (!response.ok) {
 			let errorData;
 			try {
@@ -79,7 +75,6 @@ export async function POST(
 		}
 
 		const data = await response.json();
-		console.log("Admin API: Successfully rejected repayment");
 
 		return NextResponse.json(data);
 	} catch (error) {

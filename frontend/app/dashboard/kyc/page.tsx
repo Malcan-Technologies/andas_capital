@@ -38,8 +38,6 @@ function KycPageContent() {
             const completedKycStatuses = ["PENDING_PROFILE_CONFIRMATION", "PENDING_SIGNING_OTP_DS", "PENDING_SIGNATURE"];
             
             if (completedKycStatuses.includes(appData.status)) {
-              // KYC is already completed, redirect to the appropriate step
-              console.log(`Application ${applicationId} has completed KYC with status ${appData.status}, redirecting...`);
               
               switch (appData.status) {
                 case "PENDING_PROFILE_CONFIRMATION":
@@ -56,9 +54,6 @@ function KycPageContent() {
                   break;
               }
             }
-            
-            // If status is PENDING_KYC or PENDING_SIGNING_OTP, allow KYC flow to proceed
-            console.log(`Application ${applicationId} with status ${appData.status} - allowing KYC flow to proceed`);
           }
         }
         
@@ -184,11 +179,6 @@ function KycPageContent() {
                     const appParam = applicationId ? `&applicationId=${applicationId}` : "";
                     const qrParam = "&qr=1"; // Add QR parameter for direct browser access too
                     const url = `/dashboard/kyc/capture/front?kycId=${kycId}${tokenParam}${appParam}${qrParam}`;
-                    console.log("Opening KYC URL in new tab:", url);
-                    console.log("KYC ID:", kycId);
-                    console.log("KYC Token:", kycToken ? "PRESENT" : "MISSING");
-                    console.log("Application ID:", applicationId);
-                    console.log("Full URL:", window.location.origin + url);
                     window.open(url, '_blank');
                   }
                 }}

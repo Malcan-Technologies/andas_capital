@@ -20,7 +20,6 @@ export async function GET(request: Request) {
 		const searchParams = url.searchParams.toString();
 		const targetUrl = `${backendUrl}/api/settings${searchParams ? `?${searchParams}` : ''}`;
 
-		console.log("Admin Settings API - forwarding to backend");
 
 		// Forward the request to the backend
 		const response = await fetch(targetUrl, {
@@ -64,8 +63,6 @@ export async function PUT(request: Request) {
 
 		// Get the request body
 		const body = await request.json();
-
-		console.log("Admin Settings PUT API - forwarding to backend");
 
 		// Forward the request to the backend with cache-busting headers
 		const response = await fetch(`${backendUrl}/api/settings`, {

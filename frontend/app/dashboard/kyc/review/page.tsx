@@ -110,13 +110,9 @@ function KycReviewContent() {
       const applicationId = responseApplicationId || urlApplicationId;
       
       if (applicationId) {
-        console.log(`KYC accepted for application ${applicationId}, redirecting to profile confirmation`);
         router.replace(`/dashboard/applications/${applicationId}/profile-confirmation`);
         return;
       }
-      
-      // Fallback to profile page for standalone KYC (no application)
-      console.log("KYC accepted for standalone profile verification, redirecting to profile page");
       router.replace('/dashboard/profile');
     } catch (e: any) {
       // Additional check for unauthorized errors

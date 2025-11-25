@@ -283,24 +283,20 @@ export default function DocumentUploadForm({
 	const getProductCode = useCallback(() => {
 		// First try the productCode prop
 		if (productCode) {
-			console.log("Using productCode prop:", productCode);
 			return productCode;
 		}
 
 		// Then try the selectedProduct prop
 		if (selectedProduct?.code) {
-			console.log("Using selectedProduct code:", selectedProduct.code);
 			return selectedProduct.code;
 		}
 
 		// Then try URL params
 		const urlProductCode = searchParams.get("productCode");
 		if (urlProductCode) {
-			console.log("Using URL productCode param:", urlProductCode);
 			return urlProductCode;
 		}
 
-		console.log("No product code found in any source");
 		return null;
 	}, [searchParams, selectedProduct, productCode]);
 
@@ -328,7 +324,6 @@ export default function DocumentUploadForm({
 				setError(null);
 
 				const currentApplicationId = getApplicationId();
-				console.log("Current application ID:", currentApplicationId);
 
 				if (!currentApplicationId) {
 					throw new Error(
@@ -337,7 +332,6 @@ export default function DocumentUploadForm({
 				}
 
 				const productCode = getProductCode();
-				console.log("Product code for API call:", productCode);
 
 				if (!productCode) {
 					throw new Error(
@@ -347,7 +341,6 @@ export default function DocumentUploadForm({
 
 				// Fetch product details, existing documents, and previous documents in parallel
 				const productUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/products?code=${productCode}`;
-				console.log("Fetching product from URL:", productUrl);
 
 				const [productResponse, documentsResponse, previousDocsResponse] = await Promise.all([
 					fetch(productUrl, {
@@ -397,10 +390,8 @@ export default function DocumentUploadForm({
 				}
 
 				const products = await productResponse.json();
-				console.log("Products API response:", products);
 
 				const existingDocuments = await documentsResponse.json();
-				console.log("Documents API response:", existingDocuments);
 
 				// Handle previous documents
 				if (previousDocsResponse.ok) {
@@ -437,7 +428,7 @@ export default function DocumentUploadForm({
 
 				// If no documents are required OR it's a collateral loan, automatically advance to next step
 				if (!hasRequiredDocuments || isCollateralLoan) {
-					console.log(
+					console.error(
 						isCollateralLoan 
 							? "Collateral loan detected, skipping document step" 
 							: "No documents required for this product, skipping document step"

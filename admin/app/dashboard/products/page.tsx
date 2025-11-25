@@ -69,7 +69,6 @@ export default function AdminProductsPage() {
 			const data = await fetchWithAdminTokenRefresh<Product[]>(
 				`${backendUrl}/api/products`
 			);
-			console.log("Products fetched:", data);
 			setProducts(data);
 		} catch (err) {
 			console.error("Error fetching products:", err);

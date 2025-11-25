@@ -9,9 +9,6 @@ export async function GET(
 ) {
 	try {
 		const id = params.id;
-		console.log(
-			`API /admin/applications/${id}/history - Fetching application history`
-		);
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -41,15 +38,10 @@ export async function GET(
 
 			if (!response.ok) {
 				const errorData = await response.json();
-				console.error(
-					`Error fetching application history: ${response.status}`,
-					errorData
-				);
-
 				// If the backend returns 404, return an empty array instead of an error
 				// This is useful during development when the endpoint might not exist yet
 				if (response.status === 404) {
-					console.log(
+					console.error(
 						`Backend endpoint for history not found. Returning empty array.`
 					);
 					return NextResponse.json([]);
@@ -66,20 +58,9 @@ export async function GET(
 			}
 
 			const historyData = await response.json();
-			console.log(
-				`API /admin/applications/${id}/history - Backend response:`,
-				JSON.stringify(historyData, null, 2)
-			);
 
 			// Extract the timeline from the backend response
 			const timeline = historyData.timeline || historyData || [];
-			console.log(
-				`API /admin/applications/${id}/history - Extracted timeline:`,
-				JSON.stringify(timeline, null, 2)
-			);
-			console.log(
-				`API /admin/applications/${id}/history - Timeline length: ${timeline.length}`
-			);
 
 			return NextResponse.json(timeline);
 		} catch (fetchError) {
@@ -87,9 +68,6 @@ export async function GET(
 				`API /admin/applications/${id}/history - Error:`,
 				fetchError
 			);
-
-			// During development, if the backend endpoint doesn't exist, return mock data
-			console.log(`Returning mock history data for development purposes`);
 
 			// Generate mock history data based on the application ID
 			const mockHistory = [

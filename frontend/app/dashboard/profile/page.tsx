@@ -366,7 +366,6 @@ export default function ProfilePage() {
 				try {
 					const updateData = JSON.parse(e.newValue);
 					if (updateData.action === 'redirect_to_profile' && updateData.url) {
-						console.log('Redirecting to profile page due to mobile update');
 						// Clear the flag
 						localStorage.removeItem('mobile_profile_update');
 						// Redirect to profile page

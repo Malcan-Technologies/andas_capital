@@ -81,8 +81,6 @@ export default function AdminLoginPage() {
 		// Store tokens using AdminTokenStorage
 		AdminTokenStorage.setAccessToken(data.accessToken);
 		AdminTokenStorage.setRefreshToken(data.refreshToken);
-
-		console.log("Admin OTP - Verification successful, redirecting to dashboard");
 		
 		// Redirect to dashboard
 		router.push("/dashboard");
@@ -103,24 +101,17 @@ export default function AdminLoginPage() {
 		const password = formData.get("password") as string;
 
 		try {
-			console.log("Admin Login - Attempting login with:", {
-				phoneNumber,
-			});
-
 			const response = await fetch("/api/admin/login", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ phoneNumber, password }),
 			});
 
-		console.log("Admin Login - Response status:", response.status);
 		const data = await response.json();
-		console.log("Admin Login - Response data:", data);
 
 		if (!response.ok) {
 			// Check if this is a phone verification required error
 			if (response.status === 403 && data.requiresPhoneVerification) {
-				console.log("Admin Login - Phone verification required, showing OTP verification");
 				
 				// Show OTP verification screen
 				setUserDataForOTP({
@@ -139,7 +130,6 @@ export default function AdminLoginPage() {
 				throw new Error("Access denied. Admin or Attestor privileges required.");
 			}
 
-			console.log("Admin Login - Storing tokens");
 			// Use AdminTokenStorage to store tokens with proper expiration
 			AdminTokenStorage.setAccessToken(data.accessToken);
 			AdminTokenStorage.setRefreshToken(data.refreshToken);
@@ -147,13 +137,6 @@ export default function AdminLoginPage() {
 			// Verify tokens were properly stored
 			const storedAccessToken = AdminTokenStorage.getAccessToken();
 			const storedRefreshToken = AdminTokenStorage.getRefreshToken();
-
-			console.log("Admin Login - Tokens stored:", {
-				accessToken: !!storedAccessToken,
-				refreshToken: !!storedRefreshToken,
-			});
-
-			console.log("Admin Login - Successful, redirecting based on role:", data.role);
 
 			// Add a small delay to ensure token storage is complete before navigation
 			setTimeout(() => {

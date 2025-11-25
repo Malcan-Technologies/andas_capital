@@ -6,8 +6,6 @@ const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: NextRequest) {
 	try {
-		console.log("Admin API: Processing CSV upload request");
-
 		// Get the authorization header from the request
 		const authHeader = request.headers.get("authorization");
 		if (!authHeader) {
@@ -31,8 +29,6 @@ export async function POST(request: NextRequest) {
 		// Get the form data from the request
 		const formData = await request.formData();
 		
-		console.log("Admin API: Forwarding CSV upload to backend");
-
 		// Forward the request to backend with the form data
 		const response = await fetch(
 			`${backendUrl}/api/admin/payments/csv-upload`,
@@ -45,8 +41,6 @@ export async function POST(request: NextRequest) {
 				body: formData,
 			}
 		);
-
-		console.log("Admin API: Backend response status:", response.status);
 
 		if (!response.ok) {
 			let errorData;
@@ -68,11 +62,6 @@ export async function POST(request: NextRequest) {
 		}
 
 		const data = await response.json();
-		console.log(
-			"Admin API: Successfully processed CSV upload:",
-			data.data?.summary || "No summary available"
-		);
-
 		return NextResponse.json(data);
 	} catch (error) {
 		console.error("Error processing CSV upload:", error);

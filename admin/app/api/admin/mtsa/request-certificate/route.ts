@@ -56,8 +56,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Admin requesting certificate enrollment for user:', userId);
-
     // Forward request to backend admin MTSA API with userType = 2 for internal users
     const response = await fetch(`${BACKEND_URL}/api/admin/mtsa/request-certificate`, {
       method: 'POST',

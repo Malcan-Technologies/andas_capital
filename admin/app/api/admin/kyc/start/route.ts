@@ -34,8 +34,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Admin starting KYC for user:', icNumber);
-
     // Forward request to backend admin KYC API
     const response = await fetch(`${BACKEND_URL}/api/admin/kyc/start-ctos`, {
       method: 'POST',

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
 	try {
-		console.log(`[Phone Change Request Route] Starting request`);
 
 		const body = await request.json();
 		const { newPhoneNumber } = body;
@@ -17,8 +16,6 @@ export async function POST(request: Request) {
 				{ status: 401 }
 			);
 		}
-
-		console.log(`[Phone Change Request Route] Forwarding request to backend`);
 
 		// Forward the request to the backend with the auth header
 		const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/users/me/phone/change-request`;
@@ -41,8 +38,6 @@ export async function POST(request: Request) {
 				{ status: response.status }
 			);
 		}
-
-		console.log(`[Phone Change Request Route] Success`);
 		return NextResponse.json(data);
 
 	} catch (error: any) {

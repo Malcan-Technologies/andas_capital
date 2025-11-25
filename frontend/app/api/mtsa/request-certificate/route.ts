@@ -43,12 +43,8 @@ export async function POST(request: NextRequest) {
           if (!base64Part) {
             throw new Error('Invalid base64 data URL format');
           }
-          console.log('Using existing base64 data from CTOS');
           return base64Part;
         }
-        
-        // Legacy flow: Convert file URL to base64
-        console.log('Converting file URL to base64 (legacy flow)');
         // Remove leading slash and construct full path
         const imagePath = url.startsWith('/') ? url.substring(1) : url;
         // Use direct backend URL for server-side image fetching (bypasses nginx)

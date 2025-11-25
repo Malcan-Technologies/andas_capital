@@ -436,18 +436,12 @@ function LoansPageContent() {
 
 				// If no tokens available, immediately redirect to login
 				if (!accessToken && !refreshToken) {
-					console.log(
-						"Loans - No tokens available, redirecting to login"
-					);
 					router.push("/login");
 					return;
 				}
 
 				const isAuthenticated = await checkAuth();
 				if (!isAuthenticated) {
-					console.log(
-						"Loans - Auth check failed, redirecting to login"
-					);
 					// Clear any invalid tokens
 					TokenStorage.clearTokens();
 					router.push("/login");
@@ -512,7 +506,6 @@ function LoansPageContent() {
 			const attemptScroll = (attempt = 1, maxAttempts = 5) => {
 				const loansSection = document.getElementById("loans-section");
 				if (loansSection) {
-					console.log("Scrolling to loans section");
 					
 					// Try scrollIntoView first
 					try {
@@ -521,7 +514,6 @@ function LoansPageContent() {
 							block: "start" 
 						});
 					} catch (error) {
-						console.log("scrollIntoView failed, trying alternative method");
 						// Fallback to manual scroll calculation
 						const rect = loansSection.getBoundingClientRect();
 						const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -533,10 +525,9 @@ function LoansPageContent() {
 						});
 					}
 				} else if (attempt < maxAttempts) {
-					console.log(`Scroll attempt ${attempt} failed, retrying...`);
 					setTimeout(() => attemptScroll(attempt + 1, maxAttempts), 300 * attempt);
 				} else {
-					console.log("Failed to find loans section after", maxAttempts, "attempts");
+					console.error("Failed to find loans section after", maxAttempts, "attempts");
 				}
 			};
 			
@@ -553,7 +544,6 @@ function LoansPageContent() {
 
 		if (hasPendingEarlySettlement) {
 			const interval = setInterval(async () => {
-				console.log('Auto-refreshing loans for pending early settlement/discharge updates...');
 				// Force refresh with cache busting
 				await loadLoansAndSummary();
 				// Also refresh selected loan details if it's one of the pending loans
@@ -562,7 +552,6 @@ function LoansPageContent() {
 					const updatedLoans = await fetchWithTokenRefresh<{ loans: Loan[] }>("/api/loans");
 					const updatedSelectedLoan = updatedLoans.loans.find(l => l.id === selectedLoan.id);
 					if (updatedSelectedLoan) {
-						console.log('Force refreshing selected loan repayments data...');
 						setSelectedLoan(updatedSelectedLoan);
 					}
 				}
@@ -591,7 +580,7 @@ function LoansPageContent() {
 				// Debug logging for pending discharge loans
 				loansData.loans.forEach(loan => {
 					if (loan.status === 'PENDING_DISCHARGE') {
-						console.log(`🔍 Repayments for PENDING_DISCHARGE loan ${loan.id}:`, 
+						console.warn(`Repayments for PENDING_DISCHARGE loan ${loan.id}:`, 
 							loan.repayments?.map(r => ({
 								id: r.id,
 								status: r.status,
@@ -815,8 +804,6 @@ function LoansPageContent() {
 		if (!selectedLoan || !repaymentAmount) return;
 
 		if (selectedPaymentMethod === "FPX") {
-			// Handle FPX payment flow - not implemented yet
-			console.log("FPX payment selected");
 			alert("FPX payment is not implemented yet. Please use Bank Transfer.");
 			return;
 		}
@@ -1874,7 +1861,7 @@ function LoansPageContent() {
 					return;
 				}
 			} catch (error) {
-				console.log('No existing signing URL found, will initiate new signing process');
+				console.error('No existing signing URL found, will initiate new signing process');
 			}
 			
 			// If no existing signing URL, initiate new document signing with DocuSeal

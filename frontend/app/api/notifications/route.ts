@@ -23,12 +23,6 @@ export async function GET(req: Request) {
 			queryString ? `?${queryString}` : ""
 		}`;
 
-		console.log("Notifications - Auth header:", `Bearer ${token}`);
-		console.log(
-			"Notifications - Forwarding request to backend:",
-			backendUrl
-		);
-
 		// Forward the request to the backend API
 		const response = await fetch(backendUrl, {
 			headers: {
