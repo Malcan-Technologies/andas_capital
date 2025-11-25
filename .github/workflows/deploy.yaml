@@ -512,7 +512,7 @@ jobs:
               cd /var/www/growkapital/backend
               
               # Stop existing containers
-              docker compose -f docker-compose.prod.yml down || true
+              docker compose --env-file .env -f docker-compose.prod.yml down || true
               
               # Build with cache and start containers
               echo "🔨 Building backend containers with cache..."
@@ -521,7 +521,7 @@ jobs:
               
               # Stop and remove existing containers to avoid name conflicts
               echo "🛑 Stopping existing backend containers..."
-              docker compose -f docker-compose.prod.yml down || true
+              docker compose --env-file .env -f docker-compose.prod.yml down || true
               
               # Ensure containers are fully removed if compose down fails
               echo "🧹 Ensuring clean container state..."
@@ -533,19 +533,19 @@ jobs:
               docker pull node:20-alpine 2>/dev/null || echo "⚠️ Could not pull node:20-alpine (using cached version)"
               docker pull postgres:16-alpine 2>/dev/null || echo "⚠️ Could not pull postgres:16-alpine (using cached version)"
               
-              if ! docker compose -f docker-compose.prod.yml up -d --build; then
+              if ! docker compose --env-file .env -f docker-compose.prod.yml up -d --build; then
                 echo "❌ Backend build failed. Checking for Prisma client issues..."
                 
                 # Try to fix Prisma client issues and rebuild
                 echo "🔧 Attempting to fix Prisma client issues..."
-                docker compose -f docker-compose.prod.yml exec backend npm run prisma:fix || true
+                docker compose --env-file .env -f docker-compose.prod.yml exec backend npm run prisma:fix || true
                 
                 echo "🔄 Retrying backend build..."
                 # Stop containers again before retry
-                docker compose -f docker-compose.prod.yml down || true
+                docker compose --env-file .env -f docker-compose.prod.yml down || true
                 docker stop backend-backend-1 backend-postgres-1 2>/dev/null || true
                 docker rm backend-backend-1 backend-postgres-1 2>/dev/null || true
-                if ! docker compose -f docker-compose.prod.yml up -d --build; then
+                if ! docker compose --env-file .env -f docker-compose.prod.yml up -d --build; then
                   echo "❌ Backend build failed again. Showing logs:"
                   docker compose -f docker-compose.prod.yml logs backend
                   exit 1
@@ -556,24 +556,24 @@ jobs:
               
               # Quick Prisma client verification (reduced timeout)
               echo "🔍 Quick Prisma client verification..."
-              if ! timeout 30 docker compose -f docker-compose.prod.yml exec backend npm run prisma:verify; then
+              if ! timeout 30 docker compose --env-file .env -f docker-compose.prod.yml exec backend npm run prisma:verify; then
                 echo "⚠️ Prisma client verification failed. Attempting fix..."
-                docker compose -f docker-compose.prod.yml exec backend npm run prisma:fix
-                docker compose -f docker-compose.prod.yml restart backend
+                docker compose --env-file .env -f docker-compose.prod.yml exec backend npm run prisma:fix
+                docker compose --env-file .env -f docker-compose.prod.yml restart backend
               fi
               
               echo "✅ Prisma client verified successfully"
               
               # Check if containers are actually running
               echo "🔍 Checking container status..."
-              docker compose -f docker-compose.prod.yml ps
+              docker compose --env-file .env -f docker-compose.prod.yml ps
               
               # Wait for backend to be ready
               echo "⏳ Waiting for backend to be ready..."
               MAX_WAIT=60
               WAIT_COUNT=0
               while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-                if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
+                if docker compose --env-file .env -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
                   echo "✅ Backend is ready"
                   break
                 fi
@@ -582,7 +582,7 @@ jobs:
                 if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
                   echo "❌ Backend failed to start within $MAX_WAIT seconds"
                   echo "Container logs:"
-                  docker compose -f docker-compose.prod.yml logs backend --tail 50
+                  docker compose --env-file .env -f docker-compose.prod.yml logs backend --tail 50
                   exit 1
                 fi
               done
@@ -594,33 +594,33 @@ jobs:
                 ./scripts/run-migrations.sh
               else
                 echo "⚠️ Migration script not found, running migrations directly..."
-                docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+                docker compose --env-file .env -f docker-compose.prod.yml exec backend npx prisma migrate deploy
               fi
               
               # Run database seed to ensure default settings exist
               echo "🌱 Running database seed to ensure default settings..."
-              docker compose -f docker-compose.prod.yml exec backend npx prisma db seed
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend npx prisma db seed
               
               # Ensure receipts and uploads directories exist with proper permissions
               echo "📁 Setting up receipts and uploads directories..."
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p receipts
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 receipts
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/default-letters
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/default-letters
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/disbursement-slips
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/disbursement-slips
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/stamp-certificates
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/stamp-certificates
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/kyc
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/kyc
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/stamped-agreements
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/stamped-agreements
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend mkdir -p receipts
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend chmod 777 receipts
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend mkdir -p uploads/default-letters
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend chmod 777 uploads/default-letters
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend mkdir -p uploads/disbursement-slips
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend chmod 777 uploads/disbursement-slips
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend mkdir -p uploads/stamp-certificates
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend chmod 777 uploads/stamp-certificates
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend mkdir -p uploads/kyc
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend chmod 777 uploads/kyc
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend mkdir -p uploads/stamped-agreements
+              docker compose --env-file .env -f docker-compose.prod.yml exec backend chmod 777 uploads/stamped-agreements
               
               # ReactPDF dependencies are handled in Dockerfile - skipping verification
               
               # Test receipt generation functionality
               echo "🧾 Testing receipt generation functionality..."
-              if docker compose -f docker-compose.prod.yml exec backend node -e "
+              if docker compose --env-file .env -f docker-compose.prod.yml exec backend node -e "
                 try {
                   console.log('Testing Prisma client...');
                   const { prisma } = require('./dist/src/lib/prisma');
@@ -645,7 +645,7 @@ jobs:
                 echo "✅ Receipt service test passed"
               else
                 echo "⚠️ Receipt service test failed, checking build artifacts..."
-                docker compose -f docker-compose.prod.yml exec backend ls -la dist/src/lib/
+                docker compose --env-file .env -f docker-compose.prod.yml exec backend ls -la dist/src/lib/
                 echo "Continuing deployment despite test failure..."
               fi
               
@@ -654,14 +654,14 @@ jobs:
               
               # Final verification that containers are running
               echo "🔍 Final container status check..."
-              docker compose -f docker-compose.prod.yml ps
+              docker compose --env-file .env -f docker-compose.prod.yml ps
               
               # Verify backend is still responsive
-              if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
+              if docker compose --env-file .env -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
                 echo "✅ Backend is healthy and ready"
               else
                 echo "❌ Backend health check failed at end of deployment"
-                docker compose -f docker-compose.prod.yml logs backend --tail 20
+                docker compose --env-file .env -f docker-compose.prod.yml logs backend --tail 20
                 exit 1
               fi
             '
