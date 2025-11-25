@@ -11,7 +11,8 @@ export async function GET(
 		const { userId } = await params;
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 		const authHeader = request.headers.get("authorization");
-		const token = authHeader?.replace(/^Bearer\s+/i, "").trim() || authHeader?.split(" ")[1];
+		const extractedToken = authHeader?.replace(/^Bearer\s+/i, "")?.trim() || authHeader?.split(" ")[1];
+		const token = extractedToken && extractedToken !== "Bearer" ? extractedToken : undefined;
 
 		if (!token) {
 			console.error("Credit report request: No token provided");
@@ -97,4 +98,3 @@ export async function GET(
 		);
 	}
 }
-

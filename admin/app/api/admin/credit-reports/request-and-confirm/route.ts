@@ -5,10 +5,22 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
 	try {
-		const body = await request.json();
+		let body: any;
+		try {
+			body = await request.json();
+		} catch (parseError) {
+			console.error("Credit report request: Failed to parse request body:", parseError);
+			return NextResponse.json(
+				{ success: false, message: "Invalid request body" },
+				{ status: 400 }
+			);
+		}
+
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
+		console.log("Credit report request: Backend URL:", backendUrl);
 		const authHeader = request.headers.get("authorization");
-		const token = authHeader?.replace(/^Bearer\s+/i, "").trim() || authHeader?.split(" ")[1];
+		const extractedToken = authHeader?.replace(/^Bearer\s+/i, "")?.trim() || authHeader?.split(" ")[1];
+		const token = extractedToken && extractedToken !== "Bearer" ? extractedToken : undefined;
 
 		if (!token) {
 			console.error("Credit report request: No token provided");
@@ -85,8 +97,12 @@ export async function POST(request: Request) {
 
 		return NextResponse.json(data);
 	} catch (error) {
-		console.error("Error requesting and confirming credit report:", error);
-		const errorMessage = error instanceof Error ? error.message : "Unknown error";
+		console.error("Error requesting and confirming credit report:", {
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
+			type: typeof error,
+		});
+		const errorMessage = error instanceof Error ? error.message : String(error);
 		return NextResponse.json(
 			{
 				success: false,
@@ -96,4 +112,3 @@ export async function POST(request: Request) {
 		);
 	}
 }
-

@@ -9,9 +9,21 @@ export async function GET(
 ) {
 	try {
 		const { userId } = await params;
+		console.log("Cache request: Received userId:", userId);
+		
+		if (!userId) {
+			console.error("Cache request: userId is missing");
+			return NextResponse.json(
+				{ success: false, message: "User ID is required" },
+				{ status: 400 }
+			);
+		}
+
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
+		console.log("Cache request: Backend URL:", backendUrl);
 		const authHeader = request.headers.get("authorization");
-		const token = authHeader?.replace(/^Bearer\s+/i, "").trim() || authHeader?.split(" ")[1];
+		const extractedToken = authHeader?.replace(/^Bearer\s+/i, "")?.trim() || authHeader?.split(" ")[1];
+		const token = extractedToken && extractedToken !== "Bearer" ? extractedToken : undefined;
 
 		if (!token) {
 			console.error("Cache request: No token provided");
@@ -86,8 +98,12 @@ export async function GET(
 
 		return NextResponse.json(data);
 	} catch (error) {
-		console.error("Error fetching cached credit report:", error);
-		const errorMessage = error instanceof Error ? error.message : "Unknown error";
+		console.error("Error fetching cached credit report:", {
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
+			type: typeof error,
+		});
+		const errorMessage = error instanceof Error ? error.message : String(error);
 		return NextResponse.json(
 			{
 				success: false,
@@ -97,4 +113,3 @@ export async function GET(
 		);
 	}
 }
-
