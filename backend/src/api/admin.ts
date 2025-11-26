@@ -14316,36 +14316,6 @@ router.get(
 			} else {
 				console.log('[CTOS CACHE] ✗ No completed reports found');
 			}
-			// Query for the most recent COMPLETED report regardless of error status
-			// This ensures we always get the latest timeline from the database
-			console.log('[CTOS CACHE] Fetching the most recent COMPLETED report (including errors)...');
-			let creditReport = await prisma.creditReport.findFirst({
-				where: {
-					userId,
-					requestStatus: 'COMPLETED',
-				},
-				orderBy: {
-					fetchedAt: 'desc',
-				},
-			});
-			
-			if (creditReport) {
-				console.log('[CTOS CACHE] ✓ SUCCESS: Found report');
-				console.log('[CTOS CACHE] Report details:', {
-					id: creditReport.id,
-					requestStatus: creditReport.requestStatus,
-					hasDataError: creditReport.hasDataError,
-					creditScore: creditReport.creditScore,
-					errorMessage: creditReport.errorMessage,
-					fetchedAt: creditReport.fetchedAt,
-				});
-				
-				if (creditReport.hasDataError) {
-					console.log('[CTOS CACHE] ⚠ WARNING: Latest report has data error');
-				}
-			} else {
-				console.log('[CTOS CACHE] ✗ No completed reports found');
-			}
 
 			
 			
