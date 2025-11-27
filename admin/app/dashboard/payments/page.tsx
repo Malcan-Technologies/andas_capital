@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import Link from "next/link";
@@ -143,7 +143,7 @@ function PaymentsContent() {
 	});
 	const [refreshing, setRefreshing] = useState(false);
 	const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-	const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+	const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 	// Modal states
 	const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -251,21 +251,22 @@ function PaymentsContent() {
 	// Setup auto-refresh with cleanup
 	const setupAutoRefresh = useCallback(() => {
 		// Clear any existing interval
-		if (refreshInterval) {
-			clearInterval(refreshInterval);
+		if (refreshIntervalRef.current) {
+			clearInterval(refreshIntervalRef.current);
+			refreshIntervalRef.current = null;
 		}
-
+	
 		// Set up new interval (only for pending payments)
 		if (statusFilter === "PENDING") {
 			const interval = setInterval(() => {
 				fetchPayments(false); // Silent refresh
 			}, 30000); // 30 seconds
-
-			setRefreshInterval(interval);
+	
+			refreshIntervalRef.current = interval;
 			return interval;
 		}
 		return null;
-	}, [refreshInterval, fetchPayments, statusFilter]);
+	}, [fetchPayments, statusFilter]); // Removed refreshInterval from dependencies
 
 	// Initial fetch and auto-refresh setup
 	useEffect(() => {
@@ -276,17 +277,12 @@ function PaymentsContent() {
 			if (interval) {
 				clearInterval(interval);
 			}
-		};
-	}, [fetchPayments, setupAutoRefresh]);
-
-	// Clean up interval on unmount
-	useEffect(() => {
-		return () => {
-			if (refreshInterval) {
-				clearInterval(refreshInterval);
+			if (refreshIntervalRef.current) {
+				clearInterval(refreshIntervalRef.current);
+				refreshIntervalRef.current = null;
 			}
 		};
-	}, [refreshInterval]);
+	}, [fetchPayments, setupAutoRefresh]);
 
 	// Filter payments based on search term with exact loan ID matching
 	const filterPayments = useCallback(() => {
@@ -358,9 +354,9 @@ function PaymentsContent() {
 		setProcessing(true);
 		try {
 			// Clear auto-refresh to prevent race conditions
-			if (refreshInterval) {
-				clearInterval(refreshInterval);
-				setRefreshInterval(null);
+			if (refreshIntervalRef.current) {
+				clearInterval(refreshIntervalRef.current);
+				refreshIntervalRef.current = null;
 			}
 
 			const data = await fetchWithAdminTokenRefresh<{
@@ -424,9 +420,9 @@ function PaymentsContent() {
 		setProcessing(true);
 		try {
 			// Clear auto-refresh to prevent race conditions
-			if (refreshInterval) {
-				clearInterval(refreshInterval);
-				setRefreshInterval(null);
+			if (refreshIntervalRef.current) {
+				clearInterval(refreshIntervalRef.current);
+				refreshIntervalRef.current = null;
 			}
 
 			const data = await fetchWithAdminTokenRefresh<{
