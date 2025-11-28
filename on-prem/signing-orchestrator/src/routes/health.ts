@@ -308,7 +308,7 @@ async function checkDocuSealReachability(correlationId: string): Promise<boolean
     const isTimeout = error instanceof Error && (
       error.message.includes('timeout') || 
       error.message.includes('ETIMEDOUT') ||
-      error.code === 'ECONNABORTED'
+      (error as any).code === 'ECONNABORTED'
     );
     
     if (!isTimeout) {

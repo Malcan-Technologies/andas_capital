@@ -3599,63 +3599,72 @@ router.post(
 				});
 			}
 
-			// Process the status change in a transaction to ensure loan creation
-			const updatedApplication = await prisma.$transaction(async (tx) => {
-				// Update the application to complete the live attestation
-				const updated = await tx.loanApplication.update({
-				where: { id },
-				data: {
-					attestationCompleted: true,
-					attestationDate: new Date(),
-					attestationNotes:
-						notes || "Live video call completed by admin",
-					meetingCompletedAt: meetingCompletedAt
-						? new Date(meetingCompletedAt)
-						: new Date(),
-					status: "CERT_CHECK", // Move to cert-check page (same as instant attestation)
-				},
-				include: {
-					user: {
-						select: {
-							id: true,
-							fullName: true,
-							phoneNumber: true,
-							email: true,
-						},
-					},
-					product: {
-						select: {
-							id: true,
-							name: true,
-							code: true,
-						},
+		// Process the status change in a transaction to ensure loan creation
+		const updatedApplication = await prisma.$transaction(async (tx) => {
+			// Update the application to complete the live attestation
+			const updated = await tx.loanApplication.update({
+			where: { id },
+			data: {
+				attestationCompleted: true,
+				attestationDate: new Date(),
+				attestationNotes:
+					notes || "Live video call completed by admin",
+				attestationTermsAccepted: true, // Mark terms as accepted for live attestation
+				meetingCompletedAt: meetingCompletedAt
+					? new Date(meetingCompletedAt)
+					: new Date(),
+				status: "CERT_CHECK", // Move to cert-check page (same as instant attestation)
+			},
+			include: {
+				user: {
+					select: {
+						id: true,
+						fullName: true,
+						phoneNumber: true,
+						email: true,
 					},
 				},
-				});
-
-				// Note: Loan creation will happen later when moving from CERT_CHECK to PENDING_SIGNATURE
-				// This matches the flow for instant attestation completion
-
-				return updated;
+				product: {
+					select: {
+						id: true,
+						name: true,
+						code: true,
+					},
+				},
+			},
 			});
 
-			// Track the status change in history
-			await trackApplicationStatusChange(
-				prisma,
-				id,
-				"PENDING_ATTESTATION",
-				"CERT_CHECK",
-				adminUserId,
-				"Live video call attestation completed by admin",
-				notes || "Live video call attestation completed by admin - proceeding to certificate check",
-				{
-					attestationType: "MEETING",
-					completedBy: adminUserId,
-					completedAt: new Date().toISOString(),
-					meetingCompletedAt:
-						meetingCompletedAt || new Date().toISOString(),
-				}
-			);
+			// Create loan and repayment schedule
+			try {
+				const { createLoanOnPendingSignature } = require('../lib/loanCreationUtils');
+				await createLoanOnPendingSignature(id, tx);
+				console.log(`Loan and repayment schedule created for application ${id} during live attestation completion`);
+			} catch (error) {
+				console.error(`Failed to create loan for application ${id}:`, error);
+				// Don't fail the transaction, just log the error
+			}
+
+			return updated;
+		});
+
+		// Track the status change in history
+		await trackApplicationStatusChange(
+			prisma,
+			id,
+			"PENDING_ATTESTATION",
+			"CERT_CHECK",
+			adminUserId,
+			"Live video call attestation completed by admin",
+			notes || "Live video call attestation completed by admin - proceeding to certificate check",
+			{
+				attestationType: "MEETING",
+				attestationTermsAccepted: true,
+				completedBy: adminUserId,
+				completedAt: new Date().toISOString(),
+				meetingCompletedAt:
+					meetingCompletedAt || new Date().toISOString(),
+			}
+		);
 
 			console.log(
 				`Live attestation completed successfully for application ${id} by admin ${adminUserId}`

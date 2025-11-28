@@ -116,12 +116,39 @@ export class MTSAClient {
           lastResponseLength: this.client.lastResponse?.length || 0
         });
         
-        // Log first 500 chars of request/response if available
+        // Log the full SOAP request with base64 fields truncated for readability
         if (this.client.lastRequest) {
+          // Truncate base64 image data for logging
+          let sanitizedRequest = this.client.lastRequest;
+          
+          // Truncate common base64 fields
+          const base64Fields = [
+            'NRICFront', 'NRICBack', 'SelfieImage', 'PassportImage', 
+            'pdfInBase64', 'signedPdfInBase64'
+          ];
+          
+          base64Fields.forEach(fieldName => {
+            const openTag = `<${fieldName}>`;
+            const closeTag = `</${fieldName}>`;
+            const regex = new RegExp(`${openTag}([^<]{100})[^<]*${closeTag}`, 'g');
+            sanitizedRequest = sanitizedRequest.replace(
+              regex, 
+              `${openTag}$1...[TRUNCATED BASE64 DATA]${closeTag}`
+            );
+          });
+          
           log.info(`SOAP Request Body (first 500 chars)`, { 
             request: this.client.lastRequest.substring(0, 500) 
           });
+          
+          // Log full sanitized request for certificate enrollment and revocation
+          if (methodName === 'RequestCertificate' || methodName === 'RequestRevokeCert') {
+            log.info(`Full SOAP Request for ${methodName} (Base64 truncated)`, { 
+              request: sanitizedRequest 
+            });
+          }
         }
+        
         if (this.client.lastResponse) {
           log.info(`SOAP Response Body (first 500 chars)`, { 
             response: this.client.lastResponse.substring(0, 500) 
@@ -228,11 +255,30 @@ export class MTSAClient {
   ): Promise<MTSARequestCertificateResponse> {
     const log = correlationId ? createCorrelatedLogger(correlationId) : logger;
     
+    // Log request parameters with base64 data truncated
+    const sanitizedRequest = { ...request };
+    if (sanitizedRequest.NRICFront) {
+      sanitizedRequest.NRICFront = `[BASE64 DATA - ${sanitizedRequest.NRICFront.length} chars]`;
+    }
+    if (sanitizedRequest.NRICBack) {
+      sanitizedRequest.NRICBack = `[BASE64 DATA - ${sanitizedRequest.NRICBack.length} chars]`;
+    }
+    if (sanitizedRequest.SelfieImage) {
+      sanitizedRequest.SelfieImage = `[BASE64 DATA - ${sanitizedRequest.SelfieImage.length} chars]`;
+    }
+    if (sanitizedRequest.PassportImage) {
+      sanitizedRequest.PassportImage = `[BASE64 DATA - ${sanitizedRequest.PassportImage.length} chars]`;
+    }
+    
     log.info('Requesting certificate enrollment', { 
       userId: request.UserID, 
       userType: request.UserType,
-      nationality: request.Nationality 
+      nationality: request.Nationality,
+      hasOrganisationInfo: !!request.OrganisationInfo,
+      organisationInfo: request.OrganisationInfo
     });
+    
+    log.info('Full certificate request parameters (Base64 truncated)', sanitizedRequest);
 
     const result = await this.executeSoapMethod<MTSARequestCertificateResponse>(
       'RequestCertificate',
