@@ -28,14 +28,14 @@ export async function POST(request: Request) {
 			);
 		}
 
-		// Return the response from the backend, including tokens and onboarding status
-		return NextResponse.json({
-			message: data.message,
-			accessToken: data.accessToken,
-			refreshToken: data.refreshToken,
-			isOnboardingComplete: data.isOnboardingComplete,
-			onboardingStep: data.onboardingStep,
-		});
+	// Return the actual response from the backend (userId, phoneNumber, otpSent, expiresAt)
+	return NextResponse.json({
+		message: data.message,
+		userId: data.userId,
+		phoneNumber: data.phoneNumber,
+		otpSent: data.otpSent,
+		expiresAt: data.expiresAt,
+	});
 	} catch (error) {
 		console.error("Signup error:", error);
 		return NextResponse.json(
