@@ -36,7 +36,7 @@ export default function Footer() {
 						{/* Products */}
 						<div className="text-left">
 							<h3 className="text-lg font-semibold mb-6 font-heading text-purple-400">
-								Products
+								Quick Links
 							</h3>
 							<ul className="space-y-3">
 								<li>
@@ -44,7 +44,7 @@ export default function Footer() {
 										href="/login"
 										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
 									>
-										Loan Dashboard
+										Login
 									</Link>
 								</li>
 								<li>

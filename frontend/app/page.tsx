@@ -513,7 +513,7 @@ export default function Home() {
 								<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
 									CreditXpress is proudly owned and operated by <strong>OPG Capital Holdings Sdn. Bhd.</strong>, 
 									a licensed moneylender under the Moneylenders Act 1951. Our license is issued by the 
-									Ministry of Housing and Local Government (KPKT), License No: XXXXXXXXX.
+									Ministry of Housing and Local Government (KPKT), License No: WL3337/07/01-11/020227.
 								</p>
 								
 								<p className="text-lg lg:text-xl text-gray-600 mb-6 font-body leading-relaxed">
@@ -654,7 +654,7 @@ export default function Home() {
 										<div>
 											<h4 className="text-lg font-semibold text-gray-700 mb-1">Address</h4>
 											<p className="text-gray-600">
-												[Address to be provided]
+											31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang
 							</p>
 						</div>
 							</div>

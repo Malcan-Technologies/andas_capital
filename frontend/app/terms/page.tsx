@@ -28,7 +28,7 @@ export default function Terms() {
 							1. Agreement to Terms
 						</h2>
 						<p>
-							By accessing or using Kapital&apos;s services, you
+							By accessing or using CreditXpress&apos;s services, you
 							agree to be bound by these Terms of Service. If you
 							disagree with any part of the terms, you may not
 							access our services.
@@ -103,7 +103,7 @@ export default function Terms() {
 						</h2>
 						<p>
 							The service and its original content, features, and
-							functionality are owned by Kapital and are protected
+							functionality are owned by OPG Capital Holdings Sdn. Bhd. and are protected
 							by international copyright, trademark, patent, trade
 							secret, and other intellectual property laws.
 						</p>
@@ -114,7 +114,7 @@ export default function Terms() {
 							6. Limitation of Liability
 						</h2>
 						<p>
-							In no event shall Kapital, nor its directors,
+							In no event shall OPG Capital Holdings Sdn. Bhd., nor its directors,
 							employees, partners, agents, suppliers, or
 							affiliates, be liable for any indirect, incidental,
 							special, consequential, or punitive damages
@@ -142,7 +142,7 @@ export default function Terms() {
 							contact us at:
 						</p>
 						<ul className="list-none mt-4">
-							<li>Email: legal@kapital.com</li>
+							<li>Email: opgcapital3@gmail.com</li>
 							<li>Phone: +60 12-345 6789</li>
 						</ul>
 					</section>
