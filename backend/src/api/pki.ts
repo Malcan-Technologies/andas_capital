@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
+import { whatsappService } from '../lib/whatsappService';
 
 const router = express.Router();
 
@@ -341,6 +342,25 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
 
         console.log(`VPS database updated after PKI signing: loan ${loan.id}, application ${applicationId}`);
 
+        // Fetch full application data for notifications
+        const fullApplication = await prisma.loanApplication.findUnique({
+          where: { id: applicationId },
+          include: {
+            user: {
+              select: {
+                fullName: true,
+                email: true,
+                phoneNumber: true
+              }
+            },
+            product: {
+              select: {
+                name: true
+              }
+            }
+          }
+        });
+
         // Send email notification to user
         try {
           console.log(`📧 Sending email notification to user after PKI signing`);
@@ -357,6 +377,21 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
         } catch (emailError) {
           console.error('❌ Error sending email notification:', emailError);
           // Don't fail the signing process if email fails
+        }
+
+        // Send WhatsApp notification to user
+        if (fullApplication) {
+          whatsappService.sendBorrowerSigningCompleteNotification({
+            to: fullApplication.user.phoneNumber,
+            fullName: fullApplication.user.fullName,
+            productName: fullApplication.product.name,
+            amount: fullApplication.amount.toFixed(2),
+            email: fullApplication.user.email || 'your registered email'
+          }).then(result => {
+            if (!result.success) {
+              console.error(`Failed to send WhatsApp borrower signing complete notification for application ${applicationId}: ${result.error}`);
+            }
+          });
         }
       } catch (dbError) {
         console.error('Failed to update VPS database after PKI signing:', dbError);

@@ -3671,6 +3671,31 @@ router.post(
 			}
 		);
 
+		// Send WhatsApp notification for attestation completion
+		try {
+			const userPhoneNumber = updatedApplication.user?.phoneNumber;
+			const userFullName = updatedApplication.user?.fullName || "Customer";
+			const productName = updatedApplication.product?.name || "Loan";
+			const loanAmount = updatedApplication.amount?.toString() || "0";
+
+			if (userPhoneNumber) {
+				// Import whatsappService at the top of this file if not already imported
+				const whatsappService = require('../lib/whatsappService').default;
+				
+				// Send WhatsApp notification asynchronously (don't block the response)
+				whatsappService.sendAttestationCompleteNotification({
+					to: userPhoneNumber,
+					fullName: userFullName,
+					productName: productName,
+					amount: loanAmount,
+				}).catch((error: any) => {
+					console.error("Failed to send attestation complete WhatsApp notification:", error);
+				});
+			}
+		} catch (error) {
+			console.error("Error preparing attestation complete WhatsApp notification:", error);
+		}
+
 			console.log(
 				`Live attestation completed successfully for application ${id} by admin ${adminUserId}`
 			);
@@ -9581,26 +9606,29 @@ router.post(
 				console.error("Could not create loan discharge notification:", notificationError);
 			}
 
-			// Send WhatsApp notification for loan discharge
-			try {
-				if (updatedLoan.user.phoneNumber && updatedLoan.user.fullName) {
-					const whatsappResult = await whatsappService.sendLoanDischargedNotification({
-						to: updatedLoan.user.phoneNumber,
-						fullName: updatedLoan.user.fullName,
-						loanName: updatedLoan.application.product.name
-					});
+		// Send WhatsApp notification for loan discharge
+		console.log(`📱 Attempting to send WhatsApp loan discharged notification for loan ${id}`);
+		console.log(`📱 User data: phone=${updatedLoan.user.phoneNumber}, name=${updatedLoan.user.fullName}, product=${updatedLoan.application.product.name}`);
+		console.log(`📱 Is early settlement: ${hasEarlySettlement}`);
+		try {
+			if (updatedLoan.user.phoneNumber && updatedLoan.user.fullName) {
+				const whatsappResult = await whatsappService.sendLoanDischargedNotification({
+					to: updatedLoan.user.phoneNumber,
+					fullName: updatedLoan.user.fullName,
+					loanName: updatedLoan.application.product.name
+				});
 
-					if (whatsappResult.success) {
-						console.log(`WhatsApp loan discharged notification sent to ${updatedLoan.user.phoneNumber}`);
-					} else {
-						console.log(`WhatsApp loan discharged notification failed: ${whatsappResult.error}`);
-					}
+				if (whatsappResult.success) {
+					console.log(`✅ WhatsApp loan discharged notification sent to ${updatedLoan.user.phoneNumber}`);
 				} else {
-					console.log("Missing required data for WhatsApp loan discharged notification");
+					console.log(`❌ WhatsApp loan discharged notification failed: ${whatsappResult.error}`);
 				}
-			} catch (whatsappError) {
-				console.error("Could not send WhatsApp loan discharged notification:", whatsappError);
+			} else {
+				console.log("⚠️ Missing required data for WhatsApp loan discharged notification");
 			}
+		} catch (whatsappError) {
+			console.error("❌ Could not send WhatsApp loan discharged notification:", whatsappError);
+		}
 
 			// Log the discharge approval
 			console.log(`Loan ${id} discharged by admin ${req.user?.userId}`);
@@ -11791,26 +11819,62 @@ router.post(
 				// Don't fail the main operation for audit trail issues
 			}
 
-			console.log(`All parties signed - Loan ${application.loan.id} and Application ${applicationId} set to PENDING_STAMPING`);
+		console.log(`All parties signed - Loan ${application.loan.id} and Application ${applicationId} set to PENDING_STAMPING`);
 
-			// Send email notification to borrower
-			try {
-				console.log(`📧 Sending email notification to borrower after all parties signed`);
-				const emailResult = await emailService.sendAllPartiesSignedNotification(
-					application.userId,
-					application.loan.id,
-					applicationId
-				);
-				if (emailResult.success) {
-					console.log('✅ Email notification sent successfully to borrower');
-				} else {
-					console.warn(`⚠️ Failed to send email notification: ${emailResult.error}`);
+		// Fetch full application data for notifications
+		const fullApplication = await prisma.loanApplication.findUnique({
+			where: { id: applicationId },
+			include: {
+				user: {
+					select: {
+						fullName: true,
+						email: true,
+						phoneNumber: true
+					}
+				},
+				product: {
+					select: {
+						name: true
+					}
 				}
-			} catch (emailError) {
-				console.error('❌ Error sending email notification:', emailError);
-				// Don't fail the signing process if email fails
 			}
+		});
+
+		// Send email notification to borrower
+		try {
+			console.log(`📧 Sending email notification to borrower after all parties signed`);
+			const emailResult = await emailService.sendAllPartiesSignedNotification(
+				application.userId,
+				application.loan.id,
+				applicationId
+			);
+			if (emailResult.success) {
+				console.log('✅ Email notification sent successfully to borrower');
+			} else {
+				console.warn(`⚠️ Failed to send email notification: ${emailResult.error}`);
 			}
+		} catch (emailError) {
+			console.error('❌ Error sending email notification:', emailError);
+			// Don't fail the signing process if email fails
+		}
+
+		// Send WhatsApp notification to borrower
+		if (fullApplication && fullApplication.amount && fullApplication.user.fullName) {
+			whatsappService.sendAllPartiesSigningCompleteNotification({
+				to: fullApplication.user.phoneNumber,
+				fullName: fullApplication.user.fullName,
+				productName: fullApplication.product.name,
+				amount: fullApplication.amount.toFixed(2),
+				email: fullApplication.user.email || 'your registered email'
+			}).then(result => {
+				if (!result.success) {
+					console.error(`Failed to send WhatsApp all parties signing complete notification for application ${applicationId}: ${result.error}`);
+				}
+			}).catch(error => {
+				console.error('❌ Error sending WhatsApp notification:', error);
+			});
+		}
+		}
 
 		return res.json({
 			success: true,
@@ -12819,7 +12883,13 @@ router.post(
 						select: {
 							id: true,
 							fullName: true,
-							email: true
+							email: true,
+							phoneNumber: true
+						}
+					},
+					product: {
+						select: {
+							name: true
 						}
 					}
 				}
@@ -12873,36 +12943,52 @@ router.post(
 				})
 			]);
 
-			// Create audit trail entry
-			await prisma.loanApplicationHistory.create({
-				data: {
-					applicationId: applicationId,
-					previousStatus: 'PENDING_STAMPING',
-					newStatus: 'PENDING_DISBURSEMENT',
-					changedBy: `admin_${adminUser?.userId}`,
-					changeReason: 'Stamping confirmed by admin',
-					notes: `Stamping process completed. Stamp certificate verified and uploaded. Application and loan status updated to PENDING_DISBURSEMENT, ready for disbursement by admin ${adminUser?.userId}.`,
-					metadata: {
-						confirmedBy: adminUser?.userId,
-						confirmedAt: new Date().toISOString(),
-						loanId: application.loan.id,
-						certificateUrl: application.loan.pkiStampCertificateUrl
-					}
-				}
-			});
-
-			console.log(`✅ Stamping confirmed for application ${applicationId}, status updated to PENDING_DISBURSEMENT`);
-
-			return res.json({
-				success: true,
-				message: "Stamping confirmed successfully. Application ready for disbursement.",
-				data: {
-					applicationId: applicationId,
+		// Create audit trail entry
+		await prisma.loanApplicationHistory.create({
+			data: {
+				applicationId: applicationId,
+				previousStatus: 'PENDING_STAMPING',
+				newStatus: 'PENDING_DISBURSEMENT',
+				changedBy: `admin_${adminUser?.userId}`,
+				changeReason: 'Stamping confirmed by admin',
+				notes: `Stamping process completed. Stamp certificate verified and uploaded. Application and loan status updated to PENDING_DISBURSEMENT, ready for disbursement by admin ${adminUser?.userId}.`,
+				metadata: {
+					confirmedBy: adminUser?.userId,
+					confirmedAt: new Date().toISOString(),
 					loanId: application.loan.id,
-					previousStatus: 'PENDING_STAMPING',
-					newStatus: 'PENDING_DISBURSEMENT'
+					certificateUrl: application.loan.pkiStampCertificateUrl
 				}
+			}
+		});
+
+		console.log(`✅ Stamping confirmed for application ${applicationId}, status updated to PENDING_DISBURSEMENT`);
+
+		// Send WhatsApp notification to borrower
+		if (application.amount && application.user.fullName) {
+			whatsappService.sendStampingCompletedNotification({
+				to: application.user.phoneNumber,
+				fullName: application.user.fullName,
+				productName: application.product.name,
+				amount: application.amount.toFixed(2)
+			}).then(result => {
+				if (!result.success) {
+					console.error(`Failed to send WhatsApp stamping completed notification for application ${applicationId}: ${result.error}`);
+				}
+			}).catch(error => {
+				console.error('❌ Error sending WhatsApp stamping completed notification:', error);
 			});
+		}
+
+		return res.json({
+			success: true,
+			message: "Stamping confirmed successfully. Application ready for disbursement.",
+			data: {
+				applicationId: applicationId,
+				loanId: application.loan.id,
+				previousStatus: 'PENDING_STAMPING',
+				newStatus: 'PENDING_DISBURSEMENT'
+			}
+		});
 
 		} catch (error) {
 			console.error('❌ Error confirming stamping:', error);

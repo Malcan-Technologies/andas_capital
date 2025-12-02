@@ -1924,6 +1924,11 @@ function SettingsPageContent() {
 									const getNotificationIcon = (key: string) => {
 										switch (key) {
 											case "WHATSAPP_OTP_VERIFICATION": return "🔐";
+											case "WHATSAPP_LOAN_APPLICATION_SUBMISSION": return "📝";
+											case "WHATSAPP_ATTESTATION_COMPLETE": return "✍️";
+											case "WHATSAPP_BORROWER_SIGNING_COMPLETE": return "🖊️";
+											case "WHATSAPP_ALL_PARTIES_SIGNING_COMPLETE": return "✅";
+											case "WHATSAPP_STAMPING_COMPLETED": return "📄";
 											case "WHATSAPP_LOAN_APPROVAL": return "✅";
 											case "WHATSAPP_LOAN_REJECTION": return "❌";
 											case "WHATSAPP_LOAN_DISBURSEMENT": return "💰";
@@ -1943,6 +1948,11 @@ function SettingsPageContent() {
 									const getNotificationColorClasses = (key: string) => {
 										switch (key) {
 											case "WHATSAPP_OTP_VERIFICATION": return "bg-blue-800/20 border-blue-700/30";
+											case "WHATSAPP_LOAN_APPLICATION_SUBMISSION": return "bg-blue-800/20 border-blue-700/30";
+											case "WHATSAPP_ATTESTATION_COMPLETE": return "bg-indigo-800/20 border-indigo-700/30";
+											case "WHATSAPP_BORROWER_SIGNING_COMPLETE": return "bg-violet-800/20 border-violet-700/30";
+											case "WHATSAPP_ALL_PARTIES_SIGNING_COMPLETE": return "bg-emerald-800/20 border-emerald-700/30";
+											case "WHATSAPP_STAMPING_COMPLETED": return "bg-teal-800/20 border-teal-700/30";
 											case "WHATSAPP_LOAN_APPROVAL": return "bg-green-800/20 border-green-700/30";
 											case "WHATSAPP_LOAN_REJECTION": return "bg-red-800/20 border-red-700/30";
 											case "WHATSAPP_LOAN_DISBURSEMENT": return "bg-yellow-800/20 border-yellow-700/30";

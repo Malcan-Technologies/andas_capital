@@ -13,6 +13,7 @@ import { RequestHandler } from "express";
 import { trackApplicationStatusChange } from "./admin";
 import { userHasAllKycDocuments } from "./kyc";
 import { docusealService } from "../lib/docusealService";
+import whatsappService from "../lib/whatsappService";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -390,6 +391,12 @@ router.patch("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: R
 					user: {
 						select: {
 							fullName: true,
+							phoneNumber: true,
+						},
+					},
+					product: {
+						select: {
+							name: true,
 						},
 					},
 				},
@@ -423,6 +430,33 @@ router.patch("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: R
 
 			return updatedApplication;
 		});
+
+		// Send WhatsApp notification when application is submitted (status changes to PENDING_APPROVAL or COLLATERAL_REVIEW)
+		if (updateData.status && 
+			updateData.status !== existingApplication.status && 
+			(updateData.status === "PENDING_APPROVAL" || updateData.status === "COLLATERAL_REVIEW")) {
+			try {
+				// Get user and product details for the notification
+				const userPhoneNumber = result.user?.phoneNumber;
+				const userFullName = result.user?.fullName || "Customer";
+				const productName = result.product?.name || "Loan";
+				const loanAmount = result.amount?.toString() || "0";
+
+				if (userPhoneNumber) {
+					// Send WhatsApp notification asynchronously (don't block the response)
+					whatsappService.sendLoanApplicationSubmissionNotification({
+						to: userPhoneNumber,
+						fullName: userFullName,
+						productName: productName,
+						amount: loanAmount,
+					}).catch((error) => {
+						console.error("Failed to send loan application submission WhatsApp notification:", error);
+					});
+				}
+			} catch (error) {
+				console.error("Error preparing loan application submission WhatsApp notification:", error);
+			}
+		}
 
 		return res.json(result);
 	} catch (error) {
@@ -1464,6 +1498,27 @@ router.post(
 					completedAt: new Date().toISOString(),
 				}
 			);
+
+	// Send WhatsApp notification for attestation completion
+	if (updatedApplication.amount && updatedApplication.user?.fullName) {
+		console.log(`📱 Sending WhatsApp attestation complete notification to ${updatedApplication.user.phoneNumber}`);
+		whatsappService.sendAttestationCompleteNotification({
+			to: updatedApplication.user.phoneNumber,
+			fullName: updatedApplication.user.fullName,
+			productName: updatedApplication.product.name,
+			amount: updatedApplication.amount.toFixed(2)
+		}).then(result => {
+			if (result.success) {
+				console.log(`✅ WhatsApp attestation complete notification sent successfully for application ${id}`);
+			} else {
+				console.error(`❌ Failed to send WhatsApp attestation complete notification for application ${id}: ${result.error}`);
+			}
+		}).catch(error => {
+			console.error('❌ Error sending WhatsApp attestation complete notification:', error);
+		});
+	} else {
+		console.log(`⚠️ Skipping WhatsApp notification - missing data. Amount: ${updatedApplication.amount}, FullName: ${updatedApplication.user?.fullName}`);
+	}
 
 			console.log(
 				`Attestation completed successfully for application ${id} by user ${userId}`

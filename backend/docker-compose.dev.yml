@@ -55,6 +55,9 @@ services:
             - SIGNING_ORCHESTRATOR_URL=http://host.docker.internal:4010
             - SIGNING_ORCHESTRATOR_API_KEY=NwPkizAUEfShnc4meN1m3N38DG8ZNEyRmWPMjq8BXv8
             - KYC_TOKEN_TTL_MINUTES=15
+            # Resend Email Configuration
+            - RESEND_API_KEY=${RESEND_API_KEY}
+            - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}
             # CTOS eKYC Configuration
             - CTOS_API_KEY=${CTOS_API_KEY}
             - CTOS_PACKAGE_NAME=${CTOS_PACKAGE_NAME}

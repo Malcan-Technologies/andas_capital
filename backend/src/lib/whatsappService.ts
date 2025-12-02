@@ -289,6 +289,165 @@ class WhatsAppService {
 		});
 	}
 
+	// Specific method for loan application submission notifications
+	async sendLoanApplicationSubmissionNotification({
+		to,
+		fullName,
+		productName,
+		amount
+	}: {
+		to: string;
+		fullName: string;
+		productName: string;
+		amount: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp loan application submission notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isSubmissionEnabled = await this.isNotificationEnabled('WHATSAPP_LOAN_APPLICATION_SUBMISSION');
+		
+		if (!isGlobalEnabled || !isSubmissionEnabled) {
+			console.log('WhatsApp loan application submission notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp loan application submission notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'loan_application_submission',
+			parameters: [fullName, productName, amount]
+		});
+	}
+
+	// Specific method for attestation complete notifications
+	async sendAttestationCompleteNotification({
+		to,
+		fullName,
+		productName,
+		amount
+	}: {
+		to: string;
+		fullName: string;
+		productName: string;
+		amount: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp attestation complete notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isAttestationCompleteEnabled = await this.isNotificationEnabled('WHATSAPP_ATTESTATION_COMPLETE');
+		
+		if (!isGlobalEnabled || !isAttestationCompleteEnabled) {
+			console.log('WhatsApp attestation complete notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp attestation complete notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'attestation_complete',
+			parameters: [fullName, productName, amount]
+		});
+	}
+
+	// Specific method for borrower PKI signing complete notifications
+	async sendBorrowerSigningCompleteNotification({
+		to,
+		fullName,
+		productName,
+		amount,
+		email
+	}: {
+		to: string;
+		fullName: string;
+		productName: string;
+		amount: string;
+		email: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp borrower signing complete notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isSigningCompleteEnabled = await this.isNotificationEnabled('WHATSAPP_BORROWER_SIGNING_COMPLETE');
+		
+		if (!isGlobalEnabled || !isSigningCompleteEnabled) {
+			console.log('WhatsApp borrower signing complete notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp borrower signing complete notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'complete_signing_user',
+			parameters: [fullName, productName, amount, email]
+		});
+	}
+
+	// Specific method for all parties PKI signing complete notifications
+	async sendAllPartiesSigningCompleteNotification({
+		to,
+		fullName,
+		productName,
+		amount,
+		email
+	}: {
+		to: string;
+		fullName: string;
+		productName: string;
+		amount: string;
+		email: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp all parties signing complete notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isAllPartiesSigningEnabled = await this.isNotificationEnabled('WHATSAPP_ALL_PARTIES_SIGNING_COMPLETE');
+		
+		if (!isGlobalEnabled || !isAllPartiesSigningEnabled) {
+			console.log('WhatsApp all parties signing complete notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp all parties signing complete notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'complete_signing_all',
+			parameters: [fullName, productName, amount, email]
+		});
+	}
+
+	// Specific method for stamping completed notifications
+	async sendStampingCompletedNotification({
+		to,
+		fullName,
+		productName,
+		amount
+	}: {
+		to: string;
+		fullName: string;
+		productName: string;
+		amount: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp stamping completed notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isStampingCompletedEnabled = await this.isNotificationEnabled('WHATSAPP_STAMPING_COMPLETED');
+		
+		if (!isGlobalEnabled || !isStampingCompletedEnabled) {
+			console.log('WhatsApp stamping completed notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp stamping completed notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'stamping_completed',
+			parameters: [fullName, productName, amount]
+		});
+	}
+
 	// Specific method for loan approval notifications
 	async sendLoanApprovalNotification({
 		to,
