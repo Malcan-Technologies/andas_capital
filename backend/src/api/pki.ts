@@ -2,7 +2,7 @@ import express from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
-import { whatsappService } from '../lib/whatsappService';
+import whatsappService from '../lib/whatsappService';
 
 const router = express.Router();
 
@@ -380,14 +380,14 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
         }
 
         // Send WhatsApp notification to user
-        if (fullApplication) {
+        if (fullApplication && fullApplication.amount) {
           whatsappService.sendBorrowerSigningCompleteNotification({
             to: fullApplication.user.phoneNumber,
-            fullName: fullApplication.user.fullName,
+            fullName: fullApplication.user.fullName || 'Valued Customer',
             productName: fullApplication.product.name,
             amount: fullApplication.amount.toFixed(2),
             email: fullApplication.user.email || 'your registered email'
-          }).then(result => {
+          }).then((result: { success: boolean; error?: string }) => {
             if (!result.success) {
               console.error(`Failed to send WhatsApp borrower signing complete notification for application ${applicationId}: ${result.error}`);
             }
