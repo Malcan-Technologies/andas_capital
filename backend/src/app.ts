@@ -84,7 +84,7 @@ const corsOrigins = process.env.CORS_ORIGIN
 			"http://localhost:3003",
 			"http://localhost:8080",
 	  ]
-	: ["https://creditxpress.com.my", "https://admin.creditxpress.com.my", "https://api.creditxpress.com.my"];
+	: ["https://creditxpress.com.my", "https://www.creditxpress.com.my", "https://admin.creditxpress.com.my", "https://api.creditxpress.com.my"];
 
 // Middleware
 app.use(
