@@ -3,15 +3,13 @@ import { cookies } from "next/headers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const { id } = params;
 		
 		// Get token from cookies
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 		
 		if (!token) {

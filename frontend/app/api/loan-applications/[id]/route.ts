@@ -6,12 +6,10 @@ export const dynamic = "force-dynamic";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export async function GET(
-	req: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
-		const cookieStore = cookies();
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {
@@ -41,12 +39,10 @@ export async function GET(
 	}
 }
 
-export async function DELETE(
-	req: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
-		const cookieStore = cookies();
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {
@@ -77,12 +73,10 @@ export async function DELETE(
 	}
 }
 
-export async function PATCH(
-	req: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
-		const cookieStore = cookies();
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {

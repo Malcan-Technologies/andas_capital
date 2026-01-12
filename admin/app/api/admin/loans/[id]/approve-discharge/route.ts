@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(
-	request: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const token = request.headers.get("authorization")?.split(" ")[1];
 		if (!token) {
 			return NextResponse.json(

@@ -1,184 +1,174 @@
-## Kredit.my — Fintech Lending Platform
+# Kredit.my — Fintech Lending Platform
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=nextdotjs)](https://nextjs.org) [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/) [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/) [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma)](https://www.prisma.io/) [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org) [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/) [![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/) [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma)](https://www.prisma.io/) [![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazon-aws)](https://aws.amazon.com/ecs/)
 
-TypeScript-first, Dockerized monorepo for consumer & SME lending. Customer site, admin dashboard, and API with WhatsApp Business notifications, token auth, and timezone-accurate finance logic.
+TypeScript-first lending platform for Malaysia. Consumer/SME loans, KYC, digital signing, repayments, and notifications.
 
-### Features
-- **Lending core**: applications, disbursements, repayments, wallets, late fees
-- **Admin dashboard**: approvals, notifications, users, products, analytics
-- **Notifications**: WhatsApp Business (OTP, approvals, rejections, disbursements, payments)
-- **Auth**: JWT + refresh tokens; secure admin API patterns
-- **Timezones**: Malaysia (UTC+8) calculations; DB timestamps in UTC
-- **Frontend**: Next.js App Router, RSC-first, Shadcn UI + Tailwind
+---
 
-### Monorepo Structure
-```
-backend/   # Express API, Prisma, cron jobs, WhatsApp service
-frontend/  # Customer app (Next.js)
-admin/     # Admin dashboard (Next.js)
-config/    # Nginx and infra config
-scripts/   # Deployment & helper scripts
-on-prem/   # On-premises DocuSeal & signing services
-```
+## Quick Start (Local Development)
 
-### Network Architecture
-```
-Digital Ocean VPS (Cloud)           On-Premises Server
-┌─────────────────────┐            ┌──────────────────────┐
-│ nginx (reverse proxy)│◄─Tailscale─►│ DocuSeal + Orchestrator│
-│ SSL: *.kredit.my    │   VPN       │ IP: 100.76.8.62    │
-│ Ports: 80, 443      │            │ Services: 80, 4010   │
-└─────────────────────┘            └──────────────────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ sign.kredit.my      │
-│ → DocuSeal (on-prem)│
-│ → Signing API       │
-└─────────────────────┘
-```
+### Prerequisites
+- Docker + Docker Compose
+- Node.js 20+
+- pnpm (`npm install -g pnpm`)
 
-### Quick Start (Docker)
-Prerequisites: Docker + Docker Compose
+### 1. Start Database & Backend
 
 ```bash
-# From project root
-# 1) Start dev stack
-docker compose -f docker-compose.dev.yml up -d --build
-
-# 2) Check Prisma migration status (prod example)
-docker compose -f docker-compose.prod.yml exec backend npx prisma migrate status | cat
-
-# 3) Rebuild backend container if needed
-docker compose -f docker-compose.dev.yml down && \
-  docker compose -f docker-compose.dev.yml up -d
+docker compose -f backend/docker-compose.dev.yml up -d
 ```
 
-Notes
-- Prisma client generation runs on container start (avoids volume override issues)
-- Admin API calls must include Authorization headers (JWT with refresh tokens)
- - Daily late-fee processing cron runs at 1:00 AM MYT (UTC+8) via node-cron; see `backend/src/lib/cronScheduler.ts` (scheduling) and `backend/src/lib/lateFeeProcessor.ts` (processing)
+This starts PostgreSQL (port 5432) and the backend API (port 4001) with hot reload.
 
-### KYC microservices (OCR, Face, Liveness) – Dev
-
-These run as Python FastAPI sidecars and are orchestrated by the backend compose file.
+### 2. Start Frontend Apps
 
 ```bash
-# Start backend + KYC services (from project root)
-docker compose -f backend/docker-compose.dev.yml up -d --build backend ocr face liveness
+# Terminal 1 - Customer app
+cd frontend && pnpm install && pnpm dev
 
-# Start everything defined in backend compose (backend, postgres, KYC services)
-docker compose -f backend/docker-compose.dev.yml up -d --build
-
-# Tail logs for a specific service
-docker compose -f backend/docker-compose.dev.yml logs -f backend | cat
-docker compose -f backend/docker-compose.dev.yml logs -f ocr | cat
-docker compose -f backend/docker-compose.dev.yml logs -f face | cat
-docker compose -f backend/docker-compose.dev.yml logs -f liveness | cat
-
-# Rebuild only one KYC service
-docker compose -f backend/docker-compose.dev.yml up -d --build ocr
+# Terminal 2 - Admin dashboard
+cd admin && pnpm install && pnpm dev
 ```
 
-- Service ports and endpoints (dev):
-  - **OCR**: `http://localhost:7001/ocr`
-  - **Face**: `http://localhost:7002/face-match`
-  - **Liveness**: `http://localhost:7003/liveness`
-- Uploaded images are served by the backend at `http://localhost:4001/uploads/...`.
-- When running these services via Docker, the backend auto-targets them if `KYC_DOCKER=true`.
+### 3. Access
 
-Minimum backend `.env` additions for KYC:
+| App | URL |
+|-----|-----|
+| Frontend | http://localhost:3000 |
+| Admin | http://localhost:3002 |
+| API | http://localhost:4001 |
+| Swagger | http://localhost:4001/api-docs |
 
+📖 **Full guide**: [`docs/QUICKSTART_DEV.md`](docs/QUICKSTART_DEV.md)
+
+---
+
+## Architecture
+
+```
+                    ┌─────────────────────────┐
+                    │       Cloudflare        │
+                    │   DNS + WAF + Tunnel    │
+                    └─────────────────────────┘
+                               │
+       ┌───────────────────────┼───────────────────────┐
+       │                       │                       │
+       ▼                       ▼                       ▼
+  app.domain             api.domain             sign.domain
+ admin.domain                                    (Tunnel)
+       │                       │                       │
+       ▼                       ▼                       ▼
+┌────────────────────────────────────┐         ┌──────────────┐
+│           AWS ALB                  │         │   On-Prem    │
+│       (Host-based routing)         │         │    Server    │
+└────────────────────────────────────┘         └──────────────┘
+       │           │           │                      │
+       ▼           ▼           ▼               ┌──────┴──────┐
+  Frontend      Admin      Backend             │             │
+    ECS          ECS         ECS              DocuSeal    MTSA
+                              │               Signing
+                         RDS + S3           Orchestrator
+```
+
+**Cloud (AWS ECS Fargate):** Frontend, Admin, Backend containers + RDS PostgreSQL + S3  
+**On-Premise:** DocuSeal, Signing Orchestrator, MTSA (via Cloudflare Tunnel)
+
+---
+
+## Project Structure
+
+```
+├── backend/          # Express API + Prisma
+├── frontend/         # Customer Next.js app (port 3000)
+├── admin/            # Admin Next.js app (port 3002)
+├── on-prem/          # On-premise signing services
+├── infra/            # Terraform for AWS
+├── docs/             # Documentation
+└── scripts/          # Utility scripts
+```
+
+---
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [`docs/QUICKSTART_DEV.md`](docs/QUICKSTART_DEV.md) | Local development setup |
+| [`docs/AWS_SETUP_GUIDE.md`](docs/AWS_SETUP_GUIDE.md) | AWS ECS deployment (zero to production) |
+| [`docs/NEW_CLIENT_GUIDE.md`](docs/NEW_CLIENT_GUIDE.md) | New client onboarding |
+| [`docs/THIRD_PARTY_INTEGRATIONS.md`](docs/THIRD_PARTY_INTEGRATIONS.md) | External services setup |
+| [`backend/docs/`](backend/docs/) | Backend-specific docs |
+
+---
+
+## Key Features
+
+- **Lending**: Applications, disbursements, repayments, wallets, late fees
+- **KYC**: CTOS integration, document verification
+- **Digital Signing**: DocuSeal + MTSA PKI signatures
+- **Notifications**: WhatsApp Business + Email (Resend)
+- **Admin**: Dashboard, approvals, analytics, user management
+
+---
+
+## Environment Setup
+
+### Backend (`backend/.env`)
 ```bash
-# KYC one-time token + routing
-KYC_DOCKER=true
-KYC_JWT_SECRET=change-me
-KYC_TOKEN_TTL_MINUTES=15
-
-# Optional thresholds (defaults shown)
-KYC_FACE_THRESHOLD=0.75
-KYC_LIVENESS_THRESHOLD=0.5
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/kapital
+JWT_SECRET=your-secret
 ```
 
-Troubleshooting:
-
+### Frontend/Admin (`.env`)
 ```bash
-# Check backend health
-curl -s http://localhost:4001/api/health | jq
-
-# Verify OCR stub is reachable
-curl -s -X POST http://localhost:7001/ocr -H 'Content-Type: application/json' -d '{"frontUrl":"/uploads/kyc/example.png"}' | cat
-```
-
-### Start Apps with PM2 (local)
-
-Frontend (port 3002)
-```bash
-cd frontend
-npm install
-npm run build
-pm2 start npm --name "growkapital-frontend" -- start -- --port 3002 --hostname 0.0.0.0
-pm2 save
-```
-
-Admin (port 3003)
-```bash
-cd admin
-npm install
-npm run build
-PORT=3003 pm2 start npm --name "growkapital-admin" -- start -- --hostname 0.0.0.0
-pm2 save
-```
-
-PM2 basics
-```bash
-pm2 ls
-pm2 restart growkapital-frontend
-pm2 restart growkapital-admin
-pm2 logs growkapital-frontend --lines 50 --nostream
-```
-
-### Environment Variables (essentials)
-Backend (`backend/.env`):
-```
-DATABASE_URL=postgresql://user:pass@db:5432/kapital
-JWT_SECRET=change-me
-WHATSAPP_ACCESS_TOKEN=...
-WHATSAPP_PHONE_NUMBER_ID=755314160989646
-WHATSAPP_USE_OTP_TEMPLATE=true
-TIMEZONE=Asia/Kuala_Lumpur
-```
-
-Frontend/Admin (`frontend/.env`, `admin/.env`):
-```
 NEXT_PUBLIC_API_URL=http://localhost:4001
 ```
-Use fallback in code: `process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"`.
 
-### Docs & Guides
-- **API guide (canonical)**: `API_DOCUMENTATION.md`
-- **System docs**: `backend/docs/*`
-- **Swagger**: `backend/swagger/swagger.json`
-- **Brand style**: `BRAND_STYLE_GUIDE.md`
+---
 
-### Documentation Index
-- API reference and auth flows: `API_DOCUMENTATION.md`
-- Backend overview: `backend/README.md`
-- Admin API details: `backend/docs/admin-api-guide.md`
-- Late fee system and cron: `backend/docs/LATE_FEE_PAYMENT_HANDLING.md`
-- Admin dashboard metrics: `backend/docs/ADMIN_DASHBOARD_METRICS.md`
-- Payment schedule logic: `backend/docs/PAYMENT_SCHEDULE_UPDATE.md`
-- Migrations: `backend/docs/MIGRATION_BEST_PRACTICES.md`, `backend/docs/MIGRATION_RECOVERY_SYSTEM.md`
+## Common Commands
 
-### Contributing
-- Keep TS strict & functional; avoid classes
-- Use `fetchWithAdminTokenRefresh` for admin-protected calls
+```bash
+# Rebuild backend container
+docker compose -f backend/docker-compose.dev.yml up -d --build backend
+
+# Full restart
+docker compose -f backend/docker-compose.dev.yml down && \
+docker compose -f backend/docker-compose.dev.yml up -d
+
+# Database reset
+docker compose -f backend/docker-compose.dev.yml down -v && \
+docker compose -f backend/docker-compose.dev.yml up -d
+
+# Prisma Studio (DB GUI)
+cd backend && pnpm prisma:studio
+
+# View logs
+docker compose -f backend/docker-compose.dev.yml logs -f backend
+```
+
+---
+
+## Production Deployment
+
+Deploy to AWS ECS via GitHub Actions:
+
+```bash
+git push origin main  # Triggers CI/CD
+```
+
+Manual deploy or first-time setup: See [`docs/AWS_SETUP_GUIDE.md`](docs/AWS_SETUP_GUIDE.md)
+
+---
+
+## Contributing
+
+- TypeScript strict mode, functional patterns
+- Use `fetchWithAdminTokenRefresh` for admin API calls
 - Follow Shadcn/Tailwind + brand guide
+- Use pnpm for package management
 
-### Deployment
-- Scripts in `scripts/`
-- Rebuild example:
-  - `docker compose -f docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml up -d`
+---
 
 Made with Next.js, Node.js, Prisma, and ❤️

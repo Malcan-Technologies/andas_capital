@@ -3,11 +3,9 @@ import { NextResponse } from "next/server";
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
 
-export async function POST(
-	request: Request,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const { id } = params;
 		const backendUrl =
 			process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";

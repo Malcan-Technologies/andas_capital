@@ -3,11 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const applicationId = params.id;
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";

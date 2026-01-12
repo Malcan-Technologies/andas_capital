@@ -1,0 +1,119 @@
+# Cloudflare Tunnel Configuration Template
+# 
+# Setup:
+#   1. Install cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/
+#   2. Login: cloudflared tunnel login
+#   3. Create tunnel: cloudflared tunnel create <client>-signing
+#   4. Copy this file to config.yml and update values
+#   5. Route DNS: cloudflared tunnel route dns <tunnel-id> sign.<domain>
+#   6. Run tunnel: cloudflared tunnel run <tunnel-name>
+#
+# Replace:
+#   - <tunnel-id> with your tunnel ID from step 3
+#   - sign.CLIENT_DOMAIN with your actual sign domain (e.g., sign.kredit.my)
+
+tunnel: <tunnel-id>
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  # ==============================================
+  # DocuSeal API Routes
+  # ==============================================
+  # These routes go to DocuSeal for document management
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/templates.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/submissions.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/submitters.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/attachments.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/webhooks.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/documents.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/fields.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/accounts.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/configs.*
+    service: http://localhost:3001
+
+  # ==============================================
+  # DocuSeal UI and File Routes
+  # ==============================================
+  # Signing forms
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/s/.*
+    service: http://localhost:3001
+    
+  # File serving routes
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/disk/.*
+    service: http://localhost:3001
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/file/.*
+    service: http://localhost:3001
+
+  # ==============================================
+  # MTSA SOAP Endpoints
+  # ==============================================
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/mtsa/.*
+    service: http://localhost:8080
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/MTSAPilot/.*
+    service: http://localhost:8080
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/MTSA/.*
+    service: http://localhost:8080
+
+  # ==============================================
+  # Health Checks
+  # ==============================================
+  - hostname: sign.CLIENT_DOMAIN
+    path: /orchestrator/health
+    service: http://localhost:4010
+    
+  - hostname: sign.CLIENT_DOMAIN
+    path: /health
+    service: http://localhost:3001
+
+  # ==============================================
+  # Signing Orchestrator API (catch-all for /api/*)
+  # ==============================================
+  # This must come AFTER DocuSeal API routes
+  - hostname: sign.CLIENT_DOMAIN
+    path: ^/api/.*
+    service: http://localhost:4010
+
+  # ==============================================
+  # DocuSeal Default (UI and other routes)
+  # ==============================================
+  - hostname: sign.CLIENT_DOMAIN
+    service: http://localhost:3001
+
+  # ==============================================
+  # Catch-all 404
+  # ==============================================
+  - service: http_status:404

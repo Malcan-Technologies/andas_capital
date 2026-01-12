@@ -6,12 +6,10 @@ export const dynamic = "force-dynamic";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export async function GET(
-	request: Request,
-	{ params }: { params: { id: string } }
-) {
-	try {
-		const cookieStore = cookies();
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {

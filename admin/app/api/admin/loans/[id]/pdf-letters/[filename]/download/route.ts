@@ -4,8 +4,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; filename: string } }
+  props: { params: Promise<{ id: string; filename: string }> }
 ) {
+  const params = await props.params;
   try {
     const token = request.headers.get('authorization');
     

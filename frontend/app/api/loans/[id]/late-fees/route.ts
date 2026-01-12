@@ -4,14 +4,12 @@ import { cookies } from "next/headers";
 // Force dynamic rendering since we use cookies
 export const dynamic = "force-dynamic";
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 
 		// Get the access token from cookies
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const accessToken = cookieStore.get("token")?.value;
 
 		if (!accessToken) {

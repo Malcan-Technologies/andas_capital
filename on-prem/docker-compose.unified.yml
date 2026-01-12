@@ -1,0 +1,184 @@
+# Unified On-Prem Docker Compose for Signing Services
+# This file combines DocuSeal, Signing Orchestrator, and MTSA into a single stack
+# 
+# Usage:
+#   1. Copy .env.template to .env and fill in values
+#   2. Run: docker compose -f docker-compose.unified.yml up -d
+#   3. Run cloudflared tunnel separately
+
+services:
+  # ============================================
+  # DocuSeal - Document Signing Platform
+  # ============================================
+  docuseal-postgres:
+    image: postgres:15-alpine
+    container_name: docuseal-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: docuseal
+      POSTGRES_USER: docuseal
+      POSTGRES_PASSWORD: ${DOCUSEAL_POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - docuseal_postgres_data:/var/lib/postgresql/data
+    networks:
+      - signing-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docuseal -d docuseal"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  docuseal:
+    image: docuseal/docuseal:latest
+    container_name: docuseal-app
+    restart: unless-stopped
+    depends_on:
+      docuseal-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://docuseal:${DOCUSEAL_POSTGRES_PASSWORD}@docuseal-postgres:5432/docuseal
+      SECRET_KEY_BASE: ${DOCUSEAL_SECRET_KEY_BASE}
+      HOST: ${SIGN_DOMAIN}
+      PORT: 3000
+      RAILS_FORCE_SSL: "false"
+      STORAGE: local
+      STORAGE_PATH: /data/storage
+      WORKDIR: /data/storage
+      DEFAULT_URL_HOST: ${SIGN_DOMAIN}
+      DEFAULT_URL_PORT: "443"
+      TZ: Asia/Kuala_Lumpur
+    volumes:
+      - docuseal_storage:/data/storage
+      - docuseal_uploads:/data/uploads
+    networks:
+      - signing-network
+    ports:
+      - "3001:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================
+  # Signing Orchestrator - PKI Bridge Service
+  # ============================================
+  agreements-postgres:
+    image: postgres:15-alpine
+    container_name: agreements-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agreements_user
+      POSTGRES_PASSWORD: ${AGREEMENTS_DB_PASSWORD}
+      POSTGRES_DB: agreements_db
+      TZ: Asia/Kuala_Lumpur
+    volumes:
+      - agreements_postgres_data:/var/lib/postgresql/data
+    networks:
+      - signing-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agreements_user -d agreements_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  signing-orchestrator:
+    build:
+      context: ./signing-orchestrator
+      dockerfile: Dockerfile
+    container_name: signing-orchestrator
+    restart: unless-stopped
+    depends_on:
+      agreements-postgres:
+        condition: service_healthy
+    environment:
+      APP_PORT: 4010
+      APP_BASE_URL: https://${SIGN_DOMAIN}
+      NODE_ENV: production
+      DATABASE_URL: postgresql://agreements_user:${AGREEMENTS_DB_PASSWORD}@agreements-postgres:5432/agreements_db
+      DOCUSEAL_BASE_URL: http://docuseal:3000
+      DOCUSEAL_WEBHOOK_HMAC_SECRET: ${DOCUSEAL_WEBHOOK_HMAC_SECRET}
+      DOCUSEAL_API_TOKEN: ${DOCUSEAL_API_TOKEN}
+      PKI_ENABLED: "true"
+      SIGNED_FILES_DIR: /data/signed
+      ORIGINAL_FILES_DIR: /data/original
+      STAMPED_FILES_DIR: /data/stamped
+      MAX_UPLOAD_MB: "50"
+      MTSA_ENV: ${MTSA_ENV:-pilot}
+      MTSA_WSDL_PILOT: http://mtsa:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl
+      MTSA_WSDL_PROD: http://mtsa:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl
+      MTSA_SOAP_USERNAME: ${MTSA_SOAP_USERNAME}
+      MTSA_SOAP_PASSWORD: ${MTSA_SOAP_PASSWORD}
+      SIGNING_ORCHESTRATOR_API_KEY: ${SIGNING_ORCHESTRATOR_API_KEY}
+      CORS_ORIGINS: https://${SIGN_DOMAIN},https://api.${CLIENT_DOMAIN}
+      TZ: Asia/Kuala_Lumpur
+    volumes:
+      - signed_pdfs:/data/signed
+      - original_pdfs:/data/original
+      - stamped_pdfs:/data/stamped
+      - orchestrator_logs:/var/log/signing-orchestrator
+    networks:
+      - signing-network
+    ports:
+      - "4010:4010"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================
+  # MTSA - MyTrustSigner Agent (Tomcat)
+  # ============================================
+  mtsa:
+    image: tomcat:9-jdk11
+    container_name: mtsa
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Xmx512m -Xms256m"
+      TZ: Asia/Kuala_Lumpur
+    volumes:
+      - ./mtsa/webapps:/usr/local/tomcat/webapps:ro
+      - mtsa_logs:/usr/local/tomcat/logs
+    networks:
+      - signing-network
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  signing-network:
+    driver: bridge
+
+volumes:
+  # DocuSeal volumes
+  docuseal_postgres_data:
+    driver: local
+  docuseal_storage:
+    driver: local
+  docuseal_uploads:
+    driver: local
+  
+  # Signing Orchestrator volumes
+  agreements_postgres_data:
+    driver: local
+  signed_pdfs:
+    driver: local
+  original_pdfs:
+    driver: local
+  stamped_pdfs:
+    driver: local
+  orchestrator_logs:
+    driver: local
+  
+  # MTSA volumes
+  mtsa_logs:
+    driver: local

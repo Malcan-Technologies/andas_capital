@@ -1,0 +1,91 @@
+name: Deploy All Services to AWS ECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: 'Deploy backend'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      deploy_frontend:
+        description: 'Deploy frontend'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      deploy_admin:
+        description: 'Deploy admin'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      run_migrations:
+        description: 'Run database migrations (backend only)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      run_seed:
+        description: 'Run database seed (backend only)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  backend:
+    if: ${{ github.event.inputs.deploy_backend == 'true' }}
+    uses: ./.github/workflows/deploy-backend.yml
+    with:
+      run_migrations: ${{ github.event.inputs.run_migrations }}
+      run_seed: ${{ github.event.inputs.run_seed }}
+    secrets: inherit
+    
+  frontend:
+    if: ${{ github.event.inputs.deploy_frontend == 'true' }}
+    uses: ./.github/workflows/deploy-frontend.yml
+    secrets: inherit
+    
+  admin:
+    if: ${{ github.event.inputs.deploy_admin == 'true' }}
+    uses: ./.github/workflows/deploy-admin.yml
+    secrets: inherit
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, admin]
+    if: always()
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "=========================================="
+          echo "📋 FULL DEPLOYMENT SUMMARY"
+          echo "=========================================="
+          echo "Backend: ${{ needs.backend.result || 'skipped' }}"
+          echo "Frontend: ${{ needs.frontend.result || 'skipped' }}"
+          echo "Admin: ${{ needs.admin.result || 'skipped' }}"
+          echo "Migrations: ${{ github.event.inputs.run_migrations }}"
+          echo "Seed: ${{ github.event.inputs.run_seed }}"
+          echo "=========================================="
+          
+          # Check if any deployment failed
+          if [ "${{ needs.backend.result }}" = "failure" ] || \
+             [ "${{ needs.frontend.result }}" = "failure" ] || \
+             [ "${{ needs.admin.result }}" = "failure" ]; then
+            echo "❌ One or more deployments failed"
+            exit 1
+          fi
+          
+          echo "✅ All requested deployments completed successfully!"

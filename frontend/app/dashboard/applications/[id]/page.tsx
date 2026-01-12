@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import Cookies from "js-cookie";
@@ -61,20 +61,21 @@ interface LoanApplication {
 	};
 }
 
-export default function ApplicationDetails({
-	params,
-}: {
-	params: { id: string };
-}) {
-	const router = useRouter();
-	const [application, setApplication] = useState<LoanApplication | null>(
+export default function ApplicationDetails(
+    props: {
+        params: Promise<{ id: string }>;
+    }
+) {
+    const params = use(props.params);
+    const router = useRouter();
+    const [application, setApplication] = useState<LoanApplication | null>(
 		null
 	);
-	const [loading, setLoading] = useState(true);
-	const [userName, setUserName] = useState<string>("");
-	const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [userName, setUserName] = useState<string>("");
+    const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
 
-	useEffect(() => {
+    useEffect(() => {
 		const fetchData = async () => {
 			try {
 				const token =
@@ -129,14 +130,14 @@ export default function ApplicationDetails({
 		fetchData();
 	}, [router, params.id]);
 
-	const formatCurrency = (amount: number) => {
+    const formatCurrency = (amount: number) => {
 		return new Intl.NumberFormat("en-MY", {
 			style: "currency",
 			currency: "MYR",
 		}).format(amount);
 	};
 
-	const formatDate = (dateString: string) => {
+    const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString("en-MY", {
 			year: "numeric",
 			month: "short",
@@ -144,7 +145,7 @@ export default function ApplicationDetails({
 		});
 	};
 
-	const getStatusColor = (status: string, attestationType?: string) => {
+    const getStatusColor = (status: string, attestationType?: string) => {
 		switch (status) {
 			case "INCOMPLETE":
 				return "bg-yellow-100 text-yellow-800 border border-yellow-200";
@@ -175,7 +176,7 @@ export default function ApplicationDetails({
 		}
 	};
 
-	const getStatusLabel = (status: string, attestationType?: string) => {
+    const getStatusLabel = (status: string, attestationType?: string) => {
 		switch (status) {
 			case "INCOMPLETE":
 				return "Incomplete";
@@ -208,7 +209,7 @@ export default function ApplicationDetails({
 		}
 	};
 
-	const calculateFees = (application: LoanApplication) => {
+    const calculateFees = (application: LoanApplication) => {
 		// Use the fees stored in the database instead of calculating them
 		const legalFee = application.legalFee;
 		const netDisbursement = application.netDisbursement;
@@ -225,7 +226,7 @@ export default function ApplicationDetails({
 		};
 	};
 
-	const handleDocumentUpdate = async () => {
+    const handleDocumentUpdate = async () => {
 		try {
 			const token = localStorage.getItem("token") || Cookies.get("token");
 			if (!token || !application) return;
@@ -251,7 +252,7 @@ export default function ApplicationDetails({
 		}
 	};
 
-	return (
+    return (
 		<DashboardLayout userName={userName}>
 			<div className="min-h-screen bg-offwhite">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">

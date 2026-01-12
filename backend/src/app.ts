@@ -1,5 +1,8 @@
-import express from "express";
 import dotenv from "dotenv";
+// Load environment variables FIRST, before any other imports that depend on them
+dotenv.config();
+
+import express from "express";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import { baseUrl } from "./config/swagger";
@@ -60,8 +63,6 @@ try {
 		paths: {}
 	};
 }
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4001;

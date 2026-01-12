@@ -3,11 +3,9 @@ import { NextResponse } from "next/server";
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
 
-export async function PATCH(
-	request: Request,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const id = params.id;
 		const body = await request.json();
 		const { status } = body;

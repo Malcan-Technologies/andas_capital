@@ -1,0 +1,89 @@
+name: Deploy Admin to AWS ECS
+
+on:
+  push:
+    branches: [main]
+    paths: 
+      - 'admin/**'
+      - 'client.json'
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Load client config
+        id: config
+        run: |
+          echo "CLIENT=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
+          echo "REGION=$(jq -r '.aws.region' client.json)" >> $GITHUB_OUTPUT
+          echo "ECR_REPO=$(jq -r '.ecr.admin' client.json)" >> $GITHUB_OUTPUT
+          echo "CLUSTER=$(jq -r '.ecs.cluster' client.json)" >> $GITHUB_OUTPUT
+          echo "SERVICE=$(jq -r '.ecs.admin_service' client.json)" >> $GITHUB_OUTPUT
+          echo "API_DOMAIN=$(jq -r '.domains.api' client.json)" >> $GITHUB_OUTPUT
+          echo "ADMIN_DOMAIN=$(jq -r '.domains.admin' client.json)" >> $GITHUB_OUTPUT
+          
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.config.outputs.REGION }}
+          
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Build and push Docker image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_REPO }}
+          TAG: ${{ github.sha }}
+          NEXT_PUBLIC_API_URL: https://${{ steps.config.outputs.API_DOMAIN }}
+          NEXT_PUBLIC_SITE_URL: https://${{ steps.config.outputs.ADMIN_DOMAIN }}
+        run: |
+          echo "🔨 Building admin Docker image..."
+          cd admin
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+            --build-arg NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+            -t $REGISTRY/$REPO:$TAG \
+            -t $REGISTRY/$REPO:latest .
+          
+          echo "📤 Pushing to ECR..."
+          docker push $REGISTRY/$REPO:$TAG
+          docker push $REGISTRY/$REPO:latest
+          echo "✅ Image pushed: $REGISTRY/$REPO:$TAG"
+          
+      - name: Deploy to ECS
+        env:
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          SERVICE: ${{ steps.config.outputs.SERVICE }}
+        run: |
+          echo "🚀 Deploying to ECS..."
+          aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
+          
+          echo "⏳ Waiting for service to stabilize (this may take a few minutes)..."
+          aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE
+          
+          echo "✅ ECS deployment complete"
+
+      - name: Deployment summary
+        run: |
+          echo "=========================================="
+          echo "📋 ADMIN DEPLOYMENT SUMMARY"
+          echo "=========================================="
+          echo "Client: ${{ steps.config.outputs.CLIENT }}"
+          echo "Region: ${{ steps.config.outputs.REGION }}"
+          echo "Cluster: ${{ steps.config.outputs.CLUSTER }}"
+          echo "Service: ${{ steps.config.outputs.SERVICE }}"
+          echo "Image Tag: ${{ github.sha }}"
+          echo "API URL: https://${{ steps.config.outputs.API_DOMAIN }}"
+          echo "Site URL: https://${{ steps.config.outputs.ADMIN_DOMAIN }}"
+          echo "=========================================="
+          echo "✅ Admin deployment complete!"

@@ -5,11 +5,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 // Force dynamic rendering since we need to access request headers
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-	req: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		// Extract authorization header from the request
 		const authHeader = req.headers.get("authorization");
 		

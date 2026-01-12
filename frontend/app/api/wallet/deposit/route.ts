@@ -8,7 +8,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function POST(request: Request) {
 	try {
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {

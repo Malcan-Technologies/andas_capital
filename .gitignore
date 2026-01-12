@@ -83,6 +83,12 @@ pids
 # Docker volumes
 postgres_data/
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
 # On-premises deployment files (keep separate from cloud deployments)
 # Note: These files are tracked in git but should not be deployed to cloud servers
 # Use deploy-onprem.sh for on-prem deployments only

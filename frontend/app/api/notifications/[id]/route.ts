@@ -6,12 +6,10 @@ export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
-export async function DELETE(
-	request: Request,
-	{ params }: { params: { id: string } }
-) {
-	try {
-		const cookieStore = cookies();
+export async function DELETE(request: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {
