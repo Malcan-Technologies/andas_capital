@@ -9,7 +9,7 @@
   },
   
   "domains": {
-    "app": "app.creditxpress.com.my",
+    "app": "creditxpress.com.my",
     "admin": "admin.creditxpress.com.my",
     "api": "api.creditxpress.com.my",
     "sign": "sign.creditxpress.com.my"
