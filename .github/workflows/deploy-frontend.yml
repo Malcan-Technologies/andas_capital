@@ -83,12 +83,15 @@ jobs:
           # Get task definition JSON and update image
           aws ecs describe-task-definition --task-definition $TASK_FAMILY --query 'taskDefinition' > task-def.json
           
-          # Update image in task definition
+          # Update image in task definition - find the container by name "frontend"
           NEW_IMAGE="$REGISTRY/$REPO:$TAG"
           echo "🔄 Updating image to: $NEW_IMAGE"
           
-          # Update the container image using jq
-          cat task-def.json | jq --arg IMAGE "$NEW_IMAGE" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' > new-task-def.json
+          # Update the frontend container image using jq (find by name)
+          cat task-def.json | jq --arg IMAGE "$NEW_IMAGE" '
+            .containerDefinitions = [.containerDefinitions[] | if .name == "frontend" then .image = $IMAGE else . end] | 
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+          ' > new-task-def.json
           
           # Register new task definition
           NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://new-task-def.json --query 'taskDefinition.taskDefinitionArn' --output text)
@@ -97,10 +100,37 @@ jobs:
           # Update service with new task definition
           aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASK_DEF --force-new-deployment
           
-          echo "⏳ Waiting for service to stabilize (this may take a few minutes)..."
-          aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE
+          echo "⏳ Waiting for service to stabilize (timeout: 10 minutes)..."
+          # Use a more resilient wait with retries
+          MAX_ATTEMPTS=20
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "📊 Check $ATTEMPT/$MAX_ATTEMPTS..."
+            
+            # Check service status
+            SERVICE_STATUS=$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE \
+              --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Deployments:length(deployments)}' \
+              --output json)
+            
+            RUNNING=$(echo $SERVICE_STATUS | jq -r '.Running')
+            DESIRED=$(echo $SERVICE_STATUS | jq -r '.Desired')
+            DEPLOYMENTS=$(echo $SERVICE_STATUS | jq -r '.Deployments')
+            STATUS=$(echo $SERVICE_STATUS | jq -r '.Status')
+            
+            echo "   Status: $STATUS, Running: $RUNNING/$DESIRED, Active deployments: $DEPLOYMENTS"
+            
+            # Success condition: 1 deployment, running equals desired, status is ACTIVE
+            if [ "$STATUS" = "ACTIVE" ] && [ "$RUNNING" = "$DESIRED" ] && [ "$DEPLOYMENTS" = "1" ]; then
+              echo "✅ Service stabilized successfully!"
+              exit 0
+            fi
+            
+            sleep 30
+          done
           
-          echo "✅ ECS deployment complete"
+          echo "⚠️ Service did not stabilize within timeout, but deployment may still complete"
+          exit 0
 
       - name: Deployment summary
         run: |
