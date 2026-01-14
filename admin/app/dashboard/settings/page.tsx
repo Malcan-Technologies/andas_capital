@@ -674,20 +674,19 @@ function SettingsPageContent() {
 				);
 
 			case "STRING":
-				// Special handling for time input
+				// Special handling for time input - display only, not editable
 				if (key === "UPCOMING_PAYMENT_CHECK_TIME") {
+					// Convert 24h time to 12h format for display
+					const formatTime12h = (time24: string) => {
+						const [hours, minutes] = time24.split(':').map(Number);
+						const period = hours >= 12 ? 'PM' : 'AM';
+						const hours12 = hours % 12 || 12;
+						return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+					};
 					return (
-						<div className="space-y-2">
-							<input
-								type="time"
-								value={value}
-								onChange={(e) => handleSettingChange(key, e.target.value)}
-								className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-							/>
-							<div className="text-xs text-blue-300 bg-blue-900/20 p-2 rounded border border-blue-700/30">
-								<strong>Timezone:</strong> UTC+8 (Malaysia time). Current setting: {value} will run daily at {value} Malaysian time. Requires restart to take effect.
-							</div>
-						</div>
+						<span className="text-sm text-gray-300 bg-gray-700/50 px-3 py-1.5 rounded border border-gray-600/50">
+							{formatTime12h(value || "10:00")} (MYT)
+						</span>
 					);
 				}
 				// Default string handling
@@ -1100,6 +1099,150 @@ function SettingsPageContent() {
 		}
 	};
 
+	// Helper function to get dynamic description for a setting based on related settings
+	const getDynamicDescription = (setting: SystemSetting): string | null => {
+		const { key, value } = setting;
+		const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
+
+		// Interest & Principal Allocation Method
+		if (key === "LOAN_CALCULATION_METHOD") {
+			if (value === "STRAIGHT_LINE") {
+				return "Each payment has equal principal + interest portions. Fair and transparent for borrowers.";
+			} else if (value === "RULE_OF_78") {
+				return "Early payments have higher interest, later payments have more principal. Benefits lender on early settlement.";
+			}
+		}
+
+		// Payment Schedule Type
+		if (key === "PAYMENT_SCHEDULE_TYPE") {
+			const customDueDateSetting = Object.values(settings).flat().find(s => s.key === "CUSTOM_DUE_DATE");
+			const customDueDate = customDueDateSetting?.value || 1;
+			
+			if (value === "CUSTOM_DATE") {
+				return `All payments due on the ${customDueDate}${getOrdinalSuffix(customDueDate)} of each month`;
+			} else if (value === "EXACT_MONTHLY") {
+				return "Payments due on the same day each month as disbursement (e.g., disbursed 18th → due 18th)";
+			}
+		}
+
+		// Custom Due Date
+		if (key === "CUSTOM_DUE_DATE") {
+			return `Borrowers must pay by the ${numValue}${getOrdinalSuffix(numValue)} of each month`;
+		}
+
+		// Pro-ration Cutoff Date
+		if (key === "PRORATION_CUTOFF_DATE") {
+			const customDueDateSetting = Object.values(settings).flat().find(s => s.key === "CUSTOM_DUE_DATE");
+			const customDueDate = customDueDateSetting?.value || 1;
+			return `Loans disbursed on ${numValue}${getOrdinalSuffix(numValue)} or later start repayment next month (${customDueDate}${getOrdinalSuffix(customDueDate)})`;
+		}
+
+		// Interest Discount Factor (Early Settlement)
+		if (key === "EARLY_SETTLEMENT_DISCOUNT_FACTOR") {
+			const percentage = Math.round(numValue * 100);
+			if (percentage === 0) {
+				return "No discount on remaining interest — borrower pays full interest";
+			} else if (percentage === 100) {
+				return "Full discount — borrower pays no remaining interest (only principal)";
+			} else {
+				return `${percentage}% of remaining interest is waived on early settlement`;
+			}
+		}
+
+		// Lock-in Period
+		if (key === "EARLY_SETTLEMENT_LOCK_IN_MONTHS") {
+			if (numValue === 0) {
+				return "No lock-in — borrowers can settle early immediately after disbursement";
+			} else if (numValue === 1) {
+				return "Early settlement allowed 1 month after disbursement";
+			} else {
+				return `Early settlement allowed ${numValue} months after disbursement`;
+			}
+		}
+
+		// Early Settlement Fee Value - show context based on fee type
+		if (key === "EARLY_SETTLEMENT_FEE_VALUE") {
+			const feeTypeSetting = Object.values(settings).flat().find(s => s.key === "EARLY_SETTLEMENT_FEE_TYPE");
+			const feeType = feeTypeSetting?.value;
+			
+			if (numValue === 0) {
+				return "No early settlement fee will be charged";
+			}
+			
+			if (feeType === "PERCENT") {
+				return `${numValue}% of remaining principal charged as early settlement fee`;
+			} else if (feeType === "FIXED") {
+				return `Fixed fee of RM ${numValue.toFixed(2)} charged for early settlement`;
+			}
+		}
+
+		// Include Late Fees in Early Settlement
+		if (key === "EARLY_SETTLEMENT_INCLUDE_LATE_FEES") {
+			if (value === true || value === "true") {
+				return "Outstanding late fees must be paid along with settlement amount";
+			} else {
+				return "Late fees are waived when borrower settles early";
+			}
+		}
+
+		// Rounding Mode
+		if (key === "EARLY_SETTLEMENT_ROUNDING_MODE") {
+			if (value === "HALF_UP") {
+				return "RM 100.505 → RM 100.51 (standard rounding, rounds .5 up)";
+			} else if (value === "HALF_EVEN") {
+				return "RM 100.505 → RM 100.50, RM 100.515 → RM 100.52 (banker's rounding, minimizes bias)";
+			}
+		}
+
+		// Late Fee Grace Days
+		if (key === "LATE_FEE_GRACE_DAYS") {
+			if (numValue === 0) {
+				return "Late fees applied immediately on the day after due date";
+			} else if (numValue === 1) {
+				return "Late fees applied 1 day after the due date";
+			} else {
+				return `Borrower has ${numValue} days after due date before late fees apply`;
+			}
+		}
+
+		// Late Fee Amount - show context based on fee type
+		if (key === "LATE_FEE_AMOUNT") {
+			const feeTypeSetting = Object.values(settings).flat().find(s => s.key === "LATE_FEE_TYPE");
+			const feeType = feeTypeSetting?.value;
+			
+			if (feeType === "PERCENTAGE") {
+				return `${numValue}% of the overdue installment amount`;
+			} else if (feeType === "FIXED") {
+				return `Fixed fee of RM ${numValue.toFixed(2)} per late payment`;
+			}
+		}
+
+		// Default Risk Days
+		if (key === "DEFAULT_RISK_DAYS") {
+			const remedyDaysSetting = Object.values(settings).flat().find(s => s.key === "DEFAULT_REMEDY_DAYS");
+			const remedyDays = typeof remedyDaysSetting?.value === 'number' ? remedyDaysSetting.value : parseFloat(remedyDaysSetting?.value) || 16;
+			const totalDays = numValue + remedyDays;
+			return `Initial warning sent on day ${numValue}. Loan defaults on day ${totalDays} if not remedied.`;
+		}
+
+		// Default Remedy Days
+		if (key === "DEFAULT_REMEDY_DAYS") {
+			const riskDaysSetting = Object.values(settings).flat().find(s => s.key === "DEFAULT_RISK_DAYS");
+			const riskDays = typeof riskDaysSetting?.value === 'number' ? riskDaysSetting.value : parseFloat(riskDaysSetting?.value) || 28;
+			const totalDays = riskDays + numValue;
+			return `Borrower has ${numValue} days to pay after warning (day ${riskDays}). Final default on day ${totalDays}.`;
+		}
+
+		return null;
+	};
+
+	// Helper function to get ordinal suffix (1st, 2nd, 3rd, etc.)
+	const getOrdinalSuffix = (n: number): string => {
+		const s = ["th", "st", "nd", "rd"];
+		const v = n % 100;
+		return s[(v - 20) % 10] || s[v] || s[0];
+	};
+
 	// Helper to render compact table input
 	const renderCompactInput = (setting: SystemSetting) => {
 		const { key, dataType, value, options } = setting;
@@ -1187,9 +1330,9 @@ function SettingsPageContent() {
 			);
 		}
 
-		// Filter out LOAN_LIMITS and NOTIFICATIONS categories for loan settings tab
+		// Filter out LOAN_LIMITS, NOTIFICATIONS, and SYSTEM categories for loan settings tab
 		const filteredSettings = Object.entries(settings).filter(([category]) => 
-			category !== "LOAN_LIMITS" && category !== "NOTIFICATIONS"
+			category !== "LOAN_LIMITS" && category !== "NOTIFICATIONS" && category !== "SYSTEM"
 		);
 
 		return (
@@ -1200,9 +1343,34 @@ function SettingsPageContent() {
 					const isExpanded = expandedCategories.has(category);
 					const mainToggleKey = getMainToggleKey(category);
 					const mainToggleSetting = mainToggleKey ? categorySettings.find(s => s.key === mainToggleKey) : null;
-					const displaySettings = mainToggleKey 
-						? categorySettings.filter(s => s.key !== mainToggleKey)
-						: categorySettings;
+					
+					// Filter settings - remove main toggle and conditionally hide CUSTOM_DUE_DATE/PRORATION_CUTOFF_DATE
+					const scheduleTypeSetting = Object.values(settings).flat().find(s => s.key === "PAYMENT_SCHEDULE_TYPE");
+					const isCustomDateSchedule = scheduleTypeSetting?.value === "CUSTOM_DATE";
+					
+					const displaySettings = categorySettings
+						.filter(s => {
+							// Remove main toggle from table (shown in header)
+							if (mainToggleKey && s.key === mainToggleKey) return false;
+							// Hide CUSTOM_DUE_DATE and PRORATION_CUTOFF_DATE when not using custom date schedule
+							if ((s.key === "CUSTOM_DUE_DATE" || s.key === "PRORATION_CUTOFF_DATE") && !isCustomDateSchedule) {
+								return false;
+							}
+							return true;
+						})
+						.sort((a, b) => {
+							// Define priority order for specific settings
+							const priorityOrder: Record<string, number> = {
+								"PAYMENT_SCHEDULE_TYPE": 1,
+								"CUSTOM_DUE_DATE": 2,
+								"PRORATION_CUTOFF_DATE": 3,
+								"DEFAULT_RISK_DAYS": 1,
+								"DEFAULT_REMEDY_DAYS": 2,
+							};
+							const aPriority = priorityOrder[a.key] || 100;
+							const bPriority = priorityOrder[b.key] || 100;
+							return aPriority - bPriority;
+						});
 
 					return (
 						<div key={category} className={`bg-gradient-to-br backdrop-blur-md border rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${
@@ -1276,7 +1444,9 @@ function SettingsPageContent() {
 												</TableRow>
 											</TableHeader>
 											<TableBody>
-												{displaySettings.map((setting) => (
+												{displaySettings.map((setting) => {
+												const dynamicDesc = getDynamicDescription(setting);
+												return (
 													<TableRow key={setting.key} className="border-gray-700/30">
 														<TableCell className="py-2 px-4 w-[240px] min-w-[240px]">
 															<div className="flex items-center gap-2">
@@ -1293,7 +1463,13 @@ function SettingsPageContent() {
 															</div>
 														</TableCell>
 														<TableCell className="py-2 px-4 hidden lg:table-cell">
-															<span className="text-xs text-gray-400 line-clamp-2">{setting.description}</span>
+															{dynamicDesc ? (
+																<span className="text-xs text-blue-300 bg-blue-900/20 px-2 py-1 rounded border border-blue-700/30">
+																	{dynamicDesc}
+																</span>
+															) : (
+																<span className="text-xs text-gray-400 line-clamp-2">{setting.description}</span>
+															)}
 														</TableCell>
 														<TableCell className="py-2 px-4 text-right w-[180px] min-w-[180px]">
 															<div className="flex flex-col items-end gap-0.5">
@@ -1306,44 +1482,21 @@ function SettingsPageContent() {
 															</div>
 														</TableCell>
 													</TableRow>
-												))}
+												);
+											})}
 											</TableBody>
 										</Table>
 									</div>
 
 									{/* Special content for certain categories */}
-									{category === "PAYMENT_SCHEDULE" && (
+									{category === "PAYMENT_SCHEDULE" && !isCustomDateSchedule && (
 										<div className="p-4 border-t border-gray-700/30">
-											{(() => {
-												const scheduleTypeSetting = Object.values(settings).flat().find(s => s.key === "PAYMENT_SCHEDULE_TYPE");
-												const isCustomDate = scheduleTypeSetting?.value === "CUSTOM_DATE";
-												
-												if (isCustomDate) {
-													return (
-														<div className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-3">
-															<h4 className="text-xs font-semibold text-white mb-2 flex items-center">
-																⚙️ Custom Date Configuration
-															</h4>
-															<div className="grid md:grid-cols-2 gap-3">
-																{categorySettings.filter(s => s.key === "CUSTOM_DUE_DATE" || s.key === "PRORATION_CUTOFF_DATE").map((setting) => (
-																	<div key={setting.key} className="flex items-center justify-between bg-gray-700/30 rounded p-2">
-																		<span className="text-xs text-gray-300">{setting.name}</span>
-																		{renderCompactInput(setting)}
-																	</div>
-																))}
-															</div>
-														</div>
-													);
-												} else {
-													return (
-														<div className="bg-blue-800/10 border border-blue-700/30 rounded-lg p-3">
-															<p className="text-xs text-blue-300">
-																<strong>Same Day Each Month:</strong> Payments are due on the same day of each month as the loan disbursement date.
-															</p>
-														</div>
-													);
-												}
-											})()}
+											<div className="bg-blue-800/10 border border-blue-700/30 rounded-lg p-3">
+												<p className="text-xs text-blue-300">
+													<strong>Same Day Each Month:</strong> Payments are due on the same day of each month as the loan disbursement date. 
+													Switch to "Custom Date of Month" to configure a specific due date and pro-ration cutoff.
+												</p>
+											</div>
 										</div>
 									)}
 								</div>
@@ -1619,8 +1772,7 @@ function SettingsPageContent() {
 		const whatsappSettings = notificationSettings[0]?.[1]?.filter(setting => 
 			(setting.key.startsWith('WHATSAPP_') && setting.key !== 'ENABLE_WHATSAPP_NOTIFICATIONS') ||
 			setting.key === 'UPCOMING_PAYMENT_REMINDER_DAYS' ||
-			setting.key === 'LATE_PAYMENT_REMINDER_DAYS' ||
-			setting.key === 'UPCOMING_PAYMENT_CHECK_TIME'
+			setting.key === 'LATE_PAYMENT_REMINDER_DAYS'
 		) || [];
 		
 		const generalSettings = notificationSettings[0]?.[1]?.filter(setting => 
@@ -1628,7 +1780,7 @@ function SettingsPageContent() {
 			setting.key !== 'ENABLE_WHATSAPP_NOTIFICATIONS' &&
 			setting.key !== 'UPCOMING_PAYMENT_REMINDER_DAYS' &&
 			setting.key !== 'LATE_PAYMENT_REMINDER_DAYS' &&
-			setting.key !== 'UPCOMING_PAYMENT_CHECK_TIME'
+			setting.key !== 'UPCOMING_PAYMENT_CHECK_TIME' // Displayed in Payment Reminders header
 		) || [];
 
 		const findSetting = (key: string) => whatsappSettings.find(s => s.key === key);
@@ -1790,18 +1942,18 @@ function SettingsPageContent() {
 					<table className="w-full">
 						<thead>
 							<tr className="border-b border-gray-700/50">
-								<th className="text-left text-xs font-medium text-gray-400 px-4 py-3 w-[180px]">Notification Type</th>
-								<th className="text-left text-xs font-medium text-gray-400 px-4 py-3 hidden md:table-cell">Description</th>
-								<th className="text-center text-xs font-medium text-gray-400 px-4 py-3 w-28">Status</th>
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-3 w-[220px]">Notification Type</th>
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-3 pl-6 hidden md:table-cell">Description</th>
+								<th className="text-center text-xs font-medium text-gray-400 px-4 py-3 w-32">Status</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-700/30">
 							{notificationGroups.map((group) => (
 								<React.Fragment key={group.title}>
 									{/* Group Header */}
-									<tr className="bg-gray-800/30">
+									<tr className="bg-blue-900/20">
 										<td colSpan={3} className="px-4 py-2">
-											<span className="text-xs font-semibold text-gray-300 flex items-center gap-2">
+											<span className="text-xs font-semibold text-blue-300 flex items-center gap-2">
 												<span>{group.icon}</span>
 												{group.title}
 											</span>
@@ -1812,28 +1964,26 @@ function SettingsPageContent() {
 										const { key, label, description } = item;
 										const mandatory = 'mandatory' in item ? item.mandatory : false;
 										const setting = findSetting(key);
-										if (!setting) return null;
+										// For non-mandatory items, skip if setting doesn't exist
+										// For mandatory items, always show the row
+										if (!setting && !mandatory) return null;
 										return (
 											<tr key={key} className="hover:bg-gray-800/20 transition-colors">
-												<td className="px-4 py-2.5 pl-8">
+												<td className="px-4 py-2.5 pl-8 w-[220px]">
 													<span className="text-sm text-white">{label}</span>
-													{mandatory && (
-														<span className="ml-2 text-[10px] bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded">Required</span>
-													)}
 												</td>
-												<td className="px-4 py-2.5 hidden md:table-cell">
+												<td className="px-4 py-2.5 pl-6 hidden md:table-cell">
 													<span className="text-xs text-gray-400">{description}</span>
 												</td>
 												<td className="px-4 py-2.5 text-center">
 													{mandatory ? (
-														<span className="inline-flex items-center gap-1.5 text-xs text-green-400">
-															<span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-															Always Enabled
-														</span>
-													) : (
+														<span className="text-xs text-gray-400">Always enabled</span>
+													) : setting ? (
 														<div className="inline-block">
 															{renderSettingInput(setting)}
 														</div>
+													) : (
+														<span className="text-xs text-gray-500">N/A</span>
 													)}
 												</td>
 											</tr>
@@ -1847,9 +1997,15 @@ function SettingsPageContent() {
 
 				{/* Payment Reminders Section */}
 				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
-					<div className="px-4 py-3 border-b border-gray-700/30 flex items-center gap-2">
-						<span>📅</span>
-						<h3 className="text-sm font-semibold text-white">Payment Reminders</h3>
+					<div className="px-4 py-3 border-b border-gray-700/30 flex items-center justify-between">
+						<div className="flex items-center gap-2">
+							<span>📅</span>
+							<h3 className="text-sm font-semibold text-white">Payment Reminders</h3>
+						</div>
+						<div className="flex items-center gap-2 text-xs text-gray-400">
+							<span>Daily check at</span>
+							<span className="text-white bg-gray-700/50 px-2 py-1 rounded">10:00 AM (MYT)</span>
+						</div>
 					</div>
 					<table className="w-full">
 						<thead>
@@ -1897,59 +2053,79 @@ function SettingsPageContent() {
 				</div>
 
 				{/* Default Risk Section */}
-				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
-					<div className="px-4 py-3 border-b border-gray-700/30 flex items-center justify-between">
-						<div className="flex items-center gap-2">
-							<span>⚠️</span>
-							<h3 className="text-sm font-semibold text-white">Default Risk Notifications</h3>
-						</div>
-						<details className="text-xs">
-							<summary className="text-amber-400 cursor-pointer">View Timeline</summary>
-							<div className="absolute right-4 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10 text-gray-400 w-64">
-								<p className="mb-1"><strong className="text-amber-300">Day 28:</strong> Initial warning + PDF</p>
-								<p className="mb-1"><strong className="text-orange-300">Day 29-43:</strong> Remedy reminders</p>
-								<p><strong className="text-red-300">Day 44:</strong> Final default notice</p>
+				{(() => {
+					// Get default risk settings from the settings object
+					const defaultRiskDaysSetting = Object.values(settings).flat().find(s => s.key === "DEFAULT_RISK_DAYS");
+					const defaultRemedyDaysSetting = Object.values(settings).flat().find(s => s.key === "DEFAULT_REMEDY_DAYS");
+					
+					const riskDays = typeof defaultRiskDaysSetting?.value === 'number' 
+						? defaultRiskDaysSetting.value 
+						: parseInt(defaultRiskDaysSetting?.value) || 28;
+					const remedyDays = typeof defaultRemedyDaysSetting?.value === 'number' 
+						? defaultRemedyDaysSetting.value 
+						: parseInt(defaultRemedyDaysSetting?.value) || 16;
+					const totalDays = riskDays + remedyDays;
+					const remedyEndDay = totalDays - 1;
+
+					return (
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
+							<div className="px-4 py-3 border-b border-gray-700/30 flex items-center justify-between">
+								<div className="flex items-center gap-2">
+									<span>⚠️</span>
+									<h3 className="text-sm font-semibold text-white">Default Risk Notifications</h3>
+								</div>
+								<details className="text-xs">
+									<summary className="text-amber-400 cursor-pointer">View Timeline</summary>
+									<div className="absolute right-4 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10 text-gray-400 w-64">
+										<p className="mb-1"><strong className="text-amber-300">Day {riskDays}:</strong> Initial warning</p>
+										<p className="mb-1"><strong className="text-orange-300">Day {riskDays + 1}-{remedyEndDay}:</strong> Remedy reminders</p>
+										<p><strong className="text-red-300">Day {totalDays}:</strong> Final default notice</p>
+										<p className="mt-2 text-[10px] text-gray-500 border-t border-gray-700 pt-2">
+											Configure days in Loan Settings → Default Risk Processing
+										</p>
+									</div>
+								</details>
 							</div>
-						</details>
-					</div>
-					<table className="w-full">
-						<thead>
-							<tr className="border-b border-gray-700/50">
-								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2 w-[180px]">Stage</th>
-								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2 hidden md:table-cell">Description</th>
-								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2">Days After Due</th>
-								<th className="text-center text-xs font-medium text-gray-400 px-4 py-2 w-24">Enable</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-gray-700/30">
-							{[
-								{ key: "WHATSAPP_DEFAULT_RISK", label: "Initial Warning", description: "First notice with PDF attachment", day: "28", color: "text-amber-400", bgColor: "bg-amber-500/10" },
-								{ key: "WHATSAPP_DEFAULT_REMINDER", label: "Remedy Reminder", description: "Daily reminders during remedy period", day: "29-43", color: "text-orange-400", bgColor: "bg-orange-500/10" },
-								{ key: "WHATSAPP_DEFAULT_FINAL", label: "Final Notice", description: "Loan marked as defaulted", day: "44", color: "text-red-400", bgColor: "bg-red-500/10" },
-							].map(({ key, label, description, day, color, bgColor }) => {
-								const setting = findSetting(key);
-								return (
-									<tr key={key} className="hover:bg-gray-800/20">
-										<td className="px-4 py-3">
-											<span className="text-sm text-white">{label}</span>
-										</td>
-										<td className="px-4 py-3 hidden md:table-cell">
-											<span className="text-xs text-gray-400">{description}</span>
-										</td>
-										<td className="px-4 py-3">
-											<span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${color} ${bgColor}`}>
-												Day {day}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-center">
-											{setting ? renderSettingInput(setting) : <span className="text-xs text-gray-500">N/A</span>}
-										</td>
+							<table className="w-full">
+								<thead>
+									<tr className="border-b border-gray-700/50">
+										<th className="text-left text-xs font-medium text-gray-400 px-4 py-2 w-[180px]">Stage</th>
+										<th className="text-left text-xs font-medium text-gray-400 px-4 py-2 hidden md:table-cell">Description</th>
+										<th className="text-left text-xs font-medium text-gray-400 px-4 py-2">Days After Due</th>
+										<th className="text-center text-xs font-medium text-gray-400 px-4 py-2 w-24">Enable</th>
 									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				</div>
+								</thead>
+								<tbody className="divide-y divide-gray-700/30">
+									{[
+										{ key: "WHATSAPP_DEFAULT_RISK", label: "Initial Warning", description: "First notice sent to borrower", day: String(riskDays), color: "text-amber-400", bgColor: "bg-amber-500/10" },
+										{ key: "WHATSAPP_DEFAULT_REMINDER", label: "Remedy Reminder", description: `Reminders during ${remedyDays}-day remedy period`, day: `${riskDays + 1}-${remedyEndDay}`, color: "text-orange-400", bgColor: "bg-orange-500/10" },
+										{ key: "WHATSAPP_DEFAULT_FINAL", label: "Final Notice", description: "Loan marked as defaulted", day: String(totalDays), color: "text-red-400", bgColor: "bg-red-500/10" },
+									].map(({ key, label, description, day, color, bgColor }) => {
+										const setting = findSetting(key);
+										return (
+											<tr key={key} className="hover:bg-gray-800/20">
+												<td className="px-4 py-3">
+													<span className="text-sm text-white">{label}</span>
+												</td>
+												<td className="px-4 py-3 hidden md:table-cell">
+													<span className="text-xs text-gray-400">{description}</span>
+												</td>
+												<td className="px-4 py-3">
+													<span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${color} ${bgColor}`}>
+														Day {day}
+													</span>
+												</td>
+												<td className="px-4 py-3 text-center">
+													{setting ? renderSettingInput(setting) : <span className="text-xs text-gray-500">N/A</span>}
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					);
+				})()}
 
 
 				{/* General Settings */}

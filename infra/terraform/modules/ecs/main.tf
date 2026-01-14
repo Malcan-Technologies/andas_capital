@@ -319,7 +319,6 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "WHATSAPP_CREDENTIALS", valueFrom = var.secrets_arns["whatsapp_token"] },
         { name = "RESEND_CREDENTIALS", valueFrom = var.secrets_arns["resend_api_key"] },
         { name = "CTOS_CREDENTIALS", valueFrom = var.secrets_arns["ctos_credentials"] },
-        { name = "KYC_CREDENTIALS", valueFrom = var.secrets_arns["kyc_credentials"] },
         { name = "CTOS_B2B_CREDENTIALS", valueFrom = var.secrets_arns["ctos_b2b_credentials"] },
       ]
 

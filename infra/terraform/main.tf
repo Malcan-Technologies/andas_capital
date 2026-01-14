@@ -165,7 +165,6 @@ module "ecs" {
     whatsapp_token         = module.secrets.secret_arns.whatsapp_token
     resend_api_key         = module.secrets.secret_arns.resend_api_key
     ctos_credentials       = module.secrets.secret_arns.ctos_credentials
-    kyc_credentials        = module.secrets.secret_arns.kyc_credentials
     ctos_b2b_credentials   = module.secrets.secret_arns.ctos_b2b_credentials
   }
 

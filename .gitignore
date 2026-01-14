@@ -87,6 +87,8 @@ postgres_data/
 .terraform/
 *.tfstate
 *.tfstate.*
+*.tfplan
+tfplan
 .terraform.lock.hcl
 
 # On-premises deployment files (keep separate from cloud deployments)

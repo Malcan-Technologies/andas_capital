@@ -118,20 +118,12 @@ export const ctosConfig = {
 };
 
 // ==============================================
-// KYC Service Credentials
-// AWS Secret: {secrets_prefix}/kyc-credentials
-// JSON keys: jwt_secret, token_ttl_minutes, ocr_url, face_url, liveness_url, disable_liveness
+// KYC Configuration
+// Note: Using CTOS for KYC, not Docker-based services
 // ==============================================
-const kycCredentials = parseJsonCredentials(process.env.KYC_CREDENTIALS);
-
 export const kycConfig = {
-  jwtSecret: process.env.KYC_JWT_SECRET || kycCredentials.jwt_secret || jwtConfig.secret,
-  tokenTtlMinutes: Number(process.env.KYC_TOKEN_TTL_MINUTES || kycCredentials.token_ttl_minutes || 15),
-  ocrUrl: process.env.KYC_OCR_URL || kycCredentials.ocr_url || 'http://ocr:7001/ocr',
-  faceUrl: process.env.KYC_FACE_URL || kycCredentials.face_url || 'http://face:7002/face-match',
-  livenessUrl: process.env.KYC_LIVENESS_URL || kycCredentials.liveness_url || 'http://liveness:7003/liveness',
-  disableLiveness: process.env.KYC_DISABLE_LIVENESS === 'true' || kycCredentials.disable_liveness === 'true',
-  dockerEnabled: process.env.KYC_DOCKER === 'true' || kycCredentials.docker_enabled === 'true',
+  jwtSecret: process.env.KYC_JWT_SECRET || jwtConfig.secret,
+  tokenTtlMinutes: Number(process.env.KYC_TOKEN_TTL_MINUTES || 15),
 };
 
 // ==============================================
@@ -223,7 +215,6 @@ export function logConfigStatus(): void {
   console.log(`  WhatsApp: ${whatsappConfig.accessToken ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  Resend Email: ${resendConfig.apiKey ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  CTOS eKYC: ${ctosConfig.apiKey ? '✅ Configured' : '❌ Not configured'}`);
-  console.log(`  KYC Service: ${kycConfig.dockerEnabled ? '✅ Docker mode' : '⚠️ Disabled'}`);
   console.log(`  DocuSeal: ${docusealConfig.apiToken ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  Signing Orchestrator: ${signingConfig.apiKey ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  S3 Storage: ${s3Config.isConfigured ? `✅ ${s3Config.bucket}` : '⚠️ Using local storage'}`);
