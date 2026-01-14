@@ -135,25 +135,26 @@ export const kycConfig = {
 };
 
 // ==============================================
-// DocuSeal Configuration (non-secret URLs are in env, token is secret)
+// DocuSeal & Signing Orchestrator Configuration (combined)
+// AWS Secret: {secrets_prefix}/docuseal-signing-config
+// JSON keys: api_token, base_url, api_url, template_id, webhook_secret, orchestrator_url, orchestrator_api_key
 // ==============================================
+const docusealSigningCredentials = parseJsonCredentials(process.env.DOCUSEAL_SIGNING_CONFIG);
+
 export const docusealConfig = {
   // User-facing URL (what users see in browser)
-  baseUrl: process.env.DOCUSEAL_BASE_URL || 'http://localhost:3001',
+  baseUrl: process.env.DOCUSEAL_BASE_URL || docusealSigningCredentials.base_url || 'http://localhost:3001',
   // Backend API URL (for internal API calls, may differ in Docker)
-  apiUrl: process.env.DOCUSEAL_API_URL || process.env.DOCUSEAL_BASE_URL || 'http://host.docker.internal:3001',
-  apiToken: process.env.DOCUSEAL_API_TOKEN || '',
-  apiKey: process.env.DOCUSEAL_API_KEY || process.env.DOCUSEAL_API_TOKEN || '',
-  templateId: process.env.DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID || '',
-  webhookSecret: process.env.DOCUSEAL_WEBHOOK_SECRET || '',
+  apiUrl: process.env.DOCUSEAL_API_URL || docusealSigningCredentials.api_url || process.env.DOCUSEAL_BASE_URL || docusealSigningCredentials.base_url || 'http://host.docker.internal:3001',
+  apiToken: process.env.DOCUSEAL_API_TOKEN || docusealSigningCredentials.api_token || '',
+  apiKey: process.env.DOCUSEAL_API_KEY || process.env.DOCUSEAL_API_TOKEN || docusealSigningCredentials.api_token || '',
+  templateId: process.env.DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID || docusealSigningCredentials.template_id || '',
+  webhookSecret: process.env.DOCUSEAL_WEBHOOK_SECRET || docusealSigningCredentials.webhook_secret || '',
 };
 
-// ==============================================
-// Signing Orchestrator Configuration
-// ==============================================
 export const signingConfig = {
-  url: process.env.SIGNING_ORCHESTRATOR_URL || 'http://localhost:4010',
-  apiKey: process.env.SIGNING_ORCHESTRATOR_API_KEY || '',
+  url: process.env.SIGNING_ORCHESTRATOR_URL || docusealSigningCredentials.orchestrator_url || 'http://localhost:4010',
+  apiKey: process.env.SIGNING_ORCHESTRATOR_API_KEY || docusealSigningCredentials.orchestrator_api_key || '',
 };
 
 // ==============================================

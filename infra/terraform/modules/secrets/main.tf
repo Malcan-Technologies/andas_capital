@@ -31,18 +31,10 @@ resource "aws_secretsmanager_secret" "jwt_refresh_secret" {
   }
 }
 
-# Signing Orchestrator API Key
-resource "aws_secretsmanager_secret" "signing_api_key" {
-  name = "${var.secrets_prefix}/signing-orchestrator-api-key"
-
-  tags = {
-    Client = var.client_slug
-  }
-}
-
-# DocuSeal API Token
-resource "aws_secretsmanager_secret" "docuseal_token" {
-  name = "${var.secrets_prefix}/docuseal-api-token"
+# DocuSeal & Signing Orchestrator Configuration (combined)
+# JSON keys: api_token, base_url, api_url, template_id, webhook_secret, orchestrator_url, orchestrator_api_key
+resource "aws_secretsmanager_secret" "docuseal_signing_config" {
+  name = "${var.secrets_prefix}/docuseal-signing-config"
 
   tags = {
     Client = var.client_slug
@@ -108,8 +100,7 @@ output "secret_arns" {
   value = {
     jwt_secret               = aws_secretsmanager_secret.jwt_secret.arn
     jwt_refresh_secret       = aws_secretsmanager_secret.jwt_refresh_secret.arn
-    signing_api_key          = aws_secretsmanager_secret.signing_api_key.arn
-    docuseal_token           = aws_secretsmanager_secret.docuseal_token.arn
+    docuseal_signing_config  = aws_secretsmanager_secret.docuseal_signing_config.arn
     whatsapp_token           = aws_secretsmanager_secret.whatsapp_token.arn
     resend_api_key           = aws_secretsmanager_secret.resend_api_key.arn
     ctos_credentials         = aws_secretsmanager_secret.ctos_credentials.arn

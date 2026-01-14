@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // SIGNING_ORCHESTRATOR_URL should be the base URL without /api suffix
-// e.g., https://sign.kredit.my or http://localhost:4010
+// e.g., https://sign.creditxpress.com.my or http://localhost:4010
 const SIGNING_ORCHESTRATOR_URL = process.env.SIGNING_ORCHESTRATOR_URL || 'http://localhost:4010';
 const SIGNING_ORCHESTRATOR_API_KEY = process.env.SIGNING_ORCHESTRATOR_API_KEY || process.env.DOCUSEAL_API_TOKEN || 'NwPkizAUEfShnc4meN1m3N38DG8ZNEyRmWPMjq8BXv8';
 

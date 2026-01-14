@@ -82,17 +82,37 @@ Go to **Cloudflare Zero Trust Dashboard** → **Networks** → **Tunnels** → S
 
 Add the following routes **in this exact order** (order matters!):
 
-| # | Subdomain | Domain | Path | Service |
-|---|-----------|--------|------|---------|
-| 1 | sign | clientdomain.com | `orchestrator/*` | `http://localhost:4010` |
-| 2 | sign | clientdomain.com | `api/signing/*` | `http://localhost:4010` |
-| 3 | sign | clientdomain.com | `MTSAPilot/*` | `http://localhost:8080` |
-| 4 | sign | clientdomain.com | `MTSA/*` | `http://localhost:8080` |
-| 5 | sign | clientdomain.com | `*` | `http://localhost:3001` |
+| # | Subdomain | Domain | Path | Service | Description |
+|---|-----------|--------|------|---------|-------------|
+| 1 | sign | clientdomain.com | `orchestrator/*` | `http://localhost:4010` | Health checks |
+| 2 | sign | clientdomain.com | `api/otp` | `http://localhost:4010` | OTP requests |
+| 3 | sign | clientdomain.com | `api/certificate` | `http://localhost:4010` | Certificate issuance |
+| 4 | sign | clientdomain.com | `api/cert/*` | `http://localhost:4010` | Certificate lookup |
+| 5 | sign | clientdomain.com | `api/enroll` | `http://localhost:4010` | User enrollment |
+| 6 | sign | clientdomain.com | `api/sign` | `http://localhost:4010` | PDF signing |
+| 7 | sign | clientdomain.com | `api/verify` | `http://localhost:4010` | Signature verification |
+| 8 | sign | clientdomain.com | `api/verify-cert-pin` | `http://localhost:4010` | PIN verification |
+| 9 | sign | clientdomain.com | `api/revoke` | `http://localhost:4010` | Certificate revocation |
+| 10 | sign | clientdomain.com | `api/pki/*` | `http://localhost:4010` | PKI operations |
+| 11 | sign | clientdomain.com | `api/signed/*` | `http://localhost:4010` | Signed document access |
+| 12 | sign | clientdomain.com | `api/agreements` | `http://localhost:4010` | Agreement listing |
+| 13 | sign | clientdomain.com | `api/admin/*` | `http://localhost:4010` | Admin operations |
+| 14 | sign | clientdomain.com | `MTSAPilot/*` | `http://localhost:8080` | MTSA Pilot SOAP |
+| 15 | sign | clientdomain.com | `MTSA/*` | `http://localhost:8080` | MTSA Prod SOAP |
+| 16 | sign | clientdomain.com | `*` | `http://localhost:3001` | DocuSeal (catch-all) |
 
 **⚠️ Important:** The catch-all `*` route MUST be last. Cloudflare evaluates routes in order, so specific paths must come before the catch-all.
 
-**Note:** The Signing Orchestrator has `/orchestrator/health` mounted internally, so the health check at `https://sign.clientdomain.com/orchestrator/health` works without a special route.
+**Minimum Required Routes (for OTP/Certificate flow):**
+
+If you only need basic certificate signing functionality, add at minimum:
+- `orchestrator/*` → `http://localhost:4010` (health checks)
+- `api/otp` → `http://localhost:4010` (OTP requests)
+- `api/certificate` → `http://localhost:4010` (certificate issuance)
+- `api/cert/*` → `http://localhost:4010` (certificate lookup)
+- `api/enroll` → `http://localhost:4010` (enrollment)
+
+**Note:** The Signing Orchestrator has `/orchestrator/health` mounted internally, so the health check at `https://sign.clientdomain.com/orchestrator/health` works via the `orchestrator/*` route.
 
 ### Step 6: Install as System Service
 
@@ -131,7 +151,7 @@ Test all endpoints:
 curl -s https://sign.clientdomain.com/ | head -5
 
 # Signing Orchestrator health (should return JSON with status)
-curl -s https://sign.clientdomain.com/signing-health
+curl -s https://sign.clientdomain.com/orchestrator/health
 
 # MTSA WSDL (should return XML)
 curl -s https://sign.clientdomain.com/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl | head -5
@@ -164,7 +184,7 @@ SIGNING_ORCHESTRATOR_URL=https://sign.clientdomain.com
 
 The health check in `backend/src/api/admin.ts` uses these URLs:
 - DocuSeal: `https://sign.clientdomain.com/`
-- Signing Orchestrator: `https://sign.clientdomain.com/signing-health`
+- Signing Orchestrator: `https://sign.clientdomain.com/orchestrator/health`
 - MTSA: `https://sign.clientdomain.com/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`
 
 ---
@@ -242,10 +262,10 @@ cloudflared tunnel run TUNNEL_NAME
 
 ### Port Mapping
 
-| Service | Internal Port | Cloudflare Path |
-|---------|--------------|-----------------|
+| Service | Internal Port | Cloudflare Paths |
+|---------|--------------|------------------|
 | DocuSeal | 3001 | `/*` (catch-all) |
-| Signing Orchestrator | 4010 | `/orchestrator/*`, `/api/signing/*`, `/signing-health` |
+| Signing Orchestrator | 4010 | `/orchestrator/*`, `/api/otp`, `/api/certificate`, `/api/cert/*`, `/api/enroll`, `/api/sign`, `/api/verify`, `/api/verify-cert-pin`, `/api/revoke`, `/api/pki/*`, `/api/signed/*`, `/api/agreements`, `/api/admin/*` |
 | MTSA | 8080 | `/MTSAPilot/*`, `/MTSA/*` |
 
 ---

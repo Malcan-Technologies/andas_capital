@@ -158,16 +158,15 @@ module "ecs" {
 
   # All secrets for backend container
   secrets_arns = {
-    database_url        = module.rds.database_url_secret_arn
-    jwt_secret          = module.secrets.secret_arns.jwt_secret
-    jwt_refresh_secret  = module.secrets.secret_arns.jwt_refresh_secret
-    signing_api_key     = module.secrets.secret_arns.signing_api_key
-    docuseal_token       = module.secrets.secret_arns.docuseal_token
-    whatsapp_token       = module.secrets.secret_arns.whatsapp_token
-    resend_api_key       = module.secrets.secret_arns.resend_api_key
-    ctos_credentials     = module.secrets.secret_arns.ctos_credentials
-    kyc_credentials      = module.secrets.secret_arns.kyc_credentials
-    ctos_b2b_credentials = module.secrets.secret_arns.ctos_b2b_credentials
+    database_url           = module.rds.database_url_secret_arn
+    jwt_secret             = module.secrets.secret_arns.jwt_secret
+    jwt_refresh_secret     = module.secrets.secret_arns.jwt_refresh_secret
+    docuseal_signing_config = module.secrets.secret_arns.docuseal_signing_config
+    whatsapp_token         = module.secrets.secret_arns.whatsapp_token
+    resend_api_key         = module.secrets.secret_arns.resend_api_key
+    ctos_credentials       = module.secrets.secret_arns.ctos_credentials
+    kyc_credentials        = module.secrets.secret_arns.kyc_credentials
+    ctos_b2b_credentials   = module.secrets.secret_arns.ctos_b2b_credentials
   }
 
   # RDS endpoint for backend DATABASE_URL construction

@@ -314,8 +314,8 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "DATABASE_URL", valueFrom = var.secrets_arns["database_url"] },
         { name = "JWT_SECRET", valueFrom = var.secrets_arns["jwt_secret"] },
         { name = "JWT_REFRESH_SECRET", valueFrom = var.secrets_arns["jwt_refresh_secret"] },
-        { name = "SIGNING_ORCHESTRATOR_API_KEY", valueFrom = var.secrets_arns["signing_api_key"] },
-        { name = "DOCUSEAL_API_TOKEN", valueFrom = var.secrets_arns["docuseal_token"] },
+        # Combined DocuSeal + Signing Orchestrator config (JSON)
+        { name = "DOCUSEAL_SIGNING_CONFIG", valueFrom = var.secrets_arns["docuseal_signing_config"] },
         { name = "WHATSAPP_CREDENTIALS", valueFrom = var.secrets_arns["whatsapp_token"] },
         { name = "RESEND_CREDENTIALS", valueFrom = var.secrets_arns["resend_api_key"] },
         { name = "CTOS_CREDENTIALS", valueFrom = var.secrets_arns["ctos_credentials"] },
