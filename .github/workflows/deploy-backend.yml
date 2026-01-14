@@ -55,6 +55,7 @@ jobs:
           echo "REGION=$(jq -r '.aws.region' client.json)" >> $GITHUB_OUTPUT
           echo "ACCOUNT=$(jq -r '.aws.account_id' client.json)" >> $GITHUB_OUTPUT
           echo "ECR_REPO=$(jq -r '.ecr.backend' client.json)" >> $GITHUB_OUTPUT
+          echo "ECR_MIGRATE=$(jq -r '.ecr.migrate' client.json)" >> $GITHUB_OUTPUT
           echo "CLUSTER=$(jq -r '.ecs.cluster' client.json)" >> $GITHUB_OUTPUT
           echo "SERVICE=$(jq -r '.ecs.backend_service' client.json)" >> $GITHUB_OUTPUT
           echo "SECRETS_PREFIX=$(jq -r '.secrets_prefix' client.json)" >> $GITHUB_OUTPUT
@@ -83,7 +84,6 @@ jobs:
         id: should_migrate
         run: |
           # Handle both workflow_dispatch and workflow_call contexts
-          # workflow_dispatch uses github.event.inputs, workflow_call uses inputs
           MANUAL_OVERRIDE="${{ inputs.run_migrations || github.event.inputs.run_migrations }}"
           MIGRATIONS_CHANGED="${{ steps.migration_check.outputs.migrations_changed }}"
           
@@ -102,18 +102,10 @@ jobs:
             echo "run_migrations=false" >> $GITHUB_OUTPUT
             echo "⏭️ No migrations needed (no changes detected)"
           fi
-          
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ steps.config.outputs.REGION }}
 
       - name: Determine if seed should run
         id: should_seed
         run: |
-          # Handle both workflow_dispatch and workflow_call contexts
           SEED_INPUT="${{ inputs.run_seed || github.event.inputs.run_seed }}"
           echo "📋 Seed input received: '$SEED_INPUT'"
           if [ "$SEED_INPUT" = "true" ]; then
@@ -122,21 +114,19 @@ jobs:
           else
             echo "run_seed=false" >> $GITHUB_OUTPUT
           fi
-
-      - name: Install Session Manager plugin
-        if: steps.should_migrate.outputs.run_migrations == 'true' || steps.should_seed.outputs.run_seed == 'true'
-        run: |
-          echo "📦 Installing AWS Session Manager plugin..."
-          curl -sS "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
-          sudo dpkg -i session-manager-plugin.deb
-          session-manager-plugin --version
-          echo "✅ Session Manager plugin installed"
+          
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.config.outputs.REGION }}
           
       - name: Login to ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
         
-      - name: Build and push Docker image
+      - name: Build and push backend Docker image
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           REPO: ${{ steps.config.outputs.ECR_REPO }}
@@ -150,6 +140,128 @@ jobs:
           docker push $REGISTRY/$REPO:$TAG
           docker push $REGISTRY/$REPO:latest
           echo "✅ Image pushed: $REGISTRY/$REPO:$TAG"
+
+      - name: Build and push migration Docker image
+        if: steps.should_migrate.outputs.run_migrations == 'true'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "🔨 Building migration Docker image..."
+          cd backend
+          docker build -t $REGISTRY/$REPO:$TAG -f Dockerfile.migrate .
+          
+          echo "📤 Pushing migration image to ECR..."
+          docker push $REGISTRY/$REPO:$TAG
+          echo "✅ Migration image pushed: $REGISTRY/$REPO:$TAG"
+
+      - name: Run Database Migrations (one-off task)
+        if: steps.should_migrate.outputs.run_migrations == 'true'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          CLIENT: ${{ steps.config.outputs.CLIENT }}
+          REGION: ${{ steps.config.outputs.REGION }}
+        run: |
+          echo "🗄️ Running database migrations via one-off ECS task..."
+          
+          echo "📝 Ensuring CloudWatch log group exists..."
+          aws logs create-log-group \
+            --log-group-name /ecs/$CLIENT/migrate \
+            --region $REGION 2>/dev/null || echo "Log group already exists"
+          
+          echo "📦 Registering migration task definition..."
+          TASK_DEF=$(cat infra/ecs-task-definition-migrate.json | jq --arg IMAGE "$REGISTRY/$REPO:$TAG" \
+            '.containerDefinitions[0].image = $IMAGE')
+          
+          aws ecs register-task-definition \
+            --cli-input-json "$TASK_DEF" \
+            --region $REGION
+          
+          echo "🚀 Starting migration task..."
+          
+          # Get network configuration from backend service
+          NETWORK_CONFIG=$(aws ecs describe-services \
+            --cluster $CLUSTER \
+            --services ${{ steps.config.outputs.SERVICE }} \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration' \
+            --output json)
+          
+          SUBNETS=$(echo $NETWORK_CONFIG | jq -r '.subnets | join(",")')
+          SECURITY_GROUPS=$(echo $NETWORK_CONFIG | jq -r '.securityGroups | join(",")')
+          
+          # Run migration as one-off ECS task
+          TASK_ARN=$(aws ecs run-task \
+            --cluster $CLUSTER \
+            --launch-type FARGATE \
+            --task-definition $CLIENT-migrate \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}" \
+            --region $REGION \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "❌ Failed to start migration task"
+            exit 1
+          fi
+          
+          echo "⏳ Waiting for migrations to complete (Task: $TASK_ARN)..."
+          
+          # Wait for task to complete
+          aws ecs wait tasks-stopped \
+            --cluster $CLUSTER \
+            --tasks $TASK_ARN \
+            --region $REGION
+          
+          # Check exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster $CLUSTER \
+            --tasks $TASK_ARN \
+            --region $REGION \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+          
+          if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "None" ]; then
+            echo "❌ Migrations failed with exit code $EXIT_CODE"
+            
+            echo "📋 Task details:"
+            aws ecs describe-tasks \
+              --cluster $CLUSTER \
+              --tasks $TASK_ARN \
+              --region $REGION \
+              --query 'tasks[0].containers[0]' || true
+            
+            TASK_ID=$(echo $TASK_ARN | awk -F'/' '{print $NF}')
+            echo "📋 Migration logs (Task ID: $TASK_ID):"
+            
+            echo "Available log streams:"
+            aws logs describe-log-streams \
+              --log-group-name /ecs/$CLIENT/migrate \
+              --region $REGION \
+              --max-items 5 \
+              --order-by LastEventTime \
+              --descending || echo "Could not list log streams"
+            
+            aws logs tail /ecs/$CLIENT/migrate \
+              --since 15m \
+              --format short \
+              --region $REGION || echo "Could not retrieve logs"
+            
+            exit 1
+          elif [ "$EXIT_CODE" = "None" ]; then
+            echo "⚠️ Task stopped but exit code is None - checking task status..."
+            aws ecs describe-tasks \
+              --cluster $CLUSTER \
+              --tasks $TASK_ARN \
+              --region $REGION \
+              --query 'tasks[0]' || true
+            exit 1
+          fi
+          
+          echo "✅ Database migrations completed successfully"
           
       - name: Deploy to ECS
         id: deploy
@@ -172,11 +284,10 @@ jobs:
           # Get task definition JSON and update image
           aws ecs describe-task-definition --task-definition $TASK_FAMILY --query 'taskDefinition' > task-def.json
           
-          # Update image in task definition - find the container by name "backend"
+          # Update image in task definition
           NEW_IMAGE="$REGISTRY/$REPO:$TAG"
           echo "🔄 Updating image to: $NEW_IMAGE"
           
-          # Update the backend container image using jq (find by name)
           cat task-def.json | jq --arg IMAGE "$NEW_IMAGE" '
             .containerDefinitions = [.containerDefinitions[] | if .name == "backend" then .image = $IMAGE else . end] | 
             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
@@ -189,15 +300,13 @@ jobs:
           # Update service with new task definition
           aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASK_DEF --force-new-deployment
           
-          echo "⏳ Waiting for service to stabilize (timeout: 10 minutes)..."
-          # Use a more resilient wait with retries
+          echo "⏳ Waiting for service to stabilize..."
           MAX_ATTEMPTS=20
           ATTEMPT=0
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
             echo "📊 Check $ATTEMPT/$MAX_ATTEMPTS..."
             
-            # Check service status
             SERVICE_STATUS=$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE \
               --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Deployments:length(deployments)}' \
               --output json)
@@ -209,7 +318,6 @@ jobs:
             
             echo "   Status: $STATUS, Running: $RUNNING/$DESIRED, Active deployments: $DEPLOYMENTS"
             
-            # Success condition: 1 deployment, running equals desired, status is ACTIVE
             if [ "$STATUS" = "ACTIVE" ] && [ "$RUNNING" = "$DESIRED" ] && [ "$DEPLOYMENTS" = "1" ]; then
               echo "✅ Service stabilized successfully!"
               break
@@ -218,216 +326,17 @@ jobs:
             sleep 30
           done
           
-          # Don't fail even if timeout - deployment may complete later
           echo "✅ ECS deployment initiated"
 
-      - name: Get running task for migrations
-        id: get_task
-        if: steps.should_migrate.outputs.run_migrations == 'true' || steps.should_seed.outputs.run_seed == 'true'
+      - name: Run database seed (optional)
+        if: steps.should_seed.outputs.run_seed == 'true'
         env:
           CLUSTER: ${{ steps.config.outputs.CLUSTER }}
           SERVICE: ${{ steps.config.outputs.SERVICE }}
         run: |
-          echo "🔍 Waiting for running task..."
-          
-          # ECS Fargate tasks can take 2-5 minutes to start
-          # Retry for up to 5 minutes (15 attempts x 20 seconds)
-          MAX_ATTEMPTS=15
-          ATTEMPT=0
-          TASK_ARN=""
-          
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "📊 Attempt $ATTEMPT/$MAX_ATTEMPTS - Looking for running task..."
-            
-            TASK_ARN=$(aws ecs list-tasks \
-              --cluster $CLUSTER \
-              --service-name $SERVICE \
-              --desired-status RUNNING \
-              --query 'taskArns[0]' \
-              --output text)
-            
-            if [ "$TASK_ARN" != "None" ] && [ -n "$TASK_ARN" ]; then
-              # Verify task is actually in RUNNING state (not just PENDING)
-              TASK_STATUS=$(aws ecs describe-tasks \
-                --cluster $CLUSTER \
-                --tasks $TASK_ARN \
-                --query 'tasks[0].lastStatus' \
-                --output text)
-              
-              if [ "$TASK_STATUS" = "RUNNING" ]; then
-                echo "✅ Found running task: $TASK_ARN"
-                echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
-                exit 0
-              else
-                echo "   Task found but status is $TASK_STATUS, waiting..."
-              fi
-            else
-              echo "   No running task found yet, waiting..."
-            fi
-            
-            sleep 20
-          done
-          
-          echo "❌ No running task found after $MAX_ATTEMPTS attempts"
-          echo ""
-          echo "🔍 Debugging: Checking all recent tasks..."
-          
-          # List all tasks (including stopped) for debugging
-          echo "All tasks in service:"
-          aws ecs list-tasks --cluster $CLUSTER --service-name $SERVICE --query 'taskArns[]' --output text || true
-          
-          echo ""
-          echo "Stopped tasks:"
-          aws ecs list-tasks --cluster $CLUSTER --service-name $SERVICE --desired-status STOPPED --query 'taskArns[]' --output text || true
-          
-          echo ""
-          echo "Service events (last 5):"
-          aws ecs describe-services --cluster $CLUSTER --services $SERVICE \
-            --query 'services[0].events[:5].[createdAt,message]' --output table || true
-          
-          echo ""
-          echo "💡 Check CloudWatch logs for crash details: /ecs/creditxpress/backend"
-          exit 1
-
-      - name: Run database migrations
-        if: steps.should_migrate.outputs.run_migrations == 'true'
-        env:
-          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
-          TASK_ARN: ${{ steps.get_task.outputs.task_arn }}
-        run: |
-          echo "🗄️ Running database migrations..."
-          
-          # Check if ECS Exec is enabled on the task
-          echo "🔍 Checking ECS Exec status on task..."
-          EXEC_ENABLED=$(aws ecs describe-tasks \
-            --cluster $CLUSTER \
-            --tasks $TASK_ARN \
-            --query 'tasks[0].enableExecuteCommand' \
-            --output text)
-          
-          if [ "$EXEC_ENABLED" != "True" ]; then
-            echo "❌ ECS Exec is NOT enabled on this task"
-            echo ""
-            echo "To fix this, ensure your ECS service has enableExecuteCommand: true"
-            echo "and the task role has the required SSM permissions."
-            exit 1
-          fi
-          
-          echo "✅ ECS Exec is enabled"
-          
-          # Wait for SSM agent to be ready (it starts after the container)
-          echo "⏳ Waiting for SSM agent to initialize..."
-          sleep 30
-          
-          # Retry ECS Exec with backoff - SSM agent may take time to initialize
-          MAX_RETRIES=5
-          RETRY_DELAY=15
-          
-          for i in $(seq 1 $MAX_RETRIES); do
-            echo "🔄 Attempt $i/$MAX_RETRIES - Running migrations..."
-            
-            set +e
-            MIGRATION_OUTPUT=$(aws ecs execute-command \
-              --cluster $CLUSTER \
-              --task $TASK_ARN \
-              --container backend \
-              --interactive \
-              --command "npx prisma migrate deploy" 2>&1)
-            
-            EXIT_CODE=$?
-            set -e
-            
-            echo "$MIGRATION_OUTPUT"
-            
-            # Check for EOF/session failure - these are retryable
-            if echo "$MIGRATION_OUTPUT" | grep -qE "(Cannot perform start session|EOF|TargetNotConnectedException)"; then
-              if [ $i -lt $MAX_RETRIES ]; then
-                echo "⚠️ Session failed, waiting ${RETRY_DELAY}s before retry..."
-                sleep $RETRY_DELAY
-                RETRY_DELAY=$((RETRY_DELAY * 2))
-                continue
-              else
-                echo ""
-                echo "❌ Failed to establish ECS Exec session after $MAX_RETRIES attempts"
-                echo ""
-                echo "Possible causes:"
-                echo "1. SSM Agent is not running in the container"
-                echo "2. VPC endpoints for SSM are missing (ssm, ssmmessages, ec2messages)"
-                echo "3. Task role is missing required SSM permissions"
-                echo "4. Security group is blocking outbound HTTPS (443)"
-                echo ""
-                echo "Debug command:"
-                echo "  aws ecs execute-command --cluster $CLUSTER --task $TASK_ARN --container backend --interactive --command '/bin/sh'"
-                exit 1
-              fi
-            fi
-            
-            # Session worked, check migration result
-            if [ $EXIT_CODE -ne 0 ]; then
-              echo "❌ Migration command failed with exit code $EXIT_CODE"
-              exit 1
-            fi
-            
-            # Verify migration actually ran by checking for success patterns
-            if echo "$MIGRATION_OUTPUT" | grep -qE "(No pending migrations|migrations applied|Already in sync|database is up to date)"; then
-              echo "✅ Database migrations completed successfully"
-              exit 0
-            else
-              echo "⚠️ Migration output unclear, please verify manually"
-              echo "✅ Migration command completed"
-              exit 0
-            fi
-          done
-
-      - name: Run database seed
-        if: steps.should_seed.outputs.run_seed == 'true'
-        env:
-          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
-          TASK_ARN: ${{ steps.get_task.outputs.task_arn }}
-        run: |
           echo "🌱 Running database seed..."
-          
-          MAX_RETRIES=3
-          RETRY_DELAY=15
-          
-          for i in $(seq 1 $MAX_RETRIES); do
-            echo "🔄 Attempt $i/$MAX_RETRIES - Running seed..."
-            
-            set +e
-            SEED_OUTPUT=$(aws ecs execute-command \
-              --cluster $CLUSTER \
-              --task $TASK_ARN \
-              --container backend \
-              --interactive \
-              --command "npx prisma db seed" 2>&1)
-            
-            EXIT_CODE=$?
-            set -e
-            
-            echo "$SEED_OUTPUT"
-            
-            # Check for session failure - retryable
-            if echo "$SEED_OUTPUT" | grep -qE "(Cannot perform start session|EOF|TargetNotConnectedException)"; then
-              if [ $i -lt $MAX_RETRIES ]; then
-                echo "⚠️ Session failed, waiting ${RETRY_DELAY}s before retry..."
-                sleep $RETRY_DELAY
-                RETRY_DELAY=$((RETRY_DELAY * 2))
-                continue
-              else
-                echo "❌ Failed to establish ECS Exec session for seed after $MAX_RETRIES attempts"
-                exit 1
-              fi
-            fi
-            
-            if [ $EXIT_CODE -ne 0 ]; then
-              echo "❌ Seed command failed with exit code $EXIT_CODE"
-              exit 1
-            fi
-            
-            echo "✅ Database seed completed successfully"
-            exit 0
-          done
+          echo "⚠️ Seed requires ECS Exec - skipping for now"
+          echo "To seed, run manually: aws ecs execute-command --cluster $CLUSTER --task <TASK_ARN> --container backend --interactive --command 'npx prisma db seed'"
 
       - name: Deployment summary
         run: |

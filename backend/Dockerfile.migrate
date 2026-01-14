@@ -1,0 +1,27 @@
+# Migration-only Docker image for Prisma migrations
+# Used for running database migrations as a one-off ECS task
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install system dependencies needed for Prisma and PostgreSQL
+RUN apk add --no-cache openssl postgresql-client
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies (including Prisma CLI)
+RUN npm ci
+
+# Copy Prisma schema and migrations
+COPY prisma ./prisma/
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy migration script
+COPY scripts/migrate.sh ./migrate.sh
+RUN chmod +x ./migrate.sh
+
+# Run migration script
+CMD ["./migrate.sh"]

@@ -61,7 +61,7 @@ module "ecr" {
   source = "./modules/ecr"
 
   client_slug = local.config.client_slug
-  repos       = ["backend", "frontend", "admin"]
+  repos       = ["backend", "frontend", "admin", "migrate"]
 }
 
 # ==============================================

@@ -18,7 +18,8 @@
   "ecr": {
     "backend": "creditxpress/backend",
     "frontend": "creditxpress/frontend",
-    "admin": "creditxpress/admin"
+    "admin": "creditxpress/admin",
+    "migrate": "creditxpress/migrate"
   },
   
   "ecs": {
