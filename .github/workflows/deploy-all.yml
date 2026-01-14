@@ -3,6 +3,14 @@ name: Deploy All Services to AWS ECS
 on:
   workflow_dispatch:
     inputs:
+      run_migrations_only:
+        description: 'Run migrations only (no deployments)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
       deploy_backend:
         description: 'Deploy backend'
         required: false
@@ -28,7 +36,7 @@ on:
           - 'true'
           - 'false'
       run_migrations:
-        description: 'Run database migrations (backend only)'
+        description: 'Run database migrations (with backend deploy)'
         required: false
         default: 'false'
         type: choice
@@ -36,7 +44,7 @@ on:
           - 'true'
           - 'false'
       run_seed:
-        description: 'Run database seed (backend only)'
+        description: 'Run database seed (with backend deploy)'
         required: false
         default: 'false'
         type: choice
@@ -45,8 +53,112 @@ on:
           - 'false'
 
 jobs:
+  # Migration-only mode: Just run migrations without any deployments
+  migrations-only:
+    if: ${{ github.event.inputs.run_migrations_only == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Load client config
+        id: config
+        run: |
+          echo "CLIENT=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
+          echo "REGION=$(jq -r '.aws.region' client.json)" >> $GITHUB_OUTPUT
+          echo "ECR_MIGRATE=$(jq -r '.ecr.migrate' client.json)" >> $GITHUB_OUTPUT
+          echo "CLUSTER=$(jq -r '.ecs.cluster' client.json)" >> $GITHUB_OUTPUT
+          echo "SERVICE=$(jq -r '.ecs.backend_service' client.json)" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.config.outputs.REGION }}
+          
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push migration image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "🔨 Building migration Docker image..."
+          cd backend
+          docker build -t $REGISTRY/$REPO:$TAG -f Dockerfile.migrate .
+          docker push $REGISTRY/$REPO:$TAG
+          echo "✅ Migration image pushed"
+
+      - name: Run Database Migrations
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          CLIENT: ${{ steps.config.outputs.CLIENT }}
+          REGION: ${{ steps.config.outputs.REGION }}
+        run: |
+          echo "🗄️ Running database migrations..."
+          
+          aws logs create-log-group \
+            --log-group-name /ecs/$CLIENT/migrate \
+            --region $REGION 2>/dev/null || true
+          
+          TASK_DEF=$(cat infra/ecs-task-definition-migrate.json | jq --arg IMAGE "$REGISTRY/$REPO:$TAG" \
+            '.containerDefinitions[0].image = $IMAGE')
+          
+          aws ecs register-task-definition \
+            --cli-input-json "$TASK_DEF" \
+            --region $REGION
+          
+          NETWORK_CONFIG=$(aws ecs describe-services \
+            --cluster $CLUSTER \
+            --services ${{ steps.config.outputs.SERVICE }} \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration' \
+            --output json)
+          
+          SUBNETS=$(echo $NETWORK_CONFIG | jq -r '.subnets | join(",")')
+          SECURITY_GROUPS=$(echo $NETWORK_CONFIG | jq -r '.securityGroups | join(",")')
+          
+          TASK_ARN=$(aws ecs run-task \
+            --cluster $CLUSTER \
+            --launch-type FARGATE \
+            --task-definition $CLIENT-migrate \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}" \
+            --region $REGION \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "❌ Failed to start migration task"
+            exit 1
+          fi
+          
+          echo "⏳ Waiting for migrations to complete..."
+          aws ecs wait tasks-stopped --cluster $CLUSTER --tasks $TASK_ARN --region $REGION
+          
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster $CLUSTER \
+            --tasks $TASK_ARN \
+            --region $REGION \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+          
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "❌ Migrations failed with exit code $EXIT_CODE"
+            aws logs tail /ecs/$CLIENT/migrate --since 15m --format short --region $REGION || true
+            exit 1
+          fi
+          
+          echo "✅ Migrations completed successfully"
+
+  # Normal deployment mode
   backend:
-    if: ${{ github.event.inputs.deploy_backend == 'true' }}
+    if: ${{ github.event.inputs.deploy_backend == 'true' && github.event.inputs.run_migrations_only != 'true' }}
     uses: ./.github/workflows/deploy-backend.yml
     with:
       run_migrations: ${{ github.event.inputs.run_migrations }}
@@ -54,38 +166,45 @@ jobs:
     secrets: inherit
     
   frontend:
-    if: ${{ github.event.inputs.deploy_frontend == 'true' }}
+    if: ${{ github.event.inputs.deploy_frontend == 'true' && github.event.inputs.run_migrations_only != 'true' }}
     uses: ./.github/workflows/deploy-frontend.yml
     secrets: inherit
     
   admin:
-    if: ${{ github.event.inputs.deploy_admin == 'true' }}
+    if: ${{ github.event.inputs.deploy_admin == 'true' && github.event.inputs.run_migrations_only != 'true' }}
     uses: ./.github/workflows/deploy-admin.yml
     secrets: inherit
 
   summary:
     runs-on: ubuntu-latest
-    needs: [backend, frontend, admin]
+    needs: [migrations-only, backend, frontend, admin]
     if: always()
     steps:
       - name: Deployment Summary
         run: |
           echo "=========================================="
-          echo "📋 FULL DEPLOYMENT SUMMARY"
+          echo "📋 DEPLOYMENT SUMMARY"
           echo "=========================================="
-          echo "Backend: ${{ needs.backend.result || 'skipped' }}"
-          echo "Frontend: ${{ needs.frontend.result || 'skipped' }}"
-          echo "Admin: ${{ needs.admin.result || 'skipped' }}"
-          echo "Migrations: ${{ github.event.inputs.run_migrations }}"
-          echo "Seed: ${{ github.event.inputs.run_seed }}"
+          if [ "${{ github.event.inputs.run_migrations_only }}" == "true" ]; then
+            echo "Mode: Migrations Only"
+            echo "Migrations: ${{ needs.migrations-only.result || 'skipped' }}"
+          else
+            echo "Mode: Full Deployment"
+            echo "Backend: ${{ needs.backend.result || 'skipped' }}"
+            echo "Frontend: ${{ needs.frontend.result || 'skipped' }}"
+            echo "Admin: ${{ needs.admin.result || 'skipped' }}"
+            echo "Migrations: ${{ github.event.inputs.run_migrations }}"
+            echo "Seed: ${{ github.event.inputs.run_seed }}"
+          fi
           echo "=========================================="
           
-          # Check if any deployment failed
-          if [ "${{ needs.backend.result }}" = "failure" ] || \
+          # Check if any job failed
+          if [ "${{ needs.migrations-only.result }}" = "failure" ] || \
+             [ "${{ needs.backend.result }}" = "failure" ] || \
              [ "${{ needs.frontend.result }}" = "failure" ] || \
              [ "${{ needs.admin.result }}" = "failure" ]; then
-            echo "❌ One or more deployments failed"
+            echo "❌ One or more operations failed"
             exit 1
           fi
           
-          echo "✅ All requested deployments completed successfully!"
+          echo "✅ All operations completed successfully!"

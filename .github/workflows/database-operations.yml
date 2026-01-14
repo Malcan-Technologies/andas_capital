@@ -1,0 +1,256 @@
+name: Database Operations (Migrations & Seed)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: 'Run database migrations'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      run_seed:
+        description: 'Run database seed'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  database-operations:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Load client config
+        id: config
+        run: |
+          echo "CLIENT=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
+          echo "REGION=$(jq -r '.aws.region' client.json)" >> $GITHUB_OUTPUT
+          echo "ACCOUNT=$(jq -r '.aws.account_id' client.json)" >> $GITHUB_OUTPUT
+          echo "ECR_MIGRATE=$(jq -r '.ecr.migrate' client.json)" >> $GITHUB_OUTPUT
+          echo "CLUSTER=$(jq -r '.ecs.cluster' client.json)" >> $GITHUB_OUTPUT
+          echo "SERVICE=$(jq -r '.ecs.backend_service' client.json)" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.config.outputs.REGION }}
+          
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push migration Docker image
+        if: github.event.inputs.run_migrations == 'true'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "🔨 Building migration Docker image..."
+          cd backend
+          docker build -t $REGISTRY/$REPO:$TAG -f Dockerfile.migrate .
+          
+          echo "📤 Pushing migration image to ECR..."
+          docker push $REGISTRY/$REPO:$TAG
+          echo "✅ Migration image pushed: $REGISTRY/$REPO:$TAG"
+
+      - name: Run Database Migrations
+        if: github.event.inputs.run_migrations == 'true'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          CLIENT: ${{ steps.config.outputs.CLIENT }}
+          REGION: ${{ steps.config.outputs.REGION }}
+        run: |
+          echo "🗄️ Running database migrations via one-off ECS task..."
+          
+          echo "📝 Ensuring CloudWatch log group exists..."
+          aws logs create-log-group \
+            --log-group-name /ecs/$CLIENT/migrate \
+            --region $REGION 2>/dev/null || echo "Log group already exists"
+          
+          echo "📦 Registering migration task definition..."
+          TASK_DEF=$(cat infra/ecs-task-definition-migrate.json | jq --arg IMAGE "$REGISTRY/$REPO:$TAG" \
+            '.containerDefinitions[0].image = $IMAGE')
+          
+          aws ecs register-task-definition \
+            --cli-input-json "$TASK_DEF" \
+            --region $REGION
+          
+          echo "🚀 Starting migration task..."
+          
+          # Get network configuration from backend service
+          NETWORK_CONFIG=$(aws ecs describe-services \
+            --cluster $CLUSTER \
+            --services ${{ steps.config.outputs.SERVICE }} \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration' \
+            --output json)
+          
+          SUBNETS=$(echo $NETWORK_CONFIG | jq -r '.subnets | join(",")')
+          SECURITY_GROUPS=$(echo $NETWORK_CONFIG | jq -r '.securityGroups | join(",")')
+          
+          # Run migration as one-off ECS task
+          TASK_ARN=$(aws ecs run-task \
+            --cluster $CLUSTER \
+            --launch-type FARGATE \
+            --task-definition $CLIENT-migrate \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}" \
+            --region $REGION \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "❌ Failed to start migration task"
+            exit 1
+          fi
+          
+          echo "⏳ Waiting for migrations to complete (Task: $TASK_ARN)..."
+          
+          # Wait for task to complete
+          aws ecs wait tasks-stopped \
+            --cluster $CLUSTER \
+            --tasks $TASK_ARN \
+            --region $REGION
+          
+          # Check exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster $CLUSTER \
+            --tasks $TASK_ARN \
+            --region $REGION \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+          
+          if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "None" ]; then
+            echo "❌ Migrations failed with exit code $EXIT_CODE"
+            
+            echo "📋 Task details:"
+            aws ecs describe-tasks \
+              --cluster $CLUSTER \
+              --tasks $TASK_ARN \
+              --region $REGION \
+              --query 'tasks[0].containers[0]' || true
+            
+            echo "📋 Migration logs:"
+            aws logs tail /ecs/$CLIENT/migrate \
+              --since 15m \
+              --format short \
+              --region $REGION || echo "Could not retrieve logs"
+            
+            exit 1
+          elif [ "$EXIT_CODE" = "None" ]; then
+            echo "⚠️ Task stopped but exit code is None - checking task status..."
+            aws ecs describe-tasks \
+              --cluster $CLUSTER \
+              --tasks $TASK_ARN \
+              --region $REGION \
+              --query 'tasks[0]' || true
+            exit 1
+          fi
+          
+          echo "✅ Database migrations completed successfully"
+
+      - name: Install Session Manager plugin (for seed)
+        if: github.event.inputs.run_seed == 'true'
+        run: |
+          echo "📦 Installing AWS Session Manager plugin..."
+          curl -sS "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+          sudo dpkg -i session-manager-plugin.deb
+          session-manager-plugin --version
+          echo "✅ Session Manager plugin installed"
+
+      - name: Get running backend task (for seed)
+        id: get_task
+        if: github.event.inputs.run_seed == 'true'
+        env:
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          SERVICE: ${{ steps.config.outputs.SERVICE }}
+        run: |
+          echo "🔍 Finding running backend task..."
+          
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster $CLUSTER \
+            --service-name $SERVICE \
+            --desired-status RUNNING \
+            --query 'taskArns[0]' \
+            --output text)
+          
+          if [ "$TASK_ARN" = "None" ] || [ -z "$TASK_ARN" ]; then
+            echo "❌ No running backend task found"
+            exit 1
+          fi
+          
+          echo "✅ Found running task: $TASK_ARN"
+          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
+
+      - name: Run Database Seed
+        if: github.event.inputs.run_seed == 'true'
+        env:
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          TASK_ARN: ${{ steps.get_task.outputs.task_arn }}
+        run: |
+          echo "🌱 Running database seed..."
+          
+          # Wait for SSM agent
+          echo "⏳ Waiting for SSM agent to be ready..."
+          sleep 15
+          
+          # Run seed using shell wrapper that captures output to file
+          set +e
+          aws ecs execute-command \
+            --cluster $CLUSTER \
+            --task $TASK_ARN \
+            --container backend \
+            --interactive \
+            --command "/bin/sh -c 'cd /app && npx prisma db seed > /tmp/seed.log 2>&1; echo EXIT_CODE=\$? >> /tmp/seed.log'" 2>&1
+          
+          sleep 5
+          
+          # Retrieve the output
+          echo "📋 Retrieving seed output..."
+          SEED_OUTPUT=$(aws ecs execute-command \
+            --cluster $CLUSTER \
+            --task $TASK_ARN \
+            --container backend \
+            --interactive \
+            --command "/bin/sh -c 'cat /tmp/seed.log 2>/dev/null || echo NO_OUTPUT'" 2>&1)
+          set -e
+          
+          echo "$SEED_OUTPUT"
+          
+          if echo "$SEED_OUTPUT" | grep -q "EXIT_CODE=0"; then
+            echo ""
+            echo "✅ Database seed completed successfully"
+            exit 0
+          elif echo "$SEED_OUTPUT" | grep -q "EXIT_CODE="; then
+            echo ""
+            echo "❌ Seed failed - check output above for details"
+            exit 1
+          else
+            echo ""
+            echo "⚠️ Seed status unclear - please verify manually"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "=========================================="
+          echo "📋 DATABASE OPERATIONS SUMMARY"
+          echo "=========================================="
+          echo "Client: ${{ steps.config.outputs.CLIENT }}"
+          echo "Region: ${{ steps.config.outputs.REGION }}"
+          echo "Migrations Run: ${{ github.event.inputs.run_migrations }}"
+          echo "Seed Run: ${{ github.event.inputs.run_seed }}"
+          echo "=========================================="
+          echo "✅ Database operations complete!"
