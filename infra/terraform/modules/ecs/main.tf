@@ -61,6 +61,18 @@ variable "domains" {
   })
 }
 
+variable "rds_endpoint" {
+  description = "RDS endpoint for backend"
+  type        = string
+  default     = ""
+}
+
+variable "rds_database" {
+  description = "RDS database name"
+  type        = string
+  default     = ""
+}
+
 # Data source for current AWS region
 data "aws_region" "current" {}
 
@@ -218,10 +230,83 @@ resource "aws_iam_role_policy" "ecs_exec" {
 }
 
 # ==============================================
-# Application Services Task Definitions
+# Backend Task Definition (with secrets)
 # ==============================================
-resource "aws_ecs_task_definition" "services" {
-  for_each = var.services
+resource "aws_ecs_task_definition" "backend" {
+  family                   = "${var.client_slug}-backend"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.services["backend"].cpu
+  memory                   = var.services["backend"].memory
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name  = "backend"
+      image = "${var.services["backend"].ecr_repo}:latest"
+      
+      portMappings = [
+        {
+          containerPort = var.services["backend"].port
+          hostPort      = var.services["backend"].port
+          protocol      = "tcp"
+        }
+      ]
+
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.services["backend"].port) },
+        { name = "TZ", value = "Asia/Kuala_Lumpur" },
+        { name = "DOCUSEAL_URL", value = "https://${var.domains.api}/docuseal" },
+        { name = "SIGNING_ORCHESTRATOR_URL", value = "https://${var.domains.api}/signing" },
+        { name = "FRONTEND_URL", value = "https://${var.domains.app}" },
+        { name = "ADMIN_URL", value = "https://${var.domains.admin}" },
+      ]
+
+      secrets = [
+        { name = "DATABASE_URL", valueFrom = var.secrets_arns["database_url"] },
+        { name = "JWT_SECRET", valueFrom = var.secrets_arns["jwt_secret"] },
+        { name = "JWT_REFRESH_SECRET", valueFrom = var.secrets_arns["jwt_refresh_secret"] },
+        { name = "SIGNING_ORCHESTRATOR_API_KEY", valueFrom = var.secrets_arns["signing_api_key"] },
+        { name = "DOCUSEAL_API_TOKEN", valueFrom = var.secrets_arns["docuseal_token"] },
+        { name = "WHATSAPP_CREDENTIALS", valueFrom = var.secrets_arns["whatsapp_token"] },
+        { name = "RESEND_CREDENTIALS", valueFrom = var.secrets_arns["resend_api_key"] },
+        { name = "CTOS_CREDENTIALS", valueFrom = var.secrets_arns["ctos_credentials"] },
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.services["backend"].name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "backend"
+        }
+      }
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${var.services["backend"].port}${var.services["backend"].health} || exit 1"]
+        interval    = 30
+        timeout     = 10
+        retries     = 3
+        startPeriod = 120
+      }
+
+      essential = true
+    }
+  ])
+
+  tags = {
+    Name   = "${var.client_slug}-backend"
+    Client = var.client_slug
+  }
+}
+
+# ==============================================
+# Frontend/Admin Task Definitions (no secrets needed)
+# ==============================================
+resource "aws_ecs_task_definition" "frontend_admin" {
+  for_each = { for k, v in var.services : k => v if k != "backend" }
 
   family                   = "${var.client_slug}-${each.key}"
   network_mode             = "awsvpc"
@@ -242,6 +327,11 @@ resource "aws_ecs_task_definition" "services" {
           hostPort      = each.value.port
           protocol      = "tcp"
         }
+      ]
+
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "NEXT_PUBLIC_API_URL", value = "https://${var.domains.api}" },
       ]
 
       logConfiguration = {
@@ -317,14 +407,48 @@ resource "aws_ecs_task_definition" "cloudflared" {
 }
 
 # ==============================================
-# ECS Services (all in public subnet with public IPs)
+# Backend ECS Service
 # ==============================================
-resource "aws_ecs_service" "services" {
-  for_each = var.services
+resource "aws_ecs_service" "backend" {
+  name            = var.services["backend"].name
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.backend.arn
+  desired_count   = var.services["backend"].desired_count
+  launch_type     = "FARGATE"
+
+  enable_execute_command = true
+
+  network_configuration {
+    subnets          = [var.public_subnet_id]
+    security_groups  = [var.security_group_id]
+    assign_public_ip = true
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.services["backend"].arn
+  }
+
+  wait_for_steady_state = false
+
+  lifecycle {
+    ignore_changes = [desired_count, task_definition]
+  }
+
+  tags = {
+    Name   = var.services["backend"].name
+    Client = var.client_slug
+  }
+}
+
+# ==============================================
+# Frontend/Admin ECS Services
+# ==============================================
+resource "aws_ecs_service" "frontend_admin" {
+  for_each = { for k, v in var.services : k => v if k != "backend" }
 
   name            = each.value.name
   cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.services[each.key].arn
+  task_definition = aws_ecs_task_definition.frontend_admin[each.key].arn
   desired_count   = each.value.desired_count
   launch_type     = "FARGATE"
 
@@ -431,9 +555,10 @@ output "cluster_arn" {
 }
 
 output "service_names" {
-  value = {
-    for k, v in aws_ecs_service.services : k => v.name
-  }
+  value = merge(
+    { backend = aws_ecs_service.backend.name },
+    { for k, v in aws_ecs_service.frontend_admin : k => v.name }
+  )
 }
 
 output "service_discovery_namespace" {
