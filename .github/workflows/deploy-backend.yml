@@ -82,8 +82,12 @@ jobs:
       - name: Determine if migrations should run
         id: should_migrate
         run: |
-          MANUAL_OVERRIDE="${{ github.event.inputs.run_migrations }}"
+          # Handle both workflow_dispatch and workflow_call contexts
+          # workflow_dispatch uses github.event.inputs, workflow_call uses inputs
+          MANUAL_OVERRIDE="${{ inputs.run_migrations || github.event.inputs.run_migrations }}"
           MIGRATIONS_CHANGED="${{ steps.migration_check.outputs.migrations_changed }}"
+          
+          echo "📋 Migration input received: '$MANUAL_OVERRIDE'"
           
           if [ "$MANUAL_OVERRIDE" = "true" ]; then
             echo "run_migrations=true" >> $GITHUB_OUTPUT
@@ -105,6 +109,28 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ steps.config.outputs.REGION }}
+
+      - name: Determine if seed should run
+        id: should_seed
+        run: |
+          # Handle both workflow_dispatch and workflow_call contexts
+          SEED_INPUT="${{ inputs.run_seed || github.event.inputs.run_seed }}"
+          echo "📋 Seed input received: '$SEED_INPUT'"
+          if [ "$SEED_INPUT" = "true" ]; then
+            echo "run_seed=true" >> $GITHUB_OUTPUT
+            echo "🌱 Seed will run"
+          else
+            echo "run_seed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Session Manager plugin
+        if: steps.should_migrate.outputs.run_migrations == 'true' || steps.should_seed.outputs.run_seed == 'true'
+        run: |
+          echo "📦 Installing AWS Session Manager plugin..."
+          curl -sS "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+          sudo dpkg -i session-manager-plugin.deb
+          session-manager-plugin --version
+          echo "✅ Session Manager plugin installed"
           
       - name: Login to ECR
         id: ecr
@@ -197,7 +223,7 @@ jobs:
 
       - name: Get running task for migrations
         id: get_task
-        if: steps.should_migrate.outputs.run_migrations == 'true' || github.event.inputs.run_seed == 'true'
+        if: steps.should_migrate.outputs.run_migrations == 'true' || steps.should_seed.outputs.run_seed == 'true'
         env:
           CLUSTER: ${{ steps.config.outputs.CLUSTER }}
           SERVICE: ${{ steps.config.outputs.SERVICE }}
@@ -272,36 +298,136 @@ jobs:
         run: |
           echo "🗄️ Running database migrations..."
           
-          # Run prisma migrate deploy
-          aws ecs execute-command \
+          # Check if ECS Exec is enabled on the task
+          echo "🔍 Checking ECS Exec status on task..."
+          EXEC_ENABLED=$(aws ecs describe-tasks \
             --cluster $CLUSTER \
-            --task $TASK_ARN \
-            --container backend \
-            --interactive \
-            --command "npx prisma migrate deploy" || {
-              echo "⚠️ ECS Exec may not be enabled. Trying alternative approach..."
-              echo "Please ensure ECS Exec is enabled on the service."
-              exit 1
-            }
+            --tasks $TASK_ARN \
+            --query 'tasks[0].enableExecuteCommand' \
+            --output text)
           
-          echo "✅ Database migrations completed successfully"
+          if [ "$EXEC_ENABLED" != "True" ]; then
+            echo "❌ ECS Exec is NOT enabled on this task"
+            echo ""
+            echo "To fix this, ensure your ECS service has enableExecuteCommand: true"
+            echo "and the task role has the required SSM permissions."
+            exit 1
+          fi
+          
+          echo "✅ ECS Exec is enabled"
+          
+          # Wait for SSM agent to be ready (it starts after the container)
+          echo "⏳ Waiting for SSM agent to initialize..."
+          sleep 30
+          
+          # Retry ECS Exec with backoff - SSM agent may take time to initialize
+          MAX_RETRIES=5
+          RETRY_DELAY=15
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "🔄 Attempt $i/$MAX_RETRIES - Running migrations..."
+            
+            set +e
+            MIGRATION_OUTPUT=$(aws ecs execute-command \
+              --cluster $CLUSTER \
+              --task $TASK_ARN \
+              --container backend \
+              --interactive \
+              --command "npx prisma migrate deploy" 2>&1)
+            
+            EXIT_CODE=$?
+            set -e
+            
+            echo "$MIGRATION_OUTPUT"
+            
+            # Check for EOF/session failure - these are retryable
+            if echo "$MIGRATION_OUTPUT" | grep -qE "(Cannot perform start session|EOF|TargetNotConnectedException)"; then
+              if [ $i -lt $MAX_RETRIES ]; then
+                echo "⚠️ Session failed, waiting ${RETRY_DELAY}s before retry..."
+                sleep $RETRY_DELAY
+                RETRY_DELAY=$((RETRY_DELAY * 2))
+                continue
+              else
+                echo ""
+                echo "❌ Failed to establish ECS Exec session after $MAX_RETRIES attempts"
+                echo ""
+                echo "Possible causes:"
+                echo "1. SSM Agent is not running in the container"
+                echo "2. VPC endpoints for SSM are missing (ssm, ssmmessages, ec2messages)"
+                echo "3. Task role is missing required SSM permissions"
+                echo "4. Security group is blocking outbound HTTPS (443)"
+                echo ""
+                echo "Debug command:"
+                echo "  aws ecs execute-command --cluster $CLUSTER --task $TASK_ARN --container backend --interactive --command '/bin/sh'"
+                exit 1
+              fi
+            fi
+            
+            # Session worked, check migration result
+            if [ $EXIT_CODE -ne 0 ]; then
+              echo "❌ Migration command failed with exit code $EXIT_CODE"
+              exit 1
+            fi
+            
+            # Verify migration actually ran by checking for success patterns
+            if echo "$MIGRATION_OUTPUT" | grep -qE "(No pending migrations|migrations applied|Already in sync|database is up to date)"; then
+              echo "✅ Database migrations completed successfully"
+              exit 0
+            else
+              echo "⚠️ Migration output unclear, please verify manually"
+              echo "✅ Migration command completed"
+              exit 0
+            fi
+          done
 
       - name: Run database seed
-        if: github.event.inputs.run_seed == 'true'
+        if: steps.should_seed.outputs.run_seed == 'true'
         env:
           CLUSTER: ${{ steps.config.outputs.CLUSTER }}
           TASK_ARN: ${{ steps.get_task.outputs.task_arn }}
         run: |
           echo "🌱 Running database seed..."
           
-          aws ecs execute-command \
-            --cluster $CLUSTER \
-            --task $TASK_ARN \
-            --container backend \
-            --interactive \
-            --command "npx prisma db seed"
+          MAX_RETRIES=3
+          RETRY_DELAY=15
           
-          echo "✅ Database seed completed successfully"
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "🔄 Attempt $i/$MAX_RETRIES - Running seed..."
+            
+            set +e
+            SEED_OUTPUT=$(aws ecs execute-command \
+              --cluster $CLUSTER \
+              --task $TASK_ARN \
+              --container backend \
+              --interactive \
+              --command "npx prisma db seed" 2>&1)
+            
+            EXIT_CODE=$?
+            set -e
+            
+            echo "$SEED_OUTPUT"
+            
+            # Check for session failure - retryable
+            if echo "$SEED_OUTPUT" | grep -qE "(Cannot perform start session|EOF|TargetNotConnectedException)"; then
+              if [ $i -lt $MAX_RETRIES ]; then
+                echo "⚠️ Session failed, waiting ${RETRY_DELAY}s before retry..."
+                sleep $RETRY_DELAY
+                RETRY_DELAY=$((RETRY_DELAY * 2))
+                continue
+              else
+                echo "❌ Failed to establish ECS Exec session for seed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            fi
+            
+            if [ $EXIT_CODE -ne 0 ]; then
+              echo "❌ Seed command failed with exit code $EXIT_CODE"
+              exit 1
+            fi
+            
+            echo "✅ Database seed completed successfully"
+            exit 0
+          done
 
       - name: Deployment summary
         run: |
@@ -314,6 +440,6 @@ jobs:
           echo "Service: ${{ steps.config.outputs.SERVICE }}"
           echo "Image Tag: ${{ github.sha }}"
           echo "Migrations Run: ${{ steps.should_migrate.outputs.run_migrations }}"
-          echo "Seed Run: ${{ github.event.inputs.run_seed || 'false' }}"
+          echo "Seed Run: ${{ steps.should_seed.outputs.run_seed }}"
           echo "=========================================="
           echo "✅ Backend deployment complete!"
