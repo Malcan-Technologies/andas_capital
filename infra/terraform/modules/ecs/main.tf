@@ -343,14 +343,6 @@ resource "aws_ecs_task_definition" "frontend_admin" {
         }
       }
 
-      healthCheck = {
-        command     = ["CMD-SHELL", "wget --spider -q http://localhost:${each.value.port}${each.value.health} || exit 1"]
-        interval    = 30
-        timeout     = 10
-        retries     = 3
-        startPeriod = 60
-      }
-
       essential = true
     }
   ])
