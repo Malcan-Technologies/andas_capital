@@ -13312,12 +13312,15 @@ router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (_r
 			},
 		{
 			name: 'signingOrchestrator', 
+			// Cloudflare tunnel routes /orchestrator/* to port 4010, passing the full path
+			// The orchestrator now has /orchestrator/health mounted to handle this
 			url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/orchestrator/health' : `http://${baseHost}:4010/health`,
-			timeout: 10000  // Increased to 10s to account for Tailscale latency and internal DocuSeal check
+			timeout: 10000  // Increased to 10s to account for Cloudflare tunnel latency
 		},
 			{
 				name: 'mtsa',
-				url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/mtsa/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
+				// Cloudflare route MTSAPilot/* -> localhost:8080, path is passed through
+				url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
 				timeout: 5000
 			}
 		];

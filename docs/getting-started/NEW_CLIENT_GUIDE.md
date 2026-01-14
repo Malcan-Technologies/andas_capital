@@ -276,35 +276,53 @@ docker compose -f docker-compose.unified.yml up -d
 
 ### Create Cloudflare Tunnel
 
-```bash
-# Login to Cloudflare
-cloudflared tunnel login
-
-# Create tunnel
-cloudflared tunnel create newclient-signing
-
-# Save the tunnel ID
-TUNNEL_ID=$(cloudflared tunnel list | grep newclient-signing | awk '{print $1}')
-
-# Route DNS
-cloudflared tunnel route dns $TUNNEL_ID sign.newclient.com
-
-# Configure tunnel
-cp cloudflared/config.template.yml cloudflared/config.yml
-sed -i "s/<tunnel-id>/$TUNNEL_ID/g" cloudflared/config.yml
-sed -i "s/CLIENT_DOMAIN/newclient.com/g" cloudflared/config.yml
-
-# Run tunnel
-cloudflared tunnel run newclient-signing
-```
-
-### Run as Systemd Service
+Use the automated setup script:
 
 ```bash
-sudo cloudflared service install
-sudo systemctl enable cloudflared
-sudo systemctl start cloudflared
+# Copy and run the setup script
+./on-prem/scripts/setup-cloudflare-tunnel.sh \
+  --client-name newclient \
+  --domain newclient.com
 ```
+
+The script will:
+1. Install cloudflared
+2. Authenticate with Cloudflare (opens browser)
+3. Create tunnel `newclient-onprem`
+4. Create DNS route for `sign.newclient.com`
+5. Install and start systemd service
+
+### Configure Cloudflare Dashboard Routes
+
+**IMPORTANT:** After running the script, configure routes in Cloudflare Dashboard:
+
+1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
+2. Navigate to **Networks** → **Tunnels** → **newclient-onprem**
+3. Go to **Public Hostname** tab
+4. Add these routes **IN ORDER** (specific paths first, catch-all last):
+
+| # | Path | Service |
+|---|------|---------|
+| 1 | `signing-health` | `http://localhost:4010/health` |
+| 2 | `orchestrator/*` | `http://localhost:4010` |
+| 3 | `api/signing/*` | `http://localhost:4010` |
+| 4 | `MTSAPilot/*` | `http://localhost:8080` |
+| 5 | `MTSA/*` | `http://localhost:8080` |
+| 6 | `*` | `http://localhost:3001` |
+
+### Verify Tunnel
+
+```bash
+# Check service status
+sudo systemctl status cloudflared
+
+# Test endpoints
+curl https://sign.newclient.com/
+curl https://sign.newclient.com/signing-health
+curl https://sign.newclient.com/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl
+```
+
+> 📖 For detailed documentation, see [Cloudflare Tunnel Setup Guide](../../on-prem/docs/CLOUDFLARE_TUNNEL_SETUP.md)
 
 ---
 

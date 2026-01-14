@@ -3,9 +3,16 @@
 ## 🚀 Quick Reference for Production Deployments
 
 ### Server Information
-- **Server IP**: `100.76.8.62` (via Tailscale VPN)
+- **Server IP**: `100.76.8.62` (via Tailscale VPN) or accessible via Cloudflare Tunnel
 - **SSH User**: `admin-kapital`
 - **Connection**: `ssh admin-kapital@100.76.8.62`
+
+### External Access
+- **Signing URL**: `https://sign.creditxpress.com.my` (via Cloudflare Tunnel)
+- **Tunnel Name**: `creditxpress-onprem`
+
+> **Note:** External access is provided via Cloudflare Tunnel, not direct port exposure.
+> See [Cloudflare Tunnel Setup Guide](docs/CLOUDFLARE_TUNNEL_SETUP.md) for details.
 
 ---
 
@@ -175,19 +182,61 @@ docker-compose restart
 
 ---
 
-## 🌐 Nginx Configuration
+## 🌐 Cloudflare Tunnel (External Access)
 
-### Nginx is on the VPS, not on-prem
-The on-prem server **does not** run nginx. Instead:
-- VPS nginx reverse proxies requests to on-prem via Tailscale
-- Domain: `sign.kredit.my` → VPS nginx → Tailscale → On-prem server
+External access to on-prem services is provided via **Cloudflare Tunnel**, which creates a secure encrypted connection without opening firewall ports.
 
-### To Update VPS Nginx Config
+### Current Configuration
+- **Tunnel Name**: `creditxpress-onprem`
+- **Hostname**: `sign.creditxpress.com.my`
+- **Service**: Running as systemd service on on-prem server
+
+### Cloudflare Dashboard Routes
+Routes are configured in **Cloudflare Zero Trust Dashboard** → **Networks** → **Tunnels** → **creditxpress-onprem** → **Public Hostname**:
+
+| Path | Service | Description |
+|------|---------|-------------|
+| `signing-health` | `http://localhost:4010/health` | Orchestrator health check |
+| `orchestrator/*` | `http://localhost:4010` | Signing Orchestrator API |
+| `api/signing/*` | `http://localhost:4010` | Signing API |
+| `MTSAPilot/*` | `http://localhost:8080` | MTSA Pilot SOAP |
+| `MTSA/*` | `http://localhost:8080` | MTSA Prod SOAP |
+| `*` | `http://localhost:3001` | DocuSeal (catch-all) |
+
+### Manage Cloudflare Tunnel
 ```bash
-# From your local machine
-cd /Users/ivan/Documents/creditxpress
-scp config/nginx.conf root@<vps-ip>:/etc/nginx/sites-available/default
-ssh root@<vps-ip> "nginx -t && systemctl reload nginx"
+# Check tunnel status
+ssh admin-kapital@100.76.8.62 "sudo systemctl status cloudflared"
+
+# View tunnel logs
+ssh admin-kapital@100.76.8.62 "sudo journalctl -u cloudflared -f"
+
+# Restart tunnel
+ssh admin-kapital@100.76.8.62 "sudo systemctl restart cloudflared"
+
+# Check tunnel connections
+ssh admin-kapital@100.76.8.62 "cloudflared tunnel info creditxpress-onprem"
+```
+
+### New Client Setup
+For setting up Cloudflare Tunnel on a new client:
+```bash
+# Copy setup script to server and run
+scp on-prem/scripts/setup-cloudflare-tunnel.sh admin@server:/tmp/
+ssh admin@server "/tmp/setup-cloudflare-tunnel.sh --client-name CLIENT --domain client.com"
+```
+
+See full documentation: [Cloudflare Tunnel Setup Guide](docs/CLOUDFLARE_TUNNEL_SETUP.md)
+
+---
+
+## 🌐 Nginx Configuration (Legacy - No Longer Used)
+
+> **Note:** Nginx is no longer required on-prem. Cloudflare Tunnel handles external routing and TLS termination.
+
+The `docuseal-nginx` container can be removed:
+```bash
+docker stop docuseal-nginx && docker rm docuseal-nginx
 ```
 
 ---
