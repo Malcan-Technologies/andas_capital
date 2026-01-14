@@ -425,6 +425,38 @@ export async function fileExistsInS3(key: string): Promise<boolean> {
 }
 
 /**
+ * Get S3 object metadata including file size
+ * 
+ * @param key - S3 object key
+ * @returns Object metadata or null if file doesn't exist
+ */
+export async function getS3ObjectMetadata(key: string): Promise<{
+  contentLength: number;
+  contentType: string;
+  lastModified: Date | undefined;
+} | null> {
+  if (!isS3Configured()) {
+    return null;
+  }
+
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+    });
+
+    const response = await s3Client.send(command);
+    return {
+      contentLength: response.ContentLength || 0,
+      contentType: response.ContentType || "application/octet-stream",
+      lastModified: response.LastModified,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
  * Get a readable stream from S3 for proxying file downloads
  * 
  * @param key - S3 object key

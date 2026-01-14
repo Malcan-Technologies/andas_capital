@@ -12,8 +12,21 @@ import {
 	PencilIcon,
 	StarIcon,
 	BuildingOfficeIcon,
+	InformationCircleIcon,
+	ChevronDownIcon,
+	ChevronUpIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface SystemSetting {
 	id: string;
@@ -102,6 +115,7 @@ function SettingsPageContent() {
 	// Manual trigger state
 	const [manualTriggerLoading, setManualTriggerLoading] = useState(false);
 	const [manualTriggerResult, setManualTriggerResult] = useState<any>(null);
+	const [showTriggerConfirmModal, setShowTriggerConfirmModal] = useState(false);
 
 	// Company settings state
 	const [companySettings, setCompanySettings] = useState<CompanySettings>({
@@ -117,6 +131,9 @@ function SettingsPageContent() {
 	});
 	const [companySettingsLoading, setCompanySettingsLoading] = useState(false);
 	const [companySettingsSaving, setCompanySettingsSaving] = useState(false);
+
+	// Expanded categories state for system settings
+	const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
 	// Load data on component mount and tab change
 	useEffect(() => {
@@ -345,6 +362,14 @@ function SettingsPageContent() {
 
 			if (response.success) {
 				setSettings(response.data || {});
+				
+				// Expand all categories except SYSTEM by default (only on first load)
+				if (expandedCategories.size === 0 && response.data) {
+					const allCategories = Object.keys(response.data).filter(cat => 
+						cat !== "LOAN_LIMITS" && cat !== "NOTIFICATIONS" && cat !== "SYSTEM"
+					);
+					setExpandedCategories(new Set(allCategories));
+				}
 			} else {
 				throw new Error(response.message || "Failed to load settings");
 			}
@@ -580,12 +605,12 @@ function SettingsPageContent() {
 					};
 					
 					return (
-						<div className="space-y-3">
-							<div className="flex flex-wrap gap-2">
+						<div className="space-y-2">
+							<div className="flex flex-wrap gap-1.5">
 								{reminderDays.map((day: number, index: number) => (
-									<div key={index} className={`flex items-center ${colorScheme.bg} ${colorScheme.border} rounded-md px-3 py-1`}>
-										<span className={`${colorScheme.text} text-sm font-medium`}>
-											{day} day{day !== 1 ? 's' : ''} {isLatePayment ? 'after' : 'before'}
+									<div key={index} className={`flex items-center ${colorScheme.bg} ${colorScheme.border} rounded px-2 py-1`}>
+										<span className={`${colorScheme.text} text-xs font-medium`}>
+											Day {day}
 										</span>
 										<button
 											type="button"
@@ -593,9 +618,9 @@ function SettingsPageContent() {
 												const newDays = reminderDays.filter((_: number, i: number) => i !== index);
 												handleSettingChange(key, newDays);
 											}}
-											className={`ml-2 ${colorScheme.button} transition-colors`}
+											className={`ml-1.5 ${colorScheme.button} transition-colors`}
 										>
-											<TrashIcon className="w-4 h-4" />
+											<TrashIcon className="w-3 h-3" />
 										</button>
 									</div>
 								))}
@@ -604,10 +629,10 @@ function SettingsPageContent() {
 								<input
 									id={inputId}
 									type="number"
-									placeholder={`Days (e.g., ${isLatePayment ? '3' : '7'})`}
+									placeholder={isLatePayment ? 'e.g., 3' : 'e.g., 7'}
 									min={1}
 									max={30}
-									className={`flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${colorScheme.input}`}
+									className={`w-20 px-2 py-1.5 text-xs bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 ${colorScheme.input}`}
 									onKeyPress={(e) => {
 										if (e.key === 'Enter') {
 											addReminderDay();
@@ -617,14 +642,16 @@ function SettingsPageContent() {
 								<button
 									type="button"
 									onClick={addReminderDay}
-									className={`px-4 py-2 ${colorScheme.addButton} text-white rounded-md transition-colors flex items-center`}
+									className={`px-2 py-1.5 ${colorScheme.addButton} text-white rounded transition-colors flex items-center text-xs`}
 								>
-									<PlusIcon className="w-4 h-4" />
+									<PlusIcon className="w-3 h-3 mr-1" />
+									Add
 								</button>
 							</div>
-							<div className={`text-xs ${colorScheme.instructions} p-2 rounded border`}>
-								<strong>Instructions:</strong> Enter number of days {isLatePayment ? 'after' : 'before'} payment due date to send reminder. Press Enter or click + to add. Example: {isLatePayment ? '3, 7, 14 for reminders 3, 7, and 14 days after due date' : '7, 3, 1 for reminders 7, 3, and 1 day before due date'}.
-							</div>
+							<details className="text-[10px] text-gray-500">
+								<summary className="cursor-pointer hover:text-gray-400">Instructions</summary>
+								<p className="mt-1 pl-2">Days {isLatePayment ? 'after' : 'before'} due date. Example: {isLatePayment ? '3, 7, 14' : '7, 3, 1'}</p>
+							</details>
 						</div>
 					);
 				}
@@ -791,260 +818,244 @@ function SettingsPageContent() {
 		}
 
 		return (
-			<div className="space-y-6">
-				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-6">
-					<div className="flex items-center justify-between mb-6">
+			<div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+				{/* Left Column - Company Information Form */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-5">
+					<div className="flex items-center justify-between mb-4">
 						<div>
-							<h3 className="text-lg font-medium text-white mb-2">Company Information</h3>
-							<p className="text-gray-400 text-sm">
-								Configure company details that will appear on payment receipts and loan documents.
+							<h3 className="text-base font-medium text-white">Company Information</h3>
+							<p className="text-gray-400 text-xs mt-1">
+								Details shown on receipts and documents
 							</p>
 						</div>
 						<button
 							onClick={saveCompanySettings}
 							disabled={companySettingsSaving}
-							className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
+							className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
 						>
-							{companySettingsSaving ? "Saving..." : "Save Settings"}
+							{companySettingsSaving ? "Saving..." : "Save"}
 						</button>
 					</div>
 
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-						{/* Company Name */}
-						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
-								Company Name *
-							</label>
-							<input
-								type="text"
-								value={companySettings.companyName}
-								onChange={(e) => setCompanySettings(prev => ({ ...prev, companyName: e.target.value }))}
-								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-								placeholder="Enter company name"
-							/>
+					<div className="space-y-4">
+						{/* Company Name & Address Row */}
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<div>
+								<label className="block text-xs font-medium text-gray-400 mb-1">
+									Company Name *
+								</label>
+								<input
+									type="text"
+									value={companySettings.companyName}
+									onChange={(e) => setCompanySettings(prev => ({ ...prev, companyName: e.target.value }))}
+									className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+									placeholder="Company name"
+								/>
+							</div>
+							<div>
+								<label className="block text-xs font-medium text-gray-400 mb-1">
+									Tax Label *
+								</label>
+								<input
+									type="text"
+									value={companySettings.taxLabel}
+									onChange={(e) => setCompanySettings(prev => ({ ...prev, taxLabel: e.target.value }))}
+									className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+									placeholder="e.g., SST 6%"
+								/>
+							</div>
 						</div>
 
-						{/* Company Address */}
+						{/* Address - Full Width */}
 						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
+							<label className="block text-xs font-medium text-gray-400 mb-1">
 								Company Address *
 							</label>
 							<input
 								type="text"
 								value={companySettings.companyAddress}
 								onChange={(e) => setCompanySettings(prev => ({ ...prev, companyAddress: e.target.value }))}
-								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-								placeholder="Enter company address"
+								className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="Full company address"
 							/>
 						</div>
 
-						{/* Registration Number */}
-						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
-								Registration Number
-							</label>
-							<input
-								type="text"
-								value={companySettings.companyRegNo || ""}
-								onChange={(e) => setCompanySettings(prev => ({ ...prev, companyRegNo: e.target.value }))}
-								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-								placeholder="Enter registration number"
-							/>
+						{/* Registration & License Row */}
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<div>
+								<label className="block text-xs font-medium text-gray-400 mb-1">
+									Registration No.
+								</label>
+								<input
+									type="text"
+									value={companySettings.companyRegNo || ""}
+									onChange={(e) => setCompanySettings(prev => ({ ...prev, companyRegNo: e.target.value }))}
+									className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+									placeholder="Registration number"
+								/>
+							</div>
+							<div>
+								<label className="block text-xs font-medium text-gray-400 mb-1">
+									License No.
+								</label>
+								<input
+									type="text"
+									value={companySettings.licenseNo || ""}
+									onChange={(e) => setCompanySettings(prev => ({ ...prev, licenseNo: e.target.value }))}
+									className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+									placeholder="License number"
+								/>
+							</div>
 						</div>
 
-						{/* License Number */}
-						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
-								License Number
-							</label>
-							<input
-								type="text"
-								value={companySettings.licenseNo || ""}
-								onChange={(e) => setCompanySettings(prev => ({ ...prev, licenseNo: e.target.value }))}
-								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-								placeholder="Enter license number"
-							/>
+						{/* Contact Info Row */}
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<div>
+								<label className="block text-xs font-medium text-gray-400 mb-1">
+									Contact Phone
+								</label>
+								<input
+									type="text"
+									value={companySettings.contactPhone || ""}
+									onChange={(e) => setCompanySettings(prev => ({ ...prev, contactPhone: e.target.value }))}
+									className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+									placeholder="+60123456789"
+								/>
+							</div>
+							<div>
+								<label className="block text-xs font-medium text-gray-400 mb-1">
+									Contact Email
+								</label>
+								<input
+									type="email"
+									value={companySettings.contactEmail || ""}
+									onChange={(e) => setCompanySettings(prev => ({ ...prev, contactEmail: e.target.value }))}
+									className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+									placeholder="email@company.com"
+								/>
+							</div>
 						</div>
 
-						{/* Contact Phone */}
+						{/* Footer Note */}
 						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
-								Contact Phone
+							<label className="block text-xs font-medium text-gray-400 mb-1">
+								Receipt Footer Note
 							</label>
-							<input
-								type="text"
-								value={companySettings.contactPhone || ""}
-								onChange={(e) => setCompanySettings(prev => ({ ...prev, contactPhone: e.target.value }))}
-								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-								placeholder="Enter contact phone"
-							/>
-						</div>
-
-						{/* Contact Email */}
-						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
-								Contact Email
-							</label>
-							<input
-								type="email"
-								value={companySettings.contactEmail || ""}
-								onChange={(e) => setCompanySettings(prev => ({ ...prev, contactEmail: e.target.value }))}
-								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-								placeholder="Enter contact email"
-							/>
-						</div>
-
-						{/* Tax Label */}
-						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
-								Tax Label *
-							</label>
-							<input
-								type="text"
-								value={companySettings.taxLabel}
-								onChange={(e) => setCompanySettings(prev => ({ ...prev, taxLabel: e.target.value }))}
-								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-								placeholder="e.g., SST 6%, GST 6%"
+							<textarea
+								value={companySettings.footerNote || ""}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, footerNote: e.target.value }))}
+								rows={2}
+								className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none"
+								placeholder="Optional footer text for receipts"
 							/>
 						</div>
 					</div>
-
-					{/* Footer Note */}
-					<div className="mt-6">
-						<label className="block text-sm font-medium text-gray-300 mb-2">
-							Receipt Footer Note
-						</label>
-						<textarea
-							value={companySettings.footerNote || ""}
-							onChange={(e) => setCompanySettings(prev => ({ ...prev, footerNote: e.target.value }))}
-							rows={3}
-							className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none"
-							placeholder="Enter footer note that will appear on receipts (optional)"
-						/>
-					</div>
-
-
 				</div>
 
-				{/* Preview Section */}
-				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-6">
-					<h3 className="text-lg font-medium text-white mb-4">Receipt Preview</h3>
-					<div className="bg-white p-5 rounded-lg text-black max-w-md text-xs">
-						{/* Header */}
-						<div className="border-b border-purple-600 pb-2 mb-3 flex items-center">
-							<div className="flex-1">
-								<h2 className="text-lg font-bold text-purple-600">{companySettings.companyName}</h2>
-								<p className="text-xs text-gray-600">{companySettings.companyAddress}</p>
+				{/* Right Column - Receipt Preview */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-5">
+					<div className="flex items-center justify-between mb-4">
+						<h3 className="text-base font-medium text-white">Receipt Preview</h3>
+						<span className="text-xs text-gray-500">Live preview</span>
+					</div>
+					
+					{/* Scrollable Preview Container */}
+					<div className="max-h-[600px] overflow-y-auto">
+						<div className="bg-white p-4 rounded-lg text-black text-[10px] shadow-lg">
+							{/* Header */}
+							<div className="border-b-2 border-purple-600 pb-2 mb-2">
+								<h2 className="text-sm font-bold text-purple-600">{companySettings.companyName || "Company Name"}</h2>
+								<p className="text-[10px] text-gray-600">{companySettings.companyAddress || "Company Address"}</p>
 								{companySettings.companyRegNo && (
-									<p className="text-xs text-gray-600">Registration No: {companySettings.companyRegNo}</p>
+									<p className="text-[10px] text-gray-600">Reg No: {companySettings.companyRegNo}</p>
 								)}
 								{companySettings.licenseNo && (
-									<p className="text-xs text-gray-600">License No: {companySettings.licenseNo}</p>
+									<p className="text-[10px] text-gray-600">License: {companySettings.licenseNo}</p>
 								)}
-								{companySettings.contactPhone && (
-									<p className="text-xs text-gray-600">Phone: {companySettings.contactPhone}</p>
+								<div className="flex gap-3 mt-1">
+									{companySettings.contactPhone && (
+										<p className="text-[10px] text-gray-600">📞 {companySettings.contactPhone}</p>
+									)}
+									{companySettings.contactEmail && (
+										<p className="text-[10px] text-gray-600">✉️ {companySettings.contactEmail}</p>
+									)}
+								</div>
+							</div>
+
+							{/* Receipt Title */}
+							<h3 className="text-xs font-bold text-center mb-2 text-gray-800">PAYMENT RECEIPT</h3>
+
+							{/* Receipt Information */}
+							<div className="bg-gray-50 p-2 rounded mb-2 grid grid-cols-2 gap-2">
+								<div>
+									<p className="text-[9px] text-gray-500">Receipt No.</p>
+									<p className="text-[10px] font-bold text-gray-800">RCP-2025-001</p>
+								</div>
+								<div>
+									<p className="text-[9px] text-gray-500">Date</p>
+									<p className="text-[10px] font-bold text-gray-800">{new Date().toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+								</div>
+								<div>
+									<p className="text-[9px] text-gray-500">Loan ID</p>
+									<p className="text-[10px] font-bold text-gray-800">cmemg7ph</p>
+								</div>
+								<div>
+									<p className="text-[9px] text-gray-500">Installment</p>
+									<p className="text-[10px] font-bold text-gray-800">3 / 12</p>
+								</div>
+							</div>
+
+							{/* Customer Information */}
+							<div className="mb-2">
+								<h4 className="text-[10px] font-bold text-gray-700 mb-1 border-b border-gray-200 pb-0.5">Customer</h4>
+								<div className="bg-gray-50 p-2 rounded space-y-0.5">
+									<div className="flex">
+										<span className="text-[9px] text-gray-500 w-12">Name:</span>
+										<span className="text-[10px] text-gray-800">John Doe</span>
+									</div>
+									<div className="flex">
+										<span className="text-[9px] text-gray-500 w-12">Email:</span>
+										<span className="text-[10px] text-gray-800">john@example.com</span>
+									</div>
+									<div className="flex">
+										<span className="text-[9px] text-gray-500 w-12">Phone:</span>
+										<span className="text-[10px] text-gray-800">+60123456789</span>
+									</div>
+								</div>
+							</div>
+
+							{/* Payment Details */}
+							<div className="mb-2">
+								<h4 className="text-[10px] font-bold text-gray-700 mb-1 border-b border-gray-200 pb-0.5">Payment</h4>
+								<div className="bg-gray-50 p-2 rounded space-y-1">
+									<div className="flex justify-between">
+										<span className="text-[9px] text-gray-500">Loan Payment:</span>
+										<span className="text-[10px] font-medium text-gray-800">RM 950.00</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-[9px] text-gray-500">Late Fees:</span>
+										<span className="text-[10px] font-medium text-gray-800">RM 0.00</span>
+									</div>
+									<div className="flex justify-between font-bold border-t border-purple-600 pt-1 mt-1">
+										<span className="text-[10px] text-gray-700">Total Paid</span>
+										<span className="text-[10px] text-purple-600">RM 950.00</span>
+									</div>
+								</div>
+							</div>
+
+							{/* Footer */}
+							<div className="text-center pt-2 border-t border-gray-200">
+								<p className="text-[10px] font-bold text-purple-600 mb-1">Thank you for your payment!</p>
+								{companySettings.footerNote && (
+									<p className="text-[9px] text-gray-600 mb-1">{companySettings.footerNote}</p>
 								)}
-								{companySettings.contactEmail && (
-									<p className="text-xs text-gray-600">Email: {companySettings.contactEmail}</p>
+								<p className="text-[8px] text-gray-400">Computer-generated receipt. No signature required.</p>
+								{(companySettings.contactPhone || companySettings.contactEmail) && (
+									<p className="text-[8px] text-gray-400 mt-0.5">
+										Inquiries: {companySettings.contactPhone}{companySettings.contactPhone && companySettings.contactEmail && ' | '}{companySettings.contactEmail}
+									</p>
 								)}
 							</div>
-						</div>
-
-						{/* Receipt Title */}
-						<h3 className="text-base font-bold text-center mb-3 text-gray-800">PAYMENT RECEIPT</h3>
-
-						{/* Receipt Information */}
-						<div className="bg-gray-50 p-2 rounded mb-3 flex justify-between">
-							<div className="flex-1">
-								<p className="text-xs text-gray-600 mb-1">Receipt Number</p>
-								<p className="text-xs font-bold text-gray-800 mb-2">RCP-2025-001</p>
-								<p className="text-xs text-gray-600 mb-1">Receipt Date</p>
-								<p className="text-xs font-bold text-gray-800">{new Date().toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-							</div>
-							<div className="flex-1">
-								<p className="text-xs text-gray-600 mb-1">Loan ID</p>
-								<p className="text-xs font-bold text-gray-800">cmemg7ph</p>
-							</div>
-						</div>
-
-						{/* Customer Information */}
-						<div className="mb-4">
-							<h4 className="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">Customer Information</h4>
-							<div className="bg-gray-50 p-3 rounded">
-								<div className="flex mb-1">
-									<span className="text-xs text-gray-600 w-16">Name:</span>
-									<span className="text-xs text-gray-800 flex-1">John Doe</span>
-								</div>
-								<div className="flex mb-1">
-									<span className="text-xs text-gray-600 w-16">Email:</span>
-									<span className="text-xs text-gray-800 flex-1">john@example.com</span>
-								</div>
-								<div className="flex">
-									<span className="text-xs text-gray-600 w-16">Phone:</span>
-									<span className="text-xs text-gray-800 flex-1">+60123456789</span>
-								</div>
-							</div>
-						</div>
-
-						{/* Payment Details */}
-						<div className="mb-4">
-							<h4 className="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">Payment Details</h4>
-							<div className="bg-gray-50 p-3 rounded">
-								<div className="flex justify-between mb-2">
-									<span className="text-xs text-gray-600">Installment 3 / 12</span>
-									<span className="text-xs font-bold text-gray-800">Due: 15 January 2025</span>
-								</div>
-								<div className="flex justify-between mb-2">
-									<span className="text-xs text-gray-600">Payment Method:</span>
-									<span className="text-xs font-bold text-gray-800">Online Payment</span>
-								</div>
-								<div className="flex justify-between mb-2">
-									<span className="text-xs text-gray-600">Reference:</span>
-									<span className="text-xs font-bold text-gray-800">TXN123456</span>
-								</div>
-
-								{/* Payment Breakdown */}
-								<div className="flex justify-between mb-2">
-									<span className="text-xs text-gray-600">Loan Payment:</span>
-									<span className="text-xs font-bold text-gray-800">RM 950.00</span>
-								</div>
-								<div className="flex justify-between mb-2">
-									<span className="text-xs text-gray-600">Late Fees:</span>
-									<span className="text-xs font-bold text-gray-800">RM 0.00</span>
-								</div>
-
-								<div className="flex justify-between font-bold border-t border-purple-600 pt-1 mt-2">
-									<span className="text-xs text-gray-700">Total Amount Paid</span>
-									<span className="text-xs text-gray-800">RM 950.00</span>
-								</div>
-
-								{/* Transaction Timestamps - More subtle with extra spacing */}
-								<div className="flex justify-between mb-1 mt-4">
-									<span className="text-xs text-gray-400">Payment Date:</span>
-									<span className="text-xs text-gray-500">{new Date().toLocaleString('en-MY', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' })}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-xs text-gray-400">Payment Processed:</span>
-									<span className="text-xs text-gray-500">{new Date().toLocaleString('en-MY', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' })}</span>
-								</div>
-							</div>
-						</div>
-
-						{/* Footer */}
-						<div className="text-center pt-3 border-t border-gray-200">
-							<p className="text-xs font-bold text-purple-600 mb-2">Thank you for your payment!</p>
-							{companySettings.footerNote && (
-								<p className="text-xs text-gray-600 mb-2">{companySettings.footerNote}</p>
-							)}
-							<p className="text-xs text-gray-500">This is a computer-generated receipt and does not require a signature.</p>
-							{(companySettings.contactPhone || companySettings.contactEmail) && (
-								<p className="text-xs text-gray-500 mt-1">
-									For inquiries, please contact us at{' '}
-									{companySettings.contactPhone && `${companySettings.contactPhone}`}
-									{companySettings.contactPhone && companySettings.contactEmail && ' or '}
-									{companySettings.contactEmail && `${companySettings.contactEmail}`}
-								</p>
-							)}
 						</div>
 					</div>
 				</div>
@@ -1067,6 +1078,106 @@ function SettingsPageContent() {
 		}
 	};
 
+	const toggleCategory = (category: string) => {
+		setExpandedCategories(prev => {
+			const next = new Set(prev);
+			if (next.has(category)) {
+				next.delete(category);
+			} else {
+				next.add(category);
+			}
+			return next;
+		});
+	};
+
+	// Helper to get main toggle key for a category
+	const getMainToggleKey = (category: string): string | null => {
+		switch (category) {
+			case "EARLY_SETTLEMENT": return "EARLY_SETTLEMENT_ENABLED";
+			case "LATE_FEES": return "ENABLE_LATE_FEE_GRACE_PERIOD";
+			case "DEFAULT_PROCESSING": return "ENABLE_DEFAULT_PROCESSING";
+			default: return null;
+		}
+	};
+
+	// Helper to render compact table input
+	const renderCompactInput = (setting: SystemSetting) => {
+		const { key, dataType, value, options } = setting;
+
+		switch (dataType) {
+			case "BOOLEAN":
+				return (
+					<label className="relative inline-flex items-center cursor-pointer">
+						<input
+							type="checkbox"
+							checked={value === true || value === "true"}
+							onChange={(e) => handleSettingChange(key, e.target.checked)}
+							className="sr-only peer"
+						/>
+						<div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+					</label>
+				);
+
+			case "ENUM":
+				return (
+					<select
+						value={value}
+						onChange={(e) => handleSettingChange(key, e.target.value)}
+						className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[140px]"
+					>
+						{options && Object.entries(options).map(([optionKey, optionData]: [string, any]) => (
+							<option key={optionKey} value={optionKey}>
+								{optionData.label || optionKey}
+							</option>
+						))}
+					</select>
+				);
+
+			case "NUMBER":
+				return (
+					<input
+						type="number"
+						value={value}
+						onChange={(e) => handleSettingChange(key, parseFloat(e.target.value) || 0)}
+						min={options?.min}
+						max={options?.max}
+						step={options?.step || 1}
+						className="w-20 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+					/>
+				);
+
+			case "STRING":
+				return (
+					<input
+						type="text"
+						value={value || ""}
+						onChange={(e) => handleSettingChange(key, e.target.value)}
+						className="w-32 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+					/>
+				);
+
+			case "JSON":
+				if (Array.isArray(value)) {
+					return (
+						<input
+							type="text"
+							value={value.join(", ")}
+							onChange={(e) => {
+								const newValue = e.target.value.split(",").map(v => parseInt(v.trim())).filter(v => !isNaN(v));
+								handleSettingChange(key, newValue);
+							}}
+							placeholder="e.g., 7, 3, 1"
+							className="w-24 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+						/>
+					);
+				}
+				return <span className="text-gray-400 text-sm">{JSON.stringify(value)}</span>;
+
+			default:
+				return <span className="text-gray-400 text-sm">{String(value)}</span>;
+		}
+	};
+
 	const renderSystemSettings = () => {
 		if (loading) {
 			return (
@@ -1082,437 +1193,184 @@ function SettingsPageContent() {
 		);
 
 		return (
-			<div className="space-y-6">
-				{/* Settings Categories */}
-				<div className="space-y-4">
-					{filteredSettings.map(([category, categorySettings]) => {
-						const isDisabled = isCategoryDisabled(category, categorySettings);
-						return (
+			<div className="space-y-4">
+				{/* Compact Settings Categories */}
+				{filteredSettings.map(([category, categorySettings]) => {
+					const isDisabled = isCategoryDisabled(category, categorySettings);
+					const isExpanded = expandedCategories.has(category);
+					const mainToggleKey = getMainToggleKey(category);
+					const mainToggleSetting = mainToggleKey ? categorySettings.find(s => s.key === mainToggleKey) : null;
+					const displaySettings = mainToggleKey 
+						? categorySettings.filter(s => s.key !== mainToggleKey)
+						: categorySettings;
+
+					return (
 						<div key={category} className={`bg-gradient-to-br backdrop-blur-md border rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${
 							isDisabled 
-								? "from-gray-700/40 to-gray-800/40 border-gray-600/20 opacity-60" 
+								? "from-gray-700/40 to-gray-800/40 border-gray-600/20 opacity-70" 
 								: "from-gray-800/70 to-gray-900/70 border-gray-700/30"
 						}`}>
-							<div className="px-6 py-4 border-b border-gray-700/30">
-								<h2 className={`text-lg font-semibold flex items-center ${
-									isDisabled ? "text-gray-400" : "text-white"
-								}`}>
-									<span className="mr-2 text-2xl">{getCategoryIcon(category)}</span>
-									{getCategoryDisplayName(category)}
+							{/* Compact Header */}
+							<div 
+								className="px-4 py-3 border-b border-gray-700/30 flex items-center justify-between cursor-pointer hover:bg-gray-700/20 transition-colors"
+								onClick={() => toggleCategory(category)}
+							>
+								<div className="flex items-center gap-3">
+									<span className="text-xl">{getCategoryIcon(category)}</span>
+									<div>
+										<h2 className={`text-base font-semibold ${isDisabled ? "text-gray-400" : "text-white"}`}>
+											{getCategoryDisplayName(category)}
+										</h2>
+										<p className="text-xs text-gray-500">{displaySettings.length} settings</p>
+									</div>
 									{isDisabled && (
-										<span className="ml-2 text-xs bg-gray-600/50 text-gray-400 px-2 py-1 rounded-full">
-											Disabled
-										</span>
+										<Badge variant="secondary" className="text-[10px]">Disabled</Badge>
 									)}
-								</h2>
-								{/* Add subtitle explanations for specific categories */}
-								{category === "LOAN_CALCULATION" && (
-									<p className="text-sm text-gray-400 mt-2 leading-relaxed">
-										Controls how the total loan amount (principal + interest) is split across each payment installment. 
-										This affects the <span className="text-blue-300 font-medium">principalAmount</span> and <span className="text-blue-300 font-medium">interestAmount</span> columns in the database.
-									</p>
-								)}
-								{category === "PAYMENT_SCHEDULE" && (
-									<p className="text-sm text-gray-400 mt-2 leading-relaxed">
-										Determines when loan payments are due each month. This controls the actual due dates that appear 
-										on payment schedules and affects pro-ration calculations for first payments.
-									</p>
-								)}
-								{category === "EARLY_SETTLEMENT" && (
-									<div className="flex items-center justify-between mt-2">
-										<p className={`text-sm leading-relaxed ${
-											isDisabled ? "text-gray-500" : "text-gray-400"
-										}`}>
-											Configure early settlement options for borrowers. Controls eligibility, lock-in periods, 
-											discount factors, fees, and calculation methods for early loan discharge requests.
-										</p>
-										{/* Main Enable Toggle */}
-										{(() => {
-											const mainToggleSetting = categorySettings.find(s => s.key === "EARLY_SETTLEMENT_ENABLED");
-											if (!mainToggleSetting) return null;
-											
-											return (
-												<div className="flex items-center space-x-3 ml-6">
-													<span className="text-sm font-medium text-gray-300">Enable Feature</span>
-													<label className="relative inline-flex items-center cursor-pointer">
-														<input
-															type="checkbox"
-															checked={mainToggleSetting.value}
-															onChange={(e) => handleSettingChange(mainToggleSetting.key, e.target.checked)}
-															className="sr-only peer"
-														/>
-														<div className="w-12 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-400 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-600 shadow-lg"></div>
-													</label>
-												</div>
-											);
-										})()}
-									</div>
-								)}
-								{category === "LATE_FEES" && (
-									<div className="flex items-center justify-between mt-2">
-										<p className={`text-sm leading-relaxed ${
-											isDisabled ? "text-gray-500" : "text-gray-400"
-										}`}>
-											Configure late fee calculations and grace periods for overdue payments. Controls when and how late fees are applied to loan repayments.
-										</p>
-										{/* Main Enable Toggle */}
-										{(() => {
-											const mainToggleSetting = categorySettings.find(s => s.key === "ENABLE_LATE_FEE_GRACE_PERIOD");
-											if (!mainToggleSetting) return null;
-											
-											return (
-												<div className="flex items-center space-x-3 ml-6">
-													<span className="text-sm font-medium text-gray-300">Enable Late Fees</span>
-													<label className="relative inline-flex items-center cursor-pointer">
-														<input
-															type="checkbox"
-															checked={mainToggleSetting.value}
-															onChange={(e) => handleSettingChange(mainToggleSetting.key, e.target.checked)}
-															className="sr-only peer"
-														/>
-														<div className="w-12 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-400 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-red-600 shadow-lg"></div>
-													</label>
-												</div>
-											);
-										})()}
-									</div>
-								)}
-								{category === "DEFAULT_PROCESSING" && (
-									<div className="flex items-center justify-between mt-2">
-										<p className={`text-sm leading-relaxed ${
-											isDisabled ? "text-gray-500" : "text-gray-400"
-										}`}>
-											Configure automatic default risk processing and notifications. Controls when loans are flagged as default risk and the remedy period workflow.
-										</p>
-										{/* Main Enable Toggle */}
-										{(() => {
-											const mainToggleSetting = categorySettings.find(s => s.key === "ENABLE_DEFAULT_PROCESSING");
-											if (!mainToggleSetting) return null;
-											
-											return (
-												<div className="flex items-center space-x-3 ml-6">
-													<span className="text-sm font-medium text-gray-300">Enable Default Processing</span>
-													<label className="relative inline-flex items-center cursor-pointer">
-														<input
-															type="checkbox"
-															checked={mainToggleSetting.value}
-															onChange={(e) => handleSettingChange(mainToggleSetting.key, e.target.checked)}
-															className="sr-only peer"
-														/>
-														<div className="w-12 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-400 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-amber-600 shadow-lg"></div>
-													</label>
-												</div>
-											);
-										})()}
-									</div>
-								)}
+								</div>
+								<div className="flex items-center gap-4">
+									{/* Main Toggle in Header */}
+									{mainToggleSetting && (
+										<div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+											<span className="text-xs text-gray-400">
+												{mainToggleSetting.value ? "Enabled" : "Disabled"}
+											</span>
+											<label className="relative inline-flex items-center cursor-pointer">
+												<input
+													type="checkbox"
+													checked={mainToggleSetting.value}
+													onChange={(e) => handleSettingChange(mainToggleSetting.key, e.target.checked)}
+													className="sr-only peer"
+												/>
+												<div className="w-10 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+											</label>
+										</div>
+									)}
+									{/* Expand/Collapse Icon */}
+									{isExpanded ? (
+										<ChevronUpIcon className="h-5 w-5 text-gray-400" />
+									) : (
+										<ChevronDownIcon className="h-5 w-5 text-gray-400" />
+									)}
+								</div>
 							</div>
 
-							<div className={`p-6 space-y-6 relative ${isDisabled ? "pointer-events-none" : ""}`}>
-								{isDisabled && (
-									<div className="absolute inset-0 bg-gray-900/20 rounded-lg flex items-center justify-center">
-										<div className="bg-gray-800/80 text-gray-400 px-4 py-2 rounded-lg text-sm font-medium backdrop-blur-sm">
-											Enable feature to configure settings
+							{/* Expandable Table Content */}
+							{isExpanded && (
+								<div className={`relative ${isDisabled ? "pointer-events-none" : ""}`}>
+									{isDisabled && (
+										<div className="absolute inset-0 bg-gray-900/40 z-10 flex items-center justify-center">
+											<span className="text-sm text-gray-400 bg-gray-800/90 px-3 py-1.5 rounded">
+												Enable feature to configure
+											</span>
 										</div>
-									</div>
-								)}
-								{/* Special handling for Payment Schedule category to group related settings */}
-								{category === "PAYMENT_SCHEDULE" ? (
-									<div className="space-y-8">
-										{/* Main payment schedule type */}
-										{categorySettings.filter(s => s.key === "PAYMENT_SCHEDULE_TYPE").map((setting) => (
-											<div key={setting.key} className="border-b border-gray-700/30 pb-6">
-												<div className="flex items-start justify-between">
-													<div className="flex-1 min-w-0 mr-6">
-														<div className="flex items-center space-x-2 mb-2">
-															<h3 className="text-base font-medium text-white">
-																{setting.name}
-															</h3>
-															{setting.requiresRestart && (
-																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-																	Requires Restart
-																</span>
-															)}
-															{setting.affectsExistingLoans && (
-																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-																	Affects Existing Loans
-																</span>
-															)}
-														</div>
-														<p className="text-sm text-gray-300 mb-3">
-															{setting.description}
-														</p>
-														{setting.options && setting.dataType === "ENUM" && (
-															<div className="text-xs text-gray-400">
-																<strong>Available Options:</strong>
-																<ul className="mt-2 space-y-2">
-																	{Object.entries(setting.options).map(([key, option]: [string, any]) => (
-																		<li key={key} className="ml-2 p-2 bg-gray-800/50 rounded border-l-2 border-gray-600">
-																			<strong className="text-gray-200">{option.label}:</strong>
-																			<div className="text-gray-400 mt-1">{option.description}</div>
-																		</li>
-																	))}
-																</ul>
+									)}
+									
+									{/* Compact Table */}
+									<div className="overflow-x-auto">
+										<Table>
+											<TableHeader>
+												<TableRow className="bg-gray-800/30 hover:bg-gray-800/30">
+													<TableHead className="text-gray-400 text-xs font-medium py-2 px-4 w-[240px] min-w-[240px]">Setting</TableHead>
+													<TableHead className="text-gray-400 text-xs font-medium py-2 px-4 hidden lg:table-cell">Description</TableHead>
+													<TableHead className="text-gray-400 text-xs font-medium py-2 px-4 text-right w-[180px] min-w-[180px]">Value</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{displaySettings.map((setting) => (
+													<TableRow key={setting.key} className="border-gray-700/30">
+														<TableCell className="py-2 px-4 w-[240px] min-w-[240px]">
+															<div className="flex items-center gap-2">
+																<span className="text-sm text-white font-medium">{setting.name}</span>
+																<Tooltip content={setting.description} side="bottom">
+																	<InformationCircleIcon className="h-4 w-4 text-gray-500 cursor-help flex-shrink-0" />
+																</Tooltip>
+																{setting.requiresRestart && (
+																	<Badge variant="warning" className="text-[9px] px-1 py-0">Restart</Badge>
+																)}
+																{setting.affectsExistingLoans && (
+																	<Badge variant="destructive" className="text-[9px] px-1 py-0">Affects Loans</Badge>
+																)}
 															</div>
-														)}
-													</div>
-													<div className="flex-shrink-0 w-64">
-														{renderSettingInput(setting)}
-													</div>
-												</div>
-											</div>
-										))}
-										
-										{/* Custom date configuration (conditional) */}
-										{(() => {
-											const scheduleTypeSetting = Object.values(settings).flat().find(s => s.key === "PAYMENT_SCHEDULE_TYPE");
-											const isCustomDate = scheduleTypeSetting?.value === "CUSTOM_DATE";
-											
-											if (isCustomDate) {
-												return (
-													<div className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-4">
-														<h4 className="text-sm font-semibold text-white mb-3 flex items-center">
-															⚙️ Custom Date Configuration
-															<span className="ml-2 text-xs text-gray-400 font-normal">(Only applies to Custom Date of Month)</span>
-														</h4>
-														<div className="grid md:grid-cols-2 gap-6">
-															{categorySettings.filter(s => s.key === "CUSTOM_DUE_DATE" || s.key === "PRORATION_CUTOFF_DATE").map((setting) => (
-																<div key={setting.key}>
-																	<div className="flex items-center space-x-2 mb-2">
-																		<h5 className="text-sm font-medium text-white">
-																			{setting.name}
-																		</h5>
-																	</div>
-																	<p className="text-xs text-gray-400 mb-3">
-																		{setting.description}
-																	</p>
-																	<div className="w-full">
-																		{renderSettingInput(setting)}
-																		{setting.options && setting.dataType === "NUMBER" && (
-																			<div className="mt-1 text-xs text-gray-500">
-																				Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
-																			</div>
-																		)}
-																	</div>
-																</div>
-															))}
-														</div>
-													</div>
-												);
-											} else {
-												return (
-													<div className="bg-blue-800/20 border border-blue-700/30 rounded-lg p-4">
-														<h4 className="text-sm font-semibold text-white mb-3 flex items-center">
-															ℹ️ Same Day Each Month Configuration
-														</h4>
-														<div className="text-sm text-blue-300">
-															When "Same Day Each Month" is selected, all payments are due on the same day of each month as the loan disbursement date (in Malaysia timezone). 
-															<br /><br />
-															<strong>Example:</strong> If a loan is disbursed on January 15th, all payments will be due on the 15th of each subsequent month.
-															<br /><br />
-															No additional configuration is needed - the system automatically uses the disbursement day for all payment schedules.
-														</div>
-													</div>
-												);
-											}
-										})()}
-									</div>
-								) : category === "LATE_FEES" ? (
-									/* Late Fees - exclude main toggle from regular settings */
-									categorySettings.filter(s => s.key !== "ENABLE_LATE_FEE_GRACE_PERIOD").map((setting) => (
-											<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
-												<div className="flex items-start justify-between">
-													<div className="flex-1 min-w-0 mr-6">
-														<div className="flex items-center space-x-2 mb-2">
-															<h3 className="text-base font-medium text-white">
-																{setting.name}
-															</h3>
-															{setting.requiresRestart && (
-																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-																	Requires Restart
-																</span>
-															)}
-															{setting.affectsExistingLoans && (
-																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-																	Affects Existing Loans
-																</span>
-															)}
-														</div>
-														<p className="text-sm text-gray-300 mb-3">
-															{setting.description}
-														</p>
-													</div>
-													<div className="flex-shrink-0 w-64">
-														{renderSettingInput(setting)}
-														{setting.options && setting.dataType === "NUMBER" && (
-															<div className="mt-1 text-xs text-gray-400">
-																Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+														</TableCell>
+														<TableCell className="py-2 px-4 hidden lg:table-cell">
+															<span className="text-xs text-gray-400 line-clamp-2">{setting.description}</span>
+														</TableCell>
+														<TableCell className="py-2 px-4 text-right w-[180px] min-w-[180px]">
+															<div className="flex flex-col items-end gap-0.5">
+																{renderCompactInput(setting)}
+																{setting.options && setting.dataType === "NUMBER" && (
+																	<span className="text-[10px] text-gray-500 whitespace-nowrap">
+																		Range: {setting.options.min} - {setting.options.max}
+																	</span>
+																)}
 															</div>
-														)}
-													</div>
-												</div>
-											</div>
-										))
-								) : category === "EARLY_SETTLEMENT" ? (
-									/* Early Settlement - exclude main toggle from regular settings */
-									categorySettings.filter(s => s.key !== "EARLY_SETTLEMENT_ENABLED").map((setting) => (
-										<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
-											<div className="flex items-start justify-between">
-												<div className="flex-1 min-w-0 mr-6">
-													<div className="flex items-center space-x-2 mb-2">
-														<h3 className="text-base font-medium text-white">
-															{setting.name}
-														</h3>
-														{setting.requiresRestart && (
-															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-																Requires Restart
-															</span>
-														)}
-														{setting.affectsExistingLoans && (
-															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-																Affects Existing Loans
-															</span>
-														)}
-													</div>
-													<p className="text-sm text-gray-300 mb-3">
-														{setting.description}
-													</p>
-													{setting.options && setting.dataType === "ENUM" && (
-														<div className="text-xs text-gray-400">
-															<strong>Available Options:</strong>
-															<ul className="mt-2 space-y-2">
-																{Object.entries(setting.options).map(([key, option]: [string, any]) => (
-																	<li key={key} className="ml-2 p-2 bg-gray-800/50 rounded border-l-2 border-gray-600">
-																		<strong className="text-gray-200">{option.label}:</strong>
-																		<div className="text-gray-400 mt-1">{option.description}</div>
-																	</li>
+														</TableCell>
+													</TableRow>
+												))}
+											</TableBody>
+										</Table>
+									</div>
+
+									{/* Special content for certain categories */}
+									{category === "PAYMENT_SCHEDULE" && (
+										<div className="p-4 border-t border-gray-700/30">
+											{(() => {
+												const scheduleTypeSetting = Object.values(settings).flat().find(s => s.key === "PAYMENT_SCHEDULE_TYPE");
+												const isCustomDate = scheduleTypeSetting?.value === "CUSTOM_DATE";
+												
+												if (isCustomDate) {
+													return (
+														<div className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-3">
+															<h4 className="text-xs font-semibold text-white mb-2 flex items-center">
+																⚙️ Custom Date Configuration
+															</h4>
+															<div className="grid md:grid-cols-2 gap-3">
+																{categorySettings.filter(s => s.key === "CUSTOM_DUE_DATE" || s.key === "PRORATION_CUTOFF_DATE").map((setting) => (
+																	<div key={setting.key} className="flex items-center justify-between bg-gray-700/30 rounded p-2">
+																		<span className="text-xs text-gray-300">{setting.name}</span>
+																		{renderCompactInput(setting)}
+																	</div>
 																))}
-															</ul>
+															</div>
 														</div>
-													)}
-												</div>
-												<div className="flex-shrink-0 w-64">
-													{renderSettingInput(setting)}
-													{setting.options && setting.dataType === "NUMBER" && (
-														<div className="mt-1 text-xs text-gray-400">
-															Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+													);
+												} else {
+													return (
+														<div className="bg-blue-800/10 border border-blue-700/30 rounded-lg p-3">
+															<p className="text-xs text-blue-300">
+																<strong>Same Day Each Month:</strong> Payments are due on the same day of each month as the loan disbursement date.
+															</p>
 														</div>
-													)}
-												</div>
-											</div>
+													);
+												}
+											})()}
 										</div>
-									))
-								) : category === "DEFAULT_PROCESSING" ? (
-									/* Default Processing - exclude main toggle from regular settings */
-									categorySettings.filter(s => s.key !== "ENABLE_DEFAULT_PROCESSING").map((setting) => (
-										<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
-											<div className="flex items-start justify-between">
-												<div className="flex-1 min-w-0 mr-6">
-													<div className="flex items-center space-x-2 mb-2">
-														<h3 className="text-base font-medium text-white">
-															{setting.name}
-														</h3>
-														{setting.requiresRestart && (
-															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-																Requires Restart
-															</span>
-														)}
-														{setting.affectsExistingLoans && (
-															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-																Affects Existing Loans
-															</span>
-														)}
-													</div>
-													<p className="text-sm text-gray-300 mb-3">
-														{setting.description}
-													</p>
-												</div>
-												<div className="flex-shrink-0 w-64">
-													{renderSettingInput(setting)}
-													{setting.options && setting.dataType === "NUMBER" && (
-														<div className="mt-1 text-xs text-gray-400">
-															Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
-														</div>
-													)}
-												</div>
-											</div>
-										</div>
-									))
-								) : (
-									/* Standard layout for other categories */
-									categorySettings.map((setting) => (
-										<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
-											<div className="flex items-start justify-between">
-												<div className="flex-1 min-w-0 mr-6">
-													<div className="flex items-center space-x-2 mb-2">
-														<h3 className="text-base font-medium text-white">
-															{setting.name}
-														</h3>
-														{setting.requiresRestart && (
-															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-																Requires Restart
-															</span>
-														)}
-														{setting.affectsExistingLoans && (
-															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-																Affects Existing Loans
-															</span>
-														)}
-													</div>
-													<p className="text-sm text-gray-300 mb-3">
-														{setting.description}
-													</p>
-													{setting.options && setting.dataType === "ENUM" && (
-														<div className="text-xs text-gray-400">
-															<strong>Available Options:</strong>
-															<ul className="mt-2 space-y-2">
-																{Object.entries(setting.options).map(([key, option]: [string, any]) => (
-																	<li key={key} className="ml-2 p-2 bg-gray-800/50 rounded border-l-2 border-gray-600">
-																		<strong className="text-gray-200">{option.label}:</strong>
-																		<div className="text-gray-400 mt-1">{option.description}</div>
-																	</li>
-																))}
-															</ul>
-														</div>
-													)}
-												</div>
-												<div className="flex-shrink-0 w-64">
-													{renderSettingInput(setting)}
-													{setting.options && setting.dataType === "NUMBER" && (
-														<div className="mt-1 text-xs text-gray-400">
-															Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
-														</div>
-													)}
-												</div>
-											</div>
-										</div>
-									))
-								)}
-							</div>
+									)}
+								</div>
+							)}
 						</div>
-						);
-					})}
-				</div>
+					);
+				})}
 
 				{/* Footer Actions */}
-				<div className="flex items-center justify-between">
-					<div className="text-sm text-gray-400">
+				<div className="flex items-center justify-between pt-4 border-t border-gray-700/30">
+					<div className="text-xs text-gray-500">
 						Last updated: {new Date().toLocaleString()}
 					</div>
 					<div className="flex space-x-3">
 						<button
 							onClick={forceRefresh}
 							disabled={loading}
-							className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
+							className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
 						>
-							{loading ? "Loading..." : "Force Refresh"}
+							{loading ? "Loading..." : "Refresh"}
 						</button>
 						<button
 							onClick={saveSettings}
 							disabled={saving || !hasUnsavedChanges}
-							className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-md font-medium transition-colors"
+							className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
 						>
-							{saving ? "Saving..." : "Save All Changes"}
+							{saving ? "Saving..." : "Save Changes"}
 						</button>
 					</div>
 				</div>
@@ -1736,36 +1594,30 @@ function SettingsPageContent() {
 			);
 		}
 
-		// Defensive check to ensure settings is properly initialized
 		if (!settings || typeof settings !== 'object') {
 			return (
-				<div className="bg-gradient-to-br from-red-800/70 to-red-900/70 backdrop-blur-md border border-red-700/30 rounded-xl p-8 text-center">
-					<BellIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
-					<h3 className="text-lg font-medium text-white mb-2">Settings Loading Error</h3>
-					<p className="text-red-400">Unable to load settings data. Please refresh the page.</p>
+				<div className="bg-gradient-to-br from-red-800/70 to-red-900/70 backdrop-blur-md border border-red-700/30 rounded-xl p-6 text-center">
+					<BellIcon className="h-10 w-10 text-red-500 mx-auto mb-3" />
+					<h3 className="text-base font-medium text-white mb-1">Settings Loading Error</h3>
+					<p className="text-red-400 text-sm">Unable to load settings data. Please refresh the page.</p>
 				</div>
 			);
 		}
 
-		// Filter to show only NOTIFICATIONS category
-		const notificationSettings = Object.entries(settings).filter(([category]) => 
-			category === "NOTIFICATIONS"
-		);
+		const notificationSettings = Object.entries(settings).filter(([category]) => category === "NOTIFICATIONS");
 
 		if (notificationSettings.length === 0) {
 			return (
-				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-8 text-center">
-					<BellIcon className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-					<h3 className="text-lg font-medium text-white mb-2">No Notification Settings</h3>
-					<p className="text-gray-400">Notification settings will be available in a future update</p>
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-6 text-center">
+					<BellIcon className="h-10 w-10 text-gray-500 mx-auto mb-3" />
+					<h3 className="text-base font-medium text-white mb-1">No Notification Settings</h3>
+					<p className="text-gray-400 text-sm">Notification settings will be available in a future update</p>
 				</div>
 			);
 		}
 
-		// Separate WhatsApp settings from general notification settings
 		const whatsappSettings = notificationSettings[0]?.[1]?.filter(setting => 
-			setting.key.startsWith('WHATSAPP_') || 
-			setting.key === 'ENABLE_WHATSAPP_NOTIFICATIONS' ||
+			(setting.key.startsWith('WHATSAPP_') && setting.key !== 'ENABLE_WHATSAPP_NOTIFICATIONS') ||
 			setting.key === 'UPCOMING_PAYMENT_REMINDER_DAYS' ||
 			setting.key === 'LATE_PAYMENT_REMINDER_DAYS' ||
 			setting.key === 'UPCOMING_PAYMENT_CHECK_TIME'
@@ -1779,755 +1631,369 @@ function SettingsPageContent() {
 			setting.key !== 'UPCOMING_PAYMENT_CHECK_TIME'
 		) || [];
 
-		// Check if WhatsApp notifications are enabled
-		const whatsappEnabled = whatsappSettings.find(s => s.key === 'ENABLE_WHATSAPP_NOTIFICATIONS')?.value || false;
+		const findSetting = (key: string) => whatsappSettings.find(s => s.key === key);
 
-		// Helper function to find a setting or return a placeholder
-		const findSettingOrPlaceholder = (key: string, name: string, description: string) => {
-			const setting = whatsappSettings.find(s => s.key === key);
-			if (setting) return setting;
-			
-			// Return a placeholder setting when the actual setting is missing
-			return {
-				id: `placeholder-${key}`,
-				key,
-				category: 'NOTIFICATIONS',
-				name,
-				description,
-				dataType: 'BOOLEAN',
-				value: false,
-				isActive: false,
-				requiresRestart: false,
-				affectsExistingLoans: false,
-				isMissing: true // Flag to indicate this is a placeholder
-			};
-		};
+		// Group notifications by category for table display
+		const notificationGroups = [
+			{
+				title: "Authentication & Security",
+				icon: "🔐",
+				items: [
+					{ key: "WHATSAPP_OTP_VERIFICATION", label: "OTP Verification", description: "One-time password for login and verification", mandatory: true },
+				]
+			},
+			{
+				title: "Loan Application",
+				icon: "📋",
+				items: [
+					{ key: "WHATSAPP_LOAN_APPLICATION_SUBMISSION", label: "Application Submitted", description: "Confirmation when application is received" },
+					{ key: "WHATSAPP_ATTESTATION_COMPLETE", label: "Attestation Complete", description: "Notify when attestor verifies application" },
+					{ key: "WHATSAPP_LOAN_REVISED_OFFER", label: "Revised Offer Sent", description: "Alert when loan terms are modified" },
+				]
+			},
+			{
+				title: "Loan Decision",
+				icon: "✅",
+				items: [
+					{ key: "WHATSAPP_LOAN_APPROVAL", label: "Loan Approved", description: "Notify borrower of approval" },
+					{ key: "WHATSAPP_LOAN_REJECTION", label: "Loan Rejected", description: "Notify borrower of rejection" },
+					{ key: "WHATSAPP_LOAN_DISBURSEMENT", label: "Loan Disbursed", description: "Confirm funds have been transferred" },
+					{ key: "WHATSAPP_LOAN_DISCHARGED", label: "Loan Discharged", description: "Confirm loan is fully paid off" },
+				]
+			},
+			{
+				title: "Document Signing",
+				icon: "✍️",
+				items: [
+					{ key: "WHATSAPP_BORROWER_SIGNING_COMPLETE", label: "Borrower Signed", description: "Confirm borrower completed signing" },
+					{ key: "WHATSAPP_ALL_PARTIES_SIGNING_COMPLETE", label: "All Parties Signed", description: "Notify when all signatories complete" },
+					{ key: "WHATSAPP_STAMPING_COMPLETED", label: "Stamping Complete", description: "Confirm document stamping is done" },
+				]
+			},
+			{
+				title: "Payments",
+				icon: "💳",
+				items: [
+					{ key: "WHATSAPP_PAYMENT_APPROVED", label: "Payment Approved", description: "Confirm payment was successful" },
+					{ key: "WHATSAPP_PAYMENT_FAILED", label: "Payment Failed", description: "Alert when payment is rejected" },
+				]
+			},
+		];
 
 		return (
-			<div className="space-y-6">
-				{/* WhatsApp Notifications Card - Always show, but disable content when turned off */}
-				{(whatsappSettings.length > 0 || notificationSettings.length > 0) && (
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-						<div className="px-6 py-4 border-b border-gray-700/30">
-							<div className="flex items-center">
-								<div className="w-12 h-12 bg-green-600/20 rounded-xl flex items-center justify-center mr-4">
-									<svg className="w-6 h-6 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-										<path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+			<div className="space-y-4">
+				{/* Header Card */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
+					<div className="p-4 flex items-center justify-between">
+						<div className="flex items-center gap-3">
+							<div className="w-10 h-10 bg-green-600/20 rounded-lg flex items-center justify-center">
+								<svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+									<path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+								</svg>
+							</div>
+							<div>
+								<h2 className="text-base font-semibold text-white">WhatsApp Business Notifications</h2>
+								<p className="text-xs text-gray-400">Configure which notifications are sent via WhatsApp</p>
+							</div>
+						</div>
+						<div className="flex items-center gap-3">
+							<a 
+								href="https://developers.facebook.com/docs/whatsapp/pricing/" 
+								target="_blank" 
+								rel="noopener noreferrer" 
+								className="text-xs text-blue-400 hover:text-blue-300 hidden sm:block"
+							>
+								Pricing →
+							</a>
+							<button
+								onClick={() => setShowTriggerConfirmModal(true)}
+								disabled={manualTriggerLoading}
+								className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+								title="Manually trigger payment notifications"
+							>
+								{manualTriggerLoading ? (
+									<div className="animate-spin rounded-full h-3 w-3 border border-gray-400 border-t-transparent"></div>
+								) : (
+									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 									</svg>
+								)}
+								<span className="hidden sm:inline">Run Now</span>
+							</button>
+						</div>
+					</div>
+					
+					{/* Manual Trigger Result (shows after running) */}
+					{manualTriggerResult && (
+						<div className="px-4 pb-4">
+							<div className="grid grid-cols-3 gap-3 p-3 bg-gray-800/50 rounded-lg text-center">
+								<div>
+									<div className="text-lg font-bold text-white">{manualTriggerResult.totalChecked}</div>
+									<div className="text-[10px] text-gray-400">Checked</div>
 								</div>
 								<div>
-									<h2 className="text-lg font-semibold text-white flex items-center">
-										WhatsApp Notifications
-										{!whatsappEnabled && (
-											<span className="ml-3 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
-												DISABLED
-											</span>
-										)}
-									</h2>
-									<p className={`text-sm mt-1 ${whatsappEnabled ? 'text-green-300' : 'text-gray-400'}`}>
-										{whatsappEnabled 
-											? 'Configure WhatsApp Business API notifications for loan and payment events'
-											: 'WhatsApp notifications are currently disabled. Enable the master toggle below to configure individual notification types.'
-										}
-									</p>
+									<div className="text-lg font-bold text-green-400">{manualTriggerResult.notificationsSent}</div>
+									<div className="text-[10px] text-gray-400">Sent</div>
 								</div>
-							</div>
-
-							<div className={`p-6 space-y-6 relative ${!whatsappEnabled ? 'opacity-60' : ''}`}>
-							{/* Disabled overlay */}
-							{!whatsappEnabled && whatsappSettings.length === 0 && (
-								<div className="absolute inset-0 bg-gray-900/40 rounded-lg flex items-center justify-center z-10">
-									<div className="bg-gray-800/90 text-gray-300 px-6 py-4 rounded-lg text-center backdrop-blur-sm">
-										<h3 className="text-lg font-medium mb-2">WhatsApp Notifications Disabled</h3>
-										<p className="text-sm text-gray-400">Enable WhatsApp notifications to configure individual notification types</p>
-									</div>
+								<div>
+									<div className="text-lg font-bold text-red-400">{manualTriggerResult.errors}</div>
+									<div className="text-[10px] text-gray-400">Errors</div>
 								</div>
-							)}
-							
-							{/* Master toggle first - Always show even if other settings are missing */}
-							{whatsappSettings.filter(s => s.key === "ENABLE_WHATSAPP_NOTIFICATIONS").length > 0 ? (
-								whatsappSettings.filter(s => s.key === "ENABLE_WHATSAPP_NOTIFICATIONS").map((setting) => (
-								<div key={setting.key} className="border-b border-green-700/30 pb-6">
-										<div className="flex items-start justify-between">
-											<div className="flex-1 min-w-0 mr-6">
-												<div className="flex items-center space-x-2 mb-2">
-													<h3 className="text-base font-medium text-white">
-													🔧 {setting.name}
-													</h3>
-											</div>
-											<p className="text-sm text-gray-300 mb-3">
-												{setting.description}
-											</p>
-											<div className="text-xs text-blue-300 bg-blue-900/20 p-3 rounded border border-blue-700/30">
-												<strong>💰 WhatsApp Pricing Information:</strong><br/>
-												WhatsApp Business Platform charges per message delivered. <strong>Authentication templates</strong> (like OTP) and <strong>utility templates</strong> (loan/payment notifications) have lower rates than marketing messages. 
-												<br/><br/>
-												<strong>Cost-saving tips:</strong>
-												<ul className="list-disc list-inside mt-2 space-y-1">
-													<li>Utility templates sent within customer service windows are <strong>free</strong></li>
-													<li>Volume discounts available for high-volume senders</li>
-													<li>Authentication templates have preferential rates</li>
-												</ul>
-												<br/>
-												📋 <a href="https://developers.facebook.com/docs/whatsapp/pricing/" target="_blank" rel="noopener noreferrer" className="text-blue-200 hover:text-blue-100 underline font-medium">
-													View Meta's official rate card and pricing details →
-												</a>
-											</div>
-										</div>
-										<div className="flex-shrink-0 w-64">
-											{renderSettingInput(setting)}
-										</div>
-									</div>
-								</div>
-							))
-							) : (
-								/* Fallback when ENABLE_WHATSAPP_NOTIFICATIONS setting is missing */
-								<div className="border-b border-green-700/30 pb-6">
-									<div className="flex items-start justify-between">
-										<div className="flex-1 min-w-0 mr-6">
-											<div className="flex items-center space-x-2 mb-2">
-												<h3 className="text-base font-medium text-white">
-													🔧 Enable WhatsApp Notifications
-												</h3>
-											</div>
-											<p className="text-sm text-gray-300 mb-3">
-												Master toggle to enable or disable all WhatsApp Business API notifications
-											</p>
-											<div className="text-xs text-red-300 bg-red-900/20 p-3 rounded border border-red-700/30">
-												<strong>⚠️ Setting Not Found:</strong><br/>
-												The ENABLE_WHATSAPP_NOTIFICATIONS setting is missing from the database. Please contact your system administrator to add this setting.
-											</div>
-										</div>
-										<div className="flex-shrink-0 w-64">
-											<div className="text-sm text-gray-500 italic">
-												Setting not available
-											</div>
-										</div>
-									</div>
-								</div>
-							)}
-							
-							{/* Individual notification types - Show when enabled or when master toggle exists */}
-							<div className={`grid md:grid-cols-2 gap-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
-								{whatsappSettings.filter(s => 
-									s.key !== "ENABLE_WHATSAPP_NOTIFICATIONS" && 
-									s.key !== "UPCOMING_PAYMENT_REMINDER_DAYS" && 
-									s.key !== "UPCOMING_PAYMENT_CHECK_TIME" &&
-									s.key !== "LATE_PAYMENT_REMINDER_DAYS" &&
-									s.key !== "WHATSAPP_UPCOMING_PAYMENT" &&
-									s.key !== "WHATSAPP_LATE_PAYMENT" &&
-									s.key !== "WHATSAPP_DEFAULT_RISK" &&
-									s.key !== "WHATSAPP_DEFAULT_REMINDER" &&
-									s.key !== "WHATSAPP_DEFAULT_FINAL"
-								).map((setting) => {
-									const isMandatory = setting.key === "WHATSAPP_OTP_VERIFICATION";
-									const getNotificationIcon = (key: string) => {
-										switch (key) {
-											case "WHATSAPP_OTP_VERIFICATION": return "🔐";
-											case "WHATSAPP_LOAN_APPLICATION_SUBMISSION": return "📝";
-											case "WHATSAPP_ATTESTATION_COMPLETE": return "✍️";
-											case "WHATSAPP_BORROWER_SIGNING_COMPLETE": return "🖊️";
-											case "WHATSAPP_ALL_PARTIES_SIGNING_COMPLETE": return "✅";
-											case "WHATSAPP_STAMPING_COMPLETED": return "📄";
-											case "WHATSAPP_LOAN_APPROVAL": return "✅";
-											case "WHATSAPP_LOAN_REJECTION": return "❌";
-											case "WHATSAPP_LOAN_DISBURSEMENT": return "💰";
-											case "WHATSAPP_LOAN_DISCHARGED": return "🏆";
-											case "WHATSAPP_LOAN_REVISED_OFFER": return "🔄";
-											case "WHATSAPP_PAYMENT_APPROVED": return "💳";
-											case "WHATSAPP_PAYMENT_FAILED": return "⚠️";
-											case "WHATSAPP_UPCOMING_PAYMENT": return "⏰";
-											case "WHATSAPP_LATE_PAYMENT": return "🚨";
-											case "WHATSAPP_DEFAULT_RISK": return "⚠️";
-											case "WHATSAPP_DEFAULT_REMINDER": return "📢";
-											case "WHATSAPP_DEFAULT_FINAL": return "🚨";
-											default: return "📱";
-										}
-									};
-
-									const getNotificationColorClasses = (key: string) => {
-										switch (key) {
-											case "WHATSAPP_OTP_VERIFICATION": return "bg-blue-800/20 border-blue-700/30";
-											case "WHATSAPP_LOAN_APPLICATION_SUBMISSION": return "bg-blue-800/20 border-blue-700/30";
-											case "WHATSAPP_ATTESTATION_COMPLETE": return "bg-indigo-800/20 border-indigo-700/30";
-											case "WHATSAPP_BORROWER_SIGNING_COMPLETE": return "bg-violet-800/20 border-violet-700/30";
-											case "WHATSAPP_ALL_PARTIES_SIGNING_COMPLETE": return "bg-emerald-800/20 border-emerald-700/30";
-											case "WHATSAPP_STAMPING_COMPLETED": return "bg-teal-800/20 border-teal-700/30";
-											case "WHATSAPP_LOAN_APPROVAL": return "bg-green-800/20 border-green-700/30";
-											case "WHATSAPP_LOAN_REJECTION": return "bg-red-800/20 border-red-700/30";
-											case "WHATSAPP_LOAN_DISBURSEMENT": return "bg-yellow-800/20 border-yellow-700/30";
-											case "WHATSAPP_LOAN_DISCHARGED": return "bg-green-800/20 border-green-700/30";
-											case "WHATSAPP_LOAN_REVISED_OFFER": return "bg-indigo-800/20 border-indigo-700/30";
-											case "WHATSAPP_PAYMENT_APPROVED": return "bg-purple-800/20 border-purple-700/30";
-											case "WHATSAPP_PAYMENT_FAILED": return "bg-red-800/20 border-red-700/30";
-											case "WHATSAPP_UPCOMING_PAYMENT": return "bg-orange-800/20 border-orange-700/30";
-											case "WHATSAPP_LATE_PAYMENT": return "bg-red-800/20 border-red-700/30";
-											case "WHATSAPP_DEFAULT_RISK": return "bg-amber-800/20 border-amber-700/30";
-											case "WHATSAPP_DEFAULT_REMINDER": return "bg-orange-800/20 border-orange-700/30";
-											case "WHATSAPP_DEFAULT_FINAL": return "bg-red-800/20 border-red-700/30";
-											default: return "bg-gray-800/20 border-gray-700/30";
-										}
-									};
-
-									const colorClasses = getNotificationColorClasses(setting.key);
-									
-									return (
-										<div key={setting.key} className={`${colorClasses} rounded-lg p-4 ${isMandatory ? 'border-2 border-orange-500/50' : ''}`}>
-											<div className="flex items-start justify-between mb-3">
-												<div className="flex-1 min-w-0">
-													<div className="flex items-center space-x-2 mb-2">
-														<span className="text-lg">{getNotificationIcon(setting.key)}</span>
-														<h4 className="text-sm font-medium text-white">
-															{setting.name.replace('WhatsApp ', '')}
-															{isMandatory && (
-																<span className="ml-2 text-xs bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded border border-orange-400/30">
-																	REQUIRED
-														</span>
-													)}
-														</h4>
-													</div>
-													<p className="text-xs text-gray-400">
-														{setting.description}
-													</p>
-													{isMandatory && (
-														<div className="text-xs text-orange-300 bg-orange-900/20 p-2 rounded border border-orange-700/30 mt-2">
-															<strong>Security Requirement:</strong> OTP verification cannot be disabled as it's essential for account security and fraud prevention.
-														</div>
-													)}
-												</div>
-											</div>
-											<div className="w-full">
-												{isMandatory ? (
-													<div className="space-y-2">
-														{/* Greyed out toggle to show it's non-editable */}
-														<label className="relative inline-flex items-center cursor-not-allowed opacity-60">
-															<input
-																type="checkbox"
-																checked={true}
-																disabled={true}
-																className="sr-only peer"
-															/>
-															<div className="w-11 h-6 bg-gray-500 rounded-full peer peer-checked:bg-green-500 cursor-not-allowed">
-																<div className="absolute top-[2px] left-[22px] bg-white border border-gray-400 rounded-full h-5 w-5 transition-all"></div>
-															</div>
-															<span className="ml-3 text-sm font-medium text-gray-400">
-																Always Enabled
-														</span>
-														</label>
-														{/* Status indicator */}
-														<div className="flex items-center space-x-2 text-xs text-green-300">
-															<div className="w-2 h-2 bg-green-400 rounded-full"></div>
-															<span>Security requirement - cannot be disabled</span>
-														</div>
-													</div>
-												) : (
-													renderSettingInput(setting)
-													)}
-												</div>
-										</div>
-									);
-								})}
-							</div>
-
-														{/* Payment Reminder Configuration Cards */}
-							<div className={`grid lg:grid-cols-2 gap-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
-								{/* Upcoming Payment Configuration - Always show */}
-								<div className="bg-orange-900/20 border border-orange-700/30 rounded-xl p-6">
-									<div className="flex items-center mb-6">
-										<div className="w-12 h-12 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4">
-											<span className="text-2xl">⏰</span>
-										</div>
-										<div>
-											<h3 className="text-lg font-semibold text-white">Upcoming Payment Reminders</h3>
-											<p className="text-sm text-orange-300 mt-1">Reminders before payment due date</p>
-										</div>
-									</div>
-
-									{/* Main Toggle - Always show */}
-									{(() => {
-										const setting = findSettingOrPlaceholder(
-											"WHATSAPP_UPCOMING_PAYMENT",
-											"WhatsApp Upcoming Payment Reminders",
-											"Send WhatsApp reminders before payment due dates"
-										);
-										return (
-											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4 mb-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">⏰</span>
-													<h4 className="text-sm font-medium text-white">
-														Enable Reminders
-														{setting.isMissing && (
-															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
-																MISSING
-															</span>
-														)}
-													</h4>
-												</div>
-												<p className="text-xs text-gray-400 mb-4">
-													{setting.description}
-												</p>
-												<div className="w-full">
-													{setting.isMissing ? (
-														<div className="text-sm text-gray-500 italic">
-															Setting not available in database
-														</div>
-													) : (
-														renderSettingInput(setting)
-													)}
-												</div>
-											</div>
-										);
-									})()}
-
-									{/* Upcoming Payment Reminder Days - Always show */}
-									{(() => {
-										const setting = findSettingOrPlaceholder(
-											"UPCOMING_PAYMENT_REMINDER_DAYS",
-											"Upcoming Payment Reminder Days",
-											"Days before payment due date to send reminders"
-										);
-										return (
-											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4 mb-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">📅</span>
-													<h4 className="text-sm font-medium text-white">
-														Reminder Days
-														{setting.isMissing && (
-															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
-																MISSING
-															</span>
-														)}
-													</h4>
-												</div>
-												<p className="text-xs text-gray-400 mb-4">
-													{setting.description}
-												</p>
-												<div className="w-full">
-													{setting.isMissing ? (
-														<div className="text-sm text-gray-500 italic">
-															Setting not available in database
-														</div>
-													) : (
-														renderSettingInput(setting)
-													)}
-												</div>
-											</div>
-										);
-									})()}
-
-									{/* Example Configuration */}
-									<div className="text-xs text-orange-300 bg-orange-900/20 p-3 rounded border border-orange-700/30">
-										<strong>📋 Example:</strong><br/>
-										"Hi John, this is a reminder that your payment of RM 1000 for your PayAdvance loan is due in 3 days. Please ensure payment is made before 28/8/2025 to avoid late charges."
-									</div>
-								</div>
-
-								{/* Late Payment Configuration - Always show */}
-								<div className="bg-red-900/20 border border-red-700/30 rounded-xl p-6">
-									<div className="flex items-center mb-6">
-										<div className="w-12 h-12 bg-red-600/20 rounded-xl flex items-center justify-center mr-4">
-											<span className="text-2xl">🚨</span>
-										</div>
-										<div>
-											<h3 className="text-lg font-semibold text-white">Late Payment Reminders</h3>
-											<p className="text-sm text-red-300 mt-1">Reminders after payment due date</p>
-										</div>
-									</div>
-
-									{/* Main Toggle - Always show */}
-									{(() => {
-										const setting = findSettingOrPlaceholder(
-											"WHATSAPP_LATE_PAYMENT",
-											"WhatsApp Late Payment Reminders",
-											"Send WhatsApp reminders after payment due dates"
-										);
-										return (
-											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4 mb-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">🚨</span>
-													<h4 className="text-sm font-medium text-white">
-														Enable Late Reminders
-														{setting.isMissing && (
-															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
-																MISSING
-															</span>
-														)}
-													</h4>
-												</div>
-												<p className="text-xs text-gray-400 mb-4">
-													{setting.description}
-												</p>
-												<div className="w-full">
-													{setting.isMissing ? (
-														<div className="text-sm text-gray-500 italic">
-															Setting not available in database
-														</div>
-													) : (
-														renderSettingInput(setting)
-													)}
-												</div>
-											</div>
-										);
-									})()}
-
-									{/* Late Payment Reminder Days - Always show */}
-									{(() => {
-										const setting = findSettingOrPlaceholder(
-											"LATE_PAYMENT_REMINDER_DAYS",
-											"Late Payment Reminder Days",
-											"Days after payment due date to send reminders"
-										);
-										return (
-											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4 mb-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">📅</span>
-													<h4 className="text-sm font-medium text-white">
-														Reminder Days
-														{setting.isMissing && (
-															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
-																MISSING
-															</span>
-														)}
-													</h4>
-												</div>
-												<p className="text-xs text-gray-400 mb-4">
-													{setting.description}
-												</p>
-												<div className="w-full">
-													{setting.isMissing ? (
-														<div className="text-sm text-gray-500 italic">
-															Setting not available in database
-														</div>
-													) : (
-														renderSettingInput(setting)
-													)}
-												</div>
-											</div>
-										);
-									})()}
-
-									{/* Example Configuration */}
-									<div className="text-xs text-red-300 bg-red-900/20 p-3 rounded border border-red-700/30">
-										<strong>📋 Example:</strong><br/>
-										"Hi John, your loan payment of RM 1050 for PayAdvance is past due."<br/>
-										<span className="text-xs text-gray-400">Amount includes late fees and outstanding balance</span>
-									</div>
-								</div>
-							</div>
-
-							{/* Default Risk Notifications Configuration - Always show */}
-							<div className={`bg-gradient-to-br from-amber-900/20 to-red-900/20 border border-amber-700/30 rounded-xl p-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
-								<div className="flex items-center mb-6">
-									<div className="w-12 h-12 bg-amber-600/20 rounded-xl flex items-center justify-center mr-4">
-										<span className="text-2xl">⚠️</span>
-									</div>
-									<div>
-										<h3 className="text-lg font-semibold text-white">Default Risk Notifications</h3>
-										<p className="text-sm text-amber-300 mt-1">Automated notifications for loan default risk management</p>
-									</div>
-								</div>
-
-								<div className="grid lg:grid-cols-3 gap-6">
-									{/* Default Risk Warning (28 days) - Always show */}
-									{(() => {
-										const setting = findSettingOrPlaceholder(
-											"WHATSAPP_DEFAULT_RISK",
-											"WhatsApp Default Risk Warning",
-											"Sent when loan is 28 days overdue (default risk flagged)"
-										);
-										return (
-											<div key={setting.key} className="bg-amber-800/20 border border-amber-700/30 rounded-lg p-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">⚠️</span>
-													<h4 className="text-sm font-medium text-white">
-														Initial Warning
-														{setting.isMissing && (
-															<span className="ml-2 bg-red-500/20 text-red-300 px-1 py-0.5 rounded text-xs">
-																MISSING
-															</span>
-														)}
-													</h4>
-												</div>
-												<p className="text-xs text-amber-300 mb-4">
-													{setting.description}
-												</p>
-												<div className="w-full">
-													{setting.isMissing ? (
-														<div className="text-xs text-gray-500 italic">
-															Setting not available
-														</div>
-													) : (
-														renderSettingInput(setting)
-													)}
-												</div>
-											</div>
-										);
-									})()}
-
-									{/* Default Reminder (during 14-day remedy period) - Always show */}
-									{(() => {
-										const setting = findSettingOrPlaceholder(
-											"WHATSAPP_DEFAULT_REMINDER",
-											"WhatsApp Default Remedy Reminders",
-											"Periodic reminders during 14-day remedy period"
-										);
-										return (
-											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">📢</span>
-													<h4 className="text-sm font-medium text-white">
-														Remedy Reminders
-														{setting.isMissing && (
-															<span className="ml-2 bg-red-500/20 text-red-300 px-1 py-0.5 rounded text-xs">
-																MISSING
-															</span>
-														)}
-													</h4>
-												</div>
-												<p className="text-xs text-orange-300 mb-4">
-													{setting.description}
-												</p>
-												<div className="w-full">
-													{setting.isMissing ? (
-														<div className="text-xs text-gray-500 italic">
-															Setting not available
-														</div>
-													) : (
-														renderSettingInput(setting)
-													)}
-												</div>
-											</div>
-										);
-									})()}
-
-									{/* Final Default Notice - Always show */}
-									{(() => {
-										const setting = findSettingOrPlaceholder(
-											"WHATSAPP_DEFAULT_FINAL",
-											"WhatsApp Final Default Notice",
-											"Sent when loan officially defaults (44 days overdue)"
-										);
-										return (
-											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">🚨</span>
-													<h4 className="text-sm font-medium text-white">
-														Final Notice
-														{setting.isMissing && (
-															<span className="ml-2 bg-red-500/20 text-red-300 px-1 py-0.5 rounded text-xs">
-																MISSING
-															</span>
-														)}
-													</h4>
-												</div>
-												<p className="text-xs text-red-300 mb-4">
-													{setting.description}
-												</p>
-												<div className="w-full">
-													{setting.isMissing ? (
-														<div className="text-xs text-gray-500 italic">
-															Setting not available
-														</div>
-													) : (
-														renderSettingInput(setting)
-													)}
-												</div>
-											</div>
-										);
-									})()}
-								</div>
-
-									{/* Default Process Information */}
-									<div className="mt-6 text-xs text-amber-300 bg-amber-900/20 p-4 rounded border border-amber-700/30">
-										<strong>📋 Default Process Timeline:</strong><br/>
-										<div className="mt-2 space-y-1">
-											<div><strong>Day 28:</strong> Loan flagged as "potential default" → Initial warning sent + PDF letter generated</div>
-											<div><strong>Day 29-43:</strong> 16-day remedy period → Periodic reminders sent (includes 2 days for registered post delivery)</div>
-											<div><strong>Day 44:</strong> If not cleared → Loan status changed to "DEFAULT" → Final notice sent</div>
-											<div><strong>Recovery:</strong> When payments clear outstanding amounts → Loan returns to "ACTIVE"</div>
-										</div>
-									</div>
-								</div>
-							</div>
-
-							{/* Manual Trigger Section */}
-							{(whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") || whatsappSettings.some(s => s.key === "WHATSAPP_LATE_PAYMENT")) && (
-								<div className={`bg-gradient-to-r from-orange-900/20 to-red-900/20 border border-orange-700/30 rounded-xl p-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
-									<div className="flex items-center mb-6">
-										<div className="w-12 h-12 bg-gradient-to-r from-orange-600/20 to-red-600/20 rounded-xl flex items-center justify-center mr-4">
-											<span className="text-2xl">🚀</span>
-										</div>
-										<div>
-											<h3 className="text-lg font-semibold text-white">Manual Trigger</h3>
-											<p className="text-sm text-gray-400">Run payment notifications immediately</p>
-										</div>
-									</div>
-
-									{/* Manual Trigger Section */}
-									<div className="bg-gradient-to-r from-orange-800/10 to-red-800/10 border border-orange-600/30 rounded-lg p-4">
-										<div className="flex items-center justify-between mb-4">
-											<div>
-												<h4 className="text-sm font-semibold text-white flex items-center">
-													<span className="mr-2 text-lg">🚀</span>
-													Manual Trigger
-												</h4>
-												<p className="text-xs text-gray-400 mt-1">
-													Run both upcoming and late payment notifications immediately without waiting for the scheduled trigger at 10AM (GMT+8) daily
-												</p>
-											</div>
-											<button
-												onClick={triggerPaymentNotifications}
-												disabled={manualTriggerLoading}
-												className="px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-2"
-											>
-												{manualTriggerLoading ? (
-													<>
-														<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-														<span>Processing...</span>
-													</>
-												) : (
-													<>
-														<span className="text-lg">▶️</span>
-														<span>Trigger Now</span>
-													</>
-												)}
-											</button>
-										</div>
-
-										{/* Result Display */}
-										{manualTriggerResult && (
-											<div className="mt-4 p-3 bg-green-900/20 border border-green-700/30 rounded text-xs">
-												<div className="flex items-center mb-2">
-													<span className="text-green-400 mr-2">✅</span>
-													<strong className="text-green-300">Processing Complete</strong>
-													<span className="ml-auto text-gray-400">
-														{new Date(manualTriggerResult.processedAt).toLocaleString()}
-													</span>
-												</div>
-
-												{/* Overall Summary */}
-												<div className="grid grid-cols-3 gap-4 text-center mb-4">
-													<div>
-														<div className="text-lg font-bold text-white">{manualTriggerResult.totalChecked}</div>
-														<div className="text-gray-400">Total Checked</div>
-													</div>
-													<div>
-														<div className="text-lg font-bold text-green-400">{manualTriggerResult.notificationsSent}</div>
-														<div className="text-gray-400">Total Sent</div>
-													</div>
-													<div>
-														<div className="text-lg font-bold text-red-400">{manualTriggerResult.errors}</div>
-														<div className="text-gray-400">Total Errors</div>
-													</div>
-												</div>
-
-												{/* Breakdown by Type */}
-												{(manualTriggerResult.upcomingPayments || manualTriggerResult.latePayments) && (
-													<div className="grid grid-cols-2 gap-4 text-center border-t border-green-700/30 pt-3">
-														<div className="bg-orange-900/20 border border-orange-700/30 rounded p-2">
-															<div className="text-orange-300 font-semibold mb-1">⏰ Upcoming</div>
-															<div className="text-xs space-y-1">
-																<div>Checked: <span className="text-white">{manualTriggerResult.upcomingPayments?.checked || 0}</span></div>
-																<div>Sent: <span className="text-green-400">{manualTriggerResult.upcomingPayments?.sent || 0}</span></div>
-																<div>Errors: <span className="text-red-400">{manualTriggerResult.upcomingPayments?.errors || 0}</span></div>
-															</div>
-														</div>
-														<div className="bg-red-900/20 border border-red-700/30 rounded p-2">
-															<div className="text-red-300 font-semibold mb-1">🚨 Late</div>
-															<div className="text-xs space-y-1">
-																<div>Checked: <span className="text-white">{manualTriggerResult.latePayments?.checked || 0}</span></div>
-																<div>Sent: <span className="text-green-400">{manualTriggerResult.latePayments?.sent || 0}</span></div>
-																<div>Errors: <span className="text-red-400">{manualTriggerResult.latePayments?.errors || 0}</span></div>
-															</div>
-														</div>
-													</div>
-												)}
-												{manualTriggerResult.details && manualTriggerResult.details.length > 0 && (
-													<div className="mt-3 pt-3 border-t border-green-700/30">
-														<strong className="text-green-300 text-xs">Details:</strong>
-														<div className="mt-2 max-h-32 overflow-y-auto space-y-1">
-															{manualTriggerResult.details.slice(0, 10).map((detail: any, index: number) => (
-																<div key={index} className="text-xs flex items-center justify-between">
-																	<span className="text-gray-300">User {detail.userId.slice(-8)}</span>
-																	<span className={`px-2 py-0.5 rounded text-xs ${
-																		detail.status === 'sent' ? 'bg-green-600/30 text-green-300' :
-																		detail.status === 'error' ? 'bg-red-600/30 text-red-300' :
-																		'bg-yellow-600/30 text-yellow-300'
-																	}`}>
-																		{detail.status}
-																	</span>
-																</div>
-															))}
-															{manualTriggerResult.details.length > 10 && (
-																<div className="text-xs text-gray-400 text-center pt-2">
-																	... and {manualTriggerResult.details.length - 10} more
-																</div>
-															)}
-														</div>
-													</div>
-												)}
-											</div>
-										)}
-									</div>
-								</div>
-							)}
-						</div>
-					</div>
-				)}
-
-				{/* General Notification Settings (if any) */}
-				{generalSettings.length > 0 && (
-					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-						<div className="px-6 py-4 border-b border-gray-700/30">
-							<h2 className="text-lg font-semibold text-white flex items-center">
-								<span className="mr-2 text-2xl">📱</span>
-								General Notifications
-							</h2>
-						</div>
-
-						<div className="p-6 space-y-6">
-							{generalSettings.map((setting) => (
-								<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
-									<div className="flex items-start justify-between">
-										<div className="flex-1 min-w-0 mr-6">
-											<div className="flex items-center space-x-2 mb-2">
-												<h3 className="text-base font-medium text-white">
-													{setting.name}
-												</h3>
-											</div>
-											<p className="text-sm text-gray-300 mb-3">
-												{setting.description}
-											</p>
-										</div>
-										<div className="flex-shrink-0 w-64">
-											{renderSettingInput(setting)}
-										</div>
 							</div>
 						</div>
-					))}
+					)}
 				</div>
+
+				{/* Confirmation Modal */}
+				{showTriggerConfirmModal && (
+					<div className="fixed inset-0 z-50 flex items-center justify-center">
+						<div 
+							className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+							onClick={() => setShowTriggerConfirmModal(false)}
+						/>
+						<div className="relative bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+							<h3 className="text-lg font-semibold text-white mb-2">Run Payment Notifications?</h3>
+							<p className="text-sm text-gray-400 mb-4">
+								This will immediately send WhatsApp notifications to all customers with upcoming or late payments. 
+								This action is normally scheduled to run daily at 10AM (GMT+8).
+							</p>
+							<div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-3 mb-4">
+								<p className="text-xs text-amber-300">
+									<strong>Note:</strong> Customers will only receive notifications if they haven't already been notified today.
+								</p>
+							</div>
+							<div className="flex gap-3 justify-end">
+								<button
+									onClick={() => setShowTriggerConfirmModal(false)}
+									className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+								>
+									Cancel
+								</button>
+								<button
+									onClick={() => {
+										setShowTriggerConfirmModal(false);
+										triggerPaymentNotifications();
+									}}
+									disabled={manualTriggerLoading}
+									className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+								>
+									{manualTriggerLoading ? "Running..." : "Confirm & Run"}
+								</button>
+							</div>
+						</div>
 					</div>
 				)}
 
-				{/* Footer Actions for Notifications */}
-				<div className="flex items-center justify-between">
-					<div className="text-sm text-gray-400">
-						Last updated: {new Date().toLocaleString()}
+				{/* Main Table */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
+					<table className="w-full">
+						<thead>
+							<tr className="border-b border-gray-700/50">
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-3 w-[180px]">Notification Type</th>
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-3 hidden md:table-cell">Description</th>
+								<th className="text-center text-xs font-medium text-gray-400 px-4 py-3 w-28">Status</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-gray-700/30">
+							{notificationGroups.map((group) => (
+								<React.Fragment key={group.title}>
+									{/* Group Header */}
+									<tr className="bg-gray-800/30">
+										<td colSpan={3} className="px-4 py-2">
+											<span className="text-xs font-semibold text-gray-300 flex items-center gap-2">
+												<span>{group.icon}</span>
+												{group.title}
+											</span>
+										</td>
+									</tr>
+									{/* Group Items */}
+									{group.items.map((item) => {
+										const { key, label, description } = item;
+										const mandatory = 'mandatory' in item ? item.mandatory : false;
+										const setting = findSetting(key);
+										if (!setting) return null;
+										return (
+											<tr key={key} className="hover:bg-gray-800/20 transition-colors">
+												<td className="px-4 py-2.5 pl-8">
+													<span className="text-sm text-white">{label}</span>
+													{mandatory && (
+														<span className="ml-2 text-[10px] bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded">Required</span>
+													)}
+												</td>
+												<td className="px-4 py-2.5 hidden md:table-cell">
+													<span className="text-xs text-gray-400">{description}</span>
+												</td>
+												<td className="px-4 py-2.5 text-center">
+													{mandatory ? (
+														<span className="inline-flex items-center gap-1.5 text-xs text-green-400">
+															<span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+															Always Enabled
+														</span>
+													) : (
+														<div className="inline-block">
+															{renderSettingInput(setting)}
+														</div>
+													)}
+												</td>
+											</tr>
+										);
+									})}
+								</React.Fragment>
+							))}
+						</tbody>
+					</table>
+				</div>
+
+				{/* Payment Reminders Section */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
+					<div className="px-4 py-3 border-b border-gray-700/30 flex items-center gap-2">
+						<span>📅</span>
+						<h3 className="text-sm font-semibold text-white">Payment Reminders</h3>
 					</div>
-					<div className="flex space-x-3">
+					<table className="w-full">
+						<thead>
+							<tr className="border-b border-gray-700/50">
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2 w-[200px]">Type</th>
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2">Reminder Days</th>
+								<th className="text-center text-xs font-medium text-gray-400 px-4 py-2 w-24">Enable</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-gray-700/30">
+							<tr className="hover:bg-gray-800/20">
+								<td className="px-4 py-3">
+									<div className="flex items-center gap-2">
+										<span className="text-orange-400">⏰</span>
+										<span className="text-sm text-white">Upcoming Payment</span>
+									</div>
+								</td>
+								<td className="px-4 py-3">
+									{findSetting("UPCOMING_PAYMENT_REMINDER_DAYS") ? (
+										renderSettingInput(findSetting("UPCOMING_PAYMENT_REMINDER_DAYS")!)
+									) : <span className="text-xs text-gray-500">N/A</span>}
+								</td>
+								<td className="px-4 py-3 text-center">
+									{findSetting("WHATSAPP_UPCOMING_PAYMENT") ? renderSettingInput(findSetting("WHATSAPP_UPCOMING_PAYMENT")!) : <span className="text-xs text-gray-500">N/A</span>}
+								</td>
+							</tr>
+							<tr className="hover:bg-gray-800/20">
+								<td className="px-4 py-3">
+									<div className="flex items-center gap-2">
+										<span className="text-red-400">🚨</span>
+										<span className="text-sm text-white">Late Payment</span>
+									</div>
+								</td>
+								<td className="px-4 py-3">
+									{findSetting("LATE_PAYMENT_REMINDER_DAYS") ? (
+										renderSettingInput(findSetting("LATE_PAYMENT_REMINDER_DAYS")!)
+									) : <span className="text-xs text-gray-500">N/A</span>}
+								</td>
+								<td className="px-4 py-3 text-center">
+									{findSetting("WHATSAPP_LATE_PAYMENT") ? renderSettingInput(findSetting("WHATSAPP_LATE_PAYMENT")!) : <span className="text-xs text-gray-500">N/A</span>}
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+
+				{/* Default Risk Section */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
+					<div className="px-4 py-3 border-b border-gray-700/30 flex items-center justify-between">
+						<div className="flex items-center gap-2">
+							<span>⚠️</span>
+							<h3 className="text-sm font-semibold text-white">Default Risk Notifications</h3>
+						</div>
+						<details className="text-xs">
+							<summary className="text-amber-400 cursor-pointer">View Timeline</summary>
+							<div className="absolute right-4 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10 text-gray-400 w-64">
+								<p className="mb-1"><strong className="text-amber-300">Day 28:</strong> Initial warning + PDF</p>
+								<p className="mb-1"><strong className="text-orange-300">Day 29-43:</strong> Remedy reminders</p>
+								<p><strong className="text-red-300">Day 44:</strong> Final default notice</p>
+							</div>
+						</details>
+					</div>
+					<table className="w-full">
+						<thead>
+							<tr className="border-b border-gray-700/50">
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2 w-[180px]">Stage</th>
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2 hidden md:table-cell">Description</th>
+								<th className="text-left text-xs font-medium text-gray-400 px-4 py-2">Days After Due</th>
+								<th className="text-center text-xs font-medium text-gray-400 px-4 py-2 w-24">Enable</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-gray-700/30">
+							{[
+								{ key: "WHATSAPP_DEFAULT_RISK", label: "Initial Warning", description: "First notice with PDF attachment", day: "28", color: "text-amber-400", bgColor: "bg-amber-500/10" },
+								{ key: "WHATSAPP_DEFAULT_REMINDER", label: "Remedy Reminder", description: "Daily reminders during remedy period", day: "29-43", color: "text-orange-400", bgColor: "bg-orange-500/10" },
+								{ key: "WHATSAPP_DEFAULT_FINAL", label: "Final Notice", description: "Loan marked as defaulted", day: "44", color: "text-red-400", bgColor: "bg-red-500/10" },
+							].map(({ key, label, description, day, color, bgColor }) => {
+								const setting = findSetting(key);
+								return (
+									<tr key={key} className="hover:bg-gray-800/20">
+										<td className="px-4 py-3">
+											<span className="text-sm text-white">{label}</span>
+										</td>
+										<td className="px-4 py-3 hidden md:table-cell">
+											<span className="text-xs text-gray-400">{description}</span>
+										</td>
+										<td className="px-4 py-3">
+											<span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${color} ${bgColor}`}>
+												Day {day}
+											</span>
+										</td>
+										<td className="px-4 py-3 text-center">
+											{setting ? renderSettingInput(setting) : <span className="text-xs text-gray-500">N/A</span>}
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</div>
+
+
+				{/* General Settings */}
+				{generalSettings.length > 0 && (
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl overflow-hidden">
+						<div className="px-4 py-3 border-b border-gray-700/30 flex items-center gap-2">
+							<span>📱</span>
+							<h3 className="text-sm font-semibold text-white">General Notifications</h3>
+						</div>
+						<table className="w-full">
+							<tbody className="divide-y divide-gray-700/30">
+								{generalSettings.map((setting) => (
+									<tr key={setting.key} className="hover:bg-gray-800/20">
+										<td className="px-4 py-3">
+											<div className="text-sm text-white">{setting.name}</div>
+											<div className="text-xs text-gray-500">{setting.description}</div>
+										</td>
+										<td className="px-4 py-3 w-32">
+											{renderSettingInput(setting)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+
+				{/* Footer */}
+				<div className="flex items-center justify-between">
+					<span className="text-xs text-gray-500">Last updated: {new Date().toLocaleString()}</span>
+					<div className="flex gap-2">
 						<button
 							onClick={forceRefresh}
 							disabled={loading}
-							className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
+							className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
 						>
-							{loading ? "Loading..." : "Force Refresh"}
+							Refresh
 						</button>
 						<button
 							onClick={saveSettings}
 							disabled={saving || !hasUnsavedChanges}
-							className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-md font-medium transition-colors"
+							className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
 						>
-							{saving ? "Saving..." : "Save All Changes"}
+							{saving ? "Saving..." : "Save Changes"}
 						</button>
 					</div>
 				</div>

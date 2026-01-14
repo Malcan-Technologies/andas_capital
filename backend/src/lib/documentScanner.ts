@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { prisma } from './prisma';
 import { signingConfig } from './config';
+import { getS3ObjectMetadata, parseS3Key, isS3Key } from './storage';
 
 interface ScanStats {
   totalScanned: number;
@@ -473,6 +474,55 @@ async function enrichOnPremFiles(files: FileMetadata[]): Promise<FileMetadata[]>
 }
 
 /**
+ * Fetch file sizes from S3 for documents
+ * Uses batch processing with high concurrency since S3 HEAD requests are lightweight
+ */
+async function enrichS3FileSizes(files: FileMetadata[]): Promise<FileMetadata[]> {
+  const BATCH_SIZE = 50; // S3 HEAD requests are lightweight, can handle higher concurrency
+  const s3Files = files.filter(f => f.source === 'S3' && f.fileSize === 0);
+  
+  if (s3Files.length === 0) {
+    return files;
+  }
+  
+  console.log(`Fetching file sizes for ${s3Files.length} S3 documents...`);
+  const startTime = Date.now();
+  
+  for (let i = 0; i < s3Files.length; i += BATCH_SIZE) {
+    const batch = s3Files.slice(i, i + BATCH_SIZE);
+    
+    await Promise.all(batch.map(async (file) => {
+      try {
+        // Parse the S3 key from the file path
+        const s3Key = parseS3Key(file.filePath);
+        
+        // Only fetch if it looks like an S3 key
+        if (isS3Key(file.filePath) || file.filePath.startsWith('uploads/')) {
+          const metadata = await getS3ObjectMetadata(s3Key);
+          if (metadata) {
+            file.fileSize = metadata.contentLength;
+          }
+        }
+      } catch {
+        // Silently ignore errors for individual files
+      }
+    }));
+    
+    // Log progress every 200 files
+    if ((i + BATCH_SIZE) % 200 === 0 || i + BATCH_SIZE >= s3Files.length) {
+      const processed = Math.min(i + BATCH_SIZE, s3Files.length);
+      console.log(`  Progress: ${processed}/${s3Files.length} files processed`);
+    }
+  }
+  
+  const filesWithSizes = s3Files.filter(f => f.fileSize > 0).length;
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`Fetched sizes for ${filesWithSizes}/${s3Files.length} S3 files in ${duration}s`);
+  
+  return files;
+}
+
+/**
  * Scan and index all documents by querying database tables
  */
 export async function scanAndIndexDocuments(): Promise<ScanStats> {
@@ -501,9 +551,12 @@ export async function scanAndIndexDocuments(): Promise<ScanStats> {
       getPaymentReceipts(),
     ]);
 
-    const vpsFiles = [...kycDocs, ...userDocs, ...disbursementSlips, ...pkiDocs, ...receipts];
+    let vpsFiles = [...kycDocs, ...userDocs, ...disbursementSlips, ...pkiDocs, ...receipts];
     stats.vpsFiles = vpsFiles.length;
     console.log(`Found ${vpsFiles.length} documents tracked in database (S3 storage)`);
+    
+    // Fetch file sizes from S3
+    vpsFiles = await enrichS3FileSizes(vpsFiles);
 
     // Fetch on-prem documents from signing orchestrator
     let onpremFiles: FileMetadata[] = [];
