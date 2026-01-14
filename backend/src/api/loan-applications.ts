@@ -1,5 +1,4 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import {
 	authenticateAndVerifyPhone,
 	AuthRequest,
@@ -14,9 +13,9 @@ import { docusealService } from "../lib/docusealService";
 import whatsappService from "../lib/whatsappService";
 import { docusealConfig, signingConfig } from "../lib/config";
 import { uploadToS3Organized, getS3ObjectStream, deleteFromS3, S3_FOLDERS } from "../lib/storage";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Configure multer with memory storage for S3 uploads
 const upload = multer({

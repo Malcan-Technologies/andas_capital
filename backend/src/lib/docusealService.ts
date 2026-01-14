@@ -1,9 +1,7 @@
 import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
 import { docusealConfig, urlConfig, companySigningConfig, serverConfig } from './config';
+import { prisma } from './prisma';
 // import { TimeUtils } from './precisionUtils';
-
-const prisma = new PrismaClient();
 
 interface DocuSealConfig {
   baseUrl: string;

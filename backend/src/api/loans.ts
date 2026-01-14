@@ -1,9 +1,9 @@
 import { Router, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils, SafeMath } from "../lib/precisionUtils";
 import { signingConfig } from "../lib/config";
 import { getS3ObjectStream } from "../lib/storage";
+import { prisma } from "../lib/prisma";
 
 // Import grace period function from late fee processor
 async function getLateFeeGraceSettings(prismaClient: any = prisma) {
@@ -61,7 +61,6 @@ function getRepaymentStatusWithGracePeriod(repayment: any, gracePeriodDays: numb
 }
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Early settlement settings keys
 const ES_KEYS = {

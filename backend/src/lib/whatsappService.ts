@@ -1,8 +1,6 @@
 import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
 import { whatsappConfig } from './config';
-
-const prisma = new PrismaClient();
+import { prisma } from './prisma';
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0';
 const WHATSAPP_ACCESS_TOKEN = whatsappConfig.accessToken;

@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import whatsappService from './whatsappService';
 import { TimeUtils } from './precisionUtils';
-
-const prisma = new PrismaClient();
+import { prisma } from './prisma';
 
 export interface UpcomingPaymentProcessorResult {
 	totalChecked: number;

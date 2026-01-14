@@ -26,7 +26,7 @@ import docusealRoutes from "./api/docuseal";
 import mtsaRoutes from "./api/mtsa";
 import pkiRoutes from "./api/pki";
 import ctosRoutes from "./api/ctos";
-import prisma from "../lib/prisma";
+import { prisma } from "./lib/prisma";
 
 // Load the manually maintained swagger.json file with error handling
 const swaggerPath = path.join(__dirname, "..", "swagger", "swagger.json");

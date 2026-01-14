@@ -3140,7 +3140,6 @@ router.get(
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const userRole = req.user?.role;
-			console.log(`Fetching application counts for ${userRole}`);
 
 			// ATTESTOR users only need specific counts for their work
 			if (userRole === "ATTESTOR") {
@@ -3247,24 +3246,11 @@ router.get(
 			// Get total applications count
 			const total = await prisma.loanApplication.count();
 
-			// Log all application statuses to debug
-			const allApps = await prisma.loanApplication.findMany({
-				select: {
-					id: true,
-					status: true,
-				},
-			});
-			console.log(
-				"All applications with statuses:",
-				JSON.stringify(allApps)
-			);
-
-			// Get counts for each status directly for logging
+			// Get counts for each status
 			for (const status of statusList) {
 				const count = await prisma.loanApplication.count({
 					where: { status },
 				});
-				console.log(`Count for status ${status}: ${count}`);
 				counts[status] = count;
 			}
 
@@ -3309,10 +3295,6 @@ router.get(
 			// Add total count
 			counts.total = total;
 
-			console.log(
-				`Found ${total} total applications with status counts:`,
-				counts
-			);
 			return res.json(counts);
 		} catch (error) {
 			console.error("Error fetching application counts:", error);
@@ -3464,8 +3446,6 @@ router.get(
 	requireAdminOrAttestor,
 	async (_req: AuthRequest, res: Response) => {
 		try {
-			console.log("Admin fetching live attestation requests");
-
 			const applications = await prisma.loanApplication.findMany({
 				where: {
 					status: "PENDING_ATTESTATION",
@@ -3498,9 +3478,6 @@ router.get(
 				],
 			});
 
-			console.log(
-				`Found ${applications.length} live attestation requests`
-			);
 			return res.json(applications);
 		} catch (error) {
 			console.error("Error fetching live attestation requests:", error);
@@ -5020,8 +4997,6 @@ router.get(
 	authenticateToken,
 	async (req: AuthRequest, res: Response) => {
 		try {
-			console.log("🔍 DEBUG: Admin loans endpoint called - enhanced version");
-			
 			// Get user data from database to check role instead of relying on req.user.role
 			const user = await prisma.user.findUnique({
 				where: { id: req.user?.userId },
@@ -13314,10 +13289,8 @@ router.get(
 );
 
 // Health check endpoint for on-prem services
-router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (req: AuthRequest, res: Response) => {
+router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (_req: AuthRequest, res: Response) => {
 	try {
-		console.log('🔍 Health check endpoint called by:', req.user?.userId);
-
 		const healthStatus = {
 			timestamp: new Date().toISOString(),
 			services: {

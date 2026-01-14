@@ -1,10 +1,9 @@
 import { Router, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import { authenticateToken, AuthRequest } from "../middleware/auth";
 import { docusealConfig, signingConfig } from "../lib/config";
 import { getS3ObjectStream } from "../lib/storage";
+import { prisma } from "../lib/prisma";
 
-const prisma = new PrismaClient();
 const router = Router();
 
 /**

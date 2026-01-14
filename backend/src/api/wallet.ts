@@ -1,10 +1,10 @@
 import { Router, Response } from "express";
-import { PrismaClient, WalletTransactionStatus } from "@prisma/client";
+import { WalletTransactionStatus } from "@prisma/client";
 import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils } from "../lib/precisionUtils";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Helper function to update repayment status based on all payments (Hybrid Approach)
 async function updateRepaymentStatusFromTransactions(loanId: string, tx: any) {

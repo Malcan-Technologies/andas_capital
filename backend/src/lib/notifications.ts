@@ -1,12 +1,10 @@
 import {
-	PrismaClient,
 	NotificationType,
 	NotificationPriority,
 	Prisma,
 } from "@prisma/client";
 import { logger } from "./logger";
-
-const prisma = new PrismaClient();
+import { prisma } from "./prisma";
 
 interface CreateSystemNotificationParams {
 	userId: string;

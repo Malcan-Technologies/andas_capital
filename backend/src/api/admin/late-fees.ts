@@ -7,12 +7,11 @@ import {
 } from "express";
 import { LateFeeProcessor } from "../../lib/lateFeeProcessor";
 import { authenticateToken, AuthRequest } from "../../middleware/auth";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../../lib/prisma";
 import fs from "fs";
 import path from "path";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Middleware to check if user is admin
 const isAdmin = async (req: Request, res: Response, next: NextFunction) => {

@@ -15,3 +15,6 @@ export const prisma = new PrismaClient({
     },
   ],
 });
+
+// Default export for compatibility
+export default prisma;

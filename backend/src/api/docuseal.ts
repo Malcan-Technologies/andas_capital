@@ -3,6 +3,7 @@ import { docusealService } from '../lib/docusealService';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
 import { docusealConfig, signingConfig } from '../lib/config';
+import { prisma } from '../lib/prisma';
 
 const router = express.Router();
 
@@ -23,9 +24,6 @@ router.post('/initiate-loan-signing', authenticateToken, async (req: AuthRequest
     }
 
     // Verify user owns this loan (for security)
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-    
     const loan = await prisma.loan.findFirst({
       where: {
         id: loanId,
@@ -88,9 +86,6 @@ router.post('/initiate-application-signing', authenticateToken, async (req: Auth
     }
 
     // Verify user owns this application (for security)
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-    
     const application = await prisma.loanApplication.findFirst({
       where: {
         id: applicationId,
@@ -408,9 +403,6 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
     console.log('📋 Found submission ID from submitter', { submitterId, submissionId, role: submitterRole });
 
     // Find the loan by DocuSeal submission ID
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-    
     const loan = await prisma.loan.findFirst({
       where: {
         docusealSubmissionId: submissionId.toString()
@@ -523,9 +515,6 @@ router.get('/download/:submissionId', authenticateToken, async (req: AuthRequest
     }
 
     // Verify user has access to this submission
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-    
     const loan = await prisma.loan.findFirst({
       where: {
         docusealSubmissionId: submissionId,
@@ -590,9 +579,6 @@ router.get('/admin/download/:submissionId', authenticateToken, async (req: AuthR
     }
 
     // Find loan with this submission ID (admin can access any)
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-    
     const loan = await prisma.loan.findFirst({
       where: {
         docusealSubmissionId: submissionId

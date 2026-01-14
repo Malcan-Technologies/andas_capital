@@ -1,13 +1,12 @@
 import { Router, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import { authenticateToken, AuthRequest } from "../../middleware/auth";
 import { requireAdminOrAttestor } from "../../lib/permissions";
 import { SafeMath } from "../../lib/precisionUtils";
 import ReceiptService from "../../lib/receiptService";
 import whatsappService from "../../lib/whatsappService";
+import { prisma } from "../../lib/prisma";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Helper function to format currency
 const formatCurrency = (amount: number): string => {
