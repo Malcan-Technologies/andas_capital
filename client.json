@@ -35,7 +35,7 @@
   },
   
   "s3": {
-    "bucket": "creditxpress-files"
+    "bucket": "creditxpress-prod-files"
   },
   
   "secrets_prefix": "creditxpress/prod",
