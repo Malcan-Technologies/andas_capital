@@ -2446,6 +2446,141 @@ router.get("/users", authenticateToken, async (req: Request, res: Response) => {
 
 /**
  * @swagger
+ * /api/admin/users:
+ *   post:
+ *     summary: Create a new user (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *               - password
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phoneNumber:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [USER, ADMIN, ATTESTOR]
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *       400:
+ *         description: Invalid input or user already exists
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+// Create new user (protected admin route)
+router.post(
+	"/users",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { fullName, email, phoneNumber, password, role } = req.body;
+
+			// Validate required fields
+			if (!phoneNumber || !password) {
+				return res.status(400).json({ error: "Phone number and password are required" });
+			}
+
+			// Validate password
+			if (password.length < 8) {
+				return res.status(400).json({ error: "Password must be at least 8 characters long" });
+			}
+
+			// Import phone utilities
+			const { validatePhoneNumber, normalizePhoneNumber } = require("../lib/phoneUtils");
+			
+			// Validate phone number format
+			const phoneValidation = validatePhoneNumber(phoneNumber, {
+				requireMobile: false,
+				allowLandline: true
+			});
+
+			if (!phoneValidation.isValid) {
+				return res.status(400).json({ 
+					error: phoneValidation.error || "Invalid phone number format" 
+				});
+			}
+
+			// Normalize phone number
+			const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+			// Check if user already exists
+			const existingUser = await prisma.user.findFirst({
+				where: { phoneNumber: normalizedPhone }
+			});
+
+			if (existingUser) {
+				return res.status(400).json({ 
+					error: "A user with this phone number already exists" 
+				});
+			}
+
+			// Check if email is already taken (if provided)
+			if (email) {
+				const existingEmail = await prisma.user.findFirst({
+					where: { email }
+				});
+
+				if (existingEmail) {
+					return res.status(400).json({ 
+						error: "A user with this email already exists" 
+					});
+				}
+			}
+
+			// Hash password
+			const bcrypt = require("bcryptjs");
+			const hashedPassword = await bcrypt.hash(password, 10);
+
+			// Create user with phone verified (admin-created users skip OTP verification)
+			const newUser = await prisma.user.create({
+				data: {
+					fullName: fullName || null,
+					email: email || null,
+					phoneNumber: normalizedPhone,
+					password: hashedPassword,
+					role: role || "USER",
+					phoneVerified: true, // Admin-created users are auto-verified
+				},
+				select: {
+					id: true,
+					fullName: true,
+					email: true,
+					phoneNumber: true,
+					role: true,
+					createdAt: true,
+					lastLoginAt: true,
+				},
+			});
+
+			return res.status(201).json(newUser);
+		} catch (error) {
+			console.error("Create user error:", error);
+			return res.status(500).json({ error: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
  * /api/admin/users/{id}:
  *   get:
  *     summary: Get a specific user by ID (admin only)

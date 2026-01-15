@@ -276,7 +276,7 @@ export default function AdminUsersPage() {
 
 			// Create user with token refresh
 			const newUser = await fetchWithAdminTokenRefresh<User>(
-				"/api/auth/signup",
+				"/api/admin/users",
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
