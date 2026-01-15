@@ -780,4 +780,43 @@ model CreditReportLog {
   @@map("credit_report_logs")
 }
 
+/// Internal users with digital signing certificates (admins, attestors, witnesses)
+model InternalSigner {
+  id                String    @id @default(cuid())
+  
+  // User identity - may or may not be linked to User table
+  userId            String?   // Optional reference to User.id if user exists in system
+  icNumber          String    @unique  // IC number (cert tied to this)
+  fullName          String
+  email             String
+  phoneNumber       String?
+  signerRole        String    // ADMIN, ATTESTOR, WITNESS, COMPANY_REP
+  
+  // Certificate info (cached from MTSA GetCertInfo)
+  certSerialNo      String?
+  certStatus        String?   // Valid, Expired, Revoked (from MTSA)
+  certValidFrom     DateTime?
+  certValidTo       DateTime?
+  lastCertCheck     DateTime?
+  
+  // Verification status
+  status            String    @default("PENDING")  // PENDING, VERIFIED, EXPIRED, REVOKED, INACTIVE
+  pinVerifiedAt     DateTime? // When PIN was last verified
+  
+  // Enrollment tracking
+  enrolledAt        DateTime?
+  enrolledBy        String?   // IC/name of admin who added them
+  
+  // Notes
+  notes             String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([icNumber])
+  @@index([status])
+  @@index([signerRole])
+  @@map("internal_signers")
+}
+
 

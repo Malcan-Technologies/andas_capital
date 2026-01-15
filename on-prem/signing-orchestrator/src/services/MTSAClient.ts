@@ -454,6 +454,39 @@ export class MTSAClient {
   }
 
   /**
+   * Reset certificate PIN for internal users
+   */
+  async resetCertificatePin(
+    request: { UserID: string; CertSerialNo: string; NewPin: string },
+    correlationId?: string
+  ): Promise<{ statusCode: string; statusMsg: string }> {
+    const log = correlationId ? createCorrelatedLogger(correlationId) : logger;
+    
+    log.info('Resetting certificate PIN', { 
+      userId: request.UserID,
+      certSerialNo: request.CertSerialNo?.slice(0, 8) + '...',
+      hasNewPin: !!request.NewPin 
+    });
+
+    const result = await this.executeSoapMethod<{ statusCode: string; statusMsg: string; return?: { statusCode: string; statusMsg: string } }>(
+      'ResetCertificatePin',
+      request,
+      correlationId
+    );
+
+    // Handle response structure - data may be in result.return or at root level
+    const statusCode = result.return?.statusCode || result.statusCode;
+    const statusMsg = result.return?.statusMsg || result.statusMsg;
+
+    log.info('Certificate PIN reset completed', { 
+      statusCode, 
+      success: statusCode === '000'
+    });
+
+    return { statusCode, statusMsg };
+  }
+
+  /**
    * Check if SOAP client is healthy and can connect
    */
   async healthCheck(correlationId?: string): Promise<boolean> {

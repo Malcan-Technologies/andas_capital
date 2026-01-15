@@ -232,6 +232,21 @@ export interface MTSARequestRevokeCertResponse {
   revoked?: boolean;
 }
 
+export interface MTSAResetCertPinRequest {
+  UserID: string;
+  CertSerialNo: string;
+  NewPin: string;
+}
+
+export interface MTSAResetCertPinResponse {
+  statusCode: string;
+  statusMsg: string;
+  return?: {
+    statusCode: string;
+    statusMsg: string;
+  };
+}
+
 export interface SigningRequest {
   packetId: string;
   documentId: string;

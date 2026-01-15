@@ -16,6 +16,7 @@ import { generateLoginToken, validateLoginToken } from "../middleware/loginToken
 import lateFeeRoutes from "./admin/late-fees";
 import mtsaAdminRoutes from "./admin/mtsa";
 import kycAdminRoutes from "./admin/kyc";
+import internalSignersRoutes from "./admin/internal-signers";
 import companySettingsRoutes from "./companySettings";
 import { jwtConfig, signingConfig, docusealConfig, serverConfig, ctosConfig } from "../lib/config";
 import receiptsRoutes from "./receipts";
@@ -328,6 +329,7 @@ const router = express.Router();
 router.use("/late-fees", lateFeeRoutes);
 router.use("/mtsa", mtsaAdminRoutes);
 router.use("/kyc", kycAdminRoutes);
+router.use("/internal-signers", internalSignersRoutes);
 router.use("/company-settings", companySettingsRoutes);
 router.use("/receipts", receiptsRoutes);
 router.use("/early-settlement", earlySettlementRoutes);

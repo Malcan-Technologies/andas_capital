@@ -5,8 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
 
-export async function GET(request: NextRequest, props: { params: Promise<{ userId: string }> }) {
-  const params = await props.params;
+export async function POST(request: NextRequest) {
   try {
     // Verify admin token
     const token = request.headers.get('authorization')?.replace('Bearer ', '');
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ userI
       );
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as { userId?: string };
     
     if (!decoded.userId) {
       return NextResponse.json(
@@ -27,22 +26,16 @@ export async function GET(request: NextRequest, props: { params: Promise<{ userI
       );
     }
 
-    const { userId } = params;
+    const body = await request.json();
 
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, message: 'User ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Forward request to backend admin MTSA API
-    const response = await fetch(`${BACKEND_URL}/api/admin/mtsa/cert-info/${userId}`, {
-      method: 'GET',
+    // Forward request to backend MTSA API
+    const response = await fetch(`${BACKEND_URL}/api/admin/mtsa/reset-cert-pin`, {
+      method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();
@@ -51,12 +44,12 @@ export async function GET(request: NextRequest, props: { params: Promise<{ userI
       return NextResponse.json(data);
     } else {
       return NextResponse.json(
-        { success: false, message: data.message || 'Failed to check certificate' },
+        { success: false, message: data.message || 'Failed to reset certificate PIN' },
         { status: response.status }
       );
     }
   } catch (error) {
-    console.error('Error checking certificate:', error);
+    console.error('Error resetting certificate PIN:', error);
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }
