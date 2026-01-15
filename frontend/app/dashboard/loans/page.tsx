@@ -322,7 +322,8 @@ function LoansPageContent() {
 		useState<boolean>(false);
 	const [currentPaymentReference, setCurrentPaymentReference] = useState<string>("");
 	const [repaymentAmount, setRepaymentAmount] = useState<string>("");
-	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"FPX" | "BANK_TRANSFER">("BANK_TRANSFER");
+	// Payment method - currently only BANK_TRANSFER is supported (FPX may be added in the future)
+	const selectedPaymentMethod = "BANK_TRANSFER";
 	const [repaymentError, setRepaymentError] = useState<string>("");
 	const [isEarlySettlement, setIsEarlySettlement] = useState(false);
 	const [earlySettlementQuote, setEarlySettlementQuote] = useState<any>(null);
@@ -810,12 +811,7 @@ function LoansPageContent() {
 	const handleConfirmRepayment = async () => {
 		if (!selectedLoan || !repaymentAmount) return;
 
-		if (selectedPaymentMethod === "FPX") {
-			alert("FPX payment is not implemented yet. Please use Bank Transfer.");
-			return;
-		}
-
-		// For Bank Transfer, generate reference and show the bank transfer modal
+		// Generate reference and show the bank transfer modal
 		const paymentReference = `${selectedLoan.id
 			.slice(0, 8)
 			.toUpperCase()}-${Date.now().toString().slice(-8)}`;
@@ -1693,31 +1689,87 @@ function LoansPageContent() {
 
 	const calculatePaymentPerformance = (loan: Loan) => {
 		if (!loan.repayments || loan.repayments.length === 0) {
-			return { percentage: null, onTimeCount: 0, totalCount: 0 };
+			return { percentage: null, onTimeCount: 0, lateCount: 0, missedCount: 0, settledEarlyCount: 0, totalCount: 0 };
 		}
 
-		const completedRepayments = loan.repayments.filter(
+		// Find early settlement repayment if exists
+		const earlySettlementRepayment = loan.repayments.find(
+			(r) => r.paymentType === "EARLY_SETTLEMENT" && r.status === "COMPLETED"
+		);
+		const earlySettlementDate = earlySettlementRepayment
+			? new Date(earlySettlementRepayment.paidAt || earlySettlementRepayment.createdAt)
+			: null;
+
+		// Get all scheduled repayments (excluding early settlement type)
+		const scheduledRepayments = loan.repayments.filter(
+			(r) => r.paymentType !== "EARLY_SETTLEMENT"
+		);
+
+		// Completed payments
+		const completedRepayments = scheduledRepayments.filter(
 			(r) => r.status === "COMPLETED"
 		);
 
-		if (completedRepayments.length === 0) {
-			return { percentage: null, onTimeCount: 0, totalCount: 0 };
+		// Cancelled repayments - split into overdue (missed) vs cleared early via settlement
+		const cancelledRepayments = scheduledRepayments.filter((r) => r.status === "CANCELLED");
+		
+		// Cancelled repayments that were overdue at time of early settlement (missed)
+		const cancelledOverdueRepayments = cancelledRepayments.filter((r) => {
+			if (!earlySettlementDate) return false;
+			const dueDate = new Date(r.dueDate);
+			// Was due before early settlement date (was overdue/missed)
+			return dueDate < earlySettlementDate;
+		});
+		
+		// Cancelled repayments that were NOT yet due at time of early settlement (cleared early)
+		const cancelledSettledEarlyRepayments = cancelledRepayments.filter((r) => {
+			if (!earlySettlementDate) return false;
+			const dueDate = new Date(r.dueDate);
+			// Was due on or after early settlement date (cleared early via settlement)
+			return dueDate >= earlySettlementDate;
+		});
+
+		// Total repayments to consider = completed + cancelled (all cancelled count now)
+		const totalRepaymentsToConsider = completedRepayments.length + cancelledRepayments.length;
+
+		if (totalRepaymentsToConsider === 0) {
+			return { percentage: null, onTimeCount: 0, lateCount: 0, missedCount: 0, settledEarlyCount: 0, totalCount: 0 };
 		}
 
+		// On-time payments from completed repayments
 		const onTimeOrEarlyPayments = completedRepayments.filter((r) => {
 			const paymentDate = new Date(r.paidAt || r.createdAt);
 			const dueDate = new Date(r.dueDate);
 			return paymentDate <= dueDate;
 		});
 
+		// Late payments from completed repayments
+		const latePayments = completedRepayments.filter((r) => {
+			const paymentDate = new Date(r.paidAt || r.createdAt);
+			const dueDate = new Date(r.dueDate);
+			return paymentDate > dueDate;
+		});
+
+		// Missed payments = cancelled overdue
+		const missedPayments = cancelledOverdueRepayments.length;
+		
+		// Settled early = cancelled but not yet due (count as on-time)
+		const settledEarlyPayments = cancelledSettledEarlyRepayments.length;
+
+		// On-time includes both actual on-time payments AND those cleared early via settlement
+		const totalOnTime = onTimeOrEarlyPayments.length + settledEarlyPayments;
+
 		const percentage = Math.round(
-			(onTimeOrEarlyPayments.length / completedRepayments.length) * 100
+			(totalOnTime / totalRepaymentsToConsider) * 100
 		);
 
 		return {
 			percentage,
 			onTimeCount: onTimeOrEarlyPayments.length,
-			totalCount: completedRepayments.length,
+			lateCount: latePayments.length,
+			missedCount: missedPayments,
+			settledEarlyCount: settledEarlyPayments,
+			totalCount: totalRepaymentsToConsider,
 		};
 	};
 
@@ -3356,10 +3408,12 @@ function LoansPageContent() {
 																			// Calculate totals for display
 																		let totalPrincipalPaid = 0;
 																			let totalLateFeesPaid = 0;
+																			let totalLateFeesAssessed = 0;
 																		
 																		if (loan.repayments) {
 																			loan.repayments.forEach(repayment => {
 																					totalLateFeesPaid += repayment.lateFeesPaid || 0;
+																					totalLateFeesAssessed += repayment.lateFeeAmount || 0;
 																				// For early settlement, use actualAmount as it includes all fees
 																				const principalPaid = repayment.paymentType === "EARLY_SETTLEMENT" 
 																					? (repayment.actualAmount || 0)
@@ -3399,7 +3453,19 @@ function LoansPageContent() {
 																									{performance.percentage}%
 																								</p>
 																								<p className="text-xs text-gray-500 font-body">
-																									{performance.onTimeCount} of {performance.totalCount} on-time
+																									{performance.onTimeCount} on-time
+																									{performance.settledEarlyCount > 0 && (
+																										<span className="text-purple-500"> / {performance.settledEarlyCount} settled early</span>
+																									)}
+																									{performance.lateCount > 0 && (
+																										<span className="text-orange-500"> / {performance.lateCount} late</span>
+																									)}
+																									{performance.missedCount > 0 && (
+																										<span className="text-red-500"> / {performance.missedCount} missed</span>
+																									)}
+																								</p>
+																								<p className="text-xs text-gray-400 font-body">
+																									of {performance.totalCount} scheduled
 																								</p>
 																							</>
 																						) : (
@@ -3425,13 +3491,16 @@ function LoansPageContent() {
 																				</div>
 
 																					{/* Late Fees if any */}
-																					{totalLateFeesPaid > 0 && (
+																					{totalLateFeesAssessed > 0 && (
 																						<div className="bg-white p-4 rounded-lg border border-gray-200">
 																							<p className="text-sm text-gray-500 mb-1 font-body">
 																								Late Fees Paid
 																							</p>
 																							<p className="text-lg font-semibold text-blue-600 font-heading">
 																								{formatCurrency(totalLateFeesPaid)}
+																							</p>
+																							<p className="text-xs text-gray-500 font-body">
+																								of {formatCurrency(totalLateFeesAssessed)} assessed
 																							</p>
 																				</div>
 																					)}
@@ -3595,11 +3664,9 @@ function LoansPageContent() {
 																												{(repayment.lateFeeAmount || 0) > 0 ? (
 																													<div className="flex flex-col">
 																														<span className="text-red-600">{formatCurrency(repayment.lateFeeAmount || 0)}</span>
-																														{lateFeesPaid > 0 && (
-																															<span className="text-xs text-green-600 font-medium">
-																																Paid: {formatCurrency(lateFeesPaid)}
-																															</span>
-																														)}
+																														<span className="text-xs text-green-600 font-medium">
+																															Paid: {formatCurrency(lateFeesPaid)} of {formatCurrency(repayment.lateFeeAmount || 0)}
+																														</span>
 																													</div>
 																												) : (
 																													<span className="text-gray-400">-</span>
@@ -3659,7 +3726,11 @@ function LoansPageContent() {
 																												{repayment.paidAt ? (
 																													<div className="flex flex-col">
 																														<span>{formatDate(repayment.paidAt)}</span>
-																														{paymentTiming && (
+																														{repayment.paymentType === "EARLY_SETTLEMENT" ? (
+																															<span className="text-xs font-medium text-purple-600">
+																																Early Settlement
+																															</span>
+																														) : paymentTiming && (
 																															<span className={`text-xs font-medium ${paymentTiming.color}`}>
 																																{paymentTiming.type === "early" 
 																																	? `${paymentTiming.days} day${paymentTiming.days !== 1 ? "s" : ""} early`
@@ -4156,6 +4227,21 @@ function LoansPageContent() {
 																			const hasEarlySettlement = loan.repayments?.some(
 																				repayment => repayment.paymentType === 'EARLY_SETTLEMENT'
 																			) || false;
+																			
+																			// Calculate interest saved correctly
+																			// Original total interest = totalAmount - principalAmount
+																			const originalTotalInterest = loan.totalAmount - loan.principalAmount;
+																			
+																			// Actual interest paid = sum of interestAmount from all COMPLETED repayments
+																			const actualInterestPaid = loan.repayments?.reduce((total, repayment) => {
+																				if (repayment.status === 'COMPLETED') {
+																					return total + (repayment.interestAmount || 0);
+																				}
+																				return total;
+																			}, 0) || 0;
+																			
+																			// Interest saved = original interest - actual interest paid
+																			const interestSaved = Math.max(0, originalTotalInterest - actualInterestPaid);
 
 																			return (
 																				<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
@@ -4181,9 +4267,9 @@ function LoansPageContent() {
 																							<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
 																								{formatCurrency(totalRepaid)}
 																							</p>
-																							{hasEarlySettlement && totalRepaid < loan.totalAmount && (
+																							{hasEarlySettlement && interestSaved > 0 && (
 																								<p className="text-sm text-blue-600 font-medium">
-																									Saved: {formatCurrency(loan.totalAmount - totalRepaid)} in interest
+																									Saved: {formatCurrency(interestSaved)} in interest
 																								</p>
 																							)}
 																						</div>
@@ -4225,10 +4311,23 @@ function LoansPageContent() {
 																							)}
 																						</div>
 																						<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
-																							{performance.percentage !== null 
-																								? `${performance.onTimeCount} of ${performance.totalCount} on-time`
-																								: "No payments recorded"
-																							}
+																							{performance.percentage !== null ? (
+																								<>
+																									<span>{performance.onTimeCount} on-time</span>
+																									{performance.settledEarlyCount > 0 && (
+																										<span className="text-purple-500"> / {performance.settledEarlyCount} settled early</span>
+																									)}
+																									{performance.lateCount > 0 && (
+																										<span className="text-orange-500"> / {performance.lateCount} late</span>
+																									)}
+																									{performance.missedCount > 0 && (
+																										<span className="text-red-500"> / {performance.missedCount} missed</span>
+																									)}
+																									<span className="block text-sm text-gray-400">of {performance.totalCount} scheduled</span>
+																								</>
+																							) : (
+																								"No payments recorded"
+																							)}
 																						</div>
 																					</div>
 																				</div>
@@ -6382,128 +6481,37 @@ function LoansPageContent() {
 										</div>
 									</div>
 
-									{/* Payment Method Selection */}
+									{/* Payment Method */}
 									<div className="mb-6">
 										<h4 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
 											Payment Method
 										</h4>
-										<div className="space-y-3">
-											{/* FPX Express Payment */}
-											<button
-												onClick={() => setSelectedPaymentMethod("FPX")}
-												className={`w-full border rounded-xl p-4 transition-colors bg-white text-left shadow-sm ${
-													selectedPaymentMethod === "FPX"
-														? "border-green-500 bg-green-50/50"
-														: "border-gray-200 hover:border-green-400 hover:bg-green-50/30"
-												}`}
-											>
-												<div className="flex items-center justify-between mb-3">
-													<div className="flex items-center space-x-3">
-														<div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center border border-green-200">
-															<span className="text-green-700 font-bold text-sm">
-																FPX
-															</span>
-														</div>
-														<div>
-															<h3 className="font-semibold text-gray-700 font-heading">
-																FPX Express Payment
-															</h3>
-															<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 font-body">
-																Popular
-															</span>
-														</div>
-													</div>
-													<div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-														selectedPaymentMethod === "FPX"
-															? "border-green-500 bg-green-500"
-															: "border-gray-300"
-													}`}>
-														{selectedPaymentMethod === "FPX" && (
-															<div className="w-2 h-2 bg-white rounded-full"></div>
-														)}
-													</div>
+										<div className="w-full border rounded-xl p-4 bg-blue-50/50 border-blue-500 text-left shadow-sm">
+											<div className="flex items-center space-x-3">
+												<div className="w-10 h-10 bg-blue-600/10 rounded-lg flex items-center justify-center border border-blue-600/20">
+													<svg
+														className="w-5 h-5 text-blue-600"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+														/>
+													</svg>
 												</div>
-												<div className="space-y-2 text-sm text-gray-500 font-body">
-													<div className="flex justify-between">
-														<span>Estimated Arrival</span>
-														<span className="text-gray-700">
-															Usually 5 Min
-														</span>
-													</div>
-													<div className="flex justify-between">
-														<span>Fees</span>
-														<span className="text-gray-700">
-															Up to 2%
-														</span>
-													</div>
-													{/* <div className="flex justify-between">
-														<span>Supported Banks</span>
-														<span className="text-gray-700">
-															Most Malaysian Banks
-														</span>
-													</div> */}
+												<div>
+													<h3 className="font-semibold text-gray-700 font-heading">
+														Bank Transfer
+													</h3>
+													<p className="text-sm text-gray-500 font-body">
+														Usually 1 Business Day • Free
+													</p>
 												</div>
-											</button>
-
-											{/* Bank Transfer */}
-											<button
-												onClick={() => setSelectedPaymentMethod("BANK_TRANSFER")}
-												className={`w-full border rounded-xl p-4 transition-colors text-left bg-white shadow-sm ${
-													selectedPaymentMethod === "BANK_TRANSFER"
-														? "border-blue-500 bg-blue-50/50"
-														: "border-gray-200 hover:border-blue-400 hover:bg-blue-50/30"
-												}`}
-											>
-												<div className="flex items-center justify-between mb-3">
-													<div className="flex items-center space-x-3">
-														<div className="w-10 h-10 bg-blue-600/10 rounded-lg flex items-center justify-center border border-blue-600/20">
-															<svg
-																className="w-5 h-5 text-blue-600"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-																/>
-															</svg>
-														</div>
-														<h3 className="font-semibold text-gray-700 font-heading">
-															Bank Transfer
-														</h3>
-													</div>
-													<div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-														selectedPaymentMethod === "BANK_TRANSFER"
-															? "border-blue-500 bg-blue-500"
-															: "border-gray-300"
-													}`}>
-														{selectedPaymentMethod === "BANK_TRANSFER" && (
-															<div className="w-2 h-2 bg-white rounded-full"></div>
-														)}
-													</div>
-												</div>
-												<div className="space-y-2 text-sm text-gray-500 font-body">
-													<div className="flex justify-between">
-														<span>Estimated Arrival</span>
-														<span className="text-gray-700">
-															Usually 1 Business Day
-														</span>
-													</div>
-													<div className="flex justify-between">
-														<span>Fees</span>
-														<span className="text-gray-700">Free</span>
-													</div>
-													<div className="flex justify-between">
-														<span>Supported Banks</span>
-														<span className="text-gray-700">
-															Most Malaysian Banks
-														</span>
-													</div>
-												</div>
-											</button>
+											</div>
 										</div>
 									</div>
 
@@ -6829,7 +6837,7 @@ function LoansPageContent() {
 											}
 											className="bg-blue-600 text-white flex-1 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
 										>
-											{selectedPaymentMethod === "FPX" ? "Continue with FPX" : "Continue"}
+											Continue
 										</button>
 									</div>
 								</div>

@@ -281,24 +281,35 @@ router.post('/:transactionId/approve', authenticateToken, requireAdminOrAttestor
         }
       });
 
-      // Mark all remaining future repayments as CANCELLED (not PAID)
-      await tx.loanRepayment.updateMany({
-        where: {
-          loanId: loan.id,
-          status: { in: ['PENDING', 'PARTIAL'] }
-        },
-        data: {
-          status: 'CANCELLED',
-          updatedAt: new Date()
-        }
-      });
+      // Mark all remaining repayments as CANCELLED and mark their late fees as paid
+      // (since late fees are included in the early settlement amount)
+      for (const repayment of repaymentsToCancel) {
+        // Get the full repayment to access lateFeeAmount
+        const fullRepayment = await tx.loanRepayment.findUnique({
+          where: { id: repayment.id },
+          select: { lateFeeAmount: true }
+        });
+        
+        await tx.loanRepayment.update({
+          where: { id: repayment.id },
+          data: {
+            status: 'CANCELLED',
+            // Mark late fees as fully paid since they're included in early settlement
+            lateFeesPaid: fullRepayment?.lateFeeAmount || 0,
+            updatedAt: new Date()
+          }
+        });
+      }
 
-      // 4. Update loan status to PENDING_DISCHARGE (use existing discharge workflow)
+      // 4. Update loan status to PENDING_DISCHARGE, set outstanding balance to 0, and clear default flags
       await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: 'PENDING_DISCHARGE',
           outstandingBalance: 0,
+          // Clear default flags since loan is now settled
+          defaultRiskFlaggedAt: null,
+          defaultedAt: null,
           updatedAt: new Date()
         }
       });

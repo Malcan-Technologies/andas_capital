@@ -140,10 +140,10 @@ interface DashboardStats {
 
 	repaymentPerformance?: {
 		repaymentRate: number;
-		delinquencyRate30Days: number;
-		delinquencyRate60Days: number;
-		delinquencyRate90Days: number;
-		defaultRate: number;
+		delinquencyRate30Days: number; // Now: Overdue + Default rate (uses system settings, not hardcoded 30 days)
+		delinquencyRate60Days: number; // Now: Default risk rate (flagged for default)
+		delinquencyRate90Days: number; // Now: Active default rate (loans in DEFAULT status / outstanding)
+		defaultRate: number; // Historical default rate (defaulted / total ever issued)
 		collectionsLast30Days: number;
 		upcomingPaymentsDue7Days: {
 			amount: number;
@@ -182,7 +182,7 @@ interface DashboardStats {
 		loanApprovalTime: number;
 		disbursementTime: number;
 		applicationApprovalRatio: number;
-		manualReviewRate: number;
+		totalApplications: number;
 	};
 	statusBreakdown?: {
 		status: string;
@@ -497,30 +497,42 @@ export default function AdminDashboardPage() {
 					: 0;
 
 			// Enhance monthlyStats with missing fields if they don't exist
-			const enhancedMonthlyStats = monthlyStats.map((stat: any) => ({
-				...stat,
-				fees_earned: stat.fees_earned || 0,
-				accrued_interest: stat.accrued_interest || 0,
-				actual_repayments: stat.actual_repayments || 0,
-				scheduled_repayments: stat.scheduled_repayments || 0,
-				total_loan_value: stat.total_loan_value || 0,
-				current_loan_value: stat.current_loan_value || 0,
-				repayment_count: stat.repayment_count || 0,
-				scheduled_count: stat.scheduled_count || 0,
-			}));
+			const enhancedMonthlyStats = monthlyStats.map((stat: any) => {
+				const currentLoanValue = stat.current_loan_value || 0;
+				const accruedInterest = stat.accrued_interest || 0;
+				return {
+					...stat,
+					fees_earned: stat.fees_earned || 0,
+					accrued_interest: accruedInterest,
+					actual_repayments: stat.actual_repayments || 0,
+					scheduled_repayments: stat.scheduled_repayments || 0,
+					total_loan_value: stat.total_loan_value || 0,
+					current_loan_value: currentLoanValue,
+					// Active Loan Book = Total Exposure (current_loan_value) - Accrued Interest
+					active_loan_book: Math.max(0, currentLoanValue - accruedInterest),
+					repayment_count: stat.repayment_count || 0,
+					scheduled_count: stat.scheduled_count || 0,
+				};
+			});
 
 			// Enhance dailyStats with missing fields if they don't exist
-			const enhancedDailyStats = dailyStats.map((stat: any) => ({
-				...stat,
-				fees_earned: stat.fees_earned || 0,
-				accrued_interest: stat.accrued_interest || 0,
-				actual_repayments: stat.actual_repayments || 0,
-				scheduled_repayments: stat.scheduled_repayments || 0,
-				total_loan_value: stat.total_loan_value || 0,
-				current_loan_value: stat.current_loan_value || 0,
-				repayment_count: stat.repayment_count || 0,
-				scheduled_count: stat.scheduled_count || 0,
-			}));
+			const enhancedDailyStats = dailyStats.map((stat: any) => {
+				const currentLoanValue = stat.current_loan_value || 0;
+				const accruedInterest = stat.accrued_interest || 0;
+				return {
+					...stat,
+					fees_earned: stat.fees_earned || 0,
+					accrued_interest: accruedInterest,
+					actual_repayments: stat.actual_repayments || 0,
+					scheduled_repayments: stat.scheduled_repayments || 0,
+					total_loan_value: stat.total_loan_value || 0,
+					current_loan_value: currentLoanValue,
+					// Active Loan Book = Total Exposure (current_loan_value) - Accrued Interest
+					active_loan_book: Math.max(0, currentLoanValue - accruedInterest),
+					repayment_count: stat.repayment_count || 0,
+					scheduled_count: stat.scheduled_count || 0,
+				};
+			});
 
 			const enhancedData = {
 				...data,
@@ -1827,7 +1839,7 @@ export default function AdminDashboardPage() {
 											<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
 												<div className="text-left">
 													<p className="font-semibold mb-1">How it's calculated:</p>
-													<p>Total value of all active loans including both outstanding principal balance and accrued interest. This represents the complete exposure including scheduled interest.</p>
+													<p>Sum of outstanding balances from loans with status: Active, Overdue, or Default. Excludes discharged/settled loans.</p>
 												</div>
 												<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
 											</div>
@@ -1838,7 +1850,7 @@ export default function AdminDashboardPage() {
 									</p>
 									<div className="flex items-center mt-2">
 										<span className="text-sm text-purple-400">
-													Outstanding + scheduled interest
+													Total outstanding exposure
 										</span>
 									</div>
 								</div>
@@ -1863,7 +1875,7 @@ export default function AdminDashboardPage() {
 											<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
 												<div className="text-left">
 													<p className="font-semibold mb-1">How it's calculated:</p>
-													<p>Total unpaid scheduled interest from all active loans. This represents interest that has been scheduled for payment but not yet collected from borrowers.</p>
+													<p>Sum of unpaid interest from scheduled repayments on Active, Overdue, and Default loans. Uses the interestAmount field.</p>
 												</div>
 												<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
 											</div>
@@ -1899,7 +1911,7 @@ export default function AdminDashboardPage() {
 											<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
 												<div className="text-left">
 													<p className="font-semibold mb-1">How it's calculated:</p>
-													<p>Total outstanding principal balance from all active loans currently being repaid. This represents the total amount owed by borrowers (excluding interest).</p>
+													<p>Outstanding principal + late fees. Calculated as: <span className="text-green-400">Total Exposure - Accrued Interest</span>. Includes Active, Overdue, Default loans.</p>
 												</div>
 												<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
 											</div>
@@ -1910,7 +1922,7 @@ export default function AdminDashboardPage() {
 									</p>
 									<div className="flex items-center mt-2">
 												<span className="text-sm text-green-400">
-													{formatNumber(stats.portfolioOverview?.numberOfActiveLoans || 0)} active loans
+													{formatNumber(stats.portfolioOverview?.numberOfActiveLoans || 0)} outstanding loans
 										</span>
 									</div>
 								</div>
@@ -1946,7 +1958,7 @@ export default function AdminDashboardPage() {
 									</p>
 									<div className="flex items-center mt-2">
 												<span className="text-sm text-indigo-400">
-													{Math.round(stats.portfolioOverview?.averageLoanTerm || 0)} days avg term
+													Based on {formatNumber(stats.portfolioOverview?.numberOfActiveLoans || 0)} loans
 										</span>
 									</div>
 								</div>
@@ -1966,72 +1978,6 @@ export default function AdminDashboardPage() {
 										{viewMode === 'monthly' ? 'Monthly' : 'Daily'} Portfolio Performance
 						</h3>
 									<BanknotesIcon className="h-6 w-6 text-green-400" />
-					</div>
-
-								{/* Portfolio Headlines */}
-								<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-						<div className="text-center">
-										<p className="text-2xl font-bold text-green-400">
-											{formatCurrencyCompact(
-									calculateMetrics(
-													currentData,
-													"current_loan_value"
-									).total
-								)}
-							</p>
-							<p className="text-xs text-gray-400">
-											Active Loan Book
-							</p>
-						</div>
-						<div className="text-center">
-										<p className={`text-2xl font-bold ${
-											calculateMetrics(currentData, "current_loan_value").currentPeriod >= 0 
-												? "text-green-400" 
-												: "text-red-400"
-										}`}>
-											{calculateMetrics(currentData, "current_loan_value").currentPeriod >= 0 ? "+" : ""}
-											{formatCurrencyCompact(
-												calculateMetrics(currentData, "current_loan_value").currentPeriod
-								)}
-							</p>
-										<p className="text-xs text-gray-400">{viewMode === 'monthly' ? 'This Month Change' : 'Today Change'}</p>
-						</div>
-						<div className="text-center">
-							<p
-								className={`text-2xl font-bold ${
-									calculateMetrics(
-													currentData,
-													"current_loan_value"
-									).growth >= 0
-										? "text-green-400"
-										: "text-red-400"
-								}`}
-							>
-								{calculateMetrics(
-												currentData,
-												"current_loan_value"
-								).growth >= 0
-									? "+"
-									: ""}
-								{calculateMetrics(
-												currentData,
-												"current_loan_value"
-								).growth.toFixed(1)}
-								%
-							</p>
-										<p className="text-xs text-gray-400">{getGrowthLabel()}</p>
-									</div>
-									<div className="text-center">
-										<p className="text-2xl font-bold text-amber-500">
-											{formatCurrencyCompact(
-												calculateMetrics(
-													currentData,
-													"accrued_interest"
-												).total
-											)}
-										</p>
-										<p className="text-xs text-gray-400">Accrued Interest</p>
-						</div>
 					</div>
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
@@ -2108,11 +2054,11 @@ export default function AdminDashboardPage() {
 								<Legend wrapperStyle={{ color: "#9CA3AF" }} />
 								<Area
 									type="monotone"
-												dataKey="current_loan_value"
+												dataKey="active_loan_book"
 									stroke="#10B981"
 									fillOpacity={1}
 												fill="url(#colorLoanValue)"
-												name="Outstanding Balance"
+												name="Active Loan Book"
 								/>
 								<Area
 									type="monotone"
@@ -2221,7 +2167,7 @@ export default function AdminDashboardPage() {
 													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
 														<div className="text-left">
 															<p className="font-semibold mb-1">How it's calculated:</p>
-															<p>Percentage of loans with payments overdue by 30+ days (beyond grace period). Calculated as: <span className="text-yellow-400">(Loans 30+ days overdue ÷ Total active loans) × 100</span></p>
+															<p>Percentage of outstanding loans that are overdue (past grace period) or defaulted. Calculated as: <span className="text-yellow-400">(Overdue + Default loans ÷ Outstanding loans) × 100</span></p>
 														</div>
 														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
 													</div>
@@ -2232,7 +2178,7 @@ export default function AdminDashboardPage() {
 											</p>
 											<div className="flex items-center mt-2">
 												<span className="text-xs text-gray-400">
-													30+ days overdue
+													Overdue & default loans
 												</span>
 						</div>
 					</div>
@@ -2415,7 +2361,8 @@ export default function AdminDashboardPage() {
 													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
 														<div className="text-left">
 															<p className="font-semibold mb-1">How it's calculated:</p>
-															<p>Weighted average annual return including interest, fees, and penalties. Calculated as: <span className="text-blue-400">(Base Interest Rate + Amortized Fees + Penalty Yield) × 12</span></p>
+															<p>Actual annualized return based on collections. Calculated as: <span className="text-blue-400">(Total Revenue ÷ Total Principal) × (12 ÷ Portfolio Age) × 100</span></p>
+															<p className="mt-1 text-gray-400">Revenue = Interest + Fees + Late Fees collected</p>
 														</div>
 														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
 													</div>
@@ -2428,7 +2375,7 @@ export default function AdminDashboardPage() {
 											</p>
 											<div className="flex items-center mt-2">
 												<span className="text-xs text-gray-400">
-													Incl. interest, fees & penalties
+													Actual annualized return
 												</span>
 											</div>
 										</div>
@@ -2549,29 +2496,6 @@ export default function AdminDashboardPage() {
 									<CurrencyDollarIcon className="h-6 w-6 text-emerald-400" />
 					</div>
 
-															{/* Revenue Headlines */}
-					<div className="grid grid-cols-3 gap-4 mb-6">
-						<div className="text-center">
-									<p className="text-2xl font-bold text-emerald-400">
-										{formatCurrencyCompact(stats.revenueMetrics?.totalInterestEarned || 0)}
-							</p>
-							<p className="text-xs text-gray-400">
-										Interest Revenue
-							</p>
-						</div>
-						<div className="text-center">
-									<p className="text-2xl font-bold text-purple-400">
-										{formatCurrencyCompact(stats.revenueMetrics?.totalFeesEarned || 0)}
-									</p>
-									<p className="text-xs text-gray-400">Fees Revenue</p>
-						</div>
-						<div className="text-center">
-									<p className="text-2xl font-bold text-amber-400">
-										{formatCurrencyCompact(stats.revenueMetrics?.penaltyFeesCollected || 0)}
-									</p>
-									<p className="text-xs text-gray-400">Penalty Fees</p>
-						</div>
-					</div>
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
 										<AreaChart data={currentData}>
@@ -2785,32 +2709,32 @@ export default function AdminDashboardPage() {
 								</div>
 							</div>
 
-							{/* Manual Review Rate */}
+							{/* Total Applications */}
 							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 shadow-lg rounded-xl">
 								<div className="p-6">
 									<div className="flex items-center justify-between">
 										<div className="flex-1">
 											<div className="flex items-center gap-2 mb-2">
 												<p className="text-sm font-medium text-gray-300">
-													Manual Review Rate
+													Total Applications
 												</p>
 												<div className="group relative">
 													<InformationCircleIcon className="h-4 w-4 text-gray-500 hover:text-gray-300 cursor-help" />
 													<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 z-50">
 														<div className="text-left">
-															<p className="font-semibold mb-1">How it's calculated:</p>
-															<p>Percentage of applications that require manual review by admin staff, calculated as: <span className="text-yellow-400">(Applications needing manual review ÷ Total applications) × 100</span></p>
+															<p className="font-semibold mb-1">What this shows:</p>
+															<p>Total number of loan applications submitted since inception, regardless of status.</p>
 														</div>
 														<div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
 													</div>
 												</div>
 											</div>
-											<p className="text-3xl font-bold text-yellow-400">
-												{(stats.operationalKPIs?.manualReviewRate || 0).toFixed(1)}%
+											<p className="text-3xl font-bold text-purple-400">
+												{formatNumber(stats.operationalKPIs?.totalApplications || 0)}
 											</p>
 											<div className="flex items-center mt-2">
 												<span className="text-xs text-gray-400">
-													Needs intervention
+													All time
 												</span>
 											</div>
 										</div>
@@ -2829,58 +2753,6 @@ export default function AdminDashboardPage() {
 									<Cog6ToothIcon className="h-6 w-6 text-purple-400" />
 					</div>
 
-								{/* Application Headlines */}
-					<div className="grid grid-cols-3 gap-4 mb-6">
-						<div className="text-center">
-							<p className="text-2xl font-bold text-blue-400">
-								{formatNumber(
-									calculateMetrics(
-													currentData,
-													"applications"
-									).total
-								)}
-							</p>
-										<p className="text-xs text-gray-400">
-											Total Applications
-										</p>
-						</div>
-						<div className="text-center">
-							<p className="text-2xl font-bold text-white">
-								{formatNumber(
-									calculateMetrics(
-													currentData,
-													"applications"
-												).currentPeriod
-								)}
-							</p>
-										<p className="text-xs text-gray-400">{getPeriodLabel()}</p>
-						</div>
-						<div className="text-center">
-							<p
-								className={`text-2xl font-bold ${
-									calculateMetrics(
-													currentData,
-													"applications"
-									).growth >= 0
-										? "text-green-400"
-										: "text-red-400"
-								}`}
-							>
-								{calculateMetrics(
-												currentData,
-												"applications"
-								).growth >= 0
-									? "+"
-									: ""}
-								{calculateMetrics(
-												currentData,
-												"applications"
-								).growth.toFixed(1)}
-								%
-							</p>
-										<p className="text-xs text-gray-400">{getGrowthLabel()}</p>
-						</div>
-					</div>
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
 										<AreaChart data={currentData}>

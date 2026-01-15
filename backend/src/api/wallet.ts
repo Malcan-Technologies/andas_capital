@@ -222,6 +222,13 @@ export async function calculateOutstandingBalance(loanId: string, tx: any) {
 		throw new Error(`Loan ${loanId} not found`);
 	}
 
+	// Skip recalculation for loans that have been settled/discharged
+	// Early settlement loans may have interest discounts that don't match the principalPaid-based calculation
+	if (loan.status === "PENDING_DISCHARGE" || loan.status === "PENDING_EARLY_SETTLEMENT" || loan.status === "DISCHARGED") {
+		console.log(`Skipping outstanding balance recalculation for loan ${loanId} with status ${loan.status}`);
+		return loan.outstandingBalance;
+	}
+
 	// Get total unpaid late fees for this loan using new schema
 	const unpaidLateFees = await tx.$queryRawUnsafe(
 		`

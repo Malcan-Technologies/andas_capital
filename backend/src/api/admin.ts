@@ -86,6 +86,12 @@ async function clearDefaultFlagsIfNeeded(loanId: string, adminUserId: string) {
 			return;
 		}
 
+		// Skip if loan is already in a terminal or settlement state - don't revert to ACTIVE
+		if (loan.status === 'PENDING_DISCHARGE' || loan.status === 'PENDING_EARLY_SETTLEMENT' || loan.status === 'DISCHARGED') {
+			console.log(`Loan ${loanId} is in status ${loan.status} - skipping default flag clearing (preserving settlement state)`);
+			return;
+		}
+
 		// Check if loan has any default flags set
 		const hasDefaultFlags = loan.defaultRiskFlaggedAt || loan.defaultedAt || loan.status === 'DEFAULT';
 		console.log(`🔍 Checking loan ${loanId} for default flag clearing:`);
@@ -943,53 +949,51 @@ router.get(
 			});
 
 					// 🔹 1. LOAN PORTFOLIO OVERVIEW METRICS
+		// Industry standard: Include loans with outstanding balances (ACTIVE, OVERDUE, DEFAULT)
+		// Exclude: PENDING_DISCHARGE (paid, awaiting admin), PENDING_EARLY_SETTLEMENT (being settled), DISCHARGED (closed)
+		const OUTSTANDING_LOAN_STATUSES = ['ACTIVE', 'OVERDUE', 'DEFAULT'];
+		
 		const activeLoansCount = await prisma.loan.count({
 			where: {
-				status: 'ACTIVE'
+				status: {
+					in: OUTSTANDING_LOAN_STATUSES
+				}
 			}
 		});
 
 		const totalLoansIssued = await prisma.loan.count();
 
-		// Get total value with interest (active outstanding balance + scheduled unpaid interest)
-		const totalValueWithInterest = await prisma.$queryRaw`
+		// Get total exposure (sum of outstanding balances from loans with outstanding amounts)
+		// outstandingBalance = totalAmount + unpaidLateFees - principalPaid
+		// This represents the total amount still owed including principal, interest, and late fees
+		const totalExposureResult = await prisma.$queryRaw`
 			SELECT 
-				ROUND((
-					COALESCE((
-						SELECT SUM(l."outstandingBalance") 
-						FROM "loans" l 
-						WHERE l.status = 'ACTIVE'
-					), 0) + 
-					COALESCE((
-						SELECT SUM(
-							CASE 
-								WHEN lr."scheduledAmount" > lr."principalAmount" 
-								THEN (lr."scheduledAmount" - lr."principalAmount") 
-								ELSE 0 
-							END
-						)
-						FROM "loan_repayments" lr
-						JOIN "loans" l ON lr."loanId" = l.id
-						WHERE l.status = 'ACTIVE' AND lr."paidAt" IS NULL
-					), 0)
-				)::numeric, 2) as total_value_with_interest
-		` as Array<{total_value_with_interest: number}>;
+				ROUND(COALESCE(SUM(l."outstandingBalance"), 0)::numeric, 2) as total_exposure
+			FROM "loans" l 
+			WHERE l.status IN ('ACTIVE', 'OVERDUE', 'DEFAULT')
+		` as Array<{total_exposure: number}>;
 
-		// Get accrued interest (interest accumulated but not yet collected)
+		const totalExposure = Number(totalExposureResult[0]?.total_exposure) || 0;
+
+		// Get accrued interest (unpaid interest from scheduled repayments on outstanding loans)
+		// Uses interestAmount field which represents the actual interest portion of each repayment
 		const accruedInterest = await prisma.$queryRaw`
 			SELECT 
-				ROUND(SUM(
-					CASE 
-						WHEN lr."scheduledAmount" > lr."principalAmount" 
-						THEN (lr."scheduledAmount" - lr."principalAmount") 
-						ELSE 0 
-					END
-				)::numeric, 2) as accrued_interest
+				ROUND(COALESCE(SUM(lr."interestAmount"), 0)::numeric, 2) as accrued_interest
 			FROM "loan_repayments" lr
 			JOIN "loans" l ON lr."loanId" = l.id
-			WHERE l.status = 'ACTIVE' 
+			WHERE l.status IN ('ACTIVE', 'OVERDUE', 'DEFAULT')
 			AND lr."paidAt" IS NULL
 		` as Array<{accrued_interest: number}>;
+
+		const accruedInterestValue = Number(accruedInterest[0]?.accrued_interest) || 0;
+
+		// Active Loan Book = Total exposure minus accrued interest (outstanding principal + late fees)
+		// This represents the principal amount still owed by borrowers
+		const activeLoanBook = Math.max(0, totalExposure - accruedInterestValue);
+
+		// Total Value with Interest = Total Exposure (includes principal + interest + late fees)
+		const totalValueWithInterest = totalExposure;
 		
 		const averageLoanSize = await prisma.loan.aggregate({
 			_avg: {
@@ -1040,65 +1044,50 @@ router.get(
 			? (paidOnTimeCount / totalDueCount) * 100 
 			: 0;
 
-		// Delinquency rates (30, 60, 90+ days overdue)
-		const thirtyDaysAgo = new Date();
-		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); // Include current day in 30-day period
+		// Delinquency rate - using loan status instead of hardcoded days
+		// The system already sets loan status to 'OVERDUE' when past grace period,
+		// and 'DEFAULT' based on the DEFAULT_RISK_DAYS + DEFAULT_REMEDY_DAYS settings
+		// This is more accurate as it respects the configured thresholds
 		
-		const sixtyDaysAgo = new Date();
-		sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+		// Count loans that are overdue (past grace period but not yet defaulted)
+		const overdueLoansCount = await prisma.loan.count({
+			where: {
+				status: 'OVERDUE'
+			}
+		});
 		
-		const ninetyDaysAgo = new Date();
-		ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-		const overdue30Days = await prisma.loanRepayment.count({
+		// Count loans that have been flagged for default risk but not yet defaulted
+		const defaultRiskLoansCount = await prisma.loan.count({
 			where: {
-				dueDate: {
-					lt: thirtyDaysAgo
-				},
-				paidAt: null,
-				loan: {
-					status: 'ACTIVE'
-				}
+				defaultRiskFlaggedAt: { not: null },
+				defaultedAt: null,
+				status: { in: ['ACTIVE', 'OVERDUE'] }
 			}
 		});
+		
+		// Count loans that have fully defaulted (reuse defaultedLoansCount from earlier query)
+		// Note: defaultedLoansCount is already defined above in the dashboard metrics section
+		
+		// Delinquency rate = (OVERDUE + DEFAULT loans) / Total outstanding loans
+		// This represents loans that are past the grace period
+		const totalDelinquentLoans = overdueLoansCount + defaultedLoansCount;
+		const delinquencyRate30 = activeLoansCount > 0 ? (totalDelinquentLoans / activeLoansCount) * 100 : 0;
+		
+		// Default risk rate = Loans flagged for default risk / Total outstanding loans
+		// These are loans that have triggered the DEFAULT_RISK_DAYS threshold
+		const delinquencyRate60 = activeLoansCount > 0 ? (defaultRiskLoansCount / activeLoansCount) * 100 : 0;
+		
+		// Actual default rate for this metric (same as delinquencyRate90 historically)
+		const delinquencyRate90 = activeLoansCount > 0 ? (defaultedLoansCount / activeLoansCount) * 100 : 0;
 
-		const overdue60Days = await prisma.loanRepayment.count({
-			where: {
-				dueDate: {
-					lt: sixtyDaysAgo
-				},
-				paidAt: null,
-				loan: {
-					status: 'ACTIVE'
-				}
-			}
-		});
-
-		const overdue90Days = await prisma.loanRepayment.count({
-			where: {
-				dueDate: {
-					lt: ninetyDaysAgo
-				},
-				paidAt: null,
-				loan: {
-					status: 'ACTIVE'
-				}
-			}
-		});
-
-		const delinquencyRate30 = activeLoansCount > 0 ? (overdue30Days / activeLoansCount) * 100 : 0;
-		const delinquencyRate60 = activeLoansCount > 0 ? (overdue60Days / activeLoansCount) * 100 : 0;
-		const delinquencyRate90 = activeLoansCount > 0 ? (overdue90Days / activeLoansCount) * 100 : 0;
-
-		// Default rate (written-off loans)
-		const defaultedLoans = await prisma.loan.count({
-			where: {
-				status: 'DEFAULTED'
-			}
-		});
-		const defaultRate = totalLoansIssued > 0 ? (defaultedLoans / totalLoansIssued) * 100 : 0;
+		// Default rate (loans in DEFAULT status)
+		// Industry standard: default rate = defaulted loans / total loans ever issued
+		const defaultRate = totalLoansIssued > 0 ? (defaultedLoansCount / totalLoansIssued) * 100 : 0;
 
 		// Collections in last 30 days
+		const thirtyDaysAgo = new Date();
+		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+		
 		const collectionsLast30Days = await prisma.walletTransaction.aggregate({
 			_sum: {
 				amount: true
@@ -1153,10 +1142,10 @@ router.get(
 			}
 		});
 
-		// Late payments (overdue right now)
+		// Late payments (overdue right now - includes all outstanding loan statuses)
 		const latePayments = await prisma.loanRepayment.aggregate({
 			_sum: {
-				amount: true
+				scheduledAmount: true
 			},
 			_count: true,
 			where: {
@@ -1165,38 +1154,19 @@ router.get(
 				},
 				paidAt: null,
 				loan: {
-					status: 'ACTIVE'
+					status: { in: ['ACTIVE', 'OVERDUE', 'DEFAULT'] }
 				}
 			}
 		});
 
 		// 🔹 3. REVENUE & INTEREST METRICS
-		// Get total interest earned from repayments
+		// Get total interest earned from repayments (using interestAmount field)
 		const totalInterestEarned = await prisma.$queryRaw`
 			SELECT 
-				ROUND(SUM(CASE 
-					WHEN lr.amount > lr."principalAmount" 
-					THEN lr.amount - lr."principalAmount"
-					ELSE 0 
-				END)::numeric, 2) as total_interest
+				ROUND(COALESCE(SUM(lr."interestAmount"), 0)::numeric, 2) as total_interest
 			FROM "loan_repayments" lr
 			WHERE lr."paidAt" IS NOT NULL
 		` as Array<{total_interest: number}>;
-
-		// Portfolio yield including interest, fees, and penalties (comprehensive yield calculation)
-		const portfolioYieldData = await prisma.$queryRaw`
-			SELECT 
-				-- Total portfolio principal
-				COALESCE(SUM(l."principalAmount"), 0) as total_principal,
-				-- Base interest yield (weighted by loan amounts)
-				CASE 
-					WHEN SUM(l."principalAmount") > 0 
-					THEN (SUM(l."principalAmount" * l."interestRate") / SUM(l."principalAmount"))
-					ELSE 0 
-				END as base_interest_rate
-			FROM "loans" l
-			WHERE l.status IN ('ACTIVE', 'DISCHARGED', 'PENDING_DISCHARGE')
-		` as Array<{total_principal: number, base_interest_rate: number}>;
 
 		// Get total fees earned (upfront fees from disbursed loans)
 		const totalFeesEarned = await prisma.$queryRaw`
@@ -1212,32 +1182,40 @@ router.get(
 			WHERE la.status IN ('ACTIVE', 'DISBURSED', 'PENDING_DISCHARGE', 'DISCHARGED')
 		` as Array<{total_fees: number}>;
 
-		// Calculate comprehensive portfolio yield
-		const totalPrincipal = Number(portfolioYieldData[0]?.total_principal) || 0;
-		const baseInterestRate = Number(portfolioYieldData[0]?.base_interest_rate) || 0;
+		// Calculate ACTUAL portfolio yield based on real collections vs disbursements
+		// This gives realized return, not expected/theoretical return
 		const totalFees = Number(totalFeesEarned[0]?.total_fees) || 0;
 		const penaltyFees = totalLateFeesCollected || 0;
-
-		// Portfolio yield = (Base Interest Rate + Fee Yield + Penalty Yield) * 12 (annualized)
-		let portfolioYield = 0;
-		if (totalPrincipal > 0) {
-					// Get weighted average loan term (by principal amount) to amortize fees properly
-		const avgLoanTermResult = await prisma.$queryRaw`
-			SELECT 
-				SUM(l."principalAmount" * l."term") / SUM(l."principalAmount") as weighted_avg_term_months
+		
+		// Get actual interest collected (from paid repayments)
+		const actualInterestCollected = Number(totalInterestEarned[0]?.total_interest) || 0;
+		
+		// Get total principal disbursed (all loans ever issued)
+		const totalDisbursedPrincipal = await prisma.$queryRaw`
+			SELECT ROUND(COALESCE(SUM(l."principalAmount"), 0)::numeric, 2) as total_principal
 			FROM "loans" l
-			WHERE l.status IN ('ACTIVE', 'DISCHARGED', 'PENDING_DISCHARGE')
-		` as Array<{weighted_avg_term_months: number}>;
+		` as Array<{total_principal: number}>;
+		const totalPrincipalDisbursed = Number(totalDisbursedPrincipal[0]?.total_principal) || 0;
 		
-		const avgTermMonths = Number(avgLoanTermResult[0]?.weighted_avg_term_months) || 12;
-			
-					// Amortize upfront fees over average loan term to get monthly fee yield (as percentage)
-		const feeYieldMonthly = ((totalFees / totalPrincipal) / avgTermMonths) * 100;
-		// Penalties are ongoing, so treat as annual yield spread over 12 months (as percentage)
-		const penaltyYieldMonthly = ((penaltyFees / totalPrincipal) / 12) * 100;
+		// Get weighted average age of the portfolio in months
+		// This tells us how long the money has been working
+		const portfolioAgeResult = await prisma.$queryRaw`
+			SELECT 
+				ROUND(
+					EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MIN(l."disbursedAt"))) / (30 * 24 * 60 * 60)
+				, 2) as portfolio_age_months
+			FROM "loans" l
+			WHERE l."disbursedAt" IS NOT NULL
+		` as Array<{portfolio_age_months: number}>;
+		const portfolioAgeMonths = Math.max(1, Number(portfolioAgeResult[0]?.portfolio_age_months) || 1);
 		
-		// Combine base interest + amortized fees + penalty yield, then annualize (all in percentage)
-		portfolioYield = (baseInterestRate + feeYieldMonthly + penaltyYieldMonthly) * 12;
+		// Actual Portfolio Yield = (Total Revenue / Total Principal Disbursed) * (12 / Portfolio Age) * 100
+		// Total Revenue = Interest Collected + Fees Collected + Late Fees Collected
+		let portfolioYield = 0;
+		if (totalPrincipalDisbursed > 0) {
+			const totalRevenue = actualInterestCollected + totalFees + penaltyFees;
+			// Annualized yield = (Total Revenue / Principal) * (12 / Age in Months) * 100
+			portfolioYield = (totalRevenue / totalPrincipalDisbursed) * (12 / portfolioAgeMonths) * 100;
 		}
 
 		const averageInterestRate = portfolioYield;
@@ -1357,22 +1335,8 @@ router.get(
 			AND ld."disbursedAt" IS NOT NULL
 		` as Array<{avg_disbursement_minutes: number}>;
 
-		// For manual review rate, we need total applications count
+		// Get total applications count
 		const totalApplicationsCount = await prisma.loanApplication.count();
-
-		// Manual review rate (applications requiring manual intervention)
-		const manualReviewApplications = await prisma.loanApplication.count({
-			where: {
-				OR: [
-					{ attestationType: { not: null } },
-					{ status: 'COLLATERAL_REVIEW' }
-				]
-			}
-		});
-
-		const manualReviewRate = totalApplicationsCount > 0 
-			? (manualReviewApplications / totalApplicationsCount) * 100 
-			: 0;
 
 	// Get stamping workflow counts
 	const pendingStampedAgreements = await prisma.loanApplication.count({
@@ -1418,22 +1382,22 @@ router.get(
 			// 🔹 NEW INDUSTRY-STANDARD LOAN PORTFOLIO KPIs
 			// 1. Portfolio Overview
 			portfolioOverview: {
-				activeLoanBook: currentLoanValue,
+				activeLoanBook: activeLoanBook, // Outstanding principal (total exposure - accrued interest)
 				numberOfActiveLoans: activeLoansCount,
 				totalRepaidAmount: totalRepayments,
 				averageLoanSize: averageLoanSize._avg.principalAmount || 0,
 				averageLoanTerm: averageLoanTerm._avg.term || 0,
-				totalValueWithInterest: totalValueWithInterest[0]?.total_value_with_interest || 0,
-				accruedInterest: accruedInterest[0]?.accrued_interest || 0,
+				totalValueWithInterest: totalValueWithInterest, // Total exposure (principal + interest + late fees)
+				accruedInterest: accruedInterestValue, // Unpaid interest from scheduled repayments
 			},
 
 			// 2. Repayment & Performance
 			repaymentPerformance: {
 				repaymentRate: Math.round(repaymentRate * 100) / 100,
-				delinquencyRate30Days: Math.round(delinquencyRate30 * 100) / 100,
-				delinquencyRate60Days: Math.round(delinquencyRate60 * 100) / 100,
-				delinquencyRate90Days: Math.round(delinquencyRate90 * 100) / 100,
-				defaultRate: Math.round(defaultRate * 100) / 100,
+				delinquencyRate30Days: Math.round(delinquencyRate30 * 100) / 100, // Overdue + Default rate (uses system settings)
+				delinquencyRate60Days: Math.round(delinquencyRate60 * 100) / 100, // Default risk rate (flagged but not defaulted)
+				delinquencyRate90Days: Math.round(delinquencyRate90 * 100) / 100, // Active default rate (DEFAULT / outstanding)
+				defaultRate: Math.round(defaultRate * 100) / 100, // Historical default rate (DEFAULT / total ever issued)
 				collectionsLast30Days: Math.abs(collectionsLast30Days._sum.amount || 0),
 				upcomingPaymentsDue7Days: {
 					amount: upcomingPayments7Days._sum.amount || 0,
@@ -1444,7 +1408,7 @@ router.get(
 					count: upcomingPayments30Days._count || 0
 				},
 				latePayments: {
-					amount: latePayments._sum.amount || 0,
+					amount: latePayments._sum.scheduledAmount || 0,
 					count: latePayments._count || 0
 				}
 			},
@@ -1470,7 +1434,7 @@ router.get(
 				loanApprovalTime: decisionTimes[0]?.avg_decision_minutes || 0,
 				disbursementTime: disbursementTimes[0]?.avg_disbursement_minutes || 0,
 				applicationApprovalRatio: Math.round(applicationApprovalRatio * 100) / 100,
-				manualReviewRate: Math.round(manualReviewRate * 100) / 100,
+				totalApplications: totalApplicationsCount,
 			}
 			});
 		} catch (error) {
@@ -1558,19 +1522,20 @@ router.get(
 
 			// ADMIN users get full monthly statistics
 			// Get the last 6 months of data
+			// Use Malaysia timezone (UTC+8) by adding 8 hours to UTC timestamps
 			const sixMonthsAgo = new Date();
 			sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-			// Get monthly application counts
+			// Get monthly application counts (adding 8 hours to convert UTC to MYT)
 			const monthlyApplications = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', "createdAt") as month,
+					DATE_TRUNC('month', "createdAt" + INTERVAL '8 hours') as month,
 					COUNT(*) as applications,
 					COUNT(CASE WHEN status IN ('APPROVED', 'ACTIVE', 'PENDING_DISBURSEMENT') THEN 1 END) as approvals,
 					COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as disbursements
 				FROM "loan_applications"
 				WHERE "createdAt" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', "createdAt")
+				GROUP BY DATE_TRUNC('month', "createdAt" + INTERVAL '8 hours')
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
@@ -1582,12 +1547,12 @@ router.get(
 			// Get monthly user registrations and KYC completions
 			const monthlyUsers = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', "createdAt") as month,
+					DATE_TRUNC('month', "createdAt" + INTERVAL '8 hours') as month,
 					COUNT(*) as users,
 					COUNT(CASE WHEN "kycStatus" = true THEN 1 END) as kyc_users
 				FROM "users"
 				WHERE "createdAt" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', "createdAt")
+				GROUP BY DATE_TRUNC('month', "createdAt" + INTERVAL '8 hours')
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
@@ -1598,13 +1563,13 @@ router.get(
 			// Get monthly disbursement amounts and counts using loan_disbursement table
 			const monthlyDisbursements = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', ld."disbursedAt") as month,
+					DATE_TRUNC('month', ld."disbursedAt" + INTERVAL '8 hours') as month,
 					ROUND(SUM(COALESCE(ld.amount, 0))::numeric, 2) as total_amount,
 					COUNT(*) as disbursement_count
 				FROM "loan_disbursements" ld
 				WHERE ld.status = 'COMPLETED' 
 				AND ld."disbursedAt" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', ld."disbursedAt")
+				GROUP BY DATE_TRUNC('month', ld."disbursedAt" + INTERVAL '8 hours')
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
@@ -1615,7 +1580,7 @@ router.get(
 			// Get monthly actual repayments from wallet_transactions (actual cash collected)
 			const monthlyRepayments = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', wt."processedAt") as month,
+					DATE_TRUNC('month', wt."processedAt" + INTERVAL '8 hours') as month,
 					ROUND(SUM(ABS(COALESCE(wt.amount, 0)))::numeric, 2) as actual_repayments,
 					COUNT(*) as repayment_count
 				FROM "wallet_transactions" wt
@@ -1623,7 +1588,7 @@ router.get(
 				AND wt.status = 'APPROVED'
 				AND wt."processedAt" IS NOT NULL
 				AND wt."processedAt" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', wt."processedAt")
+				GROUP BY DATE_TRUNC('month', wt."processedAt" + INTERVAL '8 hours')
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
@@ -1634,7 +1599,7 @@ router.get(
 			// Get monthly fees earned from disbursed applications
 			const monthlyFees = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', la."updatedAt") as month,
+					DATE_TRUNC('month', la."updatedAt" + INTERVAL '8 hours') as month,
 					ROUND(SUM(
 						COALESCE(la."applicationFee", 0) + 
 						COALESCE(la."originationFee", 0) + 
@@ -1643,7 +1608,7 @@ router.get(
 				FROM "loan_applications" la
 				WHERE la.status IN ('ACTIVE', 'DISBURSED', 'PENDING_DISCHARGE', 'DISCHARGED')
 				AND la."updatedAt" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', la."updatedAt")
+				GROUP BY DATE_TRUNC('month', la."updatedAt" + INTERVAL '8 hours')
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
@@ -1658,20 +1623,15 @@ router.get(
 				const targetMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - i, 1);
 				const monthEnd = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0);
 				
-				// Calculate total accrued interest as of this month-end
+				// Calculate total accrued interest as of this month-end using interestAmount field
 				// (all unpaid repayments that were due on or before this month-end)
+				// Include ACTIVE, OVERDUE, DEFAULT - exclude DISCHARGED, PENDING_DISCHARGE, PENDING_EARLY_SETTLEMENT
 				const accruedResult = await prisma.$queryRaw`
 					SELECT 
-						ROUND(SUM(
-							CASE 
-								WHEN lr."scheduledAmount" > lr."principalAmount" 
-								THEN (lr."scheduledAmount" - lr."principalAmount") 
-								ELSE 0 
-							END
-						)::numeric, 2) as accrued_interest
+						ROUND(COALESCE(SUM(lr."interestAmount"), 0)::numeric, 2) as accrued_interest
 					FROM "loan_repayments" lr
 					JOIN "loans" l ON lr."loanId" = l.id
-					WHERE l.status = 'ACTIVE' 
+					WHERE l.status IN ('ACTIVE', 'OVERDUE', 'DEFAULT')
 					AND lr."paidAt" IS NULL
 					AND lr."dueDate" <= ${monthEnd}
 				` as Array<{accrued_interest: number}>;
@@ -1685,12 +1645,12 @@ router.get(
 			// Get monthly scheduled repayments using scheduledAmount from loan_repayments
 			const monthlyScheduledRepayments = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', lr."dueDate") as month,
+					DATE_TRUNC('month', lr."dueDate" + INTERVAL '8 hours') as month,
 					ROUND(SUM(COALESCE(lr."scheduledAmount", lr.amount))::numeric, 2) as scheduled_repayments,
 					COUNT(*) as scheduled_count
 				FROM "loan_repayments" lr
 				WHERE lr."dueDate" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', lr."dueDate")
+				GROUP BY DATE_TRUNC('month', lr."dueDate" + INTERVAL '8 hours')
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
@@ -1701,12 +1661,12 @@ router.get(
 			// Get monthly TLV using totalAmount from loans table
 			const monthlyTLV = (await prisma.$queryRaw`
 				SELECT 
-					DATE_TRUNC('month', l."createdAt") as month,
+					DATE_TRUNC('month', l."createdAt" + INTERVAL '8 hours') as month,
 					ROUND(SUM(COALESCE(l."totalAmount", l."principalAmount"))::numeric, 2) as total_loan_value
 				FROM "loans" l
 				WHERE l.status IN ('ACTIVE', 'PENDING_DISCHARGE', 'DISCHARGED')
 				AND l."createdAt" >= ${sixMonthsAgo}
-				GROUP BY DATE_TRUNC('month', l."createdAt")
+				GROUP BY DATE_TRUNC('month', l."createdAt" + INTERVAL '8 hours')
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
@@ -1714,49 +1674,65 @@ router.get(
 			}>;
 
 			// Calculate monthly current loan value using actual outstanding balances
-			// Get the CORRECT current loan value by summing outstanding balances of active loans
+			// Include loans with outstanding amounts (ACTIVE, OVERDUE, DEFAULT)
+			// Exclude: PENDING_DISCHARGE (paid), PENDING_EARLY_SETTLEMENT (being settled), DISCHARGED (closed)
 			const actualCurrentLoanValue = await prisma.loan.aggregate({
 				_sum: {
 					outstandingBalance: true,
 				},
 				where: {
 					status: {
-						in: ["ACTIVE", "PENDING_DISCHARGE"],
+						in: ["ACTIVE", "OVERDUE", "DEFAULT"],
 					},
 				},
 			});
 
 			const monthlyBaselineLoanValue = actualCurrentLoanValue._sum.outstandingBalance || 0;
 
-			const monthlyCurrentLoanValue = monthlyApplications.map((stat, index) => {
-				// Simulate realistic monthly progression
-				// For monthly view, show more significant variations month by month
-				const monthsAgo = monthlyApplications.length - 1 - index;
+			// Calculate actual monthly current loan values using historical data
+			// For each month, calculate what the outstanding balance was at month-end
+			const monthlyCurrentLoanValue = [];
+			
+			for (let i = 5; i >= 0; i--) {
+				const targetMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - i, 1);
+				const monthEnd = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0);
 				
-				let monthlyValue;
-				if (monthsAgo === 0) {
-					// Current month should show the actual current loan value
-					monthlyValue = monthlyBaselineLoanValue;
+				if (i === 0) {
+					// Current month uses actual current value
+					monthlyCurrentLoanValue.push({
+						month: targetMonth,
+						current_loan_value: Math.round(monthlyBaselineLoanValue * 100) / 100,
+					});
 				} else {
-					// Historical months show realistic progression
-					// Base trend: loan portfolio growth over time (higher values in the past)
-					const growthTrend = monthlyBaselineLoanValue * (monthsAgo * 0.03); // ~3% growth per month going back
+					// For historical months, calculate based on:
+					// Current outstanding + repayments made since month-end - disbursements since month-end
+					const repaymentsSinceMonthEnd = await prisma.$queryRaw`
+						SELECT ROUND(COALESCE(SUM(ABS(wt.amount)), 0)::numeric, 2) as total_repayments
+						FROM "wallet_transactions" wt
+						WHERE wt.type = 'LOAN_REPAYMENT' 
+						AND wt.status = 'APPROVED'
+						AND wt."processedAt" > ${monthEnd}
+					` as Array<{total_repayments: number}>;
 					
-					// Add monthly variations for disbursements and repayments
-					const monthlyVariation = Math.sin(monthsAgo * 1.2) * (monthlyBaselineLoanValue * 0.02);
+					const disbursementsSinceMonthEnd = await prisma.$queryRaw`
+						SELECT ROUND(COALESCE(SUM(ld.amount), 0)::numeric, 2) as total_disbursements
+						FROM "loan_disbursements" ld
+						WHERE ld.status = 'COMPLETED'
+						AND ld."disbursedAt" > ${monthEnd}
+					` as Array<{total_disbursements: number}>;
 					
-					// Simulate some months with significant loan disbursements
-					const bigDisbursementMonth = monthsAgo % 3 === 0 && monthsAgo > 0; // Every 3 months
-					const bigDisbursementAmount = bigDisbursementMonth ? monthlyBaselineLoanValue * 0.08 : 0; // 8% increase
+					const repayments = Number(repaymentsSinceMonthEnd[0]?.total_repayments) || 0;
+					const disbursements = Number(disbursementsSinceMonthEnd[0]?.total_disbursements) || 0;
 					
-					monthlyValue = Math.max(0, monthlyBaselineLoanValue + growthTrend + monthlyVariation + bigDisbursementAmount);
+					// Historical value = current + repayments made since then - new loans disbursed since then
+					const historicalValue = Math.max(0, monthlyBaselineLoanValue + repayments - disbursements);
+					
+					monthlyCurrentLoanValue.push({
+						month: targetMonth,
+						current_loan_value: Math.round(historicalValue * 100) / 100,
+					});
 				}
-
-				return {
-					month: stat.month,
-					current_loan_value: Math.round(monthlyValue * 100) / 100,
-				};
-			});
+			}
 
 			// Create a map for easy lookup
 			const userMap = new Map(
@@ -1826,9 +1802,65 @@ router.get(
 				])
 			);
 
-			// Format the data for the frontend
-			const monthlyStats = monthlyApplications.map((stat) => {
-				const monthKey = stat.month.toISOString();
+			// Build maps from applications data for lookup
+			const applicationMap = new Map(
+				monthlyApplications.map((a) => [
+					a.month.toISOString(),
+					{
+						applications: Number(a.applications),
+						approvals: Number(a.approvals),
+						disbursements: Number(a.disbursements),
+					},
+				])
+			);
+
+			// Get current values directly (same as dashboard calculation)
+			const currentOutstandingBalance = await prisma.loan.aggregate({
+				_sum: { outstandingBalance: true },
+				where: { status: { in: ["ACTIVE", "OVERDUE", "DEFAULT"] } },
+			});
+			const currentAccruedInterestQuery = await prisma.$queryRaw`
+				SELECT ROUND(COALESCE(SUM(lr."interestAmount"), 0)::numeric, 2) as accrued_interest
+				FROM "loan_repayments" lr
+				JOIN "loans" l ON lr."loanId" = l.id
+				WHERE l.status IN ('ACTIVE', 'OVERDUE', 'DEFAULT')
+				AND lr."paidAt" IS NULL
+			` as Array<{accrued_interest: number}>;
+			
+			const currentLoanValueActual = currentOutstandingBalance._sum.outstandingBalance || 0;
+			const currentAccruedInterestValue = Number(currentAccruedInterestQuery[0]?.accrued_interest) || 0;
+
+			// Build result by iterating through all 6 months
+			// This ensures we show data even if there were no applications in a month
+			const result = [];
+			const now = new Date();
+			
+			for (let i = 5; i >= 0; i--) {
+				// Generate month start date in MYT (add 8 hours offset consideration)
+				const targetMonth = new Date(
+					now.getFullYear(),
+					now.getMonth() - i,
+					1
+				);
+				const monthStr = targetMonth.toLocaleDateString("en-US", {
+					month: "short",
+				});
+				
+				// Generate the ISO key that matches the database DATE_TRUNC result
+				// DATE_TRUNC('month', ... + INTERVAL '8 hours') returns first day of month at 00:00:00 UTC
+				const monthKeyDate = new Date(Date.UTC(
+					targetMonth.getFullYear(),
+					targetMonth.getMonth(),
+					1, 0, 0, 0, 0
+				));
+				const monthKey = monthKeyDate.toISOString();
+				
+				// Lookup data from all maps
+				const applicationData = applicationMap.get(monthKey) || {
+					applications: 0,
+					approvals: 0,
+					disbursements: 0,
+				};
 				const disbursementData = disbursementMap.get(monthKey) || {
 					total_amount: 0,
 					disbursement_count: 0,
@@ -1841,18 +1873,14 @@ router.get(
 					actual_repayments: 0,
 					repayment_count: 0,
 				};
-				const scheduledRepaymentsData = scheduledRepaymentsMap.get(
-					monthKey
-				) || {
+				const scheduledRepaymentsData = scheduledRepaymentsMap.get(monthKey) || {
 					scheduled_repayments: 0,
 					scheduled_count: 0,
 				};
 				const tlvData = tlvMap.get(monthKey) || {
 					total_loan_value: 0,
 				};
-				const currentLoanValueData = currentLoanValueMap.get(
-					monthKey
-				) || {
+				const currentLoanValueData = currentLoanValueMap.get(monthKey) || {
 					current_loan_value: 0,
 				};
 				const feesData = feesMap.get(monthKey) || {
@@ -1861,78 +1889,33 @@ router.get(
 				const accruedInterestData = accruedInterestMap.get(monthKey) || {
 					accrued_interest: 0,
 				};
-
-				return {
-					month: stat.month.toLocaleDateString("en-US", {
-						month: "short",
-					}),
-					applications: Number(stat.applications),
-					approvals: Number(stat.approvals),
-					disbursements: Number(stat.disbursements),
-					revenue: Math.round(repaymentsData.actual_repayments * 0.15 * 100) / 100, // Estimate 15% of repayments as interest revenue
+				
+				// For current month (i === 0), use actual current values
+				const isCurrentMonth = i === 0;
+				
+				result.push({
+					month: monthStr,
+					applications: applicationData.applications,
+					approvals: applicationData.approvals,
+					disbursements: applicationData.disbursements,
+					revenue: Math.round(repaymentsData.actual_repayments * 0.15 * 100) / 100,
 					fees_earned: feesData.fees_earned,
-					accrued_interest: accruedInterestData.accrued_interest,
+					accrued_interest: isCurrentMonth 
+						? Math.round(currentAccruedInterestValue * 100) / 100 
+						: accruedInterestData.accrued_interest,
 					disbursement_amount: disbursementData.total_amount,
 					disbursement_count: disbursementData.disbursement_count,
 					users: userData.users,
 					kyc_users: userData.kyc_users,
-					actual_repayments:
-						Math.round(repaymentsData.actual_repayments * 100) /
-						100,
-					scheduled_repayments:
-						Math.round(
-							scheduledRepaymentsData.scheduled_repayments * 100
-						) / 100,
-					total_loan_value:
-						Math.round(tlvData.total_loan_value * 100) / 100,
-					current_loan_value:
-						Math.round(
-							currentLoanValueData.current_loan_value * 100
-						) / 100,
+					actual_repayments: Math.round(repaymentsData.actual_repayments * 100) / 100,
+					scheduled_repayments: Math.round(scheduledRepaymentsData.scheduled_repayments * 100) / 100,
+					total_loan_value: Math.round(tlvData.total_loan_value * 100) / 100,
+					current_loan_value: isCurrentMonth 
+						? Math.round(currentLoanValueActual * 100) / 100 
+						: Math.round(currentLoanValueData.current_loan_value * 100) / 100,
 					repayment_count: repaymentsData.repayment_count,
 					scheduled_count: scheduledRepaymentsData.scheduled_count,
-				};
-			});
-
-			// Fill in missing months with zero values
-			const result = [];
-			const now = new Date();
-			for (let i = 5; i >= 0; i--) {
-				const targetMonth = new Date(
-					now.getFullYear(),
-					now.getMonth() - i,
-					1
-				);
-				const monthStr = targetMonth.toLocaleDateString("en-US", {
-					month: "short",
 				});
-
-				const existingStat = monthlyStats.find(
-					(s) => s.month === monthStr
-				);
-				if (existingStat) {
-					result.push(existingStat);
-				} else {
-					result.push({
-						month: monthStr,
-						applications: 0,
-						approvals: 0,
-						disbursements: 0,
-						revenue: 0,
-						fees_earned: 0,
-						accrued_interest: 0,
-						disbursement_amount: 0,
-						disbursement_count: 0,
-						users: 0,
-						kyc_users: 0,
-						actual_repayments: 0,
-						scheduled_repayments: 0,
-						total_loan_value: 0,
-						current_loan_value: 0,
-						repayment_count: 0,
-						scheduled_count: 0,
-					});
-				}
 			}
 
 			res.json({ monthlyStats: result });
@@ -2022,19 +2005,21 @@ router.get(
 
 			// ADMIN users get full daily statistics
 			// Get the last 30 days of data (including today)
+			// Use Malaysia timezone (UTC+8) for consistent date handling
+			// Since DB stores UTC, we add 8 hours to convert to MYT before extracting date
 			const thirtyDaysAgo = new Date();
-			thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); // Include current day in 30-day period
+			thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
 
-			// Get daily application counts
+			// Get daily application counts (adding 8 hours to convert UTC to MYT)
 			const dailyApplications = (await prisma.$queryRaw`
 				SELECT 
-					DATE("createdAt") as date,
+					DATE("createdAt" + INTERVAL '8 hours') as date,
 					COUNT(*) as applications,
 					COUNT(CASE WHEN status IN ('APPROVED', 'ACTIVE', 'PENDING_DISBURSEMENT') THEN 1 END) as approvals,
 					COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as disbursements
 				FROM "loan_applications"
 				WHERE "createdAt" >= ${thirtyDaysAgo}
-				GROUP BY DATE("createdAt")
+				GROUP BY DATE("createdAt" + INTERVAL '8 hours')
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
@@ -2046,12 +2031,12 @@ router.get(
 			// Get daily user registrations and KYC completions
 			const dailyUsers = (await prisma.$queryRaw`
 				SELECT 
-					DATE("createdAt") as date,
+					DATE("createdAt" + INTERVAL '8 hours') as date,
 					COUNT(*) as users,
 					COUNT(CASE WHEN "kycStatus" = true THEN 1 END) as kyc_users
 				FROM "users"
 				WHERE "createdAt" >= ${thirtyDaysAgo}
-				GROUP BY DATE("createdAt")
+				GROUP BY DATE("createdAt" + INTERVAL '8 hours')
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
@@ -2062,13 +2047,13 @@ router.get(
 			// Get daily disbursement amounts and counts using loan_disbursement table
 			const dailyDisbursements = (await prisma.$queryRaw`
 				SELECT 
-					DATE(ld."disbursedAt") as date,
+					DATE(ld."disbursedAt" + INTERVAL '8 hours') as date,
 					ROUND(SUM(COALESCE(ld.amount, 0))::numeric, 2) as total_amount,
 					COUNT(*) as disbursement_count
 				FROM "loan_disbursements" ld
 				WHERE ld.status = 'COMPLETED' 
 				AND ld."disbursedAt" >= ${thirtyDaysAgo}
-				GROUP BY DATE(ld."disbursedAt")
+				GROUP BY DATE(ld."disbursedAt" + INTERVAL '8 hours')
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
@@ -2079,7 +2064,7 @@ router.get(
 			// Get daily actual repayments from wallet_transactions (actual cash collected)
 			const dailyRepayments = (await prisma.$queryRaw`
 				SELECT 
-					DATE(wt."processedAt") as date,
+					DATE(wt."processedAt" + INTERVAL '8 hours') as date,
 					ROUND(SUM(ABS(COALESCE(wt.amount, 0)))::numeric, 2) as actual_repayments,
 					COUNT(*) as repayment_count
 				FROM "wallet_transactions" wt
@@ -2087,7 +2072,7 @@ router.get(
 				AND wt.status = 'APPROVED'
 				AND wt."processedAt" IS NOT NULL
 				AND wt."processedAt" >= ${thirtyDaysAgo}
-				GROUP BY DATE(wt."processedAt")
+				GROUP BY DATE(wt."processedAt" + INTERVAL '8 hours')
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
@@ -2098,7 +2083,7 @@ router.get(
 			// Get daily fees earned from disbursed applications
 			const dailyFees = (await prisma.$queryRaw`
 				SELECT 
-					DATE(la."updatedAt") as date,
+					DATE(la."updatedAt" + INTERVAL '8 hours') as date,
 					ROUND(SUM(
 						COALESCE(la."applicationFee", 0) + 
 						COALESCE(la."originationFee", 0) + 
@@ -2109,7 +2094,7 @@ router.get(
 				FROM "loan_applications" la
 				WHERE la.status IN ('ACTIVE', 'DISBURSED', 'PENDING_DISCHARGE', 'DISCHARGED')
 				AND la."updatedAt" >= ${thirtyDaysAgo}
-				GROUP BY DATE(la."updatedAt")
+				GROUP BY DATE(la."updatedAt" + INTERVAL '8 hours')
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
@@ -2117,28 +2102,26 @@ router.get(
 			}>;
 
 			// Get daily accrued interest (cumulative unpaid interest as of each date)
-			// This calculates the total accrued interest for each day in the last 30 days
+			// This calculates the total accrued interest for each day in the last 30 days using interestAmount field
 			const dailyAccruedInterest = [];
-			const todayDate = new Date();
 			
+			// Use Malaysia timezone for date iteration (UTC+8)
+			const nowUTC = new Date();
 			for (let i = 29; i >= 0; i--) {
-				const targetDate = new Date(todayDate);
-				targetDate.setDate(todayDate.getDate() - i);
+				const targetDate = new Date(nowUTC);
+				targetDate.setDate(nowUTC.getDate() - i);
+				// Set to end of day in MYT (which is 16:00 UTC = midnight MYT next day)
+				targetDate.setUTCHours(16, 0, 0, 0);
 				
-				// Calculate total accrued interest as of this date
+				// Calculate total accrued interest as of this date using interestAmount field
 				// (all unpaid repayments that were due on or before this date)
+				// Include ACTIVE, OVERDUE, DEFAULT - exclude DISCHARGED, PENDING_DISCHARGE, PENDING_EARLY_SETTLEMENT
 				const accruedResult = await prisma.$queryRaw`
 					SELECT 
-						ROUND(SUM(
-							CASE 
-								WHEN lr."scheduledAmount" > lr."principalAmount" 
-								THEN (lr."scheduledAmount" - lr."principalAmount") 
-								ELSE 0 
-							END
-						)::numeric, 2) as accrued_interest
+						ROUND(COALESCE(SUM(lr."interestAmount"), 0)::numeric, 2) as accrued_interest
 					FROM "loan_repayments" lr
 					JOIN "loans" l ON lr."loanId" = l.id
-					WHERE l.status = 'ACTIVE' 
+					WHERE l.status IN ('ACTIVE', 'OVERDUE', 'DEFAULT')
 					AND lr."paidAt" IS NULL
 					AND lr."dueDate" <= ${targetDate}
 				` as Array<{accrued_interest: number}>;
@@ -2152,12 +2135,12 @@ router.get(
 			// Get daily scheduled repayments using scheduledAmount from loan_repayments
 			const dailyScheduledRepayments = (await prisma.$queryRaw`
 				SELECT 
-					DATE(lr."dueDate") as date,
+					DATE(lr."dueDate" + INTERVAL '8 hours') as date,
 					ROUND(SUM(COALESCE(lr."scheduledAmount", lr.amount))::numeric, 2) as scheduled_repayments,
 					COUNT(*) as scheduled_count
 				FROM "loan_repayments" lr
 				WHERE lr."dueDate" >= ${thirtyDaysAgo}
-				GROUP BY DATE(lr."dueDate")
+				GROUP BY DATE(lr."dueDate" + INTERVAL '8 hours')
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
@@ -2168,12 +2151,12 @@ router.get(
 			// Get daily TLV using totalAmount from loans table
 			const dailyTLV = (await prisma.$queryRaw`
 				SELECT 
-					DATE(l."createdAt") as date,
+					DATE(l."createdAt" + INTERVAL '8 hours') as date,
 					ROUND(SUM(COALESCE(l."totalAmount", l."principalAmount"))::numeric, 2) as total_loan_value
 				FROM "loans" l
 				WHERE l.status IN ('ACTIVE', 'PENDING_DISCHARGE', 'DISCHARGED')
 				AND l."createdAt" >= ${thirtyDaysAgo}
-				GROUP BY DATE(l."createdAt")
+				GROUP BY DATE(l."createdAt" + INTERVAL '8 hours')
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
@@ -2181,14 +2164,15 @@ router.get(
 			}>;
 
 			// Calculate daily current loan value using actual outstanding balances
-			// Get the CORRECT current loan value by summing outstanding balances of active loans
+			// Include loans with outstanding amounts (ACTIVE, OVERDUE, DEFAULT)
+			// Exclude: PENDING_DISCHARGE (paid), PENDING_EARLY_SETTLEMENT (being settled), DISCHARGED (closed)
 			const actualCurrentLoanValue = await prisma.loan.aggregate({
 				_sum: {
 					outstandingBalance: true,
 				},
 				where: {
 					status: {
-						in: ["ACTIVE", "PENDING_DISCHARGE"],
+						in: ["ACTIVE", "OVERDUE", "DEFAULT"],
 					},
 				},
 			});
@@ -2196,35 +2180,42 @@ router.get(
 			// Start with actual current loan value and work day by day
 			let baselineLoanValue = actualCurrentLoanValue._sum.outstandingBalance || 0;
 
-			// Calculate daily changes for the 30-day period
+			// Calculate daily changes for the 30-day period using actual transaction data
 			const dailyCurrentLoanValue = [];
-			const currentDate = new Date();
 			
 			for (let i = 29; i >= 0; i--) {
-				const targetDate = new Date(currentDate);
-				targetDate.setDate(targetDate.getDate() - i);
+				const targetDate = new Date(nowUTC);
+				targetDate.setDate(nowUTC.getDate() - i);
+				// Set to end of day in MYT (16:00 UTC = midnight MYT next day)
+				targetDate.setUTCHours(16, 0, 0, 0);
 
 				let dailyValue;
 				if (i === 0) {
 					// Today should show the actual current loan value
 					dailyValue = baselineLoanValue;
 				} else {
-					// Simulate realistic loan portfolio progression over 30 days
-					// Loans generally decrease over time due to repayments, but new loans are added
-					const daysAgo = i;
+					// For historical days, calculate based on:
+					// Current outstanding + repayments made since that date - disbursements since that date
+					const repaymentsSinceDate = await prisma.$queryRaw`
+						SELECT ROUND(COALESCE(SUM(ABS(wt.amount)), 0)::numeric, 2) as total_repayments
+						FROM "wallet_transactions" wt
+						WHERE wt.type = 'LOAN_REPAYMENT' 
+						AND wt.status = 'APPROVED'
+						AND wt."processedAt" > ${targetDate}
+					` as Array<{total_repayments: number}>;
 					
-					// Base trend: slight decrease over time due to repayments
-					const repaymentTrend = baselineLoanValue * (daysAgo * 0.0015); // ~4.5% higher 30 days ago
+					const disbursementsSinceDate = await prisma.$queryRaw`
+						SELECT ROUND(COALESCE(SUM(ld.amount), 0)::numeric, 2) as total_disbursements
+						FROM "loan_disbursements" ld
+						WHERE ld.status = 'COMPLETED'
+						AND ld."disbursedAt" > ${targetDate}
+					` as Array<{total_disbursements: number}>;
 					
-					// Add some randomness for new loan disbursements and varying repayment amounts
-					const randomFactor = Math.sin(i * 0.7) * 0.008 + Math.cos(i * 1.3) * 0.005;
-					const randomVariation = baselineLoanValue * randomFactor;
+					const repayments = Number(repaymentsSinceDate[0]?.total_repayments) || 0;
+					const disbursements = Number(disbursementsSinceDate[0]?.total_disbursements) || 0;
 					
-					// Simulate occasional larger changes (new loan disbursements)
-					const bigChangeDay = i % 7 === 0 && i > 0; // Every 7 days
-					const bigChangeAmount = bigChangeDay ? baselineLoanValue * 0.02 : 0; // 2% increase
-					
-					dailyValue = Math.max(0, baselineLoanValue + repaymentTrend + randomVariation + bigChangeAmount);
+					// Historical value = current + repayments made since then - new loans disbursed since then
+					dailyValue = Math.max(0, baselineLoanValue + repayments - disbursements);
 				}
 
 				dailyCurrentLoanValue.push({
@@ -2314,12 +2305,34 @@ router.get(
 				])
 			);
 
+			// Get current values directly (same as dashboard calculation) for today's data
+			const currentOutstandingBalance = await prisma.loan.aggregate({
+				_sum: { outstandingBalance: true },
+				where: { status: { in: ["ACTIVE", "OVERDUE", "DEFAULT"] } },
+			});
+			const currentAccruedInterestResult = await prisma.$queryRaw`
+				SELECT ROUND(COALESCE(SUM(lr."interestAmount"), 0)::numeric, 2) as accrued_interest
+				FROM "loan_repayments" lr
+				JOIN "loans" l ON lr."loanId" = l.id
+				WHERE l.status IN ('ACTIVE', 'OVERDUE', 'DEFAULT')
+				AND lr."paidAt" IS NULL
+			` as Array<{accrued_interest: number}>;
+			
+			const todayCurrentLoanValue = currentOutstandingBalance._sum.outstandingBalance || 0;
+			const todayAccruedInterest = Number(currentAccruedInterestResult[0]?.accrued_interest) || 0;
+			
+			// Generate today's date key in Malaysia timezone (YYYY-MM-DD)
+			// MYT is UTC+8, so add 8 hours to current UTC time
+			const nowForKey = new Date(Date.now() + 8 * 60 * 60 * 1000);
+			const todayDateKey = nowForKey.toISOString().split('T')[0];
+
 			// Pre-generate all 30 days and format data
 			const dailyStats = [];
 			for (let i = 29; i >= 0; i--) {
-				const targetDate = new Date(thirtyDaysAgo);
-				targetDate.setDate(targetDate.getDate() + (29 - i));
-				const dateKey = targetDate.toISOString().split('T')[0];
+				// Generate date key in MYT
+				const targetDateForKey = new Date(Date.now() + 8 * 60 * 60 * 1000);
+				targetDateForKey.setDate(targetDateForKey.getDate() - i);
+				const dateKey = targetDateForKey.toISOString().split('T')[0];
 				
 				const applicationData = applicationMap.get(dateKey) || {
 					applications: 0,
@@ -2359,14 +2372,19 @@ router.get(
 					accrued_interest: 0,
 				};
 
+				// For today, use actual current values to match dashboard cards exactly
+				const isToday = dateKey === todayDateKey;
+				
 				dailyStats.push({
 					date: dateKey,
 					applications: applicationData.applications,
 					approvals: applicationData.approvals,
 					disbursements: applicationData.disbursements,
-					revenue: Math.round(repaymentsData.actual_repayments * 0.15 * 100) / 100, // Estimate 15% of repayments as interest revenue
+					revenue: Math.round(repaymentsData.actual_repayments * 0.15 * 100) / 100,
 					fees_earned: feesData.fees_earned,
-					accrued_interest: accruedInterestData.accrued_interest,
+					accrued_interest: isToday 
+						? Math.round(todayAccruedInterest * 100) / 100 
+						: accruedInterestData.accrued_interest,
 					disbursement_amount: disbursementData.total_amount,
 					disbursement_count: disbursementData.disbursement_count,
 					users: userData.users,
@@ -2380,10 +2398,9 @@ router.get(
 						) / 100,
 					total_loan_value:
 						Math.round(tlvData.total_loan_value * 100) / 100,
-					current_loan_value:
-						Math.round(
-							currentLoanValueData.current_loan_value * 100
-						) / 100,
+					current_loan_value: isToday 
+						? Math.round(todayCurrentLoanValue * 100) / 100 
+						: Math.round(currentLoanValueData.current_loan_value * 100) / 100,
 					repayment_count: repaymentsData.repayment_count,
 					scheduled_count: scheduledRepaymentsData.scheduled_count,
 				});
@@ -7601,17 +7618,25 @@ router.post(
 							}
 						});
 
-						// Mark all remaining future repayments as CANCELLED
-						await tx.loanRepayment.updateMany({
-							where: {
-								loanId: loan.id,
-								status: { in: ['PENDING', 'PARTIAL'] }
-							},
-							data: {
-								status: 'CANCELLED',
-								updatedAt: new Date()
-							}
-						});
+						// Mark all remaining repayments as CANCELLED and mark their late fees as paid
+						// (since late fees are included in the early settlement amount)
+						for (const repayment of repaymentsToCancel) {
+							// Get the full repayment to access lateFeeAmount
+							const fullRepayment = await tx.loanRepayment.findUnique({
+								where: { id: repayment.id },
+								select: { lateFeeAmount: true }
+							});
+							
+							await tx.loanRepayment.update({
+								where: { id: repayment.id },
+								data: {
+									status: 'CANCELLED',
+									// Mark late fees as fully paid since they're included in early settlement
+									lateFeesPaid: fullRepayment?.lateFeeAmount || 0,
+									updatedAt: new Date()
+								}
+							});
+						}
 
 						// Update transaction metadata to include original repayment statuses for reversion
 						await tx.walletTransaction.update({
@@ -7625,12 +7650,15 @@ router.post(
 							}
 						});
 
-						// Update loan status to PENDING_DISCHARGE and set outstanding balance to 0
+						// Update loan status to PENDING_DISCHARGE, set outstanding balance to 0, and clear default flags
 						const updatedLoan = await tx.loan.update({
 							where: { id: loan.id },
 							data: {
 								status: 'PENDING_DISCHARGE',
 								outstandingBalance: 0,
+								// Clear default flags since loan is now settled
+								defaultRiskFlaggedAt: null,
+								defaultedAt: null,
 								updatedAt: new Date()
 							},
 							include: {
@@ -8665,6 +8693,13 @@ async function calculateOutstandingBalance(loanId: string, tx: any) {
 
 	if (!loan) {
 		throw new Error(`Loan ${loanId} not found`);
+	}
+
+	// Skip recalculation for loans that have been settled/discharged
+	// Early settlement loans may have interest discounts that don't match the payment-based calculation
+	if (loan.status === "PENDING_DISCHARGE" || loan.status === "PENDING_EARLY_SETTLEMENT" || loan.status === "DISCHARGED") {
+		console.log(`Skipping outstanding balance recalculation for loan ${loanId} with status ${loan.status}`);
+		return loan.outstandingBalance;
 	}
 
 	// Get all APPROVED wallet transactions for this loan (actual payments made)

@@ -3116,6 +3116,63 @@ function ActiveLoansContent() {
 														);
 													}
 													
+													// Check if loan has overdue payments (late, default risk, defaulted)
+													const hasOverduePayments = selectedLoan.overdueInfo?.hasOverduePayments;
+													const isDefaulted = selectedLoan.status === "DEFAULT" || selectedLoan.defaultedAt;
+													const isDefaultRisk = selectedLoan.defaultRiskFlaggedAt && !selectedLoan.defaultedAt;
+													const daysLate = getDaysLate(selectedLoan);
+													const isLate = daysLate > 0;
+													
+													if (hasOverduePayments || isDefaulted || isDefaultRisk || isLate) {
+														// Calculate total amount to clear late status
+														const overdueAmount = selectedLoan.overdueInfo?.totalOverdueAmount || 0;
+														const overdueLateFees = selectedLoan.overdueInfo?.totalLateFees || 0;
+														const totalToClear = overdueAmount + overdueLateFees;
+														const overdueCount = selectedLoan.overdueInfo?.overdueRepayments?.length || 0;
+														
+														// Determine color based on status
+														let statusColor = "text-yellow-300";
+														let statusLabel = "Late Payment";
+														if (isDefaulted) {
+															statusColor = "text-red-300";
+															statusLabel = "Defaulted";
+														} else if (isDefaultRisk) {
+															statusColor = "text-rose-300";
+															statusLabel = "Default Risk";
+														} else if (daysLate > 30) {
+															statusColor = "text-red-300";
+															statusLabel = `${daysLate} Days Late`;
+														} else if (daysLate > 15) {
+															statusColor = "text-orange-300";
+															statusLabel = `${daysLate} Days Late`;
+														} else if (daysLate > 0) {
+															statusColor = "text-yellow-300";
+															statusLabel = `${daysLate} Days Late`;
+														}
+														
+														return (
+															<>
+																<p className="text-gray-400 text-sm mb-1">
+																	Amount to Clear
+																</p>
+																<p className={`text-2xl font-bold ${statusColor}`}>
+																	{formatCurrency(totalToClear)}
+																</p>
+																<p className="text-xs text-gray-400 mt-1">
+																	{overdueCount > 1 ? `${overdueCount} overdue payments` : "1 overdue payment"}
+																	{overdueLateFees > 0 && (
+																		<span className="block text-red-400">
+																			incl. {formatCurrency(overdueLateFees)} late fees
+																		</span>
+																	)}
+																</p>
+																<p className={`text-xs ${statusColor} mt-1 font-medium`}>
+																	{statusLabel}
+																</p>
+															</>
+														);
+													}
+													
 													return (
 														<>
 															<p className="text-gray-400 text-sm mb-1">
@@ -3160,17 +3217,49 @@ function ActiveLoansContent() {
 													const repayments =
 														selectedLoan.repayments ||
 														[];
-													const completedRepayments =
-														repayments.filter(
-															(r) =>
-																r.status ===
-																"COMPLETED"
-														);
+													
+													// Find early settlement repayment if exists
+													const earlySettlementRepayment = repayments.find(
+														(r) => r.paymentType === "EARLY_SETTLEMENT" && r.status === "COMPLETED"
+													);
+													const earlySettlementDate = earlySettlementRepayment 
+														? new Date(earlySettlementRepayment.actualPaymentDate || earlySettlementRepayment.paidAt || earlySettlementRepayment.createdAt)
+														: null;
+													
+													// Get all scheduled repayments (excluding early settlement type)
+													const scheduledRepayments = repayments.filter(
+														(r) => r.paymentType !== "EARLY_SETTLEMENT"
+													);
+													
+													// For early settlement loans, consider repayments that were due before settlement
+													// Completed payments
+													const completedRepayments = scheduledRepayments.filter(
+														(r) => r.status === "COMPLETED"
+													);
+													
+													// Cancelled repayments - split into overdue (missed) vs cleared early via settlement
+													const cancelledRepayments = scheduledRepayments.filter((r) => r.status === "CANCELLED");
+													
+													// Cancelled repayments that were overdue at time of early settlement (missed)
+													const cancelledOverdueRepayments = cancelledRepayments.filter((r) => {
+														if (!earlySettlementDate) return false;
+														const dueDate = new Date(r.dueDate);
+														// Was due before early settlement date (was overdue/missed)
+														return dueDate < earlySettlementDate;
+													});
+													
+													// Cancelled repayments that were NOT yet due at time of early settlement (cleared early)
+													const cancelledSettledEarlyRepayments = cancelledRepayments.filter((r) => {
+														if (!earlySettlementDate) return false;
+														const dueDate = new Date(r.dueDate);
+														// Was due on or after early settlement date (cleared early via settlement)
+														return dueDate >= earlySettlementDate;
+													});
+													
+													// Total repayments to consider = completed + all cancelled
+													const totalRepaymentsToConsider = completedRepayments.length + cancelledRepayments.length;
 
-													if (
-														completedRepayments.length ===
-														0
-													) {
+													if (totalRepaymentsToConsider === 0) {
 														return (
 															<>
 																<p className="text-gray-400 text-sm mb-1">
@@ -3182,12 +3271,13 @@ function ActiveLoansContent() {
 																</p>
 																<p className="text-xs text-gray-400 mt-1">
 																	No payments
-																	made yet
+																	due yet
 																</p>
 															</>
 														);
 													}
 
+													// On-time payments from completed repayments
 													const onTimeOrEarlyPayments =
 														completedRepayments.filter(
 															(r) => {
@@ -3207,13 +3297,41 @@ function ActiveLoansContent() {
 																);
 															}
 														);
+													
+													// Late payments from completed repayments
+													const latePayments = completedRepayments.filter((r) => {
+														const paymentDate = new Date(
+															r.actualPaymentDate || r.paidAt || r.createdAt
+														);
+														const dueDate = new Date(r.dueDate);
+														return paymentDate > dueDate;
+													});
+													
+													// Missed payments = cancelled overdue
+													const missedPayments = cancelledOverdueRepayments.length;
+													
+													// Settled early = cancelled but not yet due (count as on-time)
+													const settledEarlyPayments = cancelledSettledEarlyRepayments.length;
+													
+													// On-time includes both actual on-time payments AND those cleared early via settlement
+													const totalOnTime = onTimeOrEarlyPayments.length + settledEarlyPayments;
 
 													const percentage =
 														Math.round(
-															(onTimeOrEarlyPayments.length /
-																completedRepayments.length) *
+															(totalOnTime /
+																totalRepaymentsToConsider) *
 																100
 														);
+													
+													// Determine color based on performance
+													let performanceColor = "text-green-400";
+													if (percentage < 50) {
+														performanceColor = "text-red-400";
+													} else if (percentage < 75) {
+														performanceColor = "text-orange-400";
+													} else if (percentage < 100) {
+														performanceColor = "text-yellow-400";
+													}
 
 													return (
 														<>
@@ -3221,18 +3339,23 @@ function ActiveLoansContent() {
 																Payment
 																Performance
 															</p>
-															<p className="text-2xl font-bold text-white">
+															<p className={`text-2xl font-bold ${performanceColor}`}>
 																{percentage}%
 															</p>
 															<p className="text-xs text-gray-400 mt-1">
-																{
-																	onTimeOrEarlyPayments.length
-																}{" "}
-																of{" "}
-																{
-																	completedRepayments.length
-																}{" "}
-																on-time
+																{onTimeOrEarlyPayments.length} on-time
+																{settledEarlyPayments > 0 && (
+																	<span className="text-purple-400"> / {settledEarlyPayments} settled early</span>
+																)}
+																{latePayments.length > 0 && (
+																	<span className="text-yellow-400"> / {latePayments.length} late</span>
+																)}
+																{missedPayments > 0 && (
+																	<span className="text-red-400"> / {missedPayments} missed</span>
+																)}
+															</p>
+															<p className="text-xs text-gray-500 mt-0.5">
+																of {totalRepaymentsToConsider} scheduled
 															</p>
 														</>
 													);
@@ -4831,6 +4954,15 @@ function ActiveLoansContent() {
 																									)}
 																								</div>
 																								{(() => {
+																									// Check if this is an early settlement payment
+																									if (repayment.paymentType === "EARLY_SETTLEMENT") {
+																										return (
+																											<div className="text-xs text-purple-400 mt-1">
+																												Early Settlement
+																											</div>
+																										);
+																									}
+																									
 																									const paymentDate =
 																										new Date(
 																											repayment.actualPaymentDate ||

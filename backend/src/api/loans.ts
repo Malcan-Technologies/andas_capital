@@ -569,8 +569,11 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 
 		// Ensure outstanding balances are accurate by recalculating them for all active loans
 		// This ensures single source of truth even if there were any inconsistencies
+		// NOTE: Exclude PENDING_DISCHARGE and PENDING_EARLY_SETTLEMENT as their balances were set
+		// correctly during early settlement approval (which may include interest discounts that
+		// don't match the principalPaid-based calculation)
 		for (const loan of loans.filter(
-			(l) => l.status === "ACTIVE" || l.status === "OVERDUE" || l.status === "PENDING_DISCHARGE" || l.status === "PENDING_EARLY_SETTLEMENT" || l.status === "DEFAULT"
+			(l) => l.status === "ACTIVE" || l.status === "OVERDUE" || l.status === "DEFAULT"
 		)) {
 			await prisma.$transaction(async (tx) => {
 				// Import the calculation function from wallet API
