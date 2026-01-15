@@ -99,7 +99,8 @@ Add the following routes **in this exact order** (order matters!):
 | 13 | sign | clientdomain.com | `api/admin/*` | `http://localhost:4010` | Admin operations |
 | 14 | sign | clientdomain.com | `MTSAPilot/*` | `http://localhost:8080` | MTSA Pilot SOAP |
 | 15 | sign | clientdomain.com | `MTSA/*` | `http://localhost:8080` | MTSA Prod SOAP |
-| 16 | sign | clientdomain.com | `*` | `http://localhost:3001` | DocuSeal (catch-all) |
+| 16 | sign | clientdomain.com | `api/reset-cert-pin` | `http://localhost:4010` | PIN reset |
+| 17 | sign | clientdomain.com | `*` | `http://localhost:3001` | DocuSeal (catch-all) |
 
 **⚠️ Important:** The catch-all `*` route MUST be last. Cloudflare evaluates routes in order, so specific paths must come before the catch-all.
 

@@ -168,7 +168,7 @@ X-Login-Token: {login-token-from-pre-request}  // If using login token
 **Phone Verification Required (403):**
 ```json
 {
-  "message": "Phone verification required",
+  "message": "Please verify your phone number before logging in. We've sent a verification code to your WhatsApp.",
   "requiresPhoneVerification": true,
   "phoneNumber": "60123456789",
   "userId": "user-uuid"

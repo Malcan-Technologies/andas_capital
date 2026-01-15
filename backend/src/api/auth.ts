@@ -213,12 +213,12 @@ router.post("/login", loginRateLimiter, validateLoginToken as any, async (req, r
 				// Continue anyway, user can request resend
 			}
 
-			return res.status(403).json({ 
-				message: "Please verify your phone number before logging in. We've sent a verification code to your WhatsApp.",
-				requiresPhoneVerification: true,
-				phoneNumber: user.phoneNumber,
-				userId: user.id
-			});
+		return res.status(403).json({ 
+			message: "Please verify your phone number before logging in. We've sent a verification code to your WhatsApp.",
+			requiresPhoneVerification: true,
+			phoneNumber: user.phoneNumber,
+			userId: user.id
+		});
 		}
 
 		// Update last login time
