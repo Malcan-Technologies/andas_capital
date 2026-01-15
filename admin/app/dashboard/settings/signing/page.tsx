@@ -61,9 +61,11 @@ interface CertificateStatus {
     certSerialNo: string;
     validFrom: string;
     validTo: string;
+    subject?: string; // Subject DN from certificate
   };
   nextStep: 'kyc' | 'certificate' | 'enrollment' | 'complete' | 'verify-type';
   isExternalCert?: boolean; // True if user has external cert (needs internal enrollment)
+  isInternalCert?: boolean; // True if cert has EMP- serial (internal user)
 }
 
 interface KycSession {
@@ -209,9 +211,10 @@ export default function AdminSigningSettingsPage() {
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupResult, setLookupResult] = useState<{
     userInfo?: { fullName: string; email: string; phoneNumber: string };
-    certificateInfo?: { certStatus: string; certSerialNo: string; certValidFrom: string; certValidTo: string };
+    certificateInfo?: { certStatus: string; certSerialNo: string; certValidFrom: string; certValidTo: string; subject?: string; isInternalCert?: boolean };
     hasCertificate: boolean;
     alreadyExists: boolean;
+    isInternalCert?: boolean;
   } | null>(null);
   const [newSignerName, setNewSignerName] = useState('');
   const [newSignerEmail, setNewSignerEmail] = useState('');
@@ -278,18 +281,40 @@ export default function AdminSigningSettingsPage() {
       setCheckingCertificate(true);
       setError(null);
       
-      const response = await fetchWithAdminTokenRefresh<{ success: boolean; data?: { certStatus: string; certSerialNo: string; validFrom: string; validTo: string } }>(
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; data?: { certStatus: string; certSerialNo: string; validFrom: string; validTo: string; subject?: string } }>(
         `/api/admin/mtsa/cert-info/${userId}`
       );
       
       if (response.success && response.data?.certStatus === 'Valid') {
-        // Valid cert found - need to verify if it's internal (has PIN) or external (uses OTP)
-        setCertificateStatus({
-          hasValidCert: true,
-          message: 'A valid certificate was found. Please verify your PIN to confirm it is an internal signing certificate.',
-          certificateData: response.data,
-          nextStep: 'verify-type'
-        });
+        // Check if it's an internal certificate by looking for EMP- in the subject SERIALNUMBER
+        // Internal certs have: SERIALNUMBER=EMP-00001
+        // External certs have: SERIALNUMBER=<IC_NUMBER>
+        const subject = response.data.subject || '';
+        const serialNumberMatch = subject.match(/SERIALNUMBER=([^,]+)/);
+        const certSerialNumber = serialNumberMatch ? serialNumberMatch[1] : '';
+        const isInternalCert = certSerialNumber.startsWith('EMP-');
+        
+        if (isInternalCert) {
+          // Internal certificate detected - go straight to complete state with management options
+          setCertificateStatus({
+            hasValidCert: true,
+            message: 'You have a valid internal signing certificate.',
+            certificateData: response.data,
+            nextStep: 'complete',
+            isInternalCert: true,
+            isExternalCert: false
+          });
+        } else {
+          // External certificate (or unknown) - user needs to enroll as internal
+          setCertificateStatus({
+            hasValidCert: true,
+            message: 'You have an external (borrower) certificate. To sign as an internal user, you need to enroll for an internal certificate with PIN authentication.',
+            certificateData: response.data,
+            nextStep: 'kyc',
+            isInternalCert: false,
+            isExternalCert: true
+          });
+        }
       } else {
         try {
           const kycStatusResponse = await fetchWithAdminTokenRefresh<{ success: boolean; isAlreadyApproved?: boolean }>('/api/admin/kyc/status');
@@ -1082,6 +1107,14 @@ export default function AdminSigningSettingsPage() {
                           <Badge variant="success" className="ml-2">{certificateStatus.certificateData.certStatus}</Badge>
                         </div>
                         <div>
+                          <span className="text-gray-400">Type:</span>
+                          {certificateStatus.isInternalCert ? (
+                            <Badge variant="default" className="ml-2 bg-blue-600">Internal (PIN)</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="ml-2">External (OTP)</Badge>
+                          )}
+                        </div>
+                        <div>
                           <span className="text-gray-400">Serial Number:</span>
                           <span className="text-white ml-2 font-mono text-xs">{certificateStatus.certificateData.certSerialNo}</span>
                         </div>
@@ -1107,8 +1140,15 @@ export default function AdminSigningSettingsPage() {
                   <CardTitle className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-green-400" />
                     Certificate Management
+                    {certificateStatus.isInternalCert && (
+                      <Badge variant="default" className="ml-2 bg-blue-600">Internal</Badge>
+                    )}
                   </CardTitle>
-                  <CardDescription>Your digital certificate is active and ready for signing.</CardDescription>
+                  <CardDescription>
+                    {certificateStatus.isInternalCert 
+                      ? 'Your internal signing certificate is active. Use your 8-digit PIN when signing documents.'
+                      : 'Your digital certificate is active and ready for signing.'}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-3">
@@ -1138,21 +1178,33 @@ export default function AdminSigningSettingsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <ShieldCheck className="h-5 w-5 text-blue-400" />
-                    Verify Certificate Type
+                    <ShieldCheck className="h-5 w-5 text-green-400" />
+                    Verify Your PIN
                   </CardTitle>
                   <CardDescription>
-                    A valid certificate was found. Enter your 8-digit PIN to verify it is an internal signing certificate.
+                    {certificateStatus.isInternalCert 
+                      ? 'Internal signing certificate detected. Enter your 8-digit PIN to complete setup.'
+                      : 'A valid certificate was found. Enter your 8-digit PIN to verify it is an internal signing certificate.'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Alert variant="info">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      Internal certificates use an 8-digit PIN for signing. External (borrower) certificates use email OTP.
-                      If you enrolled as a borrower previously, you will need to enroll a new internal certificate.
-                    </AlertDescription>
-                  </Alert>
+                  {certificateStatus.isInternalCert ? (
+                    <Alert variant="success">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertDescription>
+                        Your certificate is registered as an internal signing certificate (Employee ID detected).
+                        Please verify your PIN to activate signing capabilities.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <Alert variant="info">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        Internal certificates use an 8-digit PIN for signing. External (borrower) certificates use email OTP.
+                        If you enrolled as a borrower previously, you will need to enroll a new internal certificate.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   {certificateStatus.certificateData && (
                     <div className="p-4 bg-gray-800 rounded-lg">
@@ -1783,13 +1835,24 @@ export default function AdminSigningSettingsPage() {
                   ) : (
                     <>
                       {lookupResult.hasCertificate ? (
-                        <Alert variant="success">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <AlertDescription>
-                            Valid certificate found: {lookupResult.certificateInfo?.certStatus}.
-                            After adding, they will need to verify their PIN to confirm it&apos;s an internal certificate.
-                          </AlertDescription>
-                        </Alert>
+                        lookupResult.isInternalCert ? (
+                          <Alert variant="success">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <AlertDescription>
+                              <strong>Internal certificate detected</strong> ({lookupResult.certificateInfo?.certStatus}).
+                              After adding, they will need to verify their PIN to complete registration.
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <Alert variant="warning">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertDescription>
+                              <strong>External (borrower) certificate found.</strong> This user has a certificate but it&apos;s 
+                              registered for external signing (uses email OTP). They need to enroll for an internal certificate 
+                              with PIN authentication to be added as an internal signer.
+                            </AlertDescription>
+                          </Alert>
+                        )
                       ) : (
                         <Alert variant="warning">
                           <AlertTriangle className="h-4 w-4" />
@@ -1839,7 +1902,7 @@ export default function AdminSigningSettingsPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddSignerDialog(false)}>Cancel</Button>
-              {lookupResult && !lookupResult.alreadyExists && (
+              {lookupResult && !lookupResult.alreadyExists && lookupResult.isInternalCert && (
                 <Button onClick={handleAddSigner} disabled={addingSigner || !newSignerName || !newSignerEmail}>
                   {addingSigner && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Add as Pending

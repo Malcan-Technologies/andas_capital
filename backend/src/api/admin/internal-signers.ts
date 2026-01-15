@@ -131,6 +131,14 @@ router.get('/lookup/:icNumber', authenticateToken, requireAdminOrAttestor, async
 
     const certData = await certResponse.json();
 
+    // Detect if it's an internal certificate by checking the subject SERIALNUMBER
+    // Internal certs have: SERIALNUMBER=EMP-XXXXX
+    // External certs have: SERIALNUMBER=<IC_NUMBER>
+    const subject = certData.data?.subject || '';
+    const serialNumberMatch = subject.match(/SERIALNUMBER=([^,]+)/);
+    const certSerialNumber = serialNumberMatch ? serialNumberMatch[1] : '';
+    const isInternalCert = certSerialNumber.startsWith('EMP-');
+
     return res.json({
       success: true,
       alreadyExists: false,
@@ -146,10 +154,15 @@ router.get('/lookup/:icNumber', authenticateToken, requireAdminOrAttestor, async
         certSerialNo: certData.data?.certSerialNo,
         certValidFrom: certData.data?.certValidFrom || certData.data?.validFrom,
         certValidTo: certData.data?.certValidTo || certData.data?.validTo,
+        subject: certData.data?.subject,
+        isInternalCert: isInternalCert
       } : null,
       hasCertificate: certData.success && certData.data?.certStatus === 'Valid',
+      isInternalCert: certData.success && isInternalCert,
       message: certData.success 
-        ? `Certificate found: ${certData.data?.certStatus}` 
+        ? isInternalCert
+          ? `Internal certificate found (${certSerialNumber}): ${certData.data?.certStatus}`
+          : `External certificate found: ${certData.data?.certStatus}. User needs internal certificate enrollment.`
         : 'No certificate found for this IC number'
     });
   } catch (error) {
