@@ -24,6 +24,9 @@ import {
 	PencilIcon,
 	PlusIcon,
 	DocumentCheckIcon,
+	ClipboardDocumentCheckIcon,
+	XCircleIcon,
+	FolderIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -160,6 +163,9 @@ interface LoanData {
 			lateFeeRate?: number;
 			lateFeeFixedAmount?: number;
 			lateFeeFrequencyDays?: number;
+			// Document requirements
+			requiredDocuments?: string[];
+			collateralRequired?: boolean;
 		};
 		user: {
 			id: string;
@@ -185,6 +191,15 @@ interface LoanData {
 			icNumber?: string;
 			idNumber?: string;
 		};
+		// Documents associated with this application
+		documents?: {
+			id: string;
+			type: string;
+			status: string;
+			fileUrl: string;
+			createdAt: string;
+			updatedAt?: string;
+		}[];
 	};
 	user: {
 		id: string;
@@ -1863,6 +1878,14 @@ function ActiveLoansContent() {
 		newStatus: string,
 		changeReason?: string
 	): string => {
+		// Handle document-related events with readable descriptions
+		if (newStatus === "DOCUMENT_UPLOADED") {
+			return "Document Uploaded";
+		}
+		if (newStatus === "DOCUMENT_DELETED") {
+			return "Document Deleted";
+		}
+		
 		// If changeReason is provided, use it directly
 		if (changeReason) {
 			return changeReason;
@@ -1875,6 +1898,50 @@ function ActiveLoansContent() {
 
 		// Otherwise, this is a status change
 		return `Status changed to ${getStatusLabel(newStatus)}`;
+	};
+
+	// Document helper functions for Documents tab
+	const getDocumentTypeName = (type: string): string => {
+		const documentTypeMap: Record<string, string> = {
+			ID: "Identification Document",
+			PAYSLIP: "Pay Slip",
+			BANK_STATEMENT: "Bank Statement",
+			UTILITY_BILL: "Utility Bill",
+			EMPLOYMENT_LETTER: "Employment Letter",
+			OTHER: "Other Document",
+		};
+		return documentTypeMap[type] || type;
+	};
+
+	const getDocumentStatusColor = (
+		status: string
+	): { bg: string; text: string } => {
+		const statusMap: Record<string, { bg: string; text: string }> = {
+			PENDING: { bg: "bg-yellow-500/20", text: "text-yellow-200" },
+			APPROVED: { bg: "bg-green-500/20", text: "text-green-200" },
+			REJECTED: { bg: "bg-red-500/20", text: "text-red-200" },
+		};
+		return statusMap[status] || { bg: "bg-gray-500/20", text: "text-gray-300" };
+	};
+
+	// Format document URL for viewing
+	const formatDocumentUrl = (fileUrl: string, documentId: string, applicationId: string): string => {
+		if (!fileUrl) return "";
+
+		// If the URL already includes http(s), it's already an absolute URL
+		if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+			return fileUrl;
+		}
+
+		// For relative URLs, use the loan-applications API endpoint
+		if (applicationId && documentId) {
+			return `${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${applicationId}/documents/${documentId}`;
+		}
+
+		// Fallback to direct file access
+		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+		const cleanFileUrl = fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl;
+		return `${backendUrl}/${cleanFileUrl}`;
 	};
 
 	const getNextPaymentDetails = (repayments: LoanRepayment[]) => {
@@ -2985,6 +3052,17 @@ function ActiveLoansContent() {
 									>
 										<PencilIcon className="inline h-4 w-4 mr-1" />
 										Signatures
+									</div>
+									<div
+										className={`px-4 py-2 cursor-pointer transition-colors ${
+											selectedTab === "documents"
+												? "border-b-2 border-blue-400 font-medium text-white"
+												: "text-gray-400 hover:text-gray-200"
+										}`}
+										onClick={() => setSelectedTab("documents")}
+									>
+										<FolderIcon className="inline h-4 w-4 mr-1" />
+										Documents
 									</div>
 									{/* Only show Default Letters tab for loans that need default-related letters */}
 									{(() => {
@@ -5660,6 +5738,10 @@ function ActiveLoansContent() {
 															<div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
 															<span className="text-gray-400">Payment Transactions</span>
 														</div>
+														<div className="flex items-center">
+															<div className="w-2 h-2 bg-cyan-400 rounded-full mr-2"></div>
+															<span className="text-gray-400">Document Changes</span>
+														</div>
 													</div>
 												</div>
 												<div className="overflow-y-auto max-h-[60vh]">
@@ -5706,7 +5788,12 @@ function ActiveLoansContent() {
 																			<div className="flex items-start space-x-3">
 																				<div className="flex-shrink-0 mt-1">
 																					<div className={`w-2 h-2 rounded-full ${
-																						event.data.changedBy?.toLowerCase().includes('system')
+																						// Document-related events get cyan color
+																						event.data.newStatus === 'DOCUMENT_UPLOADED' || 
+																						event.data.newStatus === 'DOCUMENT_DELETED' ||
+																						event.data.changeReason?.includes('DOCUMENT')
+																							? "bg-cyan-400"
+																							: event.data.changedBy?.toLowerCase().includes('system')
 																							? "bg-blue-400" 
 																							: event.data.changedBy && (
 																								event.data.changedBy.startsWith('admin_') || 
@@ -5934,6 +6021,239 @@ function ActiveLoansContent() {
 												</div>
 											)}
 										</div>
+									</div>
+								)}
+
+								{/* Documents Tab - Read Only */}
+								{selectedTab === "documents" && (
+									<div className="space-y-6">
+										{(() => {
+											// Normalize document types - remove surrounding quotes if present
+											const normalizeDocType = (docType: string | unknown): string => {
+												if (typeof docType !== 'string') return String(docType);
+												return docType.replace(/^["']|["']$/g, '').trim();
+											};
+											
+											const rawRequiredDocs = selectedLoan.application?.product?.requiredDocuments || [];
+											const requiredDocs = rawRequiredDocs.map(normalizeDocType);
+											const uploadedDocs = selectedLoan.application?.documents || [];
+											const uploadedDocTypes = Array.from(new Set(uploadedDocs.map(d => normalizeDocType(d.type))));
+											const missingDocs = requiredDocs.filter((docType: string) => !uploadedDocTypes.includes(docType));
+											const hasAllDocs = missingDocs.length === 0 && requiredDocs.length > 0;
+											const isCollateralLoan = selectedLoan.application?.product?.collateralRequired === true;
+											
+											return (
+												<>
+													{/* Summary Banner */}
+													<div className={`rounded-lg p-4 border ${
+														isCollateralLoan 
+															? "bg-amber-500/10 border-amber-500/30"
+															: hasAllDocs 
+																? "bg-green-500/10 border-green-500/30" 
+																: requiredDocs.length === 0
+																	? "bg-gray-700/30 border-gray-600/30"
+																	: "bg-amber-500/10 border-amber-500/30"
+													}`}>
+														<div className="flex items-center justify-between">
+															<div className="flex items-center">
+																{isCollateralLoan ? (
+																	<ClipboardDocumentCheckIcon className="h-5 w-5 text-amber-400 mr-2" />
+																) : hasAllDocs ? (
+																	<CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+																) : requiredDocs.length === 0 ? (
+																	<DocumentTextIcon className="h-5 w-5 text-gray-400 mr-2" />
+																) : (
+																	<ExclamationTriangleIcon className="h-5 w-5 text-amber-400 mr-2" />
+																)}
+																<div>
+																	<p className={`font-medium ${
+																		isCollateralLoan 
+																			? "text-amber-200"
+																			: hasAllDocs 
+																				? "text-green-200" 
+																				: requiredDocs.length === 0
+																					? "text-gray-300"
+																					: "text-amber-200"
+																	}`}>
+																		{isCollateralLoan 
+																			? "Collateral Loan - Documents Optional"
+																			: hasAllDocs 
+																				? "All Required Documents Uploaded" 
+																				: requiredDocs.length === 0
+																					? "No Required Documents for this Product"
+																					: `${missingDocs.length} of ${requiredDocs.length} Required Documents Missing`}
+																	</p>
+																	<p className="text-xs text-gray-400 mt-0.5">
+																		{uploadedDocs.length} document{uploadedDocs.length !== 1 ? 's' : ''} uploaded
+																		{requiredDocs.length > 0 && ` • ${requiredDocs.length} required by product`}
+																	</p>
+																</div>
+															</div>
+															<span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-1 rounded">
+																Read Only
+															</span>
+														</div>
+													</div>
+
+													{/* Required Documents Checklist */}
+													{requiredDocs.length > 0 && (
+														<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+															<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+																<ClipboardDocumentCheckIcon className="h-5 w-5 mr-2 text-blue-400" />
+																Required Documents
+															</h4>
+															<div className="space-y-3">
+																{requiredDocs.map((docType: string) => {
+																	const uploadedForType = uploadedDocs.filter(d => normalizeDocType(d.type) === docType);
+																	const hasUpload = uploadedForType.length > 0;
+																	const allApproved = hasUpload && uploadedForType.every(d => d.status === 'APPROVED');
+																	const hasRejected = hasUpload && uploadedForType.some(d => d.status === 'REJECTED');
+																	
+																	return (
+																		<div key={docType} className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30">
+																			<div className="flex justify-between items-start">
+																				<div className="flex items-start">
+																					<div className={`mt-0.5 mr-3 rounded-full p-1 ${
+																						allApproved 
+																							? "bg-green-500/20" 
+																							: hasRejected 
+																								? "bg-red-500/20"
+																								: hasUpload 
+																									? "bg-amber-500/20" 
+																									: "bg-gray-600/20"
+																					}`}>
+																						{allApproved ? (
+																							<CheckCircleIcon className="h-4 w-4 text-green-400" />
+																						) : hasRejected ? (
+																							<XCircleIcon className="h-4 w-4 text-red-400" />
+																						) : hasUpload ? (
+																							<ClockIcon className="h-4 w-4 text-amber-400" />
+																						) : (
+																							<XMarkIcon className="h-4 w-4 text-gray-500" />
+																						)}
+																					</div>
+																					<div>
+																						<p className="text-white font-medium">{getDocumentTypeName(docType)}</p>
+																						<p className="text-xs text-gray-400 mt-0.5">
+																							{!hasUpload 
+																								? "Not uploaded" 
+																								: allApproved 
+																									? `${uploadedForType.length} file(s) approved`
+																									: hasRejected
+																										? "Needs re-upload"
+																										: `${uploadedForType.length} file(s) pending review`}
+																						</p>
+																					</div>
+																				</div>
+																				<span className={`px-2 py-1 text-xs rounded-full ${
+																					allApproved 
+																						? "bg-green-500/20 text-green-200 border border-green-400/30"
+																						: hasRejected 
+																							? "bg-red-500/20 text-red-200 border border-red-400/30"
+																							: hasUpload 
+																								? "bg-amber-500/20 text-amber-200 border border-amber-400/30"
+																								: "bg-gray-600/20 text-gray-400 border border-gray-500/30"
+																				}`}>
+																					{allApproved ? "Approved" : hasRejected ? "Rejected" : hasUpload ? "Pending" : "Missing"}
+																				</span>
+																			</div>
+																			
+																			{/* Show uploaded files for this type */}
+																			{hasUpload && (
+																				<div className="mt-3 pl-8 space-y-2">
+																					{uploadedForType.map((doc) => (
+																						<div key={doc.id} className="flex items-center justify-between text-sm bg-gray-700/30 rounded px-3 py-2">
+																							<span className="text-gray-300 truncate max-w-[200px]">
+																								{doc.fileUrl.split('/').pop()}
+																							</span>
+																							<div className="flex items-center space-x-2">
+																								<span className={`px-1.5 py-0.5 text-xs rounded ${
+																									getDocumentStatusColor(doc.status).bg
+																								} ${getDocumentStatusColor(doc.status).text}`}>
+																									{doc.status}
+																								</span>
+																								<a
+																									href={formatDocumentUrl(doc.fileUrl, doc.id, selectedLoan.applicationId)}
+																									target="_blank"
+																									rel="noopener noreferrer"
+																									className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
+																								>
+																									View
+																								</a>
+																							</div>
+																						</div>
+																					))}
+																				</div>
+																			)}
+																		</div>
+																	);
+																})}
+															</div>
+														</div>
+													)}
+
+													{/* Additional Documents (uploaded but not in required list) */}
+													{(() => {
+														const additionalDocs = uploadedDocs.filter(
+															(doc) => !requiredDocs.includes(normalizeDocType(doc.type))
+														);
+														if (additionalDocs.length === 0) return null;
+														
+														return (
+															<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+																<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+																	<DocumentTextIcon className="h-5 w-5 mr-2 text-purple-400" />
+																	Additional Documents
+																</h4>
+																<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+																	{additionalDocs.map((doc) => (
+																		<div
+																			key={doc.id}
+																			className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30"
+																		>
+																			<div className="flex justify-between items-center mb-2">
+																				<span className="text-sm font-medium text-white">
+																					{getDocumentTypeName(doc.type)}
+																				</span>
+																				<span
+																					className={`px-2 py-1 text-xs rounded-full ${
+																						getDocumentStatusColor(doc.status).bg
+																					} ${getDocumentStatusColor(doc.status).text}`}
+																				>
+																					{doc.status}
+																				</span>
+																			</div>
+																			<p className="text-xs text-gray-400 truncate mb-2">
+																				{doc.fileUrl.split('/').pop()}
+																			</p>
+																			<a
+																				href={formatDocumentUrl(doc.fileUrl, doc.id, selectedLoan.applicationId)}
+																				target="_blank"
+																				rel="noopener noreferrer"
+																				className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30 inline-block"
+																			>
+																				View Document
+																			</a>
+																		</div>
+																	))}
+																</div>
+															</div>
+														);
+													})()}
+
+													{/* No documents message */}
+													{uploadedDocs.length === 0 && requiredDocs.length === 0 && (
+														<div className="border border-gray-700/50 rounded-lg p-8 bg-gray-800/50 text-center">
+															<FolderIcon className="mx-auto h-12 w-12 text-gray-500 mb-4" />
+															<h4 className="text-white font-medium mb-2">No Documents</h4>
+															<p className="text-gray-400 text-sm">
+																No documents have been uploaded for this loan application.
+															</p>
+														</div>
+													)}
+												</>
+											);
+										})()}
 									</div>
 								)}
 							</div>

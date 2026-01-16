@@ -5366,15 +5366,39 @@ router.post(
 				});
 			}
 
-			// Create document record
-			const document = await prisma.userDocument.create({
-				data: {
-					userId: application.userId,
-					applicationId: applicationId,
-					type: documentType,
-					fileUrl: uploadResult.key,
-					status: "PENDING",
-				},
+			// Create document record and audit trail entry in a transaction
+			const document = await prisma.$transaction(async (tx) => {
+				const doc = await tx.userDocument.create({
+					data: {
+						userId: application.userId,
+						applicationId: applicationId,
+						type: documentType,
+						fileUrl: uploadResult.key!, // Already validated above
+						status: "PENDING",
+					},
+				});
+
+				// Add audit trail entry
+				await tx.loanApplicationHistory.create({
+					data: {
+						applicationId: applicationId,
+						previousStatus: null,
+						newStatus: "DOCUMENT_UPLOADED",
+						changedBy: req.user?.userId || "ADMIN",
+						changeReason: "ADMIN_DOCUMENT_UPLOAD",
+						notes: `Admin uploaded document: ${documentType} (${file.originalname})`,
+						metadata: {
+							documentId: doc.id,
+							documentType: documentType,
+							fileName: file.originalname,
+							fileSize: file.size,
+							action: "UPLOAD",
+							timestamp: new Date().toISOString(),
+						},
+					},
+				});
+
+				return doc;
 			});
 
 			console.log(`Admin ${req.user?.userId} uploaded document ${document.id} for application ${applicationId}`);
@@ -5464,9 +5488,31 @@ router.delete(
 				}
 			}
 
-			// Delete the document record
-			await prisma.userDocument.delete({
-				where: { id: documentId },
+			// Delete the document record and add audit trail in a transaction
+			await prisma.$transaction(async (tx) => {
+				// Delete the document
+				await tx.userDocument.delete({
+					where: { id: documentId },
+				});
+
+				// Add audit trail entry
+				await tx.loanApplicationHistory.create({
+					data: {
+						applicationId: applicationId,
+						previousStatus: null,
+						newStatus: "DOCUMENT_DELETED",
+						changedBy: req.user?.userId || "ADMIN",
+						changeReason: "ADMIN_DOCUMENT_DELETE",
+						notes: `Admin deleted document: ${document.type} (${document.fileUrl?.split('/').pop() || 'unknown'})`,
+						metadata: {
+							documentId: documentId,
+							documentType: document.type,
+							fileName: document.fileUrl?.split('/').pop() || null,
+							action: "DELETE",
+							timestamp: new Date().toISOString(),
+						},
+					},
+				});
 			});
 
 			console.log(`Admin ${req.user?.userId} deleted document ${documentId} from application ${applicationId}`);
@@ -5594,6 +5640,9 @@ router.get(
 									lateFeeRate: true,
 									lateFeeFixedAmount: true,
 									lateFeeFrequencyDays: true,
+									// Document requirements
+									requiredDocuments: true,
+									collateralRequired: true,
 								},
 							},
 							user: {
@@ -5624,6 +5673,20 @@ router.get(
 									emergencyContactName: true,
 									emergencyContactPhone: true,
 									emergencyContactRelationship: true,
+								},
+							},
+							// Documents associated with this application
+							documents: {
+								select: {
+									id: true,
+									type: true,
+									status: true,
+									fileUrl: true,
+									createdAt: true,
+									updatedAt: true,
+								},
+								orderBy: {
+									createdAt: "desc",
 								},
 							},
 						},

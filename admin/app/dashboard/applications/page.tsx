@@ -1593,6 +1593,16 @@ function AdminApplicationsPageContent() {
       return "Admin fetched credit report from CTOS";
     }
 
+    // Handle document upload by admin
+    if (changeReason === "ADMIN_DOCUMENT_UPLOAD" || newStatus === "DOCUMENT_UPLOADED") {
+      return "Admin uploaded document";
+    }
+
+    // Handle document deletion by admin
+    if (changeReason === "ADMIN_DOCUMENT_DELETE" || newStatus === "DOCUMENT_DELETED") {
+      return "Admin deleted document";
+    }
+
     if (!previousStatus) {
       return `Application created with status: ${getStatusLabel(newStatus)}`;
     }
