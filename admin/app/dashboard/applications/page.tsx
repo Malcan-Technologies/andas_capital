@@ -43,6 +43,7 @@ import {
   Cog6ToothIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 
 interface LoanApplication {
   id: string;
@@ -867,10 +868,10 @@ function AdminApplicationsPageContent() {
       }
 
       setEditingIcNumber(false);
-      alert("IC number updated successfully");
+      toast.success("IC number updated successfully");
     } catch (error) {
       console.error("Error updating IC number:", error);
-      alert(
+      toast.error(
         `Failed to update IC number: ${
           error instanceof Error ? error.message : "Unknown error"
         }`
@@ -1270,10 +1271,8 @@ function AdminApplicationsPageContent() {
 
       // Handle specific error cases
       if (error.error === "LOAN_ALREADY_DISBURSED") {
-        alert(
-          `❌ Cannot modify this application.\n\n` +
-            `This loan has already been disbursed and cannot be changed.\n` +
-            `Disbursed: ${
+        toast.error(
+          `Cannot modify this application. This loan has already been disbursed. Disbursed: ${
               error.disbursedAt
                 ? new Date(error.disbursedAt).toLocaleString()
                 : "Unknown"
@@ -1287,15 +1286,8 @@ function AdminApplicationsPageContent() {
         setShowStatusChangeAlert(true);
       } else if (error.error === "STATUS_CONFLICT") {
         // Show notification and automatically refresh
-        alert(
-          `⚠️ Status Conflict Detected\n\n` +
-            `Another admin has already changed this application's status.\n\n` +
-            `Expected: ${error.expectedStatus}\n` +
-            `Current: ${error.actualStatus}\n` +
-            `Last updated: ${new Date(
-              error.lastUpdated
-            ).toLocaleString()}\n\n` +
-            `The page will automatically refresh to show the current status.`
+        toast.warning(
+          `Status Conflict: Another admin changed this application. Expected: ${error.expectedStatus}, Current: ${error.actualStatus}. Page will refresh.`
         );
 
         // Automatically refresh to keep all admins in sync
@@ -1312,9 +1304,8 @@ function AdminApplicationsPageContent() {
         // Show status change alert to indicate the page was refreshed
         setShowStatusChangeAlert(true);
       } else {
-        alert(
-          `Failed to update status: ${error.message || "Unknown error"}\n\n` +
-            `Please try again or refresh the page.`
+        toast.error(
+          `Failed to update status: ${error.message || "Unknown error"}. Please try again.`
         );
       }
     }
@@ -1486,7 +1477,7 @@ function AdminApplicationsPageContent() {
       }
     } catch (error) {
       console.error("Error updating document status:", error);
-      alert(
+      toast.error(
         "Failed to update document status. API endpoint may not be implemented yet."
       );
     }
@@ -1625,7 +1616,7 @@ function AdminApplicationsPageContent() {
       }
     } catch (error: any) {
       console.error('Error deleting document:', error);
-      alert(error.message || 'Failed to delete document');
+      toast.error(error.message || 'Failed to delete document');
     }
   };
 
@@ -1695,6 +1686,11 @@ function AdminApplicationsPageContent() {
       setDecisionNotes("");
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
+      
+      // Show success toast
+      toast.success(decision === "approve" 
+        ? `Application approved for ${selectedApplication.user?.fullName}` 
+        : `Application rejected for ${selectedApplication.user?.fullName}`);
     } catch (error) {
       console.error(`Error ${decision}ing application:`, error);
       // Error handling is already done in handleStatusChange
@@ -1727,6 +1723,11 @@ function AdminApplicationsPageContent() {
       setCollateralNotes("");
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
+      
+      // Show success toast
+      toast.success(decision === "approve" 
+        ? `Collateral approved for ${selectedApplication.user?.fullName}` 
+        : `Collateral rejected for ${selectedApplication.user?.fullName}`);
     } catch (error) {
       console.error(`Error ${decision}ing collateral application:`, error);
       // Error handling is already done in handleStatusChange
@@ -1805,6 +1806,9 @@ function AdminApplicationsPageContent() {
         setSelectedApplication((prev) =>
           prev ? { ...prev, status: "PENDING_SIGNATURE" } : null
         );
+        
+        // Show success toast
+        toast.success(`Attestation completed for ${selectedApplication.user?.fullName}`);
       } else {
         const errorData = await response.json();
         console.error("Attestation completion error:", errorData);
@@ -1871,6 +1875,9 @@ function AdminApplicationsPageContent() {
         setSelectedApplication((prev) =>
           prev ? { ...prev, status: "ACTIVE" } : null
         );
+        
+        // Show success toast
+        toast.success(`Loan disbursed successfully for ${selectedApplication.user?.fullName}`);
       } else {
         const errorData = await response.json();
         console.error("Disbursement error:", errorData);
@@ -1913,14 +1920,14 @@ function AdminApplicationsPageContent() {
 
       const data = await response.json();
 
-      alert("Payment slip uploaded successfully");
+      toast.success("Payment slip uploaded successfully");
       setDisbursementSlipFile(null);
 
       // Refresh application data
       await fetchApplications();
     } catch (error) {
       console.error("Error uploading payment slip:", error);
-      alert(
+      toast.error(
         error instanceof Error ? error.message : "Failed to upload payment slip"
       );
     } finally {
@@ -2029,6 +2036,9 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       setSelectedApplication((prev) =>
         prev ? { ...prev, status: "PENDING_FRESH_OFFER" } : null
       );
+      
+      // Show success toast
+      toast.success(`Fresh offer sent to ${selectedApplication.user?.fullName}`);
     } catch (error) {
       console.error("Error submitting fresh offer:", error);
       setError("Failed to submit fresh offer");
@@ -5309,7 +5319,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   "Error downloading signed agreement:",
                                   error
                                 );
-                                alert("Failed to download signed agreement");
+                                toast.error("Failed to download signed agreement");
                               }
                             }}
                             className="flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
@@ -5356,7 +5366,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                     "Error downloading stamp certificate:",
                                     error
                                   );
-                                  alert("Failed to download stamp certificate");
+                                  toast.error("Failed to download stamp certificate");
                                 }
                               }}
                               className="flex items-center justify-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
@@ -5450,7 +5460,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           <button
                             onClick={async () => {
                               if (!stampCertificateFile) {
-                                alert("Please select a stamp certificate file");
+                                toast.warning("Please select a stamp certificate file");
                                 return;
                               }
 
@@ -5465,7 +5475,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 const loanId = selectedApplication.loan?.id;
 
                                 if (!loanId) {
-                                  alert(
+                                  toast.error(
                                     "Missing loan ID. Please refresh and ensure the application has a linked loan."
                                   );
                                   return;
@@ -5526,15 +5536,15 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 await fetchApplications();
 
                                 const message = replacingStampCertificate
-                                  ? 'Stamp certificate replaced successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.'
-                                  : 'Stamp certificate uploaded successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.';
-                                alert(message);
+                                  ? 'Stamp certificate replaced! Click "Confirm Stamping & Proceed to Disbursement" to continue.'
+                                  : 'Stamp certificate uploaded! Click "Confirm Stamping & Proceed to Disbursement" to continue.';
+                                toast.success(message);
                               } catch (error) {
                                 console.error(
                                   "Error uploading stamp certificate:",
                                   error
                                 );
-                                alert(
+                                toast.error(
                                   `Failed to upload stamp certificate: ${
                                     error instanceof Error
                                       ? error.message
@@ -5595,7 +5605,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                     );
                                   }
 
-                                  alert(
+                                  toast.success(
                                     "Stamping confirmed! Application moved to PENDING_DISBURSEMENT."
                                   );
 
@@ -5622,7 +5632,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                     "❌ Error confirming stamping:",
                                     error
                                   );
-                                  alert(
+                                  toast.error(
                                     `Failed to confirm stamping: ${
                                       error instanceof Error
                                         ? error.message

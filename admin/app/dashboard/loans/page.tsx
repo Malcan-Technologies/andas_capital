@@ -29,6 +29,7 @@ import {
 	FolderIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 
 interface LoanRepayment {
 	id: string;
@@ -569,11 +570,11 @@ function ActiveLoansContent() {
 				a.download = `disbursement-slip-${refNumber}.pdf`;
 				a.click();
 			} else {
-				alert('Payment slip not found');
+				toast.error('Payment slip not found');
 			}
 		} catch (error) {
 			console.error('Error downloading slip:', error);
-			alert('Failed to download payment slip');
+			toast.error('Failed to download payment slip');
 		}
 	};
 
@@ -584,14 +585,14 @@ function ActiveLoansContent() {
 		// Check file size (10MB limit set by backend Multer)
 		const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
 		if (file.size > MAX_FILE_SIZE) {
-			alert(`File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds the maximum limit of 10MB. Please compress the file or use a smaller file.`);
+			toast.warning(`File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 10MB limit. Please compress or use a smaller file.`);
 			fileInput.value = ''; // Clear file input
 			return;
 		}
 
 		// Check file type
 		if (file.type !== 'application/pdf') {
-			alert('Only PDF files are allowed for payment slips.');
+			toast.warning('Only PDF files are allowed for payment slips.');
 			fileInput.value = ''; // Clear file input
 			return;
 		}
@@ -631,7 +632,7 @@ function ActiveLoansContent() {
 
 			const data = await response.json();
 			
-			alert('Payment slip uploaded successfully');
+			toast.success('Payment slip uploaded successfully');
 			fileInput.value = ''; // Clear file input
 			
 			// Refresh disbursements
@@ -639,7 +640,7 @@ function ActiveLoansContent() {
 		} catch (error) {
 			console.error('Error uploading payment slip:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Failed to upload payment slip';
-			alert(`❌ Upload Failed\n\n${errorMessage}`);
+			toast.error(`Upload failed: ${errorMessage}`);
 			fileInput.value = ''; // Clear file input on error
 		} finally {
 			setUploadingSlipFor(null);
@@ -834,7 +835,7 @@ function ActiveLoansContent() {
 			}
 		} catch (error) {
 			console.error("Error generating PDF letter:", error);
-			alert(`Failed to generate PDF letter: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to generate PDF letter: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setGeneratingPDF(false);
 		}
@@ -871,7 +872,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading PDF letter:', error);
-			alert('Failed to download PDF letter');
+			toast.error('Failed to download PDF letter');
 		}
 	};
 
@@ -1208,15 +1209,15 @@ function ActiveLoansContent() {
 
 		// Validation
 		if (dischargeAction === "request" && !dischargeReason.trim()) {
-			alert("Please provide a reason for the discharge request");
+			toast.warning("Please provide a reason for the discharge request");
 			return;
 		}
 		if (dischargeAction === "approve" && !dischargeNotes.trim()) {
-			alert("Please provide admin notes for the discharge approval");
+			toast.warning("Please provide admin notes for the discharge approval");
 			return;
 		}
 		if (dischargeAction === "reject" && !dischargeReason.trim()) {
-			alert("Please provide a reason for rejecting the discharge");
+			toast.warning("Please provide a reason for rejecting the discharge");
 			return;
 		}
 
@@ -1260,15 +1261,15 @@ function ActiveLoansContent() {
 						: dischargeAction === "approve"
 						? "approved"
 						: "rejected";
-				alert(`Loan discharge ${actionText} successfully`);
+				toast.success(`Loan discharge ${actionText} successfully`);
 			} else {
-				alert(
+				toast.error(
 					response.message || `Failed to ${dischargeAction} discharge`
 				);
 			}
 		} catch (error) {
 			console.error(`Error ${dischargeAction}ing discharge:`, error);
-			alert(`Failed to ${dischargeAction} discharge. Please try again.`);
+			toast.error(`Failed to ${dischargeAction} discharge. Please try again.`);
 		} finally {
 			setProcessingDischarge(false);
 		}
@@ -1289,13 +1290,13 @@ function ActiveLoansContent() {
 
 	const handleManualPaymentSubmit = async () => {
 		if (!manualPaymentForm.loanId || !manualPaymentForm.amount || !manualPaymentForm.reference) {
-			alert("Please fill in all required fields (Loan ID, Amount, Reference)");
+			toast.warning("Please fill in all required fields (Loan ID, Amount, Reference)");
 			return;
 		}
 
 		const amount = parseFloat(manualPaymentForm.amount);
 		if (isNaN(amount) || amount <= 0) {
-			alert("Please enter a valid payment amount greater than 0");
+			toast.warning("Please enter a valid payment amount greater than 0");
 			return;
 		}
 
@@ -1336,7 +1337,7 @@ function ActiveLoansContent() {
 			}
 		} catch (error) {
 			console.error("Error creating manual payment:", error);
-			alert(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setProcessingManualPayment(false);
 		}
@@ -1398,7 +1399,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading receipt:', error);
-			alert('Failed to download receipt');
+			toast.error('Failed to download receipt');
 		}
 	};
 
@@ -1442,7 +1443,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading signed agreement:', error);
-			alert(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			toast.error(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -1481,7 +1482,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error("❌ Error downloading stamped agreement:", error);
-			alert(error instanceof Error ? error.message : "Failed to download stamped agreement");
+			toast.error(error instanceof Error ? error.message : "Failed to download stamped agreement");
 		}
 	};
 
@@ -1521,7 +1522,7 @@ function ActiveLoansContent() {
 
 		} catch (error) {
 			console.error("❌ Error downloading stamp certificate:", error);
-			alert(error instanceof Error ? error.message : "Failed to download stamp certificate");
+			toast.error(error instanceof Error ? error.message : "Failed to download stamp certificate");
 		}
 	};
 
@@ -1566,7 +1567,7 @@ function ActiveLoansContent() {
 
 	const handleUploadStampedSubmit = async () => {
 		if (!uploadStampedFile || !manualPaymentForm.loanId) {
-			alert("Please select a PDF file to upload");
+			toast.warning("Please select a PDF file to upload");
 			return;
 		}
 
@@ -1603,7 +1604,7 @@ function ActiveLoansContent() {
 
 		} catch (error) {
 			console.error("❌ Error uploading stamped agreement:", error);
-			alert(error instanceof Error ? error.message : "Failed to upload stamped agreement");
+			toast.error(error instanceof Error ? error.message : "Failed to upload stamped agreement");
 		} finally {
 			setUploadStampedLoading(false);
 		}
@@ -1611,7 +1612,7 @@ function ActiveLoansContent() {
 
 	const handleUploadCertificateSubmit = async () => {
 		if (!uploadCertificateFile || !uploadCertificateLoanId) {
-			alert("Please select a PDF file to upload");
+			toast.warning("Please select a PDF file to upload");
 			return;
 		}
 
@@ -1648,7 +1649,7 @@ function ActiveLoansContent() {
 
 		} catch (error) {
 			console.error("❌ Error uploading stamp certificate:", error);
-			alert(error instanceof Error ? error.message : "Failed to upload stamp certificate");
+			toast.error(error instanceof Error ? error.message : "Failed to upload stamp certificate");
 		} finally {
 			setUploadCertificateLoading(false);
 		}
@@ -5561,7 +5562,7 @@ function ActiveLoansContent() {
 																		}
 																	} catch (error) {
 																		console.error('Error opening unsigned agreement:', error);
-																		alert('Failed to open unsigned agreement');
+																		toast.error('Failed to open unsigned agreement');
 																	}
 																}}
 																className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -6765,7 +6766,7 @@ function ActiveLoansContent() {
 										const file = e.target.files?.[0];
 										if (file) {
 											if (file.type !== 'application/pdf') {
-												alert('Please select a PDF file');
+												toast.warning('Please select a PDF file');
 												e.target.value = '';
 												return;
 											}
@@ -6861,7 +6862,7 @@ function ActiveLoansContent() {
 										const file = e.target.files?.[0];
 										if (file) {
 											if (file.type !== 'application/pdf') {
-												alert('Please select a PDF file');
+												toast.warning('Please select a PDF file');
 												e.target.value = '';
 												return;
 											}

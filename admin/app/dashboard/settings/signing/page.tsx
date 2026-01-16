@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../../components/AdminLayout';
 import { fetchWithAdminTokenRefresh } from '../../../../lib/authUtils';
+import { toast } from 'sonner';
 
 // Shadcn UI Components
 import { Button } from '@/components/ui/button';
@@ -383,6 +384,7 @@ export default function AdminSigningSettingsPage() {
       } : null);
 
       setIsEditingProfile(false);
+      toast.success('Profile updated successfully');
       
       if (editIcNumber && editIcNumber !== currentUser?.icNumber) {
         await checkCertificate(editIcNumber);
@@ -412,6 +414,7 @@ export default function AdminSigningSettingsPage() {
 
       setCurrentUser(prev => prev ? { ...prev, icNumber: icNumber.trim() } : null);
       setShowIcInput(false);
+      toast.success('IC number updated successfully');
       await checkCertificate(icNumber.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update IC number');
@@ -570,6 +573,7 @@ export default function AdminSigningSettingsPage() {
         setShowPinStep(false);
         setPin('');
         setConfirmPin('');
+        toast.success('Certificate enrolled successfully');
       } else {
         throw new Error(certificateResponse.message || 'Certificate enrollment failed');
       }
@@ -734,6 +738,7 @@ export default function AdminSigningSettingsPage() {
 
       if (response.success) {
         setOtpRequested(true);
+        toast.success('OTP sent to your email');
       } else {
         throw new Error(response.message || 'Failed to request OTP');
       }
@@ -780,6 +785,7 @@ export default function AdminSigningSettingsPage() {
         setShowRevokeDialog(false);
         setRevokeOtp('');
         setOtpRequested(false);
+        toast.success('Certificate revoked successfully');
       } else {
         throw new Error(revokeResponse.message || 'Certificate revocation failed');
       }
@@ -856,6 +862,7 @@ export default function AdminSigningSettingsPage() {
         setLookupResult(null);
         setNewSignerName('');
         setNewSignerEmail('');
+        toast.success('Signer added successfully');
         fetchInternalSigners();
       } else {
         throw new Error(response.message || 'Failed to add signer');
@@ -887,6 +894,7 @@ export default function AdminSigningSettingsPage() {
         setShowSignerPinDialog(false);
         setSignerPin('');
         setSelectedSigner(null);
+        toast.success('PIN verified successfully');
         fetchInternalSigners();
       } else {
         setError(response.message || 'PIN verification failed');
@@ -915,6 +923,7 @@ export default function AdminSigningSettingsPage() {
 
     try {
       await fetchWithAdminTokenRefresh(`/api/admin/internal-signers/${id}`, { method: 'DELETE' });
+      toast.success('Signer removed successfully');
       fetchInternalSigners();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove signer');

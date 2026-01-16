@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { useRouter } from "next/navigation";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 import {
 	PlusIcon,
 	MagnifyingGlassIcon,
@@ -66,7 +67,6 @@ export default function AdminProductsPage() {
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [success, setSuccess] = useState<string | null>(null);
 	const [search, setSearch] = useState("");
 	const [refreshing, setRefreshing] = useState(false);
 	const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
@@ -271,7 +271,7 @@ export default function AdminProductsPage() {
 			});
 
 			setIsModalOpen(false);
-			setSuccess(editingProduct ? "Product updated successfully" : "Product created successfully");
+			toast.success(editingProduct ? "Product updated successfully" : "Product created successfully");
 			fetchProducts();
 		} catch (err) {
 			console.error("Error saving product:", err);
@@ -295,7 +295,7 @@ export default function AdminProductsPage() {
 				}
 			);
 
-			setSuccess("Product deleted successfully");
+			toast.success("Product deleted successfully");
 			fetchProducts();
 		} catch (err: any) {
 			console.error("Error deleting product:", err);
@@ -420,16 +420,7 @@ export default function AdminProductsPage() {
 			title="Products"
 			description="Manage loan products and their configurations"
 		>
-			{/* Success/Error Messages */}
-			{success && (
-				<div className="mb-6 bg-green-700/30 border border-green-600/30 text-green-300 px-4 py-3 rounded-lg flex items-center justify-between">
-					<span>{success}</span>
-					<button onClick={() => setSuccess(null)}>
-						<XMarkIcon className="h-5 w-5" />
-					</button>
-				</div>
-			)}
-
+			{/* Error Message */}
 			{error && (
 				<div className="mb-6 bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
 					<span>{error}</span>

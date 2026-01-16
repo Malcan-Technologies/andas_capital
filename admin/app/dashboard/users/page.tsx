@@ -4,6 +4,7 @@ import React from "react";
 import { useEffect, useState } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 import {
 	UserIcon,
 	PlusIcon,
@@ -74,7 +75,6 @@ export default function AdminUsersPage() {
 	const [search, setSearch] = useState("");
 	const [roleFilter, setRoleFilter] = useState<string>("all");
 	const [error, setError] = useState<string | null>(null);
-	const [success, setSuccess] = useState<string | null>(null);
 	const router = useRouter();
 
 	// Dialog states
@@ -132,7 +132,6 @@ export default function AdminUsersPage() {
 		setRefreshing(true);
 		try {
 			setError(null);
-			setSuccess(null);
 
 			// Fetch all users with token refresh
 			const users = await fetchWithAdminTokenRefresh<User[]>(
@@ -226,7 +225,7 @@ export default function AdminUsersPage() {
 
 			setEditDialogOpen(false);
 			setSelectedUser(null);
-			setSuccess("User updated successfully!");
+			toast.success("User updated successfully!");
 		} catch (error) {
 			console.error("Error updating user:", error);
 			setError("Failed to update user. Please try again.");
@@ -299,7 +298,7 @@ export default function AdminUsersPage() {
 				password: "",
 				role: "USER",
 			});
-			setSuccess("User created successfully!");
+			toast.success("User created successfully!");
 		} catch (error) {
 			console.error("Error creating user:", error);
 			setError("Failed to create user. Please try again.");
@@ -337,7 +336,7 @@ export default function AdminUsersPage() {
 			setUsers(users.filter((user) => user.id !== selectedUser.id));
 			setDeleteDialogOpen(false);
 			setSelectedUser(null);
-			setSuccess("User deleted successfully!");
+			toast.success("User deleted successfully!");
 		} catch (error) {
 			console.error("Error deleting user:", error);
 			setError("Failed to delete user. Please try again.");
@@ -464,16 +463,7 @@ export default function AdminUsersPage() {
 			title="Users"
 			description="Manage and view all users in the system"
 		>
-			{/* Success/Error Messages */}
-			{success && (
-				<div className="mb-6 bg-green-700/30 border border-green-600/30 text-green-300 px-4 py-3 rounded-lg flex items-center justify-between">
-					<span>{success}</span>
-					<button onClick={() => setSuccess(null)}>
-						<XMarkIcon className="h-5 w-5" />
-					</button>
-				</div>
-			)}
-
+			{/* Error Message */}
 			{error && (
 				<div className="mb-6 bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
 					<span>{error}</span>

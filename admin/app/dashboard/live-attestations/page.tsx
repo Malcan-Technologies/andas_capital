@@ -18,6 +18,7 @@ import {
 	XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "@/lib/authUtils";
+import { toast } from "sonner";
 
 interface LoanApplication {
 	id: string;
@@ -152,10 +153,10 @@ export default function LiveAttestationsPage() {
 			// Reload the list
 			await loadLiveAttestationRequests();
 
-			alert("Live attestation completed successfully!");
+			toast.success("Live attestation completed successfully!");
 		} catch (error) {
 			console.error("Error completing live attestation:", error);
-			alert("Failed to complete live attestation. Please try again.");
+			toast.error("Failed to complete live attestation. Please try again.");
 		} finally {
 			setProcessingId(null);
 			setConfirmApplicationId(null);

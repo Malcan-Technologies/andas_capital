@@ -21,6 +21,7 @@ import {
 	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 
 interface Payment {
 	id: string;
@@ -379,7 +380,7 @@ function PaymentsContent() {
 				setApprovalNotes("");
 
 				// Show success message
-				alert("Payment approved successfully!");
+				toast.success("Payment approved successfully!");
 
 				// Force refresh with cache busting
 				await fetchPayments(false, true);
@@ -397,14 +398,14 @@ function PaymentsContent() {
 				error instanceof Error &&
 				error.message.includes("not pending")
 			) {
-				alert(
+				toast.info(
 					"This payment has already been processed. Refreshing the list..."
 				);
 				await fetchPayments(false, true);
 				setShowApprovalModal(false);
 				setApprovalNotes("");
 			} else {
-				alert("Failed to approve payment. Please try again.");
+				toast.error("Failed to approve payment. Please try again.");
 			}
 
 			// Restart auto-refresh even on error
@@ -447,7 +448,7 @@ function PaymentsContent() {
 				setRejectionNotes("");
 
 				// Show success message
-				alert("Payment rejected successfully!");
+				toast.success("Payment rejected successfully!");
 
 				// Force refresh with cache busting
 				await fetchPayments(false, true);
@@ -465,7 +466,7 @@ function PaymentsContent() {
 				error instanceof Error &&
 				error.message.includes("not pending")
 			) {
-				alert(
+				toast.info(
 					"This payment has already been processed. Refreshing the list..."
 				);
 				await fetchPayments(false, true);
@@ -473,7 +474,7 @@ function PaymentsContent() {
 				setRejectionReason("");
 				setRejectionNotes("");
 			} else {
-				alert("Failed to reject payment. Please try again.");
+				toast.error("Failed to reject payment. Please try again.");
 			}
 
 			// Restart auto-refresh even on error
@@ -485,13 +486,13 @@ function PaymentsContent() {
 
 	const handleCreateManualPayment = async () => {
 		if (!manualPaymentForm.loanId || !manualPaymentForm.amount || !manualPaymentForm.reference) {
-			alert("Please fill in all required fields (Loan ID, Amount, Reference)");
+			toast.warning("Please fill in all required fields (Loan ID, Amount, Reference)");
 			return;
 		}
 
 		const amount = parseFloat(manualPaymentForm.amount);
 		if (isNaN(amount) || amount <= 0) {
-			alert("Please enter a valid payment amount greater than 0");
+			toast.warning("Please enter a valid payment amount greater than 0");
 			return;
 		}
 
@@ -514,7 +515,7 @@ function PaymentsContent() {
 			});
 
 			if (data.success) {
-				alert(data.message || "Manual payment created successfully!");
+				toast.success(data.message || "Manual payment created successfully!");
 				
 				// Reset form
 				setManualPaymentForm({
@@ -534,7 +535,7 @@ function PaymentsContent() {
 			}
 		} catch (error) {
 			console.error("Error creating manual payment:", error);
-			alert(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setProcessing(false);
 		}
@@ -545,11 +546,11 @@ function PaymentsContent() {
 		const file = event.target.files?.[0];
 		if (file) {
 			if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-				alert("Please select a CSV file");
+				toast.warning("Please select a CSV file");
 				return;
 			}
 			if (file.size > 10 * 1024 * 1024) { // 10MB limit
-				alert("File size must be less than 10MB");
+				toast.warning("File size must be less than 10MB");
 				return;
 			}
 			setCSVFile(file);
@@ -561,7 +562,7 @@ function PaymentsContent() {
 
 	const handleCSVUpload = async () => {
 		if (!csvFile) {
-			alert("Please select a CSV file first");
+			toast.warning("Please select a CSV file first");
 			return;
 		}
 
@@ -596,7 +597,7 @@ function PaymentsContent() {
 			}
 		} catch (error) {
 			console.error("Error processing CSV file:", error);
-			alert(`Failed to process CSV file: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to process CSV file: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setCSVProcessing(false);
 		}
@@ -614,12 +615,12 @@ function PaymentsContent() {
 
 	const handleBatchApprove = async () => {
 		if (selectedMatches.size === 0) {
-			alert("Please select at least one match to approve");
+			toast.warning("Please select at least one match to approve");
 			return;
 		}
 
 		if (!csvResults?.matches) {
-			alert("No matches available for approval");
+			toast.warning("No matches available for approval");
 			return;
 		}
 
@@ -652,14 +653,17 @@ function PaymentsContent() {
 				let message = `Batch approval completed!\n\n`;
 				message += `✅ Successfully approved: ${summary.successful} payments\n`;
 				if (summary.failed > 0) {
-					message += `❌ Failed: ${summary.failed} payments\n\n`;
-					message += `Failed payments:\n`;
+					message += `Failed: ${summary.failed} payments. `;
 					failed.forEach((fail: any) => {
-						message += `- ${fail.paymentId}: ${fail.error}\n`;
+						message += `${fail.paymentId}: ${fail.error}. `;
 					});
 				}
 				
-				alert(message);
+				if (summary.failed > 0) {
+					toast.warning(message);
+				} else {
+					toast.success(message);
+				}
 				
 				// Close modal and refresh payments
 				setShowCSVModal(false);
@@ -675,7 +679,7 @@ function PaymentsContent() {
 			}
 		} catch (error) {
 			console.error("Error processing batch approval:", error);
-			alert(`Failed to process batch approval: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to process batch approval: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setProcessing(false);
 		}
@@ -702,13 +706,13 @@ function PaymentsContent() {
 			});
 
 			if (data.success) {
-				alert(`Default processing completed successfully!\n\nResults:\n${JSON.stringify(data.data, null, 2)}`);
+				toast.success("Default processing completed successfully!");
 			} else {
 				throw new Error(data.message || "Failed to trigger default processing");
 			}
 		} catch (error) {
 			console.error("Error triggering default processing:", error);
-			alert(`Failed to trigger default processing: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to trigger default processing: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setDefaultProcessing(false);
 		}

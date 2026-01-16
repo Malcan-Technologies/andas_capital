@@ -20,6 +20,7 @@ import {
 	ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 
 interface LateFeeData {
 	id: string;
@@ -343,20 +344,10 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 
 				// Show detailed success message
 				const message =
-					`Manual processing completed successfully!\n\n` +
-					`Late Fee Processing:\n` +
-					`• Found ${overdueRepayments} overdue repayments\n` +
-					`• Calculated ${feesCalculated} new fees\n` +
-					`• Total fee amount: $${totalFeeAmount.toFixed(2)}\n` +
-					`• Processing time: ${processingTimeMs}ms\n\n` +
-					`Default Processing:\n` +
-					`• ${riskLoansProcessed} loans flagged as default risk\n` +
-					`• ${defaultedLoans} loans moved to default status\n` +
-					`• ${pdfLettersGenerated} PDF letters generated\n` +
-					`• WhatsApp notifications will be sent at 10 AM\n\n` +
-					`Data will be refreshed automatically.`;
+					`Processing complete! Found ${overdueRepayments} overdue repayments, calculated ${feesCalculated} new fees ($${totalFeeAmount.toFixed(2)}). ` +
+					`${riskLoansProcessed} loans flagged as risk, ${defaultedLoans} defaulted, ${pdfLettersGenerated} PDF letters generated.`;
 
-				alert(message);
+				toast.success(message);
 
 				// Force a complete refresh of all data
 				setSelectedLateFee(null);
@@ -370,8 +361,8 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 			console.error("Error processing overdue payment fees:", error);
 			const errorMessage =
 				error instanceof Error ? error.message : "Unknown error";
-			alert(
-				`Failed to process overdue payment fees: ${errorMessage}\n\nPlease try again or check the system logs.`
+			toast.error(
+				`Failed to process overdue payment fees: ${errorMessage}. Please try again.`
 			);
 		} finally {
 			setProcessing(false);

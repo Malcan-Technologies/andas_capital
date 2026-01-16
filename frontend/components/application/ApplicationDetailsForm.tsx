@@ -351,19 +351,27 @@ function ApplicationDetailsFormContent({
 							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
 								Loan Purpose
 							</label>
-							<select
-								name="loanPurpose"
-								value={formValues.loanPurpose || ""}
-								onChange={handleSelectChange}
-								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							>
-								<option value="">Select loan purpose</option>
-								{getValidLoanTypes().map((type) => (
-									<option key={type} value={type}>
-										{type}
-									</option>
-								))}
-							</select>
+							<div className="relative">
+								<select
+									name="loanPurpose"
+									value={formValues.loanPurpose || ""}
+									onChange={handleSelectChange}
+									className="w-full px-4 pr-10 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none"
+								>
+									<option value="">Select loan purpose</option>
+									{getValidLoanTypes().map((type) => (
+										<option key={type} value={type}>
+											{type}
+										</option>
+									))}
+								</select>
+								{/* Custom dropdown arrow */}
+								<div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+									<svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+										<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+									</svg>
+								</div>
+							</div>
 							{errors.loanPurpose && (
 								<p className="mt-1 text-sm text-red-600 font-body">
 									{errors.loanPurpose}
@@ -376,19 +384,27 @@ function ApplicationDetailsFormContent({
 						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
 							Loan Term
 						</label>
-						<select
-							name="loanTerm"
-							value={formValues.loanTerm}
-							onChange={handleSelectChange}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-						>
-							<option value="">Select loan term</option>
-							{selectedProduct.repaymentTerms.map((term) => (
-								<option key={term} value={term.toString()}>
-									{formatTermDisplay(term)}
-								</option>
-							))}
-						</select>
+						<div className="relative">
+							<select
+								name="loanTerm"
+								value={formValues.loanTerm}
+								onChange={handleSelectChange}
+								className="w-full px-4 pr-10 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none"
+							>
+								<option value="">Select loan term</option>
+								{selectedProduct.repaymentTerms.map((term) => (
+									<option key={term} value={term.toString()}>
+										{formatTermDisplay(term)}
+									</option>
+								))}
+							</select>
+							{/* Custom dropdown arrow */}
+							<div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+								<svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+									<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+								</svg>
+							</div>
+						</div>
 						{errors.loanTerm && (
 							<p className="mt-1 text-sm text-red-600 font-body">
 								{errors.loanTerm}

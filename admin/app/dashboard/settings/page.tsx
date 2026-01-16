@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 interface SystemSetting {
 	id: string;
@@ -278,7 +279,7 @@ function SettingsPageContent() {
 					isActive: true,
 					isDefault: false,
 				});
-				alert("Bank account saved successfully!");
+				toast.success("Bank account saved successfully!");
 			} else {
 				throw new Error(response.message || "Failed to save bank account");
 			}
@@ -307,7 +308,7 @@ function SettingsPageContent() {
 
 			if (response.success) {
 				await loadBankAccounts();
-				alert("Bank account deleted successfully!");
+				toast.success("Bank account deleted successfully!");
 			} else {
 				throw new Error(response.message || "Failed to delete bank account");
 			}
@@ -332,7 +333,7 @@ function SettingsPageContent() {
 
 			if (response.success) {
 				await loadBankAccounts();
-				alert("Default bank account updated successfully!");
+				toast.success("Default bank account updated successfully!");
 			} else {
 				throw new Error(response.message || "Failed to set default bank account");
 			}
@@ -432,7 +433,7 @@ function SettingsPageContent() {
 				setHasUnsavedChanges(false);
 				
 				// Show success message
-				alert("Settings saved successfully!");
+				toast.success("Settings saved successfully!");
 				
 				// Force reload settings to get latest data
 				await forceRefresh();
