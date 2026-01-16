@@ -588,10 +588,15 @@ function ActiveLoansContent() {
 
 			if (response.success && response.data) {
 
-				// Update the selected loan with repayments data
+				// Update the selected loan with repayments data and totalPaid from backend
 				setSelectedLoan((prev) =>
 					prev
-						? { ...prev, repayments: response.data.repayments }
+						? { 
+							...prev, 
+							repayments: response.data.repayments,
+							// Also update totalPaid from backend calculation (based on wallet transactions)
+							totalPaid: (response.data as any).totalPaid ?? prev.totalPaid
+						}
 						: null
 				);
 			} else {
@@ -3072,11 +3077,16 @@ function ActiveLoansContent() {
 												<p className="text-2xl font-bold text-white">
 													{(() => {
 														const repayments = selectedLoan.repayments || [];
-														const totalPaid = repayments.reduce((total, repayment) => {
+														// Calculate from repayments (primary method)
+														const calculatedFromRepayments = repayments.reduce((total, repayment) => {
 															// Only count COMPLETED repayments
 															if (repayment.status !== "COMPLETED") return total;
 															return total + (repayment.actualAmount || repayment.amount || 0);
 														}, 0);
+														// Use calculated value, or fall back to backend-provided totalPaid if calculation returns 0
+														const totalPaid = calculatedFromRepayments > 0 
+															? calculatedFromRepayments 
+															: (selectedLoan.totalPaid || 0);
 														return formatCurrency(totalPaid);
 													})()}
 												</p>
@@ -3613,10 +3623,14 @@ function ActiveLoansContent() {
 															{formatCurrency(
 																(() => {
 																	// Calculate total paid using actualAmount (the actual amount paid)
-																	return selectedLoan.repayments?.reduce((total, repayment) => {
+																	const calculatedFromRepayments = selectedLoan.repayments?.reduce((total, repayment) => {
 																		if (repayment.status !== "COMPLETED") return total;
 																		return total + (repayment.actualAmount || repayment.amount || 0);
 																	}, 0) || 0;
+																	// Use calculated value, or fall back to backend-provided totalPaid
+																	return calculatedFromRepayments > 0 
+																		? calculatedFromRepayments 
+																		: (selectedLoan.totalPaid || 0);
 																})()
 															)}
 														</p>
@@ -4380,10 +4394,14 @@ function ActiveLoansContent() {
 																{formatCurrency(
 																	(() => {
 																		// Calculate total paid using actualAmount (the actual amount paid)
-																		return selectedLoan.repayments?.reduce((total, repayment) => {
+																		const calculatedFromRepayments = selectedLoan.repayments?.reduce((total, repayment) => {
 																			if (repayment.status !== "COMPLETED") return total;
 																			return total + (repayment.actualAmount || repayment.amount || 0);
 																		}, 0) || 0;
+																		// Use calculated value, or fall back to backend-provided totalPaid
+																		return calculatedFromRepayments > 0 
+																			? calculatedFromRepayments 
+																			: (selectedLoan.totalPaid || 0);
 																	})()
 																)}
 															</p>

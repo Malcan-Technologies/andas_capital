@@ -4753,6 +4753,19 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                     "Stamping confirmed! Application moved to PENDING_DISBURSEMENT."
                                   );
 
+                                  // Update selected application status to trigger disbursement reference generation
+                                  const updatedApp = {
+                                    ...selectedApplication,
+                                    status: "PENDING_DISBURSEMENT",
+                                  };
+                                  setSelectedApplication(updatedApp as any);
+
+                                  // Generate disbursement reference immediately
+                                  const reference = `DISB-${selectedApplication.id
+                                    .slice(-8)
+                                    .toUpperCase()}-${Date.now().toString().slice(-6)}`;
+                                  setDisbursementReference(reference);
+
                                   // Refresh application data
                                   await fetchApplications();
 								  setSelectedTab("disbursement");
