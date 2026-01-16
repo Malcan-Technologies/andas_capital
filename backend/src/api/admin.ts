@@ -3623,6 +3623,10 @@ router.get(
 							code: true,
 							requiredDocuments: true,
 							collateralRequired: true,
+							// Late fee fields
+							lateFeeRate: true,
+							lateFeeFixedAmount: true,
+							lateFeeFrequencyDays: true,
 						},
 					},
 					documents: {
@@ -3656,7 +3660,17 @@ router.get(
 			});
 
 			console.log(`Found ${applications.length} applications`);
-			return res.json(applications);
+			
+			// Fetch late fee grace period from system settings
+			const lateFeeGraceDays = await getLateFeeGraceSettings(prisma);
+			
+			return res.json({
+				success: true,
+				data: applications,
+				systemSettings: {
+					lateFeeGraceDays: lateFeeGraceDays
+				}
+			});
 		} catch (error) {
 			console.error("Error fetching applications:", error);
 			return res.status(500).json({ message: "Internal server error" });
@@ -5988,6 +6002,9 @@ router.get(
 
 			// Fetch current system settings for loan calculation methods
 			const systemSettings = await getLoanCalculationSettings(prisma);
+			
+			// Fetch late fee grace period from system settings
+			const lateFeeGraceDays = await getLateFeeGraceSettings(prisma);
 
 			return res.status(200).json({
 				success: true,
@@ -5996,7 +6013,8 @@ router.get(
 					calculationMethod: systemSettings.calculationMethod,
 					scheduleType: systemSettings.scheduleType,
 					customDueDate: systemSettings.customDueDate,
-					prorationCutoffDate: systemSettings.prorationCutoffDate
+					prorationCutoffDate: systemSettings.prorationCutoffDate,
+					lateFeeGraceDays: lateFeeGraceDays
 				}
 			});
 		} catch (error) {

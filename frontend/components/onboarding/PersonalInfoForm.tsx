@@ -74,6 +74,32 @@ export default function PersonalInfoForm({
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [icError, setIcError] = useState<string>("");
 
+	// Re-validate IC number on mount to ensure correct type detection
+	// This fixes cases where icType was incorrectly stored in database (e.g., IC stored as PASSPORT)
+	useEffect(() => {
+		if (formData.icNumber.trim()) {
+			const validation = validateICOrPassport(formData.icNumber);
+			if (validation.isValid && validation.type) {
+				// Only update if the detected type is different from current
+				if (validation.type !== formData.icType) {
+					console.log(`IC type corrected: ${formData.icType} -> ${validation.type}`);
+					setFormData(prev => ({
+						...prev,
+						icType: validation.type,
+						dateOfBirth: validation.extractedDOB || prev.dateOfBirth || null,
+					}));
+				} else if (validation.type === 'IC' && validation.extractedDOB && !formData.dateOfBirth) {
+					// Also extract DOB if we have IC but no DOB
+					setFormData(prev => ({
+						...prev,
+						dateOfBirth: validation.extractedDOB || null,
+					}));
+				}
+			}
+		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []); // Only run on mount
+
 	// Check if name and IC fields should be disabled due to valid certificate
 	const hasValidCertificate = certificateStatus?.hasValidCert && certificateStatus?.nameMatches;
 	const shouldDisableNameAndIC = hasValidCertificate;
@@ -153,9 +179,11 @@ export default function PersonalInfoForm({
 		}
 
 		// Age validation - must be at least 18 years old
-		if (!formData.dateOfBirth) {
+		// For passport holders: DOB is optional (age verification done via KYC)
+		const isPassportType = formData.icType === 'PASSPORT';
+		if (!isPassportType && !formData.dateOfBirth) {
 			newErrors.dateOfBirth = "Date of birth is required for age verification";
-		} else if (!isAtLeast18YearsOld(formData.dateOfBirth)) {
+		} else if (formData.dateOfBirth && !isAtLeast18YearsOld(formData.dateOfBirth)) {
 			const age = calculateAge(formData.dateOfBirth);
 			newErrors.dateOfBirth = `You must be at least 18 years old to apply. Current age: ${age} years`;
 		}
@@ -217,20 +245,42 @@ export default function PersonalInfoForm({
 	};
 
 	// Check if mandatory fields are completed and valid
-	const isFormValid = 
-		formData.fullName.trim() !== "" &&
-		formData.icNumber.trim() !== "" &&
-		formData.email.trim() !== "" &&
-		/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) &&
-		formData.educationLevel.trim() !== "" &&
-		formData.emergencyContactName.trim() !== "" &&
-		formData.emergencyContactPhone.trim() !== "" &&
-		validateEmergencyContactPhone(formData.emergencyContactPhone) &&
-		formData.emergencyContactRelationship.trim() !== "" &&
-		validateICOrPassport(formData.icNumber).isValid &&
-		formData.dateOfBirth !== null &&
-		isAtLeast18YearsOld(formData.dateOfBirth) &&
-		!icError;
+	// For passport holders: DOB is optional since we can't extract it, but if provided, age must be valid
+	const isPassport = formData.icType === 'PASSPORT';
+	const dobProvided = formData.dateOfBirth !== null;
+	const ageIsValid = dobProvided ? isAtLeast18YearsOld(formData.dateOfBirth) : false;
+	
+	const validationChecks = {
+		fullName: formData.fullName.trim() !== "",
+		icNumber: formData.icNumber.trim() !== "",
+		email: formData.email.trim() !== "",
+		emailFormat: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email),
+		educationLevel: formData.educationLevel.trim() !== "",
+		emergencyContactName: formData.emergencyContactName.trim() !== "",
+		emergencyContactPhone: formData.emergencyContactPhone.trim() !== "",
+		emergencyContactPhoneValid: validateEmergencyContactPhone(formData.emergencyContactPhone),
+		emergencyContactRelationship: formData.emergencyContactRelationship.trim() !== "",
+		icValid: validateICOrPassport(formData.icNumber).isValid,
+		// For passport: DOB is optional (can be verified later via KYC)
+		// For IC: DOB is required and extracted automatically
+		dateOfBirth: isPassport ? true : dobProvided,
+		// For passport: If DOB is provided, check age; otherwise skip age check
+		// For IC: Age must be valid (18+)
+		ageValid: isPassport ? (!dobProvided || ageIsValid) : ageIsValid,
+		noIcError: !icError,
+	};
+
+	// Debug: Log which validations are failing
+	if (process.env.NODE_ENV === 'development') {
+		const failingChecks = Object.entries(validationChecks)
+			.filter(([_, valid]) => !valid)
+			.map(([key]) => key);
+		if (failingChecks.length > 0) {
+			console.log('Failing validations:', failingChecks);
+		}
+	}
+
+	const isFormValid = Object.values(validationChecks).every(Boolean);
 
 	return (
 		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -574,6 +624,28 @@ export default function PersonalInfoForm({
 							)}
 						</div>
 					</div>
+
+					{/* Missing Fields Indicator */}
+					{!isFormValid && (
+						<div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+							<p className="text-sm font-medium text-amber-800 mb-2">Please complete the following:</p>
+							<ul className="text-sm text-amber-700 list-disc list-inside space-y-1">
+								{!validationChecks.fullName && <li>Full Name is required</li>}
+								{!validationChecks.icNumber && <li>IC/Passport Number is required</li>}
+								{validationChecks.icNumber && !validationChecks.icValid && <li>IC/Passport Number format is invalid</li>}
+								{!validationChecks.dateOfBirth && !isPassport && <li>Date of Birth is required (enter valid Malaysian IC)</li>}
+								{!validationChecks.ageValid && dobProvided && <li>You must be at least 18 years old</li>}
+								{!validationChecks.email && <li>Email Address is required</li>}
+								{validationChecks.email && !validationChecks.emailFormat && <li>Email Address format is invalid</li>}
+								{!validationChecks.educationLevel && <li>Education Level is required</li>}
+								{!validationChecks.emergencyContactName && <li>Emergency Contact Name is required</li>}
+								{!validationChecks.emergencyContactPhone && <li>Emergency Contact Phone is required</li>}
+								{validationChecks.emergencyContactPhone && !validationChecks.emergencyContactPhoneValid && <li>Emergency Contact Phone must be 8-15 digits</li>}
+								{!validationChecks.emergencyContactRelationship && <li>Emergency Contact Relationship is required</li>}
+								{!validationChecks.noIcError && <li>Please fix the IC/Passport error shown above</li>}
+							</ul>
+						</div>
+					)}
 
 					{/* Action Buttons */}
 					<div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100">

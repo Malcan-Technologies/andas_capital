@@ -17,6 +17,28 @@ export interface ICInfo {
 }
 
 /**
+ * Converts a 2-digit year to a 4-digit year using dynamic threshold
+ * Uses current year to determine century: if the resulting year would be in the future, use previous century
+ * @param twoDigitYear - The 2-digit year (0-99)
+ * @returns The full 4-digit year
+ */
+function convertToFullYear(twoDigitYear: number): number {
+  const currentYear = new Date().getFullYear();
+  const currentCentury = Math.floor(currentYear / 100) * 100; // e.g., 2000 for years 2000-2099
+  
+  // Try current century first
+  let fullYear = currentCentury + twoDigitYear;
+  
+  // If the resulting year is more than 1 year in the future, it's probably from the previous century
+  // (We allow 1 year buffer for people born late in the year who haven't had their birthday yet)
+  if (fullYear > currentYear + 1) {
+    fullYear = currentCentury - 100 + twoDigitYear; // Previous century
+  }
+  
+  return fullYear;
+}
+
+/**
  * Validates Malaysian IC number format (YYMMDD-PB-XXXX)
  * @param icNumber - The IC number to validate
  * @returns boolean indicating if it's a valid Malaysian IC format
@@ -43,8 +65,8 @@ export function isValidMalaysianIC(icNumber: string): boolean {
   if (month < 1 || month > 12) return false;
   if (day < 1 || day > 31) return false;
   
-  // Check if it's a valid date
-  const fullYear = year < 50 ? 2000 + year : 1900 + year; // Assume years 00-49 are 2000s, 50-99 are 1900s
+  // Check if it's a valid date using dynamic year conversion
+  const fullYear = convertToFullYear(year);
   const date = new Date(fullYear, month - 1, day, 12, 0, 0, 0);
   
   return date.getFullYear() === fullYear && 
@@ -72,8 +94,8 @@ export function extractDOBFromMalaysianIC(icNumber: string): Date | null {
   const month = parseInt(monthStr, 10);
   const day = parseInt(dayStr, 10);
   
-  // Determine full year (assuming years 00-49 are 2000s, 50-99 are 1900s)
-  const fullYear = year < 50 ? 2000 + year : 1900 + year;
+  // Use dynamic year conversion based on current year
+  const fullYear = convertToFullYear(year);
   
   // Create date at noon to avoid timezone issues with date-only values
   const date = new Date(fullYear, month - 1, day, 12, 0, 0, 0);

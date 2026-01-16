@@ -386,6 +386,9 @@ function ActiveLoansContent() {
 
 	// Get user role from API
 	const [userRole, setUserRole] = useState<string>("");
+	
+	// System-wide late fee grace period setting
+	const [lateFeeGraceDays, setLateFeeGraceDays] = useState<number>(3);
 
 	useEffect(() => {
 		const fetchUserRole = async () => {
@@ -504,6 +507,7 @@ function ActiveLoansContent() {
 					scheduleType: string;
 					customDueDate: number;
 					prorationCutoffDate: number;
+					lateFeeGraceDays: number;
 				};
 			}>("/api/admin/loans");
 
@@ -515,6 +519,8 @@ function ActiveLoansContent() {
 				if (response.systemSettings) {
 					// Store in state if needed, or use directly in rendering
 					(window as any).loanSystemSettings = response.systemSettings;
+					// Store late fee grace days from system settings
+					setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays ?? 3);
 				}
 			} else {
 				setError("Failed to load loans data");
@@ -3016,7 +3022,7 @@ function ActiveLoansContent() {
 								{/* Tab Navigation */}
 								<div className="flex border-b border-gray-700/30 mb-6">
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "details"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
@@ -3028,7 +3034,7 @@ function ActiveLoansContent() {
 										Details
 									</div>
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "repayments"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
@@ -3037,40 +3043,40 @@ function ActiveLoansContent() {
 											setSelectedTab("repayments")
 										}
 									>
-										<ArrowsRightLeftIcon className="inline h-4 w-4 mr-1" />
+										<ArrowsRightLeftIcon className="h-4 w-4 mr-1.5" />
 										Repayments
 									</div>
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "audit"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
 										}`}
 										onClick={() => setSelectedTab("audit")}
 									>
-										<DocumentTextIcon className="inline h-4 w-4 mr-1" />
+										<DocumentTextIcon className="h-4 w-4 mr-1.5" />
 										Audit Trail
 									</div>
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "signatures"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
 										}`}
 										onClick={() => setSelectedTab("signatures")}
 									>
-										<PencilIcon className="inline h-4 w-4 mr-1" />
+										<PencilIcon className="h-4 w-4 mr-1.5" />
 										Signatures
 									</div>
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "documents"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
 										}`}
 										onClick={() => setSelectedTab("documents")}
 									>
-										<FolderIcon className="inline h-4 w-4 mr-1" />
+										<FolderIcon className="h-4 w-4 mr-1.5" />
 										Documents
 									</div>
 									{/* Only show Default Letters tab for loans that need default-related letters */}
@@ -3086,14 +3092,14 @@ function ActiveLoansContent() {
 										if (isLate || isDefaultRisk || isDefaulted) {
 											return (
 												<div
-													className={`px-4 py-2 cursor-pointer transition-colors ${
+													className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 														selectedTab === "pdf-letters"
 															? "border-b-2 border-blue-400 font-medium text-white"
 															: "text-gray-400 hover:text-gray-200"
 													}`}
 													onClick={() => setSelectedTab("pdf-letters")}
 												>
-													<DocumentArrowDownIcon className="inline h-4 w-4 mr-1" />
+													<DocumentArrowDownIcon className="h-4 w-4 mr-1.5" />
 													Default Letters
 												</div>
 											);
@@ -4405,7 +4411,7 @@ function ActiveLoansContent() {
 													{/* Late Payment Fees from Product */}
 													{selectedLoan.application?.product && (
 														<div className="border-t border-gray-600/50 pt-4">
-															<p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees (per product terms)</p>
+															<p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees</p>
 															<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
 																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
 																	<span className="text-gray-400 block text-xs mb-1">Late Fee Rate</span>
@@ -4420,16 +4426,19 @@ function ActiveLoansContent() {
 																	<span className="text-amber-400 font-medium">
 																		{selectedLoan.application.product.lateFeeFixedAmount !== undefined && selectedLoan.application.product.lateFeeFixedAmount !== null
 																			? formatCurrency(selectedLoan.application.product.lateFeeFixedAmount)
-																			: "RM 0.00"} <span className="text-xs text-gray-400">per occurrence</span>
+																			: "RM 0.00"}
 																	</span>
+																	{selectedLoan.application.product.lateFeeFrequencyDays !== undefined && selectedLoan.application.product.lateFeeFrequencyDays !== null && selectedLoan.application.product.lateFeeFrequencyDays > 0 && (
+																		<span className="text-xs text-gray-400 block mt-1">every {selectedLoan.application.product.lateFeeFrequencyDays} days</span>
+																	)}
 																</div>
 																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
 																	<span className="text-gray-400 block text-xs mb-1">Grace Period</span>
 																	<span className="text-amber-400 font-medium">
-																		{selectedLoan.application.product.lateFeeFrequencyDays !== undefined && selectedLoan.application.product.lateFeeFrequencyDays !== null
-																			? `${selectedLoan.application.product.lateFeeFrequencyDays} days`
-																			: "7 days"} <span className="text-xs text-gray-400">before fee applies</span>
+																		{lateFeeGraceDays} days
 																	</span>
+																	<span className="text-xs text-gray-400 block mt-1">before fee applies</span>
+																	<span className="text-xs text-blue-400 block mt-0.5">(system-wide)</span>
 																</div>
 															</div>
 														</div>

@@ -38,6 +38,9 @@ import {
   XMarkIcon,
   ExclamationTriangleIcon,
   ArrowUpTrayIcon,
+  InformationCircleIcon,
+  FolderIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 
 interface LoanApplication {
@@ -208,9 +211,16 @@ function AdminApplicationsPageContent() {
   const [signaturesData, setSignaturesData] = useState<any>(null);
   const [loadingSignatures, setLoadingSignatures] = useState(false);
   
+  // System-wide late fee grace period setting
+  const [lateFeeGraceDays, setLateFeeGraceDays] = useState<number>(3);
+  
   // Document upload states
   const [uploadingDocument, setUploadingDocument] = useState<string | null>(null); // document type being uploaded
   const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
+  
+  // Actions tab states - hidden by default with warning
+  const [showActionsTab, setShowActionsTab] = useState(false);
+  const [showActionsWarningModal, setShowActionsWarningModal] = useState(false);
 
   // Helper function to check if application has pending company signature
   const hasPendingCompanySignature = (app: LoanApplication): boolean => {
@@ -661,12 +671,17 @@ function AdminApplicationsPageContent() {
       // ATTESTOR users get filtered applications from backend
       if (currentUserRole === "ATTESTOR") {
         try {
-          const applicationsData = await fetchWithAdminTokenRefresh<
-            LoanApplication[]
-          >("/api/admin/applications");
+          const response = await fetchWithAdminTokenRefresh<{
+            success: boolean;
+            data: LoanApplication[];
+            systemSettings?: { lateFeeGraceDays: number };
+          }>("/api/admin/applications");
 
-          if (applicationsData) {
-            setApplications(applicationsData);
+          if (response.success && response.data) {
+            setApplications(response.data);
+            if (response.systemSettings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+            }
           } else {
             setApplications([]);
           }
@@ -680,9 +695,17 @@ function AdminApplicationsPageContent() {
 
       // Try fetching applications from applications endpoint (ADMIN only)
       try {
-        const applicationsData = await fetchWithAdminTokenRefresh<
-          LoanApplication[]
-        >("/api/admin/applications");
+        const response = await fetchWithAdminTokenRefresh<{
+          success: boolean;
+          data: LoanApplication[];
+          systemSettings?: { lateFeeGraceDays: number };
+        }>("/api/admin/applications");
+        
+        // Extract applications from new format, and store system settings
+        const applicationsData = response.success && response.data ? response.data : [];
+        if (response.systemSettings?.lateFeeGraceDays !== undefined) {
+          setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+        }
 
         // For each application, fetch its history
         const applicationsWithHistory = await Promise.all(
@@ -905,7 +928,7 @@ function AdminApplicationsPageContent() {
   };
 
   const formatCurrency = (amount?: number) => {
-    if (!amount) return "N/A";
+    if (amount === undefined || amount === null) return "N/A";
     return new Intl.NumberFormat("en-MY", {
       style: "currency",
       currency: "MYR",
@@ -2766,52 +2789,67 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
               <div className="p-6">
                 {/* Tab Navigation */}
-                <div className="flex border-b border-gray-700/30 mb-6">
+                <div className="flex flex-wrap border-b border-gray-700/30 mb-6">
                   <div
-                    className={`px-4 py-2 cursor-pointer transition-colors ${
+                    className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                       selectedTab === "details"
                         ? "border-b-2 border-blue-400 font-medium text-white"
                         : "text-gray-400 hover:text-gray-200"
                     }`}
                     onClick={() => setSelectedTab("details")}
                   >
+                    <InformationCircleIcon className="h-4 w-4 mr-1.5" />
                     Details
                   </div>
-                  {/* Documents tab - ADMIN only */}
+                  {/* Documents tab - ADMIN only, highlighted for approval/collateral review */}
                   {userRole === "ADMIN" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "documents"
-                          ? "border-b-2 border-blue-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? ["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status)
+                            ? "border-b-2 border-amber-400 font-medium text-white bg-amber-500/10"
+                            : "border-b-2 border-blue-400 font-medium text-white"
+                          : ["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status)
+                            ? "text-amber-300 hover:text-amber-200 bg-amber-500/5 hover:bg-amber-500/10"
+                            : "text-gray-400 hover:text-gray-200"
                       }`}
                       onClick={() => setSelectedTab("documents")}
                     >
-                      <div className="flex items-center space-x-2">
-                        <span>Documents</span>
-                        {selectedApplication?.documents &&
-                          selectedApplication.documents.length > 0 && (
-                            <span className="bg-blue-500/20 text-blue-200 text-xs font-medium px-2 py-1 rounded-full border border-blue-400/20">
-                              {selectedApplication.documents.length}
-                            </span>
-                          )}
-                      </div>
+                      <FolderIcon className="h-4 w-4 mr-1.5" />
+                      <span>Documents</span>
+                      {selectedApplication?.documents &&
+                        selectedApplication.documents.length > 0 && (
+                          <span className={`ml-1.5 text-xs font-medium px-1.5 py-0.5 rounded-full border ${
+                            ["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status)
+                              ? "bg-amber-500/20 text-amber-200 border-amber-400/20"
+                              : "bg-blue-500/20 text-blue-200 border-blue-400/20"
+                          }`}>
+                            {selectedApplication.documents.length}
+                          </span>
+                        )}
+                      {["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status) && (
+                        <span className="ml-1.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                      )}
                     </div>
                   )}
                   {/* Audit Trail tab - ADMIN only */}
                   {userRole === "ADMIN" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "audit"
                           ? "border-b-2 border-blue-400 font-medium text-white"
                           : "text-gray-400 hover:text-gray-200"
                       }`}
                       onClick={() => setSelectedTab("audit")}
                     >
+                      <DocumentTextIcon className="h-4 w-4 mr-1.5" />
                       Audit Trail
                     </div>
                   )}
-                  {/* Show Signatures tab for signature-related applications */}
+                  {/* Show Signatures tab for signature-related applications - ACTION REQUIRED */}
                   {[
                     "PENDING_SIGNATURE",
                     "PENDING_PKI_SIGNING",
@@ -2819,98 +2857,133 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                     "PENDING_SIGNING_OTP_DS",
                   ].includes(selectedApplication.status) && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "signatures"
-                          ? "border-b-2 border-blue-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-purple-400 font-medium text-white bg-purple-500/10"
+                          : "text-purple-300 hover:text-purple-200 bg-purple-500/5 hover:bg-purple-500/10"
                       }`}
                       onClick={() => setSelectedTab("signatures")}
                     >
-                      <PencilSquareIcon className="inline h-4 w-4 mr-1" />
+                      <PencilSquareIcon className="h-4 w-4 mr-1.5" />
                       Signatures
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-purple-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                      </span>
                     </div>
                   )}
-                  {/* Show Approval tab for PENDING_APPROVAL applications */}
+                  {/* Show Approval tab for PENDING_APPROVAL applications - ACTION REQUIRED */}
                   {selectedApplication.status === "PENDING_APPROVAL" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "approval"
-                          ? "border-b-2 border-amber-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-amber-400 font-medium text-white bg-amber-500/10"
+                          : "text-amber-300 hover:text-amber-200 bg-amber-500/5 hover:bg-amber-500/10"
                       }`}
                       onClick={() => setSelectedTab("approval")}
                     >
-                      <DocumentMagnifyingGlassIcon className="inline h-4 w-4 mr-1" />
+                      <DocumentMagnifyingGlassIcon className="h-4 w-4 mr-1.5" />
                       Approval
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      </span>
                     </div>
                   )}
-                  {/* Show Collateral Review tab for COLLATERAL_REVIEW applications */}
+                  {/* Show Collateral Review tab for COLLATERAL_REVIEW applications - ACTION REQUIRED */}
                   {selectedApplication.status === "COLLATERAL_REVIEW" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "collateral"
-                          ? "border-b-2 border-amber-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-amber-400 font-medium text-white bg-amber-500/10"
+                          : "text-amber-300 hover:text-amber-200 bg-amber-500/5 hover:bg-amber-500/10"
                       }`}
                       onClick={() => setSelectedTab("collateral")}
                     >
-                      <ClipboardDocumentCheckIcon className="inline h-4 w-4 mr-1" />
+                      <ClipboardDocumentCheckIcon className="h-4 w-4 mr-1.5" />
                       Collateral Review
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      </span>
                     </div>
                   )}
-                  {/* Show Attestation tab for PENDING_ATTESTATION applications */}
+                  {/* Show Attestation tab for PENDING_ATTESTATION applications - ACTION REQUIRED */}
                   {selectedApplication.status === "PENDING_ATTESTATION" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "attestation"
-                          ? "border-b-2 border-cyan-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-cyan-400 font-medium text-white bg-cyan-500/10"
+                          : "text-cyan-300 hover:text-cyan-200 bg-cyan-500/5 hover:bg-cyan-500/10"
                       }`}
                       onClick={() => setSelectedTab("attestation")}
                     >
-                      <ClipboardDocumentCheckIcon className="inline h-4 w-4 mr-1" />
+                      <ClipboardDocumentCheckIcon className="h-4 w-4 mr-1.5" />
                       Attestation
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-cyan-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                      </span>
                     </div>
                   )}
-                  {/* Show Stamping tab for PENDING_STAMPING applications */}
+                  {/* Show Stamping tab for PENDING_STAMPING applications - ACTION REQUIRED */}
                   {selectedApplication.status === "PENDING_STAMPING" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "stamping"
-                          ? "border-b-2 border-teal-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-teal-400 font-medium text-white bg-teal-500/10"
+                          : "text-teal-300 hover:text-teal-200 bg-teal-500/5 hover:bg-teal-500/10"
                       }`}
                       onClick={() => setSelectedTab("stamping")}
                     >
-                      <DocumentTextIcon className="inline h-4 w-4 mr-1" />
+                      <DocumentTextIcon className="h-4 w-4 mr-1.5" />
                       Stamping
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-teal-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                      </span>
                     </div>
                   )}
-                  {/* Show Disbursement tab for PENDING_DISBURSEMENT applications */}
+                  {/* Show Disbursement tab for PENDING_DISBURSEMENT applications - ACTION REQUIRED */}
                   {selectedApplication.status === "PENDING_DISBURSEMENT" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "disbursement"
-                          ? "border-b-2 border-green-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-green-400 font-medium text-white bg-green-500/10"
+                          : "text-green-300 hover:text-green-200 bg-green-500/5 hover:bg-green-500/10"
                       }`}
                       onClick={() => setSelectedTab("disbursement")}
                     >
-                      <BanknotesIcon className="inline h-4 w-4 mr-1" />
+                      <BanknotesIcon className="h-4 w-4 mr-1.5" />
                       Disbursement
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      </span>
                     </div>
                   )}
-                  {/* Actions tab - ADMIN only */}
-                  {userRole === "ADMIN" && (
+                  {/* Actions tab - ADMIN only, hidden by default */}
+                  {userRole === "ADMIN" && showActionsTab && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "actions"
-                          ? "border-b-2 border-blue-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-red-400 font-medium text-white bg-red-500/10"
+                          : "text-red-400 hover:text-red-300 bg-red-500/5 hover:bg-red-500/10"
                       }`}
                       onClick={() => setSelectedTab("actions")}
                     >
-                      Actions
+                      <ExclamationTriangleIcon className="h-4 w-4 mr-1.5" />
+                      <span className="text-xs">Dev Actions</span>
+                    </div>
+                  )}
+                  {/* Toggle to show Actions tab - ADMIN only */}
+                  {userRole === "ADMIN" && !showActionsTab && (
+                    <div
+                      className="px-2 py-2 cursor-pointer transition-colors flex items-center text-gray-500 hover:text-gray-400"
+                      onClick={() => setShowActionsWarningModal(true)}
+                      title="Show developer actions (testing only)"
+                    >
+                      <Cog6ToothIcon className="h-3.5 w-3.5" />
                     </div>
                   )}
                 </div>
@@ -3257,7 +3330,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                         {/* Late Payment Fees from Product */}
                         {selectedApplication.product && (
                           <div className="border-t border-gray-600/50 pt-4">
-                            <p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees (per product terms)</p>
+                            <p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees</p>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                               <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
                                 <span className="text-gray-400 block text-xs mb-1">Late Fee Rate</span>
@@ -3272,16 +3345,19 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 <span className="text-amber-400 font-medium">
                                   {selectedApplication.product.lateFeeFixedAmount !== undefined && selectedApplication.product.lateFeeFixedAmount !== null
                                     ? formatCurrency(selectedApplication.product.lateFeeFixedAmount)
-                                    : "RM 0.00"} <span className="text-xs text-gray-400">per occurrence</span>
+                                    : "RM 0.00"}
                                 </span>
+                                {selectedApplication.product.lateFeeFrequencyDays !== undefined && selectedApplication.product.lateFeeFrequencyDays !== null && selectedApplication.product.lateFeeFrequencyDays > 0 && (
+                                  <span className="text-xs text-gray-400 block mt-1">every {selectedApplication.product.lateFeeFrequencyDays} days</span>
+                                )}
                               </div>
                               <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
                                 <span className="text-gray-400 block text-xs mb-1">Grace Period</span>
                                 <span className="text-amber-400 font-medium">
-                                  {selectedApplication.product.lateFeeFrequencyDays !== undefined && selectedApplication.product.lateFeeFrequencyDays !== null
-                                    ? `${selectedApplication.product.lateFeeFrequencyDays} days`
-                                    : "7 days"} <span className="text-xs text-gray-400">before fee applies</span>
+                                  {lateFeeGraceDays} days
                                 </span>
+                                <span className="text-xs text-gray-400 block mt-1">before fee applies</span>
+                                <span className="text-xs text-blue-400 block mt-0.5">(system-wide)</span>
                               </div>
                             </div>
                           </div>
@@ -5698,6 +5774,79 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       </div>
 
       {/* PIN signing now handled in separate admin PKI page */}
+
+      {/* Actions Tab Warning Modal */}
+      {showActionsWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowActionsWarningModal(false)}
+          />
+          {/* Modal */}
+          <div className="relative bg-gray-900 border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Warning Header */}
+            <div className="bg-red-500/20 border-b border-red-500/30 px-6 py-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 bg-red-500/20 rounded-full p-2">
+                  <ExclamationTriangleIcon className="h-6 w-6 text-red-400" />
+                </div>
+                <h3 className="ml-3 text-lg font-semibold text-red-400">
+                  Warning: Developer Actions
+                </h3>
+              </div>
+            </div>
+            {/* Content */}
+            <div className="px-6 py-5">
+              <div className="space-y-4">
+                <p className="text-gray-300">
+                  This tab contains <span className="font-semibold text-red-400">dangerous actions</span> that can break compliance and audit trails.
+                </p>
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                  <ul className="text-sm text-red-300 space-y-2">
+                    <li className="flex items-start">
+                      <XCircleIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Manual status changes bypass normal workflow validations</span>
+                    </li>
+                    <li className="flex items-start">
+                      <XCircleIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Actions here may not trigger required notifications</span>
+                    </li>
+                    <li className="flex items-start">
+                      <XCircleIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Audit records may be incomplete or inconsistent</span>
+                    </li>
+                  </ul>
+                </div>
+                <p className="text-sm text-gray-400 italic">
+                  This tab is intended for <span className="font-medium text-gray-300">testing and development purposes only</span>. 
+                  Do not use unless absolutely necessary.
+                </p>
+              </div>
+            </div>
+            {/* Actions */}
+            <div className="bg-gray-800/50 border-t border-gray-700/50 px-6 py-4 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowActionsWarningModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-700 border border-gray-600/50 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowActionsTab(true);
+                  setShowActionsWarningModal(false);
+                  setSelectedTab("actions");
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 border border-red-500 rounded-lg transition-colors flex items-center"
+              >
+                <ExclamationTriangleIcon className="h-4 w-4 mr-1.5" />
+                I Understand, Show Actions
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
