@@ -1730,9 +1730,10 @@ function ActiveLoansContent() {
 		if (totalAmountDue === 0) return 0;
 		
 		// Calculate total paid using actualAmount (the actual amount paid)
+		// Include both COMPLETED and PARTIAL repayments since actualAmount reflects actual payments made
 		const totalPaid = loan.repayments?.reduce((total, repayment) => {
-			if (repayment.status !== "COMPLETED") return total;
-			return total + (repayment.actualAmount || repayment.amount || 0);
+			if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+			return total + (repayment.actualAmount || 0);
 		}, 0) || 0;
 		
 		return Math.min((totalPaid / totalAmountDue) * 100, 100);
@@ -2711,12 +2712,11 @@ function ActiveLoansContent() {
 																						   loan.status === "PENDING_DISCHARGE" ||
 																						   loan.status === "DISCHARGED";
 																if (isPendingSettlement) {
-																	// Calculate total paid from completed repayments (this is the actual amount paid)
+																	// Calculate total paid from completed/partial repayments (this is the actual amount paid)
 																	const totalPaid = loan.repayments?.reduce((total, repayment) => {
-																		if (repayment.status !== "COMPLETED") return total;
-																		// For completed repayments, use actualAmount if available, otherwise calculate
-																		const actualAmount = repayment.actualAmount || repayment.amount || 0;
-																		return total + actualAmount;
+																		if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+																		// For completed/partial repayments, use actualAmount which reflects actual payment
+																		return total + (repayment.actualAmount || 0);
 																	}, 0) || 0;
 																	
 																	// Get discount info if available
@@ -3078,10 +3078,10 @@ function ActiveLoansContent() {
 													{(() => {
 														const repayments = selectedLoan.repayments || [];
 														// Calculate from repayments (primary method)
+														// Include both COMPLETED and PARTIAL since actualAmount reflects actual payments
 														const calculatedFromRepayments = repayments.reduce((total, repayment) => {
-															// Only count COMPLETED repayments
-															if (repayment.status !== "COMPLETED") return total;
-															return total + (repayment.actualAmount || repayment.amount || 0);
+															if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+															return total + (repayment.actualAmount || 0);
 														}, 0);
 														// Use calculated value, or fall back to backend-provided totalPaid if calculation returns 0
 														const totalPaid = calculatedFromRepayments > 0 
@@ -3623,9 +3623,10 @@ function ActiveLoansContent() {
 															{formatCurrency(
 																(() => {
 																	// Calculate total paid using actualAmount (the actual amount paid)
+																	// Include both COMPLETED and PARTIAL since actualAmount reflects actual payments
 																	const calculatedFromRepayments = selectedLoan.repayments?.reduce((total, repayment) => {
-																		if (repayment.status !== "COMPLETED") return total;
-																		return total + (repayment.actualAmount || repayment.amount || 0);
+																		if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+																		return total + (repayment.actualAmount || 0);
 																	}, 0) || 0;
 																	// Use calculated value, or fall back to backend-provided totalPaid
 																	return calculatedFromRepayments > 0 
@@ -3739,9 +3740,9 @@ function ActiveLoansContent() {
 														return total + (repayment.actualAmount || repayment.amount || 0);
 													}, 0);
 													
-													// Late fees paid (from all completed repayments)
+													// Late fees paid (from all completed/partial repayments)
 													const totalLateFeesPaid = selectedLoan.repayments?.reduce((total, repayment) => {
-														if (repayment.status !== "COMPLETED") return total;
+														if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
 														return total + (repayment.lateFeesPaid || 0);
 													}, 0) || 0;
 													
@@ -4394,9 +4395,10 @@ function ActiveLoansContent() {
 																{formatCurrency(
 																	(() => {
 																		// Calculate total paid using actualAmount (the actual amount paid)
+																		// Include both COMPLETED and PARTIAL since actualAmount reflects actual payments
 																		const calculatedFromRepayments = selectedLoan.repayments?.reduce((total, repayment) => {
-																			if (repayment.status !== "COMPLETED") return total;
-																			return total + (repayment.actualAmount || repayment.amount || 0);
+																			if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+																			return total + (repayment.actualAmount || 0);
 																		}, 0) || 0;
 																		// Use calculated value, or fall back to backend-provided totalPaid
 																		return calculatedFromRepayments > 0 

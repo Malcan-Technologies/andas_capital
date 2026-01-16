@@ -1162,12 +1162,21 @@ router.get(
 		});
 
 		// 🔹 3. REVENUE & INTEREST METRICS
-		// Get total interest earned from repayments (using interestAmount field)
+		// Get total interest earned from repayments
+		// Interest paid = MIN(interestAmount, actualAmount - lateFeesPaid)
+		// This follows payment allocation priority: Late Fees → Interest → Principal
+		// Include both COMPLETED and PARTIAL repayments since actualAmount reflects actual payments
 		const totalInterestEarned = await prisma.$queryRaw`
 			SELECT 
-				ROUND(COALESCE(SUM(lr."interestAmount"), 0)::numeric, 2) as total_interest
+				ROUND(COALESCE(SUM(
+					GREATEST(0, LEAST(
+						lr."interestAmount",
+						COALESCE(lr."actualAmount", 0) - COALESCE(lr."lateFeesPaid", 0)
+					))
+				), 0)::numeric, 2) as total_interest
 			FROM "loan_repayments" lr
-			WHERE lr."paidAt" IS NOT NULL
+			WHERE lr.status IN ('COMPLETED', 'PARTIAL')
+			AND lr."actualAmount" > 0
 		` as Array<{total_interest: number}>;
 
 		// Get total fees earned (upfront fees from disbursed loans)
