@@ -100,9 +100,18 @@ export default function LiveAttestationsPage() {
 			setLoading(true);
 			setError(null);
 
-			const data = await fetchWithAdminTokenRefresh<LoanApplication[]>(
-				"/api/admin/applications/live-attestations"
-			);
+			const response = await fetchWithAdminTokenRefresh<
+				| LoanApplication[]
+				| { success: boolean; data: LoanApplication[] }
+			>("/api/admin/applications/live-attestations");
+
+			// Handle both direct array format and wrapped format { success, data }
+			let data: LoanApplication[] = [];
+			if (Array.isArray(response)) {
+				data = response;
+			} else if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
+				data = response.data;
+			}
 
 			setApplications(data);
 		} catch (error) {

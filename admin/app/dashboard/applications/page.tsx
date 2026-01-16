@@ -41,6 +41,7 @@ import {
   InformationCircleIcon,
   FolderIcon,
   Cog6ToothIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 
 interface LoanApplication {
@@ -255,6 +256,7 @@ function AdminApplicationsPageContent() {
     "PENDING_APPROVAL",
     "PENDING_FRESH_OFFER",
     "PENDING_ATTESTATION",
+    "CERT_CHECK",
     "PENDING_SIGNATURE",
     "PENDING_PKI_SIGNING",
     "PENDING_SIGNING_COMPANY_WITNESS",
@@ -412,6 +414,8 @@ function AdminApplicationsPageContent() {
         return ArrowsUpDownIcon;
       case "PENDING_ATTESTATION":
         return ClipboardDocumentCheckIcon;
+      case "CERT_CHECK":
+        return ShieldCheckIcon;
       case "PENDING_SIGNATURE":
         return DocumentTextIcon;
       case "PENDING_PKI_SIGNING":
@@ -457,6 +461,8 @@ function AdminApplicationsPageContent() {
         return "bg-pink-500/20 text-pink-200 border-pink-400/20";
       case "PENDING_ATTESTATION":
         return "bg-cyan-500/20 text-cyan-200 border-cyan-400/20";
+      case "CERT_CHECK":
+        return "bg-sky-500/20 text-sky-200 border-sky-400/20";
       case "PENDING_SIGNATURE":
         return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
       case "PENDING_PKI_SIGNING":
@@ -502,6 +508,8 @@ function AdminApplicationsPageContent() {
         return "Fresh Offer Pending";
       case "PENDING_ATTESTATION":
         return "Pending Attestation";
+      case "CERT_CHECK":
+        return "Certificate Check";
       case "PENDING_SIGNATURE":
         return "Pending Signature";
       case "PENDING_PKI_SIGNING":
@@ -695,16 +703,34 @@ function AdminApplicationsPageContent() {
 
       // Try fetching applications from applications endpoint (ADMIN only)
       try {
-        const response = await fetchWithAdminTokenRefresh<{
-          success: boolean;
-          data: LoanApplication[];
-          systemSettings?: { lateFeeGraceDays: number };
-        }>("/api/admin/applications");
+        const response = await fetchWithAdminTokenRefresh<
+          | {
+              success: boolean;
+              data: LoanApplication[];
+              systemSettings?: { lateFeeGraceDays: number };
+            }
+          | LoanApplication[]
+        >("/api/admin/applications");
         
-        // Extract applications from new format, and store system settings
-        const applicationsData = response.success && response.data ? response.data : [];
-        if (response.systemSettings?.lateFeeGraceDays !== undefined) {
-          setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+        // Extract applications - handle both wrapped format { success, data } and direct array format
+        let applicationsData: LoanApplication[] = [];
+        if (Array.isArray(response)) {
+          // Direct array format
+          applicationsData = response;
+        } else if (response && typeof response === 'object') {
+          // Wrapped format { success, data, systemSettings }
+          if ('data' in response && Array.isArray(response.data)) {
+            applicationsData = response.data;
+          }
+          if ('systemSettings' in response && response.systemSettings?.lateFeeGraceDays !== undefined) {
+            setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+          }
+        }
+
+        // Ensure applicationsData is always an array
+        if (!Array.isArray(applicationsData)) {
+          console.error('Applications data is not an array:', applicationsData);
+          applicationsData = [];
         }
 
         // For each application, fetch its history
