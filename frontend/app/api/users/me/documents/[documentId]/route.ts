@@ -14,18 +14,27 @@ export async function GET(
 		const params = await props.params;
 		const { documentId } = params;
 
-		// Try to get token from Authorization header first, then fall back to cookies
+		// Try multiple sources for authentication token:
+		// 1. Authorization header (for fetch requests)
+		// 2. Request cookies (for browser navigation/window.open)
+		// 3. next/headers cookies (fallback)
 		const authHeader = req.headers.get("authorization");
 		let token = authHeader?.replace("Bearer ", "");
 		
 		if (!token) {
+			// Try request cookies first (works for browser navigation)
+			token = req.cookies.get("token")?.value;
+		}
+		
+		if (!token) {
+			// Fallback to next/headers cookies
 			const cookieStore = await cookies();
 			token = cookieStore.get("token")?.value;
 		}
 
 		if (!token) {
 			return NextResponse.json(
-				{ message: "Unauthorized" },
+				{ message: "Unauthorized - No authentication token found" },
 				{ status: 401 }
 			);
 		}

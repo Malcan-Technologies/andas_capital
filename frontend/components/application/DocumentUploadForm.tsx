@@ -910,9 +910,16 @@ export default function DocumentUploadForm({
 	};
 
 	// Get the proper URL for accessing a document (handles S3 and local files)
-	// For "Use Previous" documents, always use the user documents endpoint
-	// This works for all user-owned documents regardless of which application they were uploaded for
+	// Uses backend URL directly since the loan-applications document endpoint
+	// streams from S3 without requiring cookie-based auth
 	const getDocumentAccessUrl = (doc: PreviousDocument): string => {
+		const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+		
+		if (doc.applicationId) {
+			// For application-linked documents, use the backend loan-applications endpoint directly
+			return `${backendUrl}/api/loan-applications/${doc.applicationId}/documents/${doc.id}`;
+		}
+		// For standalone documents without applicationId, use the Next.js API proxy
 		return `/api/users/me/documents/${doc.id}`;
 	};
 

@@ -486,9 +486,18 @@ export default function ProfilePage() {
 	};
 
 	const handleDocumentView = (document: UserDocument) => {
-		// Use the unified user documents endpoint - works for all documents (S3 and local)
-		// This endpoint streams the document through the backend, handling S3 authentication
-		window.open(`/api/users/me/documents/${document.id}`, '_blank');
+		// Use the backend loan-applications endpoint directly for documents with applicationId
+		// This endpoint streams from S3 and doesn't require cookie-based auth
+		const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+		
+		if (document.applicationId) {
+			// For application-linked documents, use the loan-applications endpoint
+			window.open(`${backendUrl}/api/loan-applications/${document.applicationId}/documents/${document.id}`, '_blank');
+		} else {
+			// For standalone user documents, use the user documents endpoint via Next.js proxy
+			// This handles authentication through cookies
+			window.open(`/api/users/me/documents/${document.id}`, '_blank');
+		}
 	};
 
 
