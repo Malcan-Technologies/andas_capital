@@ -67,6 +67,8 @@ interface PersonalInfo {
 	state: string;
 	postalCode: string;
 	zipCode?: string;
+	bankName?: string;
+	accountNumber?: string;
 }
 
 const defaultUserData: PersonalInfo = {
@@ -81,6 +83,8 @@ const defaultUserData: PersonalInfo = {
 	city: "",
 	state: "",
 	postalCode: "",
+	bankName: "",
+	accountNumber: "",
 };
 
 interface EmploymentInfo {

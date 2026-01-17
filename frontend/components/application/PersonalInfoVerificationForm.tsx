@@ -1,6 +1,14 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AcademicCapIcon, UserIcon, BriefcaseIcon, HomeIcon } from "@heroicons/react/24/outline";
+import { 
+	AcademicCapIcon, 
+	UserIcon, 
+	BriefcaseIcon, 
+	HomeIcon, 
+	BanknotesIcon,
+	CreditCardIcon
+} from "@heroicons/react/24/outline";
+import { CheckCircleIcon as CheckCircleIconSolid } from "@heroicons/react/24/solid";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
 
 interface PersonalInfo {
@@ -18,7 +26,23 @@ interface PersonalInfo {
 	state: string;
 	postalCode: string;
 	zipCode?: string;
+	bankName?: string;
+	accountNumber?: string;
 }
+
+// Malaysian banks list
+const banks = [
+	"Maybank",
+	"CIMB Bank",
+	"Public Bank",
+	"RHB Bank",
+	"Hong Leong Bank",
+	"AmBank",
+	"Bank Islam",
+	"OCBC Bank",
+	"UOB Bank",
+	"Standard Chartered",
+] as const;
 
 interface PersonalInfoVerificationFormProps {
 	onSubmit: (values: PersonalInfo) => void;
@@ -58,6 +82,8 @@ function PersonalInfoVerificationFormContent({
 		city: "",
 		state: "",
 		postalCode: "",
+		bankName: "",
+		accountNumber: "",
 	});
 	const [errors, setErrors] = useState<Partial<PersonalInfo>>({});
 	const [loading, setLoading] = useState(true);
@@ -95,6 +121,8 @@ function PersonalInfoVerificationFormContent({
 						state: userData.state || "",
 						postalCode:
 							userData.postalCode || userData.zipCode || "",
+						bankName: userData.bankName || "",
+						accountNumber: userData.accountNumber || "",
 					};
 					
 					setFormValues(newFormValues);
@@ -172,8 +200,74 @@ function PersonalInfoVerificationFormContent({
 			newErrors.postalCode = "Please enter a valid 5-digit postal code";
 		}
 
+		// Bank details validation
+		if (!formValues.bankName) {
+			newErrors.bankName = "Please select your bank";
+		}
+
+		if (!formValues.accountNumber) {
+			newErrors.accountNumber = "Account number is required";
+		} else if (!/^\d{10,16}$/.test(formValues.accountNumber)) {
+			newErrors.accountNumber = "Account number must be between 10 and 16 digits";
+		}
+
 		setErrors(newErrors);
 		return Object.keys(newErrors).length === 0;
+	};
+
+	// Section completion check functions
+	const isPersonalInfoComplete = () => {
+		return !!(
+			formValues.fullName &&
+			formValues.email &&
+			/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formValues.email) &&
+			formValues.phoneNumber
+		);
+	};
+
+	const isEducationEmploymentComplete = () => {
+		const hasBasicInfo = !!(
+			formValues.educationLevel &&
+			formValues.employmentStatus &&
+			formValues.monthlyIncome &&
+			parseFloat(formValues.monthlyIncome) > 0
+		);
+
+		// If employed/self-employed, also require employer name
+		if (formValues.employmentStatus === "Employed" || formValues.employmentStatus === "Self-Employed") {
+			return hasBasicInfo && !!formValues.employerName;
+		}
+
+		return hasBasicInfo;
+	};
+
+	const isAddressComplete = () => {
+		return !!(
+			formValues.address1 &&
+			formValues.city &&
+			formValues.state &&
+			formValues.postalCode &&
+			/^\d{5}$/.test(formValues.postalCode)
+		);
+	};
+
+	const isBankDetailsComplete = () => {
+		return !!(
+			formValues.bankName &&
+			formValues.accountNumber &&
+			/^\d{10,16}$/.test(formValues.accountNumber)
+		);
+	};
+
+	// Section completion badge component
+	const SectionBadge = ({ isComplete }: { isComplete: boolean }) => {
+		if (!isComplete) return null;
+		return (
+			<div className="flex items-center space-x-1 ml-auto">
+				<CheckCircleIconSolid className="h-5 w-5 text-green-500" />
+				<span className="text-sm font-medium text-green-600 font-body">Complete</span>
+			</div>
+		);
 	};
 
 	const handleSubmit = (e: React.FormEvent) => {
@@ -201,9 +295,12 @@ function PersonalInfoVerificationFormContent({
 				} else {
 					setFormValues((prev) => ({ ...prev, [field]: value }));
 				}
-			} else if (field === "monthlyIncome" || field === "postalCode" || field === "serviceLength") {
+			} else if (field === "monthlyIncome" || field === "postalCode" || field === "serviceLength" || field === "accountNumber") {
 				const numericValue = value.replace(/[^0-9.]/g, "");
 				if (field === "postalCode" && numericValue.length > 5) {
+					return;
+				}
+				if (field === "accountNumber" && numericValue.length > 16) {
 					return;
 				}
 				setFormValues((prev) => ({ ...prev, [field]: numericValue }));
@@ -260,6 +357,7 @@ function PersonalInfoVerificationFormContent({
 						<h3 className="text-lg font-heading font-semibold text-blue-400">
 							Personal Information
 						</h3>
+						<SectionBadge isComplete={isPersonalInfoComplete()} />
 					</div>
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
@@ -323,6 +421,7 @@ function PersonalInfoVerificationFormContent({
 						<h3 className="text-lg font-heading font-semibold text-blue-400">
 							Education & Employment
 						</h3>
+						<SectionBadge isComplete={isEducationEmploymentComplete()} />
 					</div>
 					<div className="space-y-4">
 						<div>
@@ -472,6 +571,7 @@ function PersonalInfoVerificationFormContent({
 						<h3 className="text-lg font-heading font-semibold text-blue-400">
 							Residential Address
 						</h3>
+						<SectionBadge isComplete={isAddressComplete()} />
 					</div>
 					<div className="space-y-4">
 						<div>
@@ -559,6 +659,88 @@ function PersonalInfoVerificationFormContent({
 									</p>
 								)}
 							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Bank Details Section */}
+				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+					<div className="flex items-center space-x-2 mb-6">
+						<BanknotesIcon className="h-5 w-5 text-blue-400" />
+						<h3 className="text-lg font-heading font-semibold text-blue-400">
+							Bank Account Details
+						</h3>
+						<SectionBadge isComplete={isBankDetailsComplete()} />
+					</div>
+					<p className="text-sm text-gray-500 font-body mb-4">
+						Your bank account will be used for loan disbursement
+					</p>
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Bank Name <span className="text-red-500">*</span>
+							</label>
+							<div className="relative">
+								<div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+									<BanknotesIcon className="h-5 w-5 text-gray-400" />
+								</div>
+								<select
+									value={formValues.bankName || ""}
+									onChange={handleChange("bankName")}
+									className={`w-full pl-12 pr-10 py-3 bg-white border rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none ${
+										errors.bankName
+											? "border-red-300"
+											: "border-gray-300"
+									}`}
+								>
+									<option value="">Choose your bank</option>
+									{banks.map((bank) => (
+										<option key={bank} value={bank}>
+											{bank}
+										</option>
+									))}
+								</select>
+								<div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+									<svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+										<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+									</svg>
+								</div>
+							</div>
+							{errors.bankName && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.bankName}
+								</p>
+							)}
+						</div>
+
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+								Account Number <span className="text-red-500">*</span>
+							</label>
+							<div className="relative">
+								<div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+									<CreditCardIcon className="h-5 w-5 text-gray-400" />
+								</div>
+								<input
+									type="text"
+									value={formValues.accountNumber || ""}
+									onChange={handleChange("accountNumber")}
+									className={`w-full pl-12 pr-4 py-3 bg-white border rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body ${
+										errors.accountNumber
+											? "border-red-300"
+											: "border-gray-300"
+									}`}
+									placeholder="Enter your account number"
+								/>
+							</div>
+							{errors.accountNumber && (
+								<p className="mt-1 text-sm text-red-600 font-body">
+									{errors.accountNumber}
+								</p>
+							)}
+							<p className="mt-1 text-xs text-gray-500 font-body">
+								Must be between 10 and 16 digits
+							</p>
 						</div>
 					</div>
 				</div>
