@@ -3656,6 +3656,20 @@ router.get(
 							},
 						},
 					},
+					disbursement: {
+						select: {
+							id: true,
+							referenceNumber: true,
+							amount: true,
+							bankName: true,
+							bankAccountNumber: true,
+							disbursedAt: true,
+							disbursedBy: true,
+							notes: true,
+							status: true,
+							paymentSlipUrl: true,
+						},
+					},
 				},
 			});
 

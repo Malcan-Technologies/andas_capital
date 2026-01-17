@@ -117,6 +117,18 @@ interface LoanApplication {
       signedAt?: string;
     }[];
   };
+  disbursement?: {
+    id: string;
+    referenceNumber: string;
+    amount: number;
+    bankName?: string;
+    bankAccountNumber?: string;
+    disbursedAt: string;
+    disbursedBy: string;
+    notes?: string;
+    status: string;
+    paymentSlipUrl?: string;
+  };
 }
 
 interface Document {
@@ -380,10 +392,6 @@ function AdminApplicationsPageContent() {
   const [processingDecision, setProcessingDecision] = useState(false);
   const [processingCollateral, setProcessingCollateral] = useState(false);
   const [processingDisbursement, setProcessingDisbursement] = useState(false);
-  const [disbursementSlipFile, setDisbursementSlipFile] = useState<File | null>(
-    null
-  );
-  const [uploadingSlip, setUploadingSlip] = useState(false);
 
   // Fresh offer states
   const [showFreshOfferForm, setShowFreshOfferForm] = useState(false);
@@ -1920,63 +1928,25 @@ function AdminApplicationsPageContent() {
 
     showConfirmModal({
       title: "Confirm Disbursement",
-      message: `Are you sure you want to disburse funds for this loan?`,
+      message: `Please confirm that you have already completed the bank transfer for the correct amount before proceeding.`,
       details: [
         `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
         `Amount: ${formatCurrency(disbursementAmount)}`,
         `Reference: ${disbursementReference}`,
         `Bank: ${selectedApplication.user?.bankName || "Not set"}`,
         `Account: ${selectedApplication.user?.accountNumber || "Not set"}`,
+        ``,
+        `⚠️ IMPORTANT:`,
+        `• Ensure the bank transfer has been completed`,
+        `• Upload the disbursement slip later in Loans → Disbursements tab`,
       ],
-      confirmText: "Disburse Loan",
+      confirmText: "I Confirm - Disburse Loan",
       confirmColor: "green",
       onConfirm: () => {
         closeConfirmModal();
         processDisbursement();
       },
     });
-  };
-
-  // Disbursement slip upload handler
-  const handleDisbursementSlipUpload = async () => {
-    if (!selectedApplication || !disbursementSlipFile) return;
-
-    setUploadingSlip(true);
-    try {
-      const formData = new FormData();
-      formData.append("paymentSlip", disbursementSlipFile);
-
-      const response = await fetch(
-        `/api/admin/applications/${selectedApplication.id}/upload-disbursement-slip`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
-          },
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      const data = await response.json();
-
-      toast.success("Payment slip uploaded successfully");
-      setDisbursementSlipFile(null);
-
-      // Refresh application data
-      await fetchApplications();
-    } catch (error) {
-      console.error("Error uploading payment slip:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to upload payment slip"
-      );
-    } finally {
-      setUploadingSlip(false);
-    }
   };
 
   // Process fresh offer (called after confirmation)
@@ -4738,72 +4708,62 @@ function AdminApplicationsPageContent() {
 
                 {/* Disbursement Tab */}
                 {selectedTab === "disbursement" && (
-                  <div>
-                    {/* Disbursement Section */}
-                    <div className="border border-green-500/30 rounded-lg p-6 bg-green-500/10 mb-6">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
-                        <BanknotesIcon className="h-6 w-6 mr-2 text-green-400" />
-                        Loan Disbursement
-                      </h4>
+                  <div className="space-y-6">
+                    {/* Transfer Details Card */}
+                    <div className="border border-green-500/30 rounded-xl p-6 bg-gradient-to-br from-green-500/10 to-green-600/5">
+                      <div className="flex items-center justify-between mb-6">
+                        <h4 className="text-lg font-semibold text-white flex items-center">
+                          <BanknotesIcon className="h-6 w-6 mr-2 text-green-400" />
+                          Transfer Details
+                        </h4>
+                        <span className="px-3 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full border border-green-500/30">
+                          Ready to Disburse
+                        </span>
+                      </div>
 
-                      {/* Loan Summary */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Borrower
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.user?.fullName}
+                      {/* Amount Highlight */}
+                      <div className="bg-gray-900/50 rounded-lg p-4 mb-6 text-center">
+                        <p className="text-sm text-gray-400 mb-1">Net Disbursement Amount</p>
+                        <p className="text-3xl font-bold text-green-400">
+                          {selectedApplication.netDisbursement
+                            ? formatCurrency(selectedApplication.netDisbursement)
+                            : selectedApplication.amount
+                            ? formatCurrency(selectedApplication.amount)
+                            : "Not set"}
+                        </p>
+                        {selectedApplication.netDisbursement && selectedApplication.amount && 
+                          selectedApplication.netDisbursement !== selectedApplication.amount && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Principal: {formatCurrency(selectedApplication.amount)}
                           </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.email}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.phoneNumber}
-                          </p>
+                        )}
+                      </div>
+
+                      {/* Bank Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Recipient</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.fullName || "—"}</p>
                         </div>
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Disbursement Details
-                          </h5>
-                          <p className="text-white">
-                            Disbursement Amount:{" "}
-                            {selectedApplication.netDisbursement
-                              ? formatCurrency(
-                                  selectedApplication.netDisbursement
-                                )
-                              : selectedApplication.amount
-                              ? formatCurrency(selectedApplication.amount)
-                              : "Not set"}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            Loan Amount:{" "}
-                            {selectedApplication.amount
-                              ? formatCurrency(selectedApplication.amount)
-                              : "Not set"}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            Bank:{" "}
-                            {selectedApplication.user?.bankName ||
-                              "Not provided"}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm text-gray-400">
-                              Account:{" "}
-                              {selectedApplication.user?.accountNumber ||
-                                "Not provided"}
-                            </p>
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Bank</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.bankName || "Not provided"}</p>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-4 md:col-span-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Account Number</p>
+                              <p className="text-white font-mono text-lg">{selectedApplication.user?.accountNumber || "Not provided"}</p>
+                            </div>
                             {selectedApplication.user?.accountNumber && (
                               <button
-                                onClick={() =>
-                                  navigator.clipboard.writeText(
-                                    selectedApplication.user?.accountNumber ||
-                                      ""
-                                  )
-                                }
-                                className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 rounded border border-blue-400/20"
-                                title="Copy account number"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(selectedApplication.user?.accountNumber || "");
+                                  toast.success("Account number copied to clipboard");
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-colors border border-blue-500/30"
                               >
+                                <ClipboardDocumentCheckIcon className="h-4 w-4" />
                                 Copy
                               </button>
                             )}
@@ -4811,107 +4771,87 @@ function AdminApplicationsPageContent() {
                         </div>
                       </div>
 
-                      {/* Reference Number */}
+                      {/* Reference Number Input */}
                       <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Bank Transfer Reference Number
+                          Bank Transfer Reference
                         </label>
-                        <div className="relative">
+                        <div className="flex gap-3">
                           <input
                             type="text"
                             value={disbursementReference}
-                            onChange={(e) =>
-                              setDisbursementReference(e.target.value)
-                            }
-                            placeholder="Enter bank transfer reference..."
-                            className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            onChange={(e) => setDisbursementReference(e.target.value)}
+                            placeholder="Enter or use auto-generated reference..."
+                            className="flex-1 px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono"
                           />
-                          <div className="mt-2 p-2 bg-blue-500/10 border border-blue-400/20 rounded text-xs text-blue-200">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <strong>Auto-generated reference:</strong>{" "}
-                                {disbursementReference}
-                                <br />
-                                <span className="text-blue-300">
-                                  Use this reference when making the bank
-                                  transfer
-                                </span>
-                              </div>
-                              {disbursementReference && (
-                                <button
-                                  onClick={() =>
-                                    navigator.clipboard.writeText(
-                                      disbursementReference
-                                    )
-                                  }
-                                  className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/20 rounded border border-blue-400/30 ml-2"
-                                  title="Copy reference number"
-                                >
-                                  Copy Ref
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                          <button
+                            onClick={() => {
+                              if (disbursementReference) {
+                                navigator.clipboard.writeText(disbursementReference);
+                                toast.success("Reference number copied to clipboard");
+                              }
+                            }}
+                            disabled={!disbursementReference}
+                            className="px-4 py-3 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg transition-colors"
+                            title="Copy reference"
+                          >
+                            <ClipboardDocumentCheckIcon className="h-5 w-5" />
+                          </button>
                         </div>
-                      </div>
-
-                      {/* Disbursement Notes */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Disbursement Notes (Optional)
-                        </label>
-                        <textarea
-                          value={disbursementNotes}
-                          onChange={(e) => setDisbursementNotes(e.target.value)}
-                          placeholder="Add notes about the disbursement..."
-                          className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          rows={3}
-                        />
-                      </div>
-
-                      {/* Disbursement Button */}
-                      <div className="flex space-x-4">
-                        <button
-                          onClick={handleDisbursement}
-                          disabled={
-                            processingDisbursement ||
-                            !disbursementReference.trim()
-                          }
-                          className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
-                        >
-                          <BanknotesIcon className="h-5 w-5 mr-2" />
-                          {processingDisbursement
-                            ? "Processing..."
-                            : "Disburse Loan"}
-                        </button>
-                        {!disbursementReference.trim() && (
-                          <p className="text-sm text-red-400 flex items-center">
-                            Reference number is required
+                        {disbursementReference && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Use this reference when making the bank transfer
                           </p>
                         )}
                       </div>
 
-                      {/* Process Information */}
-                      <div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
-                        <h5 className="text-sm font-medium text-blue-200 mb-2">
-                          Disbursement Process
-                        </h5>
-                        <ul className="text-xs text-blue-200 space-y-1">
-                          <li>
-                            • Funds will be transferred to the borrower's
-                            registered bank account
-                          </li>
-                          <li>
-                            • Loan status will change to ACTIVE upon successful
-                            disbursement
-                          </li>
-                          <li>
-                            • Borrower will receive SMS and email notifications
-                          </li>
-                          <li>
-                            • Repayment schedule will be automatically generated
-                          </li>
-                        </ul>
+                      {/* Notes (Collapsible feel - smaller) */}
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Notes <span className="text-gray-500 font-normal">(Optional)</span>
+                        </label>
+                        <textarea
+                          value={disbursementNotes}
+                          onChange={(e) => setDisbursementNotes(e.target.value)}
+                          placeholder="Add any notes about this disbursement..."
+                          className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                          rows={2}
+                        />
+                      </div>
+
+                      {/* Disburse Button */}
+                      <button
+                        onClick={handleDisbursement}
+                        disabled={processingDisbursement || !disbursementReference.trim()}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/30 disabled:shadow-none"
+                      >
+                        {processingDisbursement ? (
+                          <>
+                            <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                            Processing Disbursement...
+                          </>
+                        ) : (
+                          <>
+                            <BanknotesIcon className="h-5 w-5" />
+                            Disburse Loan
+                          </>
+                        )}
+                      </button>
+                      {!disbursementReference.trim() && (
+                        <p className="text-xs text-center text-amber-400 mt-2">
+                          Enter a reference number to enable disbursement
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Info Card */}
+                    <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                      <div className="flex items-start gap-3">
+                        <InformationCircleIcon className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-gray-400 space-y-1">
+                          <p>After disbursement, the loan becomes <span className="text-green-400 font-medium">ACTIVE</span> and repayment schedule is generated automatically.</p>
+                          <p>You can upload the payment slip from the <span className="text-blue-400">Loans</span> page after completing the bank transfer.</p>
+                        </div>
                       </div>
                     </div>
                   </div>

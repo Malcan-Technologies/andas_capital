@@ -311,7 +311,6 @@ function ActiveLoansContent() {
 		active: 0,
 		pending_discharge: 0,
 		pending_early_settlement: 0,
-		pending_stamped: 0,
 		discharged: 0,
 		late: 0,
 		potential_default: 0,
@@ -893,7 +892,6 @@ function ActiveLoansContent() {
 			}).length,
 			pending_discharge: loans.filter((loan) => loan.status === "PENDING_DISCHARGE").length,
 			pending_early_settlement: loans.filter((loan) => loan.status === "PENDING_EARLY_SETTLEMENT").length,
-			pending_stamped: loans.filter((loan) => loan.pkiSignedPdfUrl && (!loan.pkiStampedPdfUrl || !loan.pkiStampCertificateUrl) && loan.status !== "DEFAULT").length,
 			discharged: loans.filter((loan) => loan.status === "DISCHARGED").length,
 			late: loans.filter((loan) => {
 				// Priority: DEFAULT > Default Risk > Late
@@ -954,10 +952,6 @@ function ActiveLoansContent() {
 		} else if (statusFilter === "pending_early_settlement") {
 			filtered = filtered.filter(
 				(loan) => loan.status === "PENDING_EARLY_SETTLEMENT"
-			);
-		} else if (statusFilter === "pending_stamped") {
-			filtered = filtered.filter(
-				(loan) => loan.pkiSignedPdfUrl && (!loan.pkiStampedPdfUrl || !loan.pkiStampCertificateUrl) && loan.status !== "DEFAULT"
 			);
 		} else if (statusFilter === "discharged") {
 			filtered = filtered.filter((loan) => loan.status === "DISCHARGED");
@@ -2675,16 +2669,6 @@ function ActiveLoansContent() {
 						}`}
 					>
 						Early Settlement ({filterCounts.pending_early_settlement})
-					</button>
-					<button
-						onClick={() => setStatusFilter("pending_stamped")}
-						className={`px-4 py-2 rounded-lg border transition-colors ${
-							statusFilter === "pending_stamped"
-								? "bg-teal-500/30 text-teal-100 border-teal-400/30"
-								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-						}`}
-					>
-						Pending Stamped ({filterCounts.pending_stamped})
 					</button>
 					<button
 						onClick={() => setStatusFilter("discharged")}

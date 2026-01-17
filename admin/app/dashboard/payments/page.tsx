@@ -289,21 +289,21 @@ function PaymentsContent() {
 		};
 	}, [fetchPayments, setupAutoRefresh]);
 
-	// Filter payments based on search term with exact loan ID matching
+	// Filter payments based on search term with loan ID matching
 	const filterPayments = useCallback(() => {
 		if (!searchTerm.trim()) {
 			setFilteredPayments(payments);
 		} else {
 			const search = searchTerm.toLowerCase();
 
-			// First, check for exact loan ID match
-			const exactLoanMatch = payments.find(
+			// First, check if search matches any loan ID exactly - return ALL payments for that loan
+			const exactLoanMatches = payments.filter(
 				(payment: Payment) => payment.loan.id.toLowerCase() === search
 			);
 
-			if (exactLoanMatch) {
-				// If exact loan ID match found, show only that payment
-				setFilteredPayments([exactLoanMatch]);
+			if (exactLoanMatches.length > 0) {
+				// If exact loan ID match found, show ALL payments for that loan
+				setFilteredPayments(exactLoanMatches);
 			} else {
 				// Otherwise, do partial matching across all fields
 				const filtered = payments.filter(
