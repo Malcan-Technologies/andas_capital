@@ -41,10 +41,10 @@ const defaultDevOrigins = [
 ];
 
 const defaultProdOrigins = [
-  'https://creditxpress.com.my',
-  'https://www.creditxpress.com.my',
-  'https://admin.creditxpress.com.my',
-  'https://api.creditxpress.com.my',
+  'https://andas.com.my',
+  'https://www.andas.com.my',
+  'https://admin.andas.com.my',
+  'https://api.andas.com.my',
 ];
 
 export const corsConfig = {
@@ -96,7 +96,7 @@ const resendCredentials = parseJsonCredentials(process.env.RESEND_CREDENTIALS);
 
 export const resendConfig = {
   apiKey: process.env.RESEND_API_KEY || resendCredentials.api_key || '',
-  fromEmail: process.env.RESEND_FROM_EMAIL || resendCredentials.from_email || 'noreply@creditxpress.com.my',
+  fromEmail: process.env.RESEND_FROM_EMAIL || resendCredentials.from_email || 'noreply@andas.com.my',
 };
 
 // ==============================================
@@ -155,9 +155,9 @@ export const signingConfig = {
 // Reads from AWS Secrets Manager JSON or individual env vars
 // ==============================================
 export const companySigningConfig = {
-  companyEmail: process.env.COMPANY_SIGNING_EMAIL || docusealSigningCredentials.company_signing_email || 'admin@creditxpress.com.my',
+  companyEmail: process.env.COMPANY_SIGNING_EMAIL || docusealSigningCredentials.company_signing_email || 'admin@andas.com.my',
   witnessName: process.env.WITNESS_NAME || docusealSigningCredentials.witness_name || 'Legal Representative',
-  witnessEmail: process.env.WITNESS_EMAIL || docusealSigningCredentials.witness_email || 'legal@creditxpress.com.my',
+  witnessEmail: process.env.WITNESS_EMAIL || docusealSigningCredentials.witness_email || 'legal@andas.com.my',
   // Server public IP for digital signature attestation
   serverPublicIp: process.env.SERVER_PUBLIC_IP || docusealSigningCredentials.server_public_ip || '',
   // Default company name (fallback when database has no settings)
