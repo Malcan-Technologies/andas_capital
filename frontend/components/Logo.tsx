@@ -28,7 +28,7 @@ export default function Logo({
 		<div className={`relative ${sizeClasses[size]} ${className}`}>
 			<Image
 				src={logoSrc}
-				alt="Kapital"
+				alt="Andas Capital"
 				fill
 				className="object-contain"
 				priority

@@ -85,7 +85,7 @@ export default function EquipmentFinancing() {
 
 	return (
 		<main className="min-h-screen bg-white dark:bg-white">
-			<Navbar bgStyle="bg-[#0A0612] dark:bg-[#0A0612]" />
+			<Navbar />
 
 			{/* Hero Section */}
 			<section className="relative min-h-screen bg-[#0A0612] dark:bg-[#0A0612] pt-16">

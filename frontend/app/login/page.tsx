@@ -354,11 +354,11 @@ function LoginPageContent() {
 	// Show OTP verification if needed
 	if (showOTPVerification && userDataForOTP) {
 		return (
-			<div className="min-h-screen flex flex-col items-center justify-center bg-offwhite py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+			<div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
 				{/* Background decorative elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-purple-primary/10 to-blue-tertiary/10 blur-3xl"></div>
-					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-blue-tertiary/10 to-purple-primary/10 blur-3xl"></div>
+					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-teal-400/10 to-teal-300/10 blur-3xl"></div>
+					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-teal-300/10 to-teal-400/10 blur-3xl"></div>
 				</div>
 
 				<div className="max-w-md w-full relative z-10">
@@ -387,11 +387,11 @@ function LoginPageContent() {
 	// Show forgot password flow
 	if (showForgotPassword) {
 		return (
-			<div className="min-h-screen flex flex-col items-center justify-center bg-offwhite py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+			<div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
 				{/* Background decorative elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-purple-primary/10 to-blue-tertiary/10 blur-3xl"></div>
-					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-blue-tertiary/10 to-purple-primary/10 blur-3xl"></div>
+					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-teal-400/10 to-teal-300/10 blur-3xl"></div>
+					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-teal-300/10 to-teal-400/10 blur-3xl"></div>
 				</div>
 
 				<div className="max-w-md w-full relative z-10">
@@ -470,7 +470,7 @@ function LoginPageContent() {
 									<button
 										type="submit"
 										disabled={resetLoading}
-										className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-purple-primary hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
+										className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-teal-400 hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
 									>
 										{resetLoading ? (
 											<>
@@ -555,7 +555,7 @@ function LoginPageContent() {
 												...prev, 
 												newPassword: e.target.value 
 											}))}
-											className="block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary hover:border-gray-400 transition-colors rounded-xl"
+											className="block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 hover:border-gray-400 transition-colors rounded-xl"
 											placeholder="Enter new password (min 8 characters)"
 											minLength={8}
 										/>
@@ -592,7 +592,7 @@ function LoginPageContent() {
 												...prev, 
 												confirmPassword: e.target.value 
 											}))}
-											className="block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary hover:border-gray-400 transition-colors rounded-xl"
+											className="block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 hover:border-gray-400 transition-colors rounded-xl"
 											placeholder="Confirm new password"
 										/>
 										<button
@@ -619,7 +619,7 @@ function LoginPageContent() {
 									<button
 										type="submit"
 										disabled={resetLoading}
-										className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-purple-primary hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
+										className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-teal-400 hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
 									>
 										{resetLoading ? (
 											<>
@@ -694,11 +694,11 @@ function LoginPageContent() {
 	}
 
 	return (
-		<div className="min-h-screen flex flex-col items-center justify-center bg-offwhite py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+		<div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
 				{/* Background decorative elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-purple-primary/10 to-blue-tertiary/10 blur-3xl"></div>
-					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-blue-tertiary/10 to-purple-primary/10 blur-3xl"></div>
+					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-teal-400/10 to-teal-300/10 blur-3xl"></div>
+					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-teal-300/10 to-teal-400/10 blur-3xl"></div>
 				</div>
 
 				<div className="max-w-md w-full relative z-10">
@@ -735,10 +735,10 @@ function LoginPageContent() {
 								Welcome back
 							</h2>
 							<p className="mt-2 text-center text-sm text-gray-600 font-body">
-								New to CreditXpress?{" "}
+								New to Andas Capital?{" "}
 								<Link
 									href="/signup"
-									className="font-medium text-purple-primary hover:text-purple-600 transition-colors"
+									className="font-medium text-teal-400 hover:text-teal-500 transition-colors"
 								>
 									Create an account
 								</Link>
@@ -812,7 +812,7 @@ function LoginPageContent() {
 																			<button
 										type="button"
 										onClick={handleForgotPasswordClick}
-										className="text-sm font-medium text-purple-primary hover:text-purple-600 transition-colors"
+										className="text-sm font-medium text-teal-400 hover:text-teal-500 transition-colors"
 									>
 										Forgot password?
 									</button>
@@ -827,7 +827,7 @@ function LoginPageContent() {
 													: "password"
 											}
 											required
-											className="mt-1 block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary hover:border-gray-400 transition-colors [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+											className="mt-1 block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 hover:border-gray-400 transition-colors [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
 											placeholder="Enter your password"
 											autoComplete="current-password"
 										/>
@@ -887,7 +887,7 @@ function LoginPageContent() {
 								<button
 									type="submit"
 									disabled={loading}
-									className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-purple-primary hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+									className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-teal-400 hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
 								>
 									{loading ? (
 										<>

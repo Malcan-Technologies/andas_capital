@@ -1,21 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { MdArrowBack } from "react-icons/md";
+import { ArrowLeft } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export default function RiskDisclosure() {
 	return (
-		<div className="min-h-screen bg-offwhite">
-			<Navbar bgStyle="bg-white shadow-sm" />
+		<div className="min-h-screen bg-gray-50">
+			<Navbar />
 			
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
 				<Link 
 					href="/"
-					className="inline-flex items-center text-purple-primary hover:text-purple-700 font-semibold mb-8 transition-colors"
+					className="inline-flex items-center text-teal-400 hover:text-teal-500 font-semibold mb-8 transition-colors"
 				>
-					<MdArrowBack size={20} className="mr-2" />
+					<ArrowLeft className="h-5 w-5 mr-2" />
 					Back to Home
 				</Link>
 
@@ -30,7 +30,7 @@ export default function RiskDisclosure() {
 					</div>
 
 					<div className="prose prose-lg max-w-none font-body text-gray-700">
-						<div className="mb-8 p-6 bg-purple-primary/5 rounded-xl border border-purple-primary/20">
+						<div className="mb-8 p-6 bg-teal-400/5 rounded-xl border border-teal-400/20">
 							<p className="mb-2"><strong>Operator:</strong> OPG Capital Holdings Sdn Bhd (202101043135)</p>
 							<p className="mb-2"><strong>KPKT Licence:</strong> WL3337/07/01-11/020227</p>
 							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia</p>
@@ -42,7 +42,7 @@ export default function RiskDisclosure() {
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">1) Purpose of this Disclosure</h2>
 							<p>
 								Borrowing involves costs and risks. This Risk Disclosure helps you understand the key risks when applying for and 
-								repaying loans through CreditXpress in Malaysia. It supplements (and does not replace) your <strong>Loan Agreement</strong>, 
+								repaying loans through Andas Capital in Malaysia. It supplements (and does not replace) your <strong>Loan Agreement</strong>, 
 								<strong>Terms of Service</strong>, <strong>Terms of Use</strong>, <strong>Privacy Notice</strong>, and <strong>PDPA Policy</strong>. 
 								If there is any conflict, your <strong>Loan Agreement</strong> and legally-required disclosures prevail.
 							</p>

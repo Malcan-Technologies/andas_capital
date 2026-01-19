@@ -1,21 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { MdArrowBack } from "react-icons/md";
+import { ArrowLeft } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export default function TermsOfService() {
 	return (
-		<div className="min-h-screen bg-offwhite">
-			<Navbar bgStyle="bg-white shadow-sm" />
+		<div className="min-h-screen bg-gray-50">
+			<Navbar />
 			
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
 				<Link 
 					href="/"
-					className="inline-flex items-center text-purple-primary hover:text-purple-700 font-semibold mb-8 transition-colors"
+					className="inline-flex items-center text-teal-400 hover:text-teal-500 font-semibold mb-8 transition-colors"
 				>
-					<MdArrowBack size={20} className="mr-2" />
+					<ArrowLeft className="h-5 w-5 mr-2" />
 					Back to Home
 				</Link>
 
@@ -33,8 +33,8 @@ export default function TermsOfService() {
 						<section className="mb-8">
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">1. Who We Are</h2>
 							<p className="mb-4">
-								These Terms of Service ("Terms") govern the CreditXpress digital moneylending services ("Services"). 
-								"CreditXpress", "we", "us", or "our" refers to <strong>OPG Capital Holdings Sdn Bhd (202101043135)</strong>, 
+								These Terms of Service ("Terms") govern the Andas Capital digital moneylending services ("Services"). 
+								"Andas Capital", "we", "us", or "our" refers to <strong>OPG Capital Holdings Sdn Bhd (202101043135)</strong>, 
 								licensed under the <strong>Ministry of Housing and Local Government (KPKT)</strong> (<strong>Licence No. WL3337/07/01-11/020227</strong>) 
 								and operating under the <strong>Moneylenders Act 1951</strong> and applicable subsidiary regulations in Malaysia.
 							</p>
@@ -131,7 +131,7 @@ export default function TermsOfService() {
 						<section className="mb-8">
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">12. Intellectual Property</h2>
 							<p>
-								All platform content and software are owned by or licensed to CreditXpress. You receive a limited, revocable, 
+								All platform content and software are owned by or licensed to Andas Capital. You receive a limited, revocable, 
 								non-transferable licence to use the Services for personal, lawful purposes.
 							</p>
 						</section>

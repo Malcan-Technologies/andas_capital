@@ -16,7 +16,7 @@ export default function CreditScorePlus() {
 
 	return (
 		<main className="min-h-screen bg-white dark:bg-white">
-			<Navbar bgStyle="bg-[#0A0612] dark:bg-[#0A0612]" />
+			<Navbar />
 
 			{/* Hero Section */}
 			<section className="relative min-h-screen bg-gradient-to-br from-[#0A0612] via-[#1A1A0A] to-[#0A0612] dark:bg-gradient-to-br dark:from-[#0A0612] dark:via-[#1A1A0A] dark:to-[#0A0612] pt-16">

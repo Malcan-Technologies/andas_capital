@@ -1,21 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { MdArrowBack } from "react-icons/md";
+import { ArrowLeft } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export default function PrivacyPolicy() {
 	return (
-		<div className="min-h-screen bg-offwhite">
-			<Navbar bgStyle="bg-white shadow-sm" />
+		<div className="min-h-screen bg-gray-50">
+			<Navbar />
 			
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
 				<Link 
 					href="/"
-					className="inline-flex items-center text-purple-primary hover:text-purple-700 font-semibold mb-8 transition-colors"
+					className="inline-flex items-center text-teal-400 hover:text-teal-500 font-semibold mb-8 transition-colors"
 				>
-					<MdArrowBack size={20} className="mr-2" />
+					<ArrowLeft className="h-5 w-5 mr-2" />
 					Back to Home
 				</Link>
 
@@ -33,7 +33,7 @@ export default function PrivacyPolicy() {
 						<p className="mb-8">
 							This Privacy Policy (&quot;Policy&quot;) describes how OPG Capital Holdings Sdn. Bhd. (&quot;Company&quot;, &quot;we&quot;, &quot;us&quot;, &quot;our&quot;) 
 							collects, uses, stores, processes, discloses, and protects personal data when you access or use the 
-							CreditXpress mobile application (&quot;App&quot;) and any related services.
+							Andas Capital mobile application (&quot;App&quot;) and any related services.
 						</p>
 						<p className="mb-4">This Policy is intended to meet the requirements of:</p>
 						<ul className="list-disc pl-6 space-y-2 mb-8">
@@ -62,7 +62,7 @@ export default function PrivacyPolicy() {
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">2. Application Scope & Applicability</h2>
 							<p className="mb-2">This Privacy Policy applies to:</p>
 							<ul className="list-disc pl-6 space-y-2 mb-4">
-								<li>The CreditXpress Android mobile application</li>
+								<li>The Andas Capital Android mobile application</li>
 								<li>Services and features provided through the App</li>
 								<li>Communications related to your user account or financing services</li>
 							</ul>
@@ -244,7 +244,7 @@ export default function PrivacyPolicy() {
 							<p className="mb-4">Account deletion is not available if there are active or outstanding loans.</p>
 							<p>
 								Detailed instructions and conditions are available at:<br />
-								<Link href="/account-and-data-deletion" className="text-purple-primary hover:text-purple-700 font-semibold">
+								<Link href="/account-and-data-deletion" className="text-teal-400 hover:text-teal-500 font-semibold">
 									👉 https://andas.com.my/account-and-data-deletion
 								</Link>
 							</p>

@@ -23,7 +23,7 @@ import {
 export default function Partners() {
 	return (
 		<div className="min-h-screen bg-offwhite text-gray-700 font-body w-full">
-			<Navbar bgStyle="bg-transparent" />
+			<Navbar />
 
 			{/* Hero Section */}
 			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-[#0A0612] via-[#1A0B2E] to-[#0A0612] w-full">

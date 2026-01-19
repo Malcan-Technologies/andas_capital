@@ -1,21 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { MdArrowBack } from "react-icons/md";
+import { ArrowLeft } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export default function PrivacyNotice() {
 	return (
-		<div className="min-h-screen bg-offwhite">
-			<Navbar bgStyle="bg-white shadow-sm" />
+		<div className="min-h-screen bg-gray-50">
+			<Navbar />
 			
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
 				<Link 
 					href="/"
-					className="inline-flex items-center text-purple-primary hover:text-purple-700 font-semibold mb-8 transition-colors"
+					className="inline-flex items-center text-teal-400 hover:text-teal-500 font-semibold mb-8 transition-colors"
 				>
-					<MdArrowBack size={20} className="mr-2" />
+					<ArrowLeft className="h-5 w-5 mr-2" />
 					Back to Home
 				</Link>
 
@@ -31,7 +31,7 @@ export default function PrivacyNotice() {
 
 					<div className="prose prose-lg max-w-none font-body text-gray-700">
 						<p className="mb-8">
-							This Privacy Notice explains how CreditXpress processes personal data in Malaysia under the 
+							This Privacy Notice explains how Andas Capital processes personal data in Malaysia under the 
 							<strong> Personal Data Protection Act 2010 (PDPA)</strong> and other applicable laws 
 							(e.g., <strong>AMLA 2001</strong>, <strong>Moneylenders Act 1951</strong>, <strong>Credit Reporting Agencies Act 2010</strong>).
 						</p>
@@ -122,7 +122,7 @@ export default function PrivacyNotice() {
 						<section className="mb-8">
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">10. Account Closure and Personal Data Deletion</h2>
 							<p className="mb-4">
-								You may request the closure of your CreditXpress account and/or the deletion of your personal data, 
+								You may request the closure of your Andas Capital account and/or the deletion of your personal data, 
 								subject to applicable laws and regulatory requirements.
 							</p>
 							<p className="mb-4">
@@ -134,13 +134,13 @@ export default function PrivacyNotice() {
 							<ul className="list-disc pl-6 space-y-2 mb-4">
 								<li>
 									<strong>Account & Personal Data Deletion:</strong><br />
-									<a href="https://andas.com.my/account-and-data-deletion" className="text-purple-primary hover:text-purple-700">
+									<a href="https://andas.com.my/account-and-data-deletion" className="text-teal-400 hover:text-teal-500">
 										https://andas.com.my/account-and-data-deletion
 									</a>
 								</li>
 								<li>
 									<strong>Privacy Policy:</strong><br />
-									<a href="https://andas.com.my/privacy-policy" className="text-purple-primary hover:text-purple-700">
+									<a href="https://andas.com.my/privacy-policy" className="text-teal-400 hover:text-teal-500">
 										https://andas.com.my/privacy-policy
 									</a>
 								</li>

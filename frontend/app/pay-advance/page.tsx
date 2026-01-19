@@ -122,7 +122,7 @@ export default function EmployeeMicroLoan() {
 
 	return (
 		<main className="min-h-screen bg-offwhite">
-			<Navbar bgStyle="bg-[#0A0612]/90 backdrop-blur-md" />
+			<Navbar />
 
 			{/* Hero Section */}
 			<section className="relative min-h-screen bg-[#0A0612] pt-16 w-full">

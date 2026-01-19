@@ -137,7 +137,7 @@ export default function PersonalLoan() {
 
 	return (
 		<div className="min-h-screen bg-offwhite text-gray-700 font-body w-full">
-			<Navbar bgStyle="bg-transparent" />
+			<Navbar />
 
 			{/* Hero Section */}
 			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-slate-900 via-[#1E3A8A] to-gray-900 w-full">

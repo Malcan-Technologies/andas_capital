@@ -1,21 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { MdArrowBack } from "react-icons/md";
+import { ArrowLeft } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export default function TermsOfUse() {
 	return (
-		<div className="min-h-screen bg-offwhite">
-			<Navbar bgStyle="bg-white shadow-sm" />
+		<div className="min-h-screen bg-gray-50">
+			<Navbar />
 			
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
 				<Link 
 					href="/"
-					className="inline-flex items-center text-purple-primary hover:text-purple-700 font-semibold mb-8 transition-colors"
+					className="inline-flex items-center text-teal-400 hover:text-teal-500 font-semibold mb-8 transition-colors"
 				>
-					<MdArrowBack size={20} className="mr-2" />
+					<ArrowLeft className="h-5 w-5 mr-2" />
 					Back to Home
 				</Link>
 
@@ -56,7 +56,7 @@ export default function TermsOfUse() {
 						<section className="mb-8">
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">4. Content & IP</h2>
 							<p>
-								The Site and its contents are owned by or licensed to CreditXpress. You are granted a limited, non-exclusive licence 
+								The Site and its contents are owned by or licensed to Andas Capital. You are granted a limited, non-exclusive licence 
 								to access for personal, non-commercial use.
 							</p>
 						</section>

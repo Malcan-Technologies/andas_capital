@@ -243,7 +243,7 @@ export default function SignupPage() {
 	};
 
 	return (
-		<div className="min-h-screen flex flex-col items-center justify-center bg-offwhite py-12 px-4 sm:px-6 lg:px-8">
+		<div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
 				<div className="max-w-md w-full">
 					<button
 						onClick={() => router.back()}
@@ -281,7 +281,7 @@ export default function SignupPage() {
 								Already have an account?{" "}
 								<Link
 									href="/login"
-									className="font-medium text-purple-primary hover:text-purple-700 transition-colors"
+									className="font-medium text-teal-400 hover:text-teal-500 transition-colors"
 								>
 									Sign in
 								</Link>
@@ -357,7 +357,7 @@ export default function SignupPage() {
 											}
 											required
 											minLength={8}
-											className="mt-1 block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary hover:border-gray-400 transition-colors [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+											className="mt-1 block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 hover:border-gray-400 transition-colors [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
 											placeholder="Min. 8 characters"
 											autoComplete="new-password"
 										/>
@@ -424,7 +424,7 @@ export default function SignupPage() {
 											}
 											required
 											minLength={8}
-											className="mt-1 block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary hover:border-gray-400 transition-colors [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+											className="mt-1 block w-full h-12 px-4 py-3 pr-12 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 hover:border-gray-400 transition-colors [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
 											placeholder="Re-enter your password"
 											autoComplete="new-password"
 										/>
@@ -487,7 +487,7 @@ export default function SignupPage() {
 													e.target.checked
 												)
 											}
-											className="h-4 w-4 text-purple-primary focus:ring-purple-primary border-gray-300 bg-white cursor-pointer"
+											className="h-4 w-4 text-teal-400 focus:ring-teal-400 border-gray-300 bg-white cursor-pointer"
 										/>
 									</div>
 									<div className="ml-3 text-sm">
@@ -499,7 +499,7 @@ export default function SignupPage() {
 											<Link
 												href="/terms"
 												target="_blank"
-												className="text-purple-primary hover:text-purple-700"
+												className="text-teal-400 hover:text-teal-500"
 											>
 												terms and conditions
 											</Link>
@@ -518,7 +518,7 @@ export default function SignupPage() {
 								<button
 									type="submit"
 									disabled={loading || !acceptedTerms}
-									className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-purple-primary hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
+									className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-teal-400 hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
 								>
 									{loading ? (
 										<span className="flex items-center justify-center whitespace-nowrap">
@@ -588,7 +588,7 @@ export default function SignupPage() {
 											setOtpCode(value);
 											if (otpError) setOtpError(null);
 										}}
-										className="block w-full h-12 px-4 py-3 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary hover:border-gray-400 transition-colors text-center tracking-widest"
+										className="block w-full h-12 px-4 py-3 text-base font-body bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 hover:border-gray-400 transition-colors text-center tracking-widest"
 										placeholder="000000"
 										autoComplete="one-time-code"
 									/>
@@ -606,7 +606,7 @@ export default function SignupPage() {
 								<button
 									type="submit"
 									disabled={otpLoading || otpCode.length !== 6}
-									className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-purple-primary hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
+									className="w-full h-12 px-4 py-2 text-base font-medium text-white bg-teal-400 hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-body rounded-xl shadow-lg"
 								>
 									{otpLoading ? (
 										<span className="flex items-center justify-center whitespace-nowrap">
@@ -644,7 +644,7 @@ export default function SignupPage() {
 											type="button"
 											onClick={handleResendOTP}
 											disabled={resendLoading}
-											className="font-medium text-purple-primary hover:text-purple-700 transition-colors disabled:opacity-50"
+											className="font-medium text-teal-400 hover:text-teal-500 transition-colors disabled:opacity-50"
 										>
 											{resendLoading ? "Sending..." : "Resend Code"}
 										</button>

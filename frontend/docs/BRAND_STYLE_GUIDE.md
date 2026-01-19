@@ -163,9 +163,9 @@ This is the **core brand identity**.
 
 | Usage | Font | Class | Style |
 |-------|------|-------|-------|
-| **Headings** | `Manrope` | `font-heading` | `font-semibold` or `font-bold` |
-| **Body Text** | `Inter` | `font-body` | `font-normal` |
-| **Logo Text** | `Manrope` | `font-logo` | `font-bold` |
+| **Headings** | `Playfair Display` | `font-heading` | `font-semibold` or `font-bold` |
+| **Body Text** | `Poppins` | `font-body` | `font-normal` |
+| **Logo Text** | `Playfair Display` | `font-logo` | `font-bold` |
 
 ---
 
