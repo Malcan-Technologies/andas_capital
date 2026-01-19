@@ -1,30 +1,35 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const poppins = Poppins({ 
+	subsets: ["latin"],
+	weight: ["300", "400", "500", "600", "700"],
+	display: "swap",
+});
 
 export const metadata: Metadata = {
 	title: {
 		template: "%s | Andas Capital",
-		default: "Andas Capital - Modern credit for Malaysia",
+		default: "Andas Capital - Trusted Financing Partner in Malaysia",
 	},
 	description:
-		"Get the funding you need with industry-leading rates and lightning-fast approval times. Business loans, personal loans, and salary advance solutions in Malaysia.",
+		"Andas Capital provides flexible financing solutions tailored to your needs. Fast approvals, competitive rates, and personalized service for businesses and individuals across Malaysia.",
 	keywords: [
 		"business loans",
 		"personal loans",
-		"salary advance",
+		"SME financing",
 		"financing",
 		"malaysia",
 		"fintech",
+		"andas capital",
 	],
 	metadataBase: new URL("https://andas.com.my"),
 	openGraph: {
-		title: "Andas Capital - Modern credit for Malaysia",
+		title: "Andas Capital - Trusted Financing Partner in Malaysia",
 		description:
-			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
+			"Flexible financing solutions with fast approvals and competitive rates for businesses and individuals.",
 		url: "https://andas.com.my",
 		siteName: "Andas Capital",
 		images: [
@@ -32,7 +37,7 @@ export const metadata: Metadata = {
 				url: "/og-image.jpg",
 				width: 1200,
 				height: 630,
-				alt: "CreditXpress - Smart Financing Solutions",
+				alt: "Andas Capital - Trusted Financing Partner",
 			},
 		],
 		locale: "en_MY",
@@ -52,16 +57,16 @@ export const metadata: Metadata = {
 			{
 				rel: "mask-icon",
 				url: "/safari-pinned-tab.svg",
-				color: "#4F46E5",
+				color: "#1a365d",
 			},
 		],
 	},
 	manifest: "/site.webmanifest",
 	twitter: {
 		card: "summary_large_image",
-		title: "CreditXpress - Smart Financing Solutions for Every Need",
+		title: "Andas Capital - Trusted Financing Partner in Malaysia",
 		description:
-			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
+			"Flexible financing solutions with fast approvals and competitive rates for businesses and individuals.",
 		images: ["/og-image.jpg"],
 	},
 	robots: {
@@ -87,7 +92,7 @@ export default function RootLayout({
 }) {
 	return (
 		<html lang="en">
-			<body className={`${inter.className} min-h-screen`}>
+			<body className={`${poppins.className} min-h-screen`}>
 				<Providers>
 					<div className="w-full min-h-screen">{children}</div>
 				</Providers>
