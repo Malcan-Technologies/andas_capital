@@ -14171,26 +14171,27 @@ router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (_r
 			overall: 'checking' as const
 		};
 
-		// Define service URLs - these are configurable based on environment
-		const baseHost = serverConfig.isProduction ? 'sign.creditxpress.com.my' : 'host.docker.internal';
+		// Define service URLs - use config values from environment/secrets
+		const docusealBaseUrl = docusealConfig.baseUrl || 'http://host.docker.internal:3001';
+		const orchestratorUrl = signingConfig.url || 'http://host.docker.internal:4010';
 		
 		const services = [
 			{
 				name: 'docuseal',
-				url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/' : `http://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
+				url: `${docusealBaseUrl}/`, // DocuSeal doesn't have /health, use root
 				timeout: 5000
 			},
-		{
-			name: 'signingOrchestrator', 
-			// Cloudflare tunnel routes /orchestrator/* to port 4010, passing the full path
-			// The orchestrator now has /orchestrator/health mounted to handle this
-			url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/orchestrator/health' : `http://${baseHost}:4010/health`,
-			timeout: 10000  // Increased to 10s to account for Cloudflare tunnel latency
-		},
+			{
+				name: 'signingOrchestrator', 
+				// Cloudflare tunnel routes /orchestrator/* to port 4010, passing the full path
+				// The orchestrator now has /orchestrator/health mounted to handle this
+				url: serverConfig.isProduction ? `${docusealBaseUrl}/orchestrator/health` : `${orchestratorUrl}/health`,
+				timeout: 10000  // Increased to 10s to account for Cloudflare tunnel latency
+			},
 			{
 				name: 'mtsa',
 				// Cloudflare route MTSAPilot/* -> localhost:8080, path is passed through
-				url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
+				url: serverConfig.isProduction ? `${docusealBaseUrl}/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl` : 'http://host.docker.internal:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl',
 				timeout: 5000
 			}
 		];

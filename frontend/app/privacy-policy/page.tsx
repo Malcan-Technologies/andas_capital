@@ -52,8 +52,8 @@ export default function PrivacyPolicy() {
 							<p className="mb-2"><strong>Registration Number:</strong> 202101043135</p>
 							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia</p>
 							<p className="mb-2"><strong>Country of Operation:</strong> Malaysia</p>
-							<p className="mb-2"><strong>Customer Support Email:</strong> hello@creditxpress.com.my</p>
-							<p className="mb-4"><strong>Privacy & Data Protection Contact:</strong> hello@creditxpress.com.my</p>
+							<p className="mb-2"><strong>Customer Support Email:</strong> support@andas.com.my</p>
+							<p className="mb-4"><strong>Privacy & Data Protection Contact:</strong> support@andas.com.my</p>
 							<p>All privacy-related enquiries, requests, or complaints should be directed to the contact details above.</p>
 						</section>
 
@@ -245,7 +245,7 @@ export default function PrivacyPolicy() {
 							<p>
 								Detailed instructions and conditions are available at:<br />
 								<Link href="/account-and-data-deletion" className="text-purple-primary hover:text-purple-700 font-semibold">
-									👉 https://creditxpress.com.my/account-and-data-deletion
+									👉 https://andas.com.my/account-and-data-deletion
 								</Link>
 							</p>
 						</section>
@@ -260,7 +260,7 @@ export default function PrivacyPolicy() {
 								<li>Withdraw consent (where applicable)</li>
 								<li>Request deletion of personal data (subject to legal limitations)</li>
 							</ul>
-							<p>Requests may be submitted to <strong>hello@creditxpress.com.my</strong>.</p>
+							<p>Requests may be submitted to <strong>support@andas.com.my</strong>.</p>
 						</section>
 
 						{/* Section 12 */}

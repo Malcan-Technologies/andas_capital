@@ -69,7 +69,7 @@ export default function AccountAndDataDeletion() {
 							<ol className="list-decimal pl-6 space-y-2 mb-4">
 								<li>
 									Send an email from your registered email address to:<br />
-									<strong>📧 hello@creditxpress.com.my</strong>
+									<strong>📧 support@andas.com.my</strong>
 								</li>
 								<li>
 									Use the subject line:<br />
@@ -122,7 +122,7 @@ export default function AccountAndDataDeletion() {
 							<ol className="list-decimal pl-6 space-y-2 mb-4">
 								<li>
 									Send an email from your registered email address to:<br />
-									<strong>📧 hello@creditxpress.com.my</strong>
+									<strong>📧 support@andas.com.my</strong>
 								</li>
 								<li>
 									Use the subject line:<br />
@@ -187,7 +187,7 @@ export default function AccountAndDataDeletion() {
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">Contact</h2>
 							<p>
 								For questions regarding account or personal data deletion, contact:<br />
-								<strong>📧 hello@creditxpress.com.my</strong>
+								<strong>📧 support@andas.com.my</strong>
 							</p>
 						</section>
 					</div>

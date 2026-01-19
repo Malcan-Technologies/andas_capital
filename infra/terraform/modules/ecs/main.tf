@@ -72,13 +72,13 @@ variable "docuseal_template_id" {
 variable "company_signing_email" {
   description = "Company signer email for DocuSeal"
   type        = string
-  default     = "admin@creditxpress.com.my"
+  default     = "admin@andas.com.my"
 }
 
 variable "witness_email" {
   description = "Witness email for DocuSeal"
   type        = string
-  default     = "legal@creditxpress.com.my"
+  default     = "legal@andas.com.my"
 }
 
 variable "witness_name" {

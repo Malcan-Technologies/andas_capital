@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // SIGNING_ORCHESTRATOR_URL should be the base URL for the signing orchestrator
 // In production with Cloudflare tunnel, use the /orchestrator prefix
-// e.g., https://sign.creditxpress.com.my or http://localhost:4010
+// e.g., https://sign.andas.com.my or http://localhost:4010
 const SIGNING_ORCHESTRATOR_URL = process.env.SIGNING_ORCHESTRATOR_URL || 'http://localhost:4010';
 const SIGNING_ORCHESTRATOR_API_KEY = process.env.SIGNING_ORCHESTRATOR_API_KEY || process.env.DOCUSEAL_API_TOKEN || 'NwPkizAUEfShnc4meN1m3N38DG8ZNEyRmWPMjq8BXv8';
 

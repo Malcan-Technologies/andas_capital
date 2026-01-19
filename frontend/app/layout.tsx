@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
 	title: {
-		template: "%s | CreditXpress",
-		default: "CreditXpress - Modern credit for Malaysia",
+		template: "%s | Andas Capital",
+		default: "Andas Capital - Modern credit for Malaysia",
 	},
 	description:
 		"Get the funding you need with industry-leading rates and lightning-fast approval times. Business loans, personal loans, and salary advance solutions in Malaysia.",
@@ -20,13 +20,13 @@ export const metadata: Metadata = {
 		"malaysia",
 		"fintech",
 	],
-	metadataBase: new URL("https://creditxpress.com.my"),
+	metadataBase: new URL("https://andas.com.my"),
 	openGraph: {
-		title: "CreditXpress - Modern credit for Malaysia",
+		title: "Andas Capital - Modern credit for Malaysia",
 		description:
 			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
-		url: "https://creditxpress.com.my",
-		siteName: "CreditXpress",
+		url: "https://andas.com.my",
+		siteName: "Andas Capital",
 		images: [
 			{
 				url: "/og-image.jpg",

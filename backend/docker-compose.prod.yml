@@ -67,7 +67,7 @@ services:
             - WITNESS_EMAIL=${WITNESS_EMAIL}
             - WITNESS_NAME=${WITNESS_NAME}
             # MTSA/Signing Orchestrator Configuration
-            - SIGNING_ORCHESTRATOR_URL=${SIGNING_ORCHESTRATOR_URL:-https://sign.creditxpress.com.my}
+            - SIGNING_ORCHESTRATOR_URL=${SIGNING_ORCHESTRATOR_URL:-https://sign.andas.com.my}
             - SIGNING_ORCHESTRATOR_API_KEY=${SIGNING_ORCHESTRATOR_API_KEY}
             # Resend Email Configuration
             - RESEND_API_KEY=${RESEND_API_KEY}

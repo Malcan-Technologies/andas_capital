@@ -33,7 +33,7 @@ export default function TermsOfUse() {
 						<section className="mb-8">
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">1. Scope</h2>
 							<p>
-								These Terms of Use govern your access to <strong>creditxpress.com.my</strong> and our app interfaces (the "Site"). 
+								These Terms of Use govern your access to <strong>andas.com.my</strong> and our app interfaces (the "Site"). 
 								For borrowing and account activities, refer to the <strong>Terms of Service</strong>.
 							</p>
 						</section>

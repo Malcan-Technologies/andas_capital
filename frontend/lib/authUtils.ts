@@ -12,7 +12,7 @@ function getCookieDomain(): string | undefined {
 	
 	try {
 		const url = new URL(siteUrl);
-		// Add dot prefix to allow subdomain sharing (e.g., '.creditxpress.com.my')
+		// Add dot prefix to allow subdomain sharing (e.g., '.andas.com.my')
 		return `.${url.hostname}`;
 	} catch (error) {
 		console.warn('Failed to parse NEXT_PUBLIC_SITE_URL for cookie domain:', error);

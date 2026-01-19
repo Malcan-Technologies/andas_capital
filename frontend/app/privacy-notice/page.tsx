@@ -40,7 +40,7 @@ export default function PrivacyNotice() {
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">1. Data Controller & Contact</h2>
 							<p className="mb-2"><strong>OPG Capital Holdings Sdn Bhd (202101043135)</strong></p>
 							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia</p>
-							<p><strong>Email:</strong> hello@creditxpress.com.my (Office hours: 9:00 AM – 5:00 PM, Mon–Fri)</p>
+							<p><strong>Email:</strong> support@andas.com.my (Office hours: 9:00 AM – 5:00 PM, Mon–Fri)</p>
 						</section>
 
 						<section className="mb-8">
@@ -134,14 +134,14 @@ export default function PrivacyNotice() {
 							<ul className="list-disc pl-6 space-y-2 mb-4">
 								<li>
 									<strong>Account & Personal Data Deletion:</strong><br />
-									<a href="https://creditxpress.com.my/account-and-data-deletion" className="text-purple-primary hover:text-purple-700">
-										https://creditxpress.com.my/account-and-data-deletion
+									<a href="https://andas.com.my/account-and-data-deletion" className="text-purple-primary hover:text-purple-700">
+										https://andas.com.my/account-and-data-deletion
 									</a>
 								</li>
 								<li>
 									<strong>Privacy Policy:</strong><br />
-									<a href="https://creditxpress.com.my/privacy-policy" className="text-purple-primary hover:text-purple-700">
-										https://creditxpress.com.my/privacy-policy
+									<a href="https://andas.com.my/privacy-policy" className="text-purple-primary hover:text-purple-700">
+										https://andas.com.my/privacy-policy
 									</a>
 								</li>
 							</ul>
