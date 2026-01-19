@@ -8,26 +8,24 @@
 @tailwind utilities;
 
 :root {
-  /* Brand Colors */
-  --color-primary: #14B8A6;
-  --color-accent-from: #14B8A6;
-  --color-accent-to: #3B82F6;
-  --color-highlight: #22D3EE;
-  --color-bg: #0F172A;
-  --color-text-light: #F8FAFC;
+  /* Brand Colors - Light Mode Only */
+  --color-background: #F9FAFB;
+  --color-card: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-text: #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-disabled: #94A3B8;
+  --color-accent: #2DD4BF;
+  --color-accent-hover: #14B8A6;
+  --color-oval: #020617;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
   
   /* Legacy variables for compatibility */
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+  --foreground-rgb: 15, 23, 42;
+  --background-start-rgb: 249, 250, 251;
+  --background-end-rgb: 249, 250, 251;
 }
 
 /* Masonry Layout */
@@ -54,59 +52,32 @@
 
 @layer base {
   :root {
-    /* Brand-aligned shadcn variables */
-    --background: 222.2 84% 4.9%; /* Deep slate */
-    --foreground: 210 40% 98%; /* Near white */
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 168 76% 42%; /* Brand teal */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 188 95% 68%; /* Brand highlight */
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 168 76% 42%;
-    --chart-1: 168 76% 42%; /* Brand teal */
-    --chart-2: 217 91% 60%; /* Brand blue */
-    --chart-3: 188 95% 68%; /* Brand highlight */
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.75rem; /* Slightly more rounded for modern feel */
-  }
-  
-  .light {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Light mode shadcn variables - aligned with new brand */
+    --background: 210 20% 98%; /* gray-50 #F9FAFB */
+    --foreground: 222.2 47.4% 11.2%; /* slate-900 #0F172A */
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 222.2 47.4% 11.2%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 168 76% 42%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 188 95% 68%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 168 76% 42%;
-    --chart-1: 168 76% 42%;
-    --chart-2: 217 91% 60%;
-    --chart-3: 188 95% 68%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+    --primary: 168 76% 50%; /* teal-400 #2DD4BF */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 96%; /* gray-100 */
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%; /* slate-500 */
+    --accent: 168 76% 50%; /* teal-400 */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%; /* red-500 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%; /* gray-200 #E5E7EB */
+    --input: 220 13% 91%;
+    --ring: 168 76% 50%; /* teal-400 */
+    --chart-1: 168 76% 50%; /* teal */
+    --chart-2: 142 71% 45%; /* green */
+    --chart-3: 38 92% 50%; /* amber */
+    --chart-4: 0 84% 60%; /* red */
+    --chart-5: 215 16% 47%; /* slate */
+    --radius: 0.75rem;
   }
 }
 
@@ -116,68 +87,72 @@
   }
   
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-gray-50 text-slate-900 font-body;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   
   /* Brand Typography Classes */
   .brand-logo {
-    @apply font-logo text-brand-primary;
+    @apply font-logo text-slate-900;
   }
   
   .brand-heading {
-    @apply font-heading;
+    @apply font-heading text-slate-900;
   }
   
-  .brand-gradient-text {
-    @apply bg-gradient-to-r from-brand-primary to-accent bg-clip-text text-transparent;
-  }
-  
-  /* Brand Component Classes */
+  /* Brand Component Classes - Light Mode */
   .brand-button-primary {
-    @apply bg-brand-gradient hover:bg-brand-gradient-hover text-white font-medium px-6 py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl;
+    @apply bg-teal-400 hover:bg-teal-500 text-white font-medium px-6 py-3 rounded-xl transition-all duration-200;
   }
   
   .brand-button-secondary {
-    @apply bg-transparent border-2 border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white font-medium px-6 py-3 rounded-xl transition-all duration-200;
+    @apply bg-white border border-gray-200 hover:bg-gray-50 text-slate-900 font-medium px-6 py-3 rounded-xl transition-all duration-200;
   }
   
   .brand-card {
-    @apply bg-gradient-to-br from-gray-900/80 via-gray-800/80 to-gray-900/80 backdrop-blur-md border border-gray-700/30 rounded-2xl shadow-xl;
+    @apply bg-white border border-gray-200 rounded-xl;
   }
   
   .brand-input {
-    @apply bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary backdrop-blur-md;
+    @apply bg-white border border-gray-200 text-slate-900 placeholder-slate-400 rounded-xl focus:ring-2 focus:ring-teal-400 focus:border-teal-400;
   }
   
-  /* Brand gradient background for progress bars and other elements */
-  .brand-gradient-bg {
-    @apply bg-gradient-to-r from-brand-primary to-accent;
+  /* Floating oval bar - Brand Identity */
+  .brand-oval-bar {
+    @apply fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-950 rounded-full px-6 py-3 flex items-center gap-6 shadow-lg;
+  }
+  
+  .brand-oval-icon {
+    @apply h-6 w-6 text-slate-400 transition-colors;
+  }
+  
+  .brand-oval-icon-active {
+    @apply h-6 w-6 text-teal-400 transition-colors;
   }
 }
 
-/* Custom scrollbar styling */
+/* Custom scrollbar styling - Light theme */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(229, 231, 235, 0.5);
+  background: #E5E7EB;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #7C3AED, #38BDF8);
+  background: #94A3B8;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #6D28D9, #0EA5E9);
+  background: #64748B;
 }
 
 ::-webkit-scrollbar-corner {
-  background: rgba(229, 231, 235, 0.5);
+  background: #E5E7EB;
 }
 
 /* Responsive scrollbar sizing */
@@ -201,20 +176,20 @@
 }
 
 .chart-scroll::-webkit-scrollbar-track {
-  background: rgba(229, 231, 235, 0.8);
+  background: #E5E7EB;
   border-radius: 6px;
   margin: 0 8px;
 }
 
 .chart-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(90deg, #7C3AED, #38BDF8);
+  background: #94A3B8;
   border-radius: 6px;
   border: 1px solid transparent;
   background-clip: padding-box;
 }
 
 .chart-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(90deg, #6D28D9, #0EA5E9);
+  background: #64748B;
 }
 
 /* Responsive chart scrollbar */
@@ -244,10 +219,9 @@
 
 /* Selection styling */
 ::selection {
-  background: rgba(20, 184, 166, 0.3);
-  color: #F8FAFC;
+  background: rgba(45, 212, 191, 0.3);
+  color: #0F172A;
 }
-
 
 /* Partner logos scrolling animation */
 @keyframes scroll {

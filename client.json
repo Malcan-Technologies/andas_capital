@@ -1,57 +1,57 @@
 {
-  "client_slug": "creditxpress",
-  "client_name": "Credit Xpress",
+  "client_slug": "andas",
+  "client_name": "Andas",
   "environment": "production",
   
   "aws": {
     "region": "ap-southeast-5",
-    "account_id": "127521539053"
+    "account_id": "095907292083"
   },
   
   "domains": {
-    "app": "creditxpress.com.my",
-    "admin": "admin.creditxpress.com.my",
-    "api": "api.creditxpress.com.my",
-    "sign": "sign.creditxpress.com.my"
+    "app": "andas.com.my",
+    "admin": "admin.andas.com.my",
+    "api": "api.andas.com.my",
+    "sign": "sign.andas.com.my"
   },
   
   "ecr": {
-    "backend": "creditxpress/backend",
-    "frontend": "creditxpress/frontend",
-    "admin": "creditxpress/admin",
-    "migrate": "creditxpress/migrate"
+    "backend": "andas/backend",
+    "frontend": "andas/frontend",
+    "admin": "andas/admin",
+    "migrate": "andas/migrate"
   },
   
   "ecs": {
-    "cluster": "creditxpress-cluster",
-    "backend_service": "creditxpress-backend",
-    "frontend_service": "creditxpress-frontend",
-    "admin_service": "creditxpress-admin"
+    "cluster": "andas-cluster",
+    "backend_service": "andas-backend",
+    "frontend_service": "andas-frontend",
+    "admin_service": "andas-admin"
   },
   
   "rds": {
-    "identifier": "creditxpress-postgres",
-    "database": "creditxpress"
+    "identifier": "andas-postgres",
+    "database": "andas"
   },
   
   "s3": {
-    "bucket": "creditxpress-prod-files"
+    "bucket": "andas-prod-files-095907292083"
   },
   
-  "secrets_prefix": "creditxpress/prod",
+  "secrets_prefix": "andas/prod",
   
   "branding": {
-    "company_name": "OPG Capital Holdings Sdn. Bhd.",
+    "company_name": "Andas Capital Sdn. Bhd.",
     "primary_color": "#1a365d",
-    "support_email": "support@creditxpress.com.my"
+    "support_email": "support@andas.com.my"
   },
 
   "docuseal": {
     "template_id": "2",
     "template_name": "Jadual J (Official)",
-    "template_external_id": "creditxpress-loan-agreement",
-    "company_signing_email": "admin@creditxpress.com.my",
-    "witness_email": "legal@creditxpress.com.my",
+    "template_external_id": "andas-loan-agreement",
+    "company_signing_email": "admin@andas.com.my",
+    "witness_email": "legal@andas.com.my",
     "witness_name": "Legal Representative"
   },
 
@@ -66,7 +66,7 @@
       "container_image": "mtsa-pilot:1.01"
     },
     "cloudflare": {
-      "tunnel_name": "creditxpress-onprem"
+      "tunnel_name": "andas-onprem"
     }
   }
 }

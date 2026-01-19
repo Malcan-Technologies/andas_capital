@@ -134,25 +134,25 @@ The Docker container automatically:
 3. Runs `prisma db push` (syncs schema)
 4. Starts the dev server with hot reload
 
-### Via pnpm (if running backend locally)
+### Via npm (if running backend locally)
 
 ```bash
 cd backend
 
 # Generate Prisma client
-pnpm prisma:generate
+npm run prisma:generate
 
 # Push schema to database (creates/updates tables)
-pnpm prisma:push
+npm run prisma:push
 
 # Run migrations (production-style)
-pnpm prisma:migrate
+npm run prisma:migrate
 
 # Open Prisma Studio (GUI for database)
-pnpm prisma:studio
+npm run prisma:studio
 
 # Seed the database with sample data
-pnpm prisma:seed
+npm run prisma:seed
 ```
 
 ---

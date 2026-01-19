@@ -1,6 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-	darkMode: ["class"],
 	content: [
 		"./pages/**/*.{js,ts,jsx,tsx,mdx}",
 		"./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -14,54 +13,62 @@ module.exports = {
 				sm: "calc(var(--radius) - 4px)",
 			},
 			colors: {
-				// Brand Colors - Updated to match style guide
-				offwhite: "#F7F4EF", // Background Base
-				"purple-primary": "#7C3AED", // Primary Brand Color
-				"blue-tertiary": "#38BDF8", // Tertiary Accent Color
-
-				// Brand object for compatibility
+				// ===========================================
+				// NEW BRAND COLORS (Primary - use these)
+				// ===========================================
 				brand: {
-					primary: "#7C3AED", // Purple - Primary brand color
-					accent: {
-						from: "#7C3AED", // Purple
-						to: "#38BDF8", // Blue
-					},
-					highlight: "#38BDF8", // Blue - CTA/Emphasis
-					background: "#F7F4EF", // Off-white background
-					text: "#374151", // Gray-700 for body text
-					subtext: "#6B7280", // Gray-500 for subtext
+					// Backgrounds
+					background: "#F9FAFB", // App background (gray-50)
+					card: "#FFFFFF", // Card/sheet background
+					border: "#E5E7EB", // Dividers/borders (gray-200)
+
+					// Text colors (never use pure black)
+					text: "#0F172A", // Main text (slate-900)
+					"text-secondary": "#475569", // Secondary text (slate-600)
+					"text-disabled": "#94A3B8", // Disabled/helper text (slate-400)
+
+					// Accent color
+					accent: "#2DD4BF", // Teal accent for buttons, active icons, progress
+					"accent-hover": "#14B8A6", // Teal-500 for hover states
+
+					// Signature element - Black floating oval bar
+					oval: "#020617", // Slate-950 - NEVER change this
+
+					// Status colors (minimal use)
+					success: "#22C55E", // Green-500
+					warning: "#F59E0B", // Amber-500
+					error: "#EF4444", // Red-500
 				},
-				// Semantic colors mapped to brand
-				primary: {
-					50: "#faf5ff",
-					100: "#f3e8ff",
-					200: "#e9d5ff",
-					300: "#d8b4fe",
-					400: "#c084fc",
-					500: "#a855f7",
-					600: "#9333ea",
-					700: "#7c3aed", // Brand primary
-					800: "#6b21a8",
-					900: "#581c87",
-					950: "#3b0764",
-					DEFAULT: "#7C3AED",
-					foreground: "#F7F4EF",
-				},
+
+				// Legacy: brand-primary for backwards compatibility
+				"brand-primary": "#2DD4BF", // Maps to teal-400 (accent)
+
+				// ===========================================
+				// LEGACY ALIASES (for backwards compatibility)
+				// These map old class names to new brand colors
+				// TODO: Gradually migrate components to new classes
+				// ===========================================
+				offwhite: "#F9FAFB", // Legacy: now maps to gray-50
+				"purple-primary": "#2DD4BF", // Legacy: now maps to teal-400 (accent)
+				"blue-tertiary": "#14B8A6", // Legacy: now maps to teal-500
+
+				// Semantic accent colors
 				accent: {
-					50: "#f0f9ff",
-					100: "#e0f2fe",
-					200: "#bae6fd",
-					300: "#7dd3fc",
-					400: "#38bdf8", // Blue tertiary
-					500: "#0ea5e9",
-					600: "#0284c7",
-					700: "#0369a1",
-					800: "#075985",
-					900: "#0c4a6e",
-					950: "#082f49",
-					DEFAULT: "#38BDF8",
-					foreground: "#374151",
+					50: "#f0fdfa",
+					100: "#ccfbf1",
+					200: "#99f6e4",
+					300: "#5eead4",
+					400: "#2dd4bf", // Brand accent
+					500: "#14b8a6",
+					600: "#0d9488",
+					700: "#0f766e",
+					800: "#115e59",
+					900: "#134e4a",
+					950: "#042f2e",
+					DEFAULT: "#2DD4BF",
+					foreground: "#FFFFFF",
 				},
+
 				// Keep existing shadcn colors for compatibility
 				background: "hsl(var(--background))",
 				foreground: "hsl(var(--foreground))",
@@ -72,6 +79,10 @@ module.exports = {
 				popover: {
 					DEFAULT: "hsl(var(--popover))",
 					foreground: "hsl(var(--popover-foreground))",
+				},
+				primary: {
+					DEFAULT: "hsl(var(--primary))",
+					foreground: "hsl(var(--primary-foreground))",
 				},
 				secondary: {
 					DEFAULT: "hsl(var(--secondary))",
@@ -107,30 +118,11 @@ module.exports = {
 				logo: "700", // Bold for logo
 				heading: "600", // SemiBold for headings
 			},
-			backgroundImage: {
-				"brand-gradient":
-					"linear-gradient(135deg, #7C3AED 0%, #38BDF8 100%)",
-				"brand-gradient-hover":
-					"linear-gradient(135deg, #6B21A8 0%, #0284C7 100%)",
-				"accent-gradient":
-					"linear-gradient(135deg, #38BDF8 0%, #7C3AED 100%)",
-			},
 			animation: {
-				gradient: "gradient 6s ease infinite",
 				float: "float 3s ease-in-out infinite",
 				"pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
 			},
 			keyframes: {
-				gradient: {
-					"0%, 100%": {
-						"background-size": "200% 200%",
-						"background-position": "left center",
-					},
-					"50%": {
-						"background-size": "200% 200%",
-						"background-position": "right center",
-					},
-				},
 				float: {
 					"0%, 100%": { transform: "translateY(0px)" },
 					"50%": { transform: "translateY(-10px)" },
