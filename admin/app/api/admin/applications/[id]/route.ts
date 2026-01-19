@@ -13,11 +13,9 @@ interface LoanApplication {
 	[key: string]: any;
 }
 
-export async function GET(
-	request: Request,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const id = params.id;
 
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;

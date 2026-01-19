@@ -21,6 +21,7 @@ import {
 	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 
 interface Payment {
 	id: string;
@@ -183,11 +184,15 @@ function PaymentsContent() {
 		paymentDate: "",
 	});
 
-	// Handle URL search parameter
+	// Handle URL search and status parameters
 	useEffect(() => {
 		const searchParam = searchParams.get("search");
 		if (searchParam) {
 			setSearchTerm(searchParam);
+		}
+		const statusParam = searchParams.get("status");
+		if (statusParam && ["all", "PENDING", "APPROVED", "REJECTED"].includes(statusParam)) {
+			setStatusFilter(statusParam);
 		}
 	}, [searchParams]);
 
@@ -284,21 +289,21 @@ function PaymentsContent() {
 		};
 	}, [fetchPayments, setupAutoRefresh]);
 
-	// Filter payments based on search term with exact loan ID matching
+	// Filter payments based on search term with loan ID matching
 	const filterPayments = useCallback(() => {
 		if (!searchTerm.trim()) {
 			setFilteredPayments(payments);
 		} else {
 			const search = searchTerm.toLowerCase();
 
-			// First, check for exact loan ID match
-			const exactLoanMatch = payments.find(
+			// First, check if search matches any loan ID exactly - return ALL payments for that loan
+			const exactLoanMatches = payments.filter(
 				(payment: Payment) => payment.loan.id.toLowerCase() === search
 			);
 
-			if (exactLoanMatch) {
-				// If exact loan ID match found, show only that payment
-				setFilteredPayments([exactLoanMatch]);
+			if (exactLoanMatches.length > 0) {
+				// If exact loan ID match found, show ALL payments for that loan
+				setFilteredPayments(exactLoanMatches);
 			} else {
 				// Otherwise, do partial matching across all fields
 				const filtered = payments.filter(
@@ -343,9 +348,15 @@ function PaymentsContent() {
 		setSelectedPayment(payment);
 	};
 
-	const handleRefresh = () => {
+	const handleRefresh = async () => {
 		setRefreshing(true);
-		fetchPayments(true, true); // Force cache bust
+		try {
+			await fetchPayments(true, true); // Force cache bust
+			toast.success("Payments refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing payments:", error);
+			toast.error("Failed to refresh payments");
+		}
 	};
 
 	const handleApprovePayment = async () => {
@@ -379,7 +390,7 @@ function PaymentsContent() {
 				setApprovalNotes("");
 
 				// Show success message
-				alert("Payment approved successfully!");
+				toast.success("Payment approved successfully!");
 
 				// Force refresh with cache busting
 				await fetchPayments(false, true);
@@ -397,14 +408,14 @@ function PaymentsContent() {
 				error instanceof Error &&
 				error.message.includes("not pending")
 			) {
-				alert(
+				toast.info(
 					"This payment has already been processed. Refreshing the list..."
 				);
 				await fetchPayments(false, true);
 				setShowApprovalModal(false);
 				setApprovalNotes("");
 			} else {
-				alert("Failed to approve payment. Please try again.");
+				toast.error("Failed to approve payment. Please try again.");
 			}
 
 			// Restart auto-refresh even on error
@@ -447,7 +458,7 @@ function PaymentsContent() {
 				setRejectionNotes("");
 
 				// Show success message
-				alert("Payment rejected successfully!");
+				toast.success("Payment rejected successfully!");
 
 				// Force refresh with cache busting
 				await fetchPayments(false, true);
@@ -465,7 +476,7 @@ function PaymentsContent() {
 				error instanceof Error &&
 				error.message.includes("not pending")
 			) {
-				alert(
+				toast.info(
 					"This payment has already been processed. Refreshing the list..."
 				);
 				await fetchPayments(false, true);
@@ -473,7 +484,7 @@ function PaymentsContent() {
 				setRejectionReason("");
 				setRejectionNotes("");
 			} else {
-				alert("Failed to reject payment. Please try again.");
+				toast.error("Failed to reject payment. Please try again.");
 			}
 
 			// Restart auto-refresh even on error
@@ -485,13 +496,13 @@ function PaymentsContent() {
 
 	const handleCreateManualPayment = async () => {
 		if (!manualPaymentForm.loanId || !manualPaymentForm.amount || !manualPaymentForm.reference) {
-			alert("Please fill in all required fields (Loan ID, Amount, Reference)");
+			toast.warning("Please fill in all required fields (Loan ID, Amount, Reference)");
 			return;
 		}
 
 		const amount = parseFloat(manualPaymentForm.amount);
 		if (isNaN(amount) || amount <= 0) {
-			alert("Please enter a valid payment amount greater than 0");
+			toast.warning("Please enter a valid payment amount greater than 0");
 			return;
 		}
 
@@ -514,7 +525,7 @@ function PaymentsContent() {
 			});
 
 			if (data.success) {
-				alert(data.message || "Manual payment created successfully!");
+				toast.success(data.message || "Manual payment created successfully!");
 				
 				// Reset form
 				setManualPaymentForm({
@@ -534,7 +545,7 @@ function PaymentsContent() {
 			}
 		} catch (error) {
 			console.error("Error creating manual payment:", error);
-			alert(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setProcessing(false);
 		}
@@ -545,11 +556,11 @@ function PaymentsContent() {
 		const file = event.target.files?.[0];
 		if (file) {
 			if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-				alert("Please select a CSV file");
+				toast.warning("Please select a CSV file");
 				return;
 			}
 			if (file.size > 10 * 1024 * 1024) { // 10MB limit
-				alert("File size must be less than 10MB");
+				toast.warning("File size must be less than 10MB");
 				return;
 			}
 			setCSVFile(file);
@@ -561,7 +572,7 @@ function PaymentsContent() {
 
 	const handleCSVUpload = async () => {
 		if (!csvFile) {
-			alert("Please select a CSV file first");
+			toast.warning("Please select a CSV file first");
 			return;
 		}
 
@@ -596,7 +607,7 @@ function PaymentsContent() {
 			}
 		} catch (error) {
 			console.error("Error processing CSV file:", error);
-			alert(`Failed to process CSV file: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to process CSV file: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setCSVProcessing(false);
 		}
@@ -614,12 +625,12 @@ function PaymentsContent() {
 
 	const handleBatchApprove = async () => {
 		if (selectedMatches.size === 0) {
-			alert("Please select at least one match to approve");
+			toast.warning("Please select at least one match to approve");
 			return;
 		}
 
 		if (!csvResults?.matches) {
-			alert("No matches available for approval");
+			toast.warning("No matches available for approval");
 			return;
 		}
 
@@ -652,14 +663,17 @@ function PaymentsContent() {
 				let message = `Batch approval completed!\n\n`;
 				message += `✅ Successfully approved: ${summary.successful} payments\n`;
 				if (summary.failed > 0) {
-					message += `❌ Failed: ${summary.failed} payments\n\n`;
-					message += `Failed payments:\n`;
+					message += `Failed: ${summary.failed} payments. `;
 					failed.forEach((fail: any) => {
-						message += `- ${fail.paymentId}: ${fail.error}\n`;
+						message += `${fail.paymentId}: ${fail.error}. `;
 					});
 				}
 				
-				alert(message);
+				if (summary.failed > 0) {
+					toast.warning(message);
+				} else {
+					toast.success(message);
+				}
 				
 				// Close modal and refresh payments
 				setShowCSVModal(false);
@@ -675,7 +689,7 @@ function PaymentsContent() {
 			}
 		} catch (error) {
 			console.error("Error processing batch approval:", error);
-			alert(`Failed to process batch approval: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to process batch approval: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setProcessing(false);
 		}
@@ -702,13 +716,13 @@ function PaymentsContent() {
 			});
 
 			if (data.success) {
-				alert(`Default processing completed successfully!\n\nResults:\n${JSON.stringify(data.data, null, 2)}`);
+				toast.success("Default processing completed successfully!");
 			} else {
 				throw new Error(data.message || "Failed to trigger default processing");
 			}
 		} catch (error) {
 			console.error("Error triggering default processing:", error);
-			alert(`Failed to trigger default processing: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to trigger default processing: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setDefaultProcessing(false);
 		}
@@ -960,27 +974,70 @@ function PaymentsContent() {
 					<div className="lg:col-span-2">
 						{selectedPayment ? (
 							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-								<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
+								<div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+								<div>
 									<h3 className="text-lg font-medium text-white">
 										Payment Details
 									</h3>
-									<div className="flex items-center space-x-2">
+									<div className="mt-1.5 flex items-center gap-2">
 										{(() => {
 											const statusColor = getStatusColor(selectedPayment.status);
 											return (
 												<span
-													className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
+													className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
 												>
 													{selectedPayment.status}
 												</span>
 											);
 										})()}
-										<span className="px-2 py-1 bg-blue-500/20 text-blue-200 text-xs font-medium rounded-full border border-blue-400/20">
-											{selectedPayment.reference ||
-												selectedPayment.id}
-										</span>
 									</div>
 								</div>
+								<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
+									ID: {selectedPayment.id.substring(0, 8)}
+								</span>
+							</div>
+
+							{/* Action Bar */}
+							<div className="p-4 border-b border-gray-700/30">
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{selectedPayment.status === "PENDING" && (
+											<>
+												<button
+													onClick={() => setShowApprovalModal(true)}
+													disabled={processing}
+													className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs disabled:opacity-50"
+													title="Approve this payment"
+												>
+													<CheckCircleIcon className="h-3 w-3 mr-1" />
+													Approve Payment
+												</button>
+												<button
+													onClick={() => setShowRejectionModal(true)}
+													disabled={processing}
+													className="flex items-center px-3 py-1.5 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors text-xs disabled:opacity-50"
+													title="Reject this payment"
+												>
+													<XCircleIcon className="h-3 w-3 mr-1" />
+													Reject Payment
+												</button>
+											</>
+										)}
+										{selectedPayment.loan.application.id && (
+											<Link
+												href={`/dashboard/loans?search=${selectedPayment.loan.application.id}`}
+												className="flex items-center px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-xs"
+												title="View the active loan"
+											>
+												<CreditCardIcon className="h-3 w-3 mr-1" />
+												View Active Loan
+											</Link>
+										)}
+									</div>
+								</div>
+							</div>
 
 								<div className="p-6">
 									{/* Summary Cards */}
@@ -1152,43 +1209,6 @@ function PaymentsContent() {
 										</div>
 									</div>
 
-									{/* Action Buttons */}
-									<div className="flex flex-wrap gap-3">
-										{selectedPayment.status === "PENDING" && (
-											<>
-												<button
-													onClick={() =>
-														setShowApprovalModal(true)
-													}
-													disabled={processing}
-													className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
-												>
-													<CheckCircleIcon className="h-5 w-5 mr-2" />
-													Approve Payment
-												</button>
-												<button
-													onClick={() =>
-														setShowRejectionModal(true)
-													}
-													disabled={processing}
-													className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center disabled:opacity-50"
-												>
-													<XCircleIcon className="h-5 w-5 mr-2" />
-													Reject Payment
-												</button>
-											</>
-										)}
-										{selectedPayment.loan.application
-											.id && (
-											<Link
-												href={`/dashboard/loans?search=${selectedPayment.loan.application.id}`}
-												className="px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors flex items-center"
-											>
-												<CreditCardIcon className="h-5 w-5 mr-2" />
-												View Active Loan
-											</Link>
-										)}
-									</div>
 								</div>
 							</div>
 						) : (

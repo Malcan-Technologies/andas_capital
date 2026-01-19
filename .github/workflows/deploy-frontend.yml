@@ -1,0 +1,148 @@
+name: Deploy Frontend to AWS ECS
+
+on:
+  push:
+    branches: [main]
+    paths: 
+      - 'frontend/**'
+      - 'client.json'
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Load client config
+        id: config
+        run: |
+          echo "CLIENT=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
+          echo "REGION=$(jq -r '.aws.region' client.json)" >> $GITHUB_OUTPUT
+          echo "ECR_REPO=$(jq -r '.ecr.frontend' client.json)" >> $GITHUB_OUTPUT
+          echo "CLUSTER=$(jq -r '.ecs.cluster' client.json)" >> $GITHUB_OUTPUT
+          echo "SERVICE=$(jq -r '.ecs.frontend_service' client.json)" >> $GITHUB_OUTPUT
+          echo "API_DOMAIN=$(jq -r '.domains.api' client.json)" >> $GITHUB_OUTPUT
+          echo "APP_DOMAIN=$(jq -r '.domains.app' client.json)" >> $GITHUB_OUTPUT
+          echo "SIGN_DOMAIN=$(jq -r '.domains.sign' client.json)" >> $GITHUB_OUTPUT
+          
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.config.outputs.REGION }}
+          
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Build and push Docker image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_REPO }}
+          TAG: ${{ github.sha }}
+          NEXT_PUBLIC_API_URL: https://${{ steps.config.outputs.API_DOMAIN }}
+          NEXT_PUBLIC_SITE_URL: https://${{ steps.config.outputs.APP_DOMAIN }}
+          SIGNING_ORCHESTRATOR_URL: https://${{ steps.config.outputs.SIGN_DOMAIN }}
+        run: |
+          echo "🔨 Building frontend Docker image..."
+          cd frontend
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+            --build-arg NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+            --build-arg SIGNING_ORCHESTRATOR_URL=$SIGNING_ORCHESTRATOR_URL \
+            -t $REGISTRY/$REPO:$TAG \
+            -t $REGISTRY/$REPO:latest .
+          
+          echo "📤 Pushing to ECR..."
+          docker push $REGISTRY/$REPO:$TAG
+          docker push $REGISTRY/$REPO:latest
+          echo "✅ Image pushed: $REGISTRY/$REPO:$TAG"
+          
+      - name: Deploy to ECS
+        env:
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          SERVICE: ${{ steps.config.outputs.SERVICE }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_REPO }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "🚀 Deploying to ECS..."
+          
+          # Get current task definition
+          TASK_DEF=$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE --query 'services[0].taskDefinition' --output text)
+          TASK_FAMILY=$(echo $TASK_DEF | cut -d'/' -f2 | cut -d':' -f1)
+          
+          echo "📋 Current task definition: $TASK_DEF"
+          echo "📋 Task family: $TASK_FAMILY"
+          
+          # Get task definition JSON and update image
+          aws ecs describe-task-definition --task-definition $TASK_FAMILY --query 'taskDefinition' > task-def.json
+          
+          # Update image in task definition - find the container by name "frontend"
+          NEW_IMAGE="$REGISTRY/$REPO:$TAG"
+          echo "🔄 Updating image to: $NEW_IMAGE"
+          
+          # Update the frontend container image using jq (find by name)
+          cat task-def.json | jq --arg IMAGE "$NEW_IMAGE" '
+            .containerDefinitions = [.containerDefinitions[] | if .name == "frontend" then .image = $IMAGE else . end] | 
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+          ' > new-task-def.json
+          
+          # Register new task definition
+          NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://new-task-def.json --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "✅ New task definition registered: $NEW_TASK_DEF"
+          
+          # Update service with new task definition
+          aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASK_DEF --force-new-deployment
+          
+          echo "⏳ Waiting for service to stabilize (timeout: 10 minutes)..."
+          # Use a more resilient wait with retries
+          MAX_ATTEMPTS=20
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "📊 Check $ATTEMPT/$MAX_ATTEMPTS..."
+            
+            # Check service status
+            SERVICE_STATUS=$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE \
+              --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Deployments:length(deployments)}' \
+              --output json)
+            
+            RUNNING=$(echo $SERVICE_STATUS | jq -r '.Running')
+            DESIRED=$(echo $SERVICE_STATUS | jq -r '.Desired')
+            DEPLOYMENTS=$(echo $SERVICE_STATUS | jq -r '.Deployments')
+            STATUS=$(echo $SERVICE_STATUS | jq -r '.Status')
+            
+            echo "   Status: $STATUS, Running: $RUNNING/$DESIRED, Active deployments: $DEPLOYMENTS"
+            
+            # Success condition: 1 deployment, running equals desired, status is ACTIVE
+            if [ "$STATUS" = "ACTIVE" ] && [ "$RUNNING" = "$DESIRED" ] && [ "$DEPLOYMENTS" = "1" ]; then
+              echo "✅ Service stabilized successfully!"
+              exit 0
+            fi
+            
+            sleep 30
+          done
+          
+          echo "⚠️ Service did not stabilize within timeout, but deployment may still complete"
+          exit 0
+
+      - name: Deployment summary
+        run: |
+          echo "=========================================="
+          echo "📋 FRONTEND DEPLOYMENT SUMMARY"
+          echo "=========================================="
+          echo "Client: ${{ steps.config.outputs.CLIENT }}"
+          echo "Region: ${{ steps.config.outputs.REGION }}"
+          echo "Cluster: ${{ steps.config.outputs.CLUSTER }}"
+          echo "Service: ${{ steps.config.outputs.SERVICE }}"
+          echo "Image Tag: ${{ github.sha }}"
+          echo "API URL: https://${{ steps.config.outputs.API_DOMAIN }}"
+          echo "Site URL: https://${{ steps.config.outputs.APP_DOMAIN }}"
+          echo "=========================================="
+          echo "✅ Frontend deployment complete!"

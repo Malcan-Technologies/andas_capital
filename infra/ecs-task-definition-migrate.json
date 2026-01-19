@@ -1,0 +1,31 @@
+{
+  "family": "creditxpress-migrate",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::127521539053:role/creditxpress-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::127521539053:role/creditxpress-ecs-task-role",
+  "containerDefinitions": [
+    {
+      "name": "migrate",
+      "image": "PLACEHOLDER_IMAGE",
+      "essential": true,
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-5:127521539053:secret:creditxpress/prod/database-url"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/creditxpress/migrate",
+          "awslogs-region": "ap-southeast-5",
+          "awslogs-stream-prefix": "migrate",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import {
 	ChevronUpIcon,
 	ChevronDownIcon,
 } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
 interface WalletData {
@@ -174,7 +175,7 @@ export default function WalletPage() {
 
 	const handleConfirmTransfer = async () => {
 		if (!depositAmount || parseFloat(depositAmount) <= 0) {
-			alert("Please enter a valid amount");
+			toast.warning("Please enter a valid amount");
 			return;
 		}
 
@@ -205,13 +206,13 @@ export default function WalletPage() {
 				setDepositAmount("");
 				setTransferConfirmed(false);
 
-				alert(
+				toast.success(
 					"Deposit request submitted successfully! Your transaction is pending approval."
 				);
 			}
 		} catch (error) {
 			console.error("Error creating deposit:", error);
-			alert("Failed to submit deposit request. Please try again.");
+			toast.error("Failed to submit deposit request. Please try again.");
 		}
 	};
 
@@ -221,17 +222,17 @@ export default function WalletPage() {
 
 	const handleConfirmWithdrawal = async () => {
 		if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
-			alert("Please enter a valid amount");
+			toast.warning("Please enter a valid amount");
 			return;
 		}
 
 		if (!selectedBankAccount) {
-			alert("Please select a bank account");
+			toast.warning("Please select a bank account");
 			return;
 		}
 
 		if (parseFloat(withdrawAmount) > walletData.availableForWithdrawal) {
-			alert("Insufficient funds available for withdrawal");
+			toast.warning("Insufficient funds available for withdrawal");
 			return;
 		}
 
@@ -262,19 +263,19 @@ export default function WalletPage() {
 				setWithdrawAmount("");
 				setSelectedBankAccount("");
 
-				alert(
+				toast.success(
 					"Withdrawal request submitted successfully! Your transaction is pending approval."
 				);
 			}
 		} catch (error) {
 			console.error("Error creating withdrawal:", error);
-			alert("Failed to submit withdrawal request. Please try again.");
+			toast.error("Failed to submit withdrawal request. Please try again.");
 		}
 	};
 
 	const handleAddBankAccount = async () => {
 		if (!newBankName || !newAccountNumber) {
-			alert("Please fill in all bank account details");
+			toast.warning("Please fill in all bank account details");
 			return;
 		}
 
@@ -302,11 +303,11 @@ export default function WalletPage() {
 				setNewAccountNumber("");
 				setShowAddBankModal(false);
 
-				alert("Bank account added successfully!");
+				toast.success("Bank account added successfully!");
 			}
 		} catch (error) {
 			console.error("Error adding bank account:", error);
-			alert("Failed to add bank account. Please try again.");
+			toast.error("Failed to add bank account. Please try again.");
 		}
 	};
 
@@ -316,7 +317,7 @@ export default function WalletPage() {
 
 	const handleEditBankAccount = async () => {
 		if (!newBankName || !newAccountNumber) {
-			alert("Please fill in all bank account details");
+			toast.warning("Please fill in all bank account details");
 			return;
 		}
 
@@ -342,17 +343,17 @@ export default function WalletPage() {
 				setShowManageBankModal(false);
 				setShowAddBankModal(false);
 
-				alert("Bank account updated successfully!");
+				toast.success("Bank account updated successfully!");
 			}
 		} catch (error) {
 			console.error("Error updating bank account:", error);
-			alert("Failed to update bank account. Please try again.");
+			toast.error("Failed to update bank account. Please try again.");
 		}
 	};
 
 	const copyToClipboard = (text: string) => {
 		navigator.clipboard.writeText(text);
-		alert("Copied to clipboard!");
+		toast.success("Copied to clipboard!");
 	};
 
 	if (loading) {
@@ -578,60 +579,6 @@ export default function WalletPage() {
 								</div>
 
 								<div className="space-y-4">
-									{/* FPX Express Deposit */}
-									<div className="border border-gray-200 rounded-xl p-4 hover:border-purple-primary/50 transition-colors bg-gray-50">
-										<div className="flex items-center justify-between mb-3">
-											<div className="flex items-center space-x-3">
-												<div className="w-10 h-10 bg-purple-primary/10 rounded-lg flex items-center justify-center border border-purple-primary/20">
-													<span className="text-purple-primary font-bold text-sm font-body">
-														FPX
-													</span>
-												</div>
-												<div>
-													<h3 className="font-semibold text-gray-700 font-body">
-														FPX Express Deposit
-													</h3>
-													<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-tertiary/10 text-blue-tertiary border border-blue-tertiary/20 font-body">
-														Popular
-													</span>
-												</div>
-											</div>
-											<svg
-												className="w-5 h-5 text-gray-400"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-													d="M9 5l7 7-7 7"
-												/>
-											</svg>
-										</div>
-										<div className="space-y-2 text-sm text-gray-500 font-body">
-											<div className="flex justify-between">
-												<span>Estimated Arrival</span>
-												<span>Usually 5 Min</span>
-											</div>
-											<div className="flex justify-between">
-												<span>Fees</span>
-												<span>Free</span>
-											</div>
-											<div className="flex justify-between">
-												<span>Currency</span>
-												<span>MYR</span>
-											</div>
-											<div className="flex justify-between">
-												<span>Supported Banks</span>
-												<span>
-													Most Malaysian Banks
-												</span>
-											</div>
-										</div>
-									</div>
-
 									{/* Bank Transfer */}
 									<button
 										onClick={handleBankTransferClick}

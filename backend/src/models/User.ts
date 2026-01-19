@@ -1,7 +1,6 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma";
 
 export interface IUser {
 	id: string;

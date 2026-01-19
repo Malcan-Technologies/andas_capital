@@ -67,6 +67,8 @@ interface PersonalInfo {
 	state: string;
 	postalCode: string;
 	zipCode?: string;
+	bankName?: string;
+	accountNumber?: string;
 }
 
 const defaultUserData: PersonalInfo = {
@@ -81,6 +83,8 @@ const defaultUserData: PersonalInfo = {
 	city: "",
 	state: "",
 	postalCode: "",
+	bankName: "",
+	accountNumber: "",
 };
 
 interface EmploymentInfo {
@@ -944,51 +948,30 @@ function ApplyPageContent() {
 											Fees & Charges
 										</p>
 										<div className="mt-1 space-y-1">
-											{selectedProductDetails.originationFee >
-												0 && (
+											{/* Legal Fee - show based on legalFeeType */}
+											{(() => {
+												const legalFeeValue = selectedProductDetails.legalFeeValue ?? selectedProductDetails.legalFeeFixed ?? 0;
+												if (legalFeeValue > 0) {
+													return (
+														<div className="flex items-start">
+															<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+															<p className="text-gray-700 font-body">
+																{selectedProductDetails.legalFeeType === 'PERCENTAGE' 
+																	? `${legalFeeValue}% legal fee`
+																	: `RM ${legalFeeValue.toFixed(2)} legal fee`
+																}
+															</p>
+														</div>
+													);
+												}
+												return null;
+											})()}
+											{/* Stamping Fee - always percentage */}
+											{(selectedProductDetails.stampingFee ?? 0) > 0 && (
 												<div className="flex items-start">
 													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
-														{
-															selectedProductDetails.originationFee
-														}
-														% origination fee
-													</p>
-												</div>
-											)}
-											{selectedProductDetails.legalFee >
-												0 && (
-												<div className="flex items-start">
-													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
-													<p className="text-gray-700 font-body">
-														{
-															selectedProductDetails.legalFee
-														}
-														% legal fee
-													</p>
-												</div>
-											)}
-											{selectedProductDetails.applicationFee >
-												0 && (
-												<div className="flex items-start">
-													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
-													<p className="text-gray-700 font-body">
-														RM{" "}
-														{
-															selectedProductDetails.applicationFee
-														}{" "}
-														application fee (paid
-														before approval)
-													</p>
-												</div>
-											)}
-											{selectedProductDetails.applicationFee >
-												0 && (
-												<div className="flex items-start">
-													<CheckCircleIcon className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
-													<p className="text-gray-700 font-body">
-														Includes 1 free CTOS
-														credit report
+														{selectedProductDetails.stampingFee}% stamping fee
 													</p>
 												</div>
 											)}
@@ -1113,51 +1096,30 @@ function ApplyPageContent() {
 											Fees & Charges
 										</p>
 										<div className="mt-1 space-y-1">
-											{selectedProductDetails.originationFee >
-												0 && (
+											{/* Legal Fee - show based on legalFeeType */}
+											{(() => {
+												const legalFeeValue = selectedProductDetails.legalFeeValue ?? selectedProductDetails.legalFeeFixed ?? 0;
+												if (legalFeeValue > 0) {
+													return (
+														<div className="flex items-start">
+															<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
+															<p className="text-gray-700 font-body">
+																{selectedProductDetails.legalFeeType === 'PERCENTAGE' 
+																	? `${legalFeeValue}% legal fee`
+																	: `RM ${legalFeeValue.toFixed(2)} legal fee`
+																}
+															</p>
+														</div>
+													);
+												}
+												return null;
+											})()}
+											{/* Stamping Fee - always percentage */}
+											{(selectedProductDetails.stampingFee ?? 0) > 0 && (
 												<div className="flex items-start">
 													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
 													<p className="text-gray-700 font-body">
-														{
-															selectedProductDetails.originationFee
-														}
-														% origination fee
-													</p>
-												</div>
-											)}
-											{selectedProductDetails.legalFee >
-												0 && (
-												<div className="flex items-start">
-													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
-													<p className="text-gray-700 font-body">
-														{
-															selectedProductDetails.legalFee
-														}
-														% legal fee
-													</p>
-												</div>
-											)}
-											{selectedProductDetails.applicationFee >
-												0 && (
-												<div className="flex items-start">
-													<InformationCircleIcon className="h-5 w-5 text-blue-tertiary mr-2 mt-0.5" />
-													<p className="text-gray-700 font-body">
-														RM{" "}
-														{
-															selectedProductDetails.applicationFee
-														}{" "}
-														application fee (paid
-														before approval)
-													</p>
-												</div>
-											)}
-											{selectedProductDetails.applicationFee >
-												0 && (
-												<div className="flex items-start">
-													<CheckCircleIcon className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
-													<p className="text-gray-700 font-body">
-														Includes 1 free CTOS
-														credit report
+														{selectedProductDetails.stampingFee}% stamping fee
 													</p>
 												</div>
 											)}

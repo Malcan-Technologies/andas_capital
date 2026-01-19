@@ -1,0 +1,58 @@
+# Cloudflare Tunnel Configuration Template
+# =============================================================================
+#
+# IMPORTANT: Routes are now managed in Cloudflare Dashboard, not in this file!
+#
+# This file is only used for local tunnel configuration. The actual routing
+# is configured in the Cloudflare Zero Trust Dashboard under:
+#   Networks → Tunnels → [tunnel-name] → Public Hostname
+#
+# For full setup instructions, see:
+#   on-prem/docs/CLOUDFLARE_TUNNEL_SETUP.md
+#
+# Quick Setup:
+#   1. Run: ./on-prem/scripts/setup-cloudflare-tunnel.sh --client-name CLIENT --domain client.com
+#   2. Configure routes in Cloudflare Dashboard (see below)
+#   3. Verify: curl https://sign.client.com/
+#
+# =============================================================================
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+# =============================================================================
+# CLOUDFLARE DASHBOARD ROUTES
+# =============================================================================
+#
+# Configure these routes in Cloudflare Zero Trust Dashboard.
+# ORDER MATTERS - specific paths must come BEFORE the catch-all!
+#
+# | #  | Path              | Service               | Description              |
+# |----|-------------------|-----------------------|--------------------------|
+# | 1  | orchestrator/*    | http://localhost:4010 | Health checks            |
+# | 2  | api/otp           | http://localhost:4010 | OTP requests             |
+# | 3  | api/certificate   | http://localhost:4010 | Certificate issuance     |
+# | 4  | api/cert/*        | http://localhost:4010 | Certificate lookup       |
+# | 5  | api/enroll        | http://localhost:4010 | User enrollment          |
+# | 6  | api/sign          | http://localhost:4010 | PDF signing              |
+# | 7  | api/verify        | http://localhost:4010 | Signature verification   |
+# | 8  | api/verify-cert-pin | http://localhost:4010 | PIN verification       |
+# | 9  | api/revoke        | http://localhost:4010 | Certificate revocation   |
+# | 10 | api/pki/*         | http://localhost:4010 | PKI operations           |
+# | 11 | api/signed/*      | http://localhost:4010 | Signed document access   |
+# | 12 | api/agreements    | http://localhost:4010 | Agreement listing        |
+# | 13 | api/admin/*       | http://localhost:4010 | Admin operations         |
+# | 14 | MTSAPilot/*       | http://localhost:8080 | MTSA Pilot SOAP          |
+# | 15 | MTSA/*            | http://localhost:8080 | MTSA Prod SOAP           |
+# | 16 | *                 | http://localhost:3001 | DocuSeal (catch-all)     |
+#
+# Minimum routes for OTP/Certificate flow:
+#   orchestrator/*, api/otp, api/certificate, api/cert/*, api/enroll
+#
+# Note: Health check at /orchestrator/health works via the orchestrator/* route
+#
+# =============================================================================
+
+# Minimal ingress config - actual routing handled by Cloudflare Dashboard
+ingress:
+  - service: http_status:404

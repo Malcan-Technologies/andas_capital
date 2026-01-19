@@ -1,0 +1,354 @@
+name: Deploy Backend to AWS ECS
+
+on:
+  push:
+    branches: [main]
+    paths: 
+      - 'backend/**'
+      - 'client.json'
+  workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: 'Force run database migrations'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - 'auto'
+          - 'true'
+          - 'false'
+      run_seed:
+        description: 'Run database seed after deployment'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+  workflow_call:
+    inputs:
+      run_migrations:
+        description: 'Force run database migrations'
+        required: false
+        default: 'auto'
+        type: string
+      run_seed:
+        description: 'Run database seed after deployment'
+        required: false
+        default: 'false'
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Fetch last 2 commits for change detection
+        
+      - name: Load client config
+        id: config
+        run: |
+          echo "CLIENT=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
+          echo "REGION=$(jq -r '.aws.region' client.json)" >> $GITHUB_OUTPUT
+          echo "ACCOUNT=$(jq -r '.aws.account_id' client.json)" >> $GITHUB_OUTPUT
+          echo "ECR_REPO=$(jq -r '.ecr.backend' client.json)" >> $GITHUB_OUTPUT
+          echo "ECR_MIGRATE=$(jq -r '.ecr.migrate' client.json)" >> $GITHUB_OUTPUT
+          echo "CLUSTER=$(jq -r '.ecs.cluster' client.json)" >> $GITHUB_OUTPUT
+          echo "SERVICE=$(jq -r '.ecs.backend_service' client.json)" >> $GITHUB_OUTPUT
+          echo "SECRETS_PREFIX=$(jq -r '.secrets_prefix' client.json)" >> $GITHUB_OUTPUT
+
+      - name: Detect migration changes
+        id: migration_check
+        run: |
+          # Check if prisma migrations folder has changes
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^backend/prisma/migrations/'; then
+            echo "migrations_changed=true" >> $GITHUB_OUTPUT
+            echo "🗄️ Database migrations detected in this commit"
+          else
+            echo "migrations_changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No database migration changes detected"
+          fi
+          
+          # Check if prisma schema has changes
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^backend/prisma/schema.prisma'; then
+            echo "schema_changed=true" >> $GITHUB_OUTPUT
+            echo "📋 Prisma schema changes detected"
+          else
+            echo "schema_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine if migrations should run
+        id: should_migrate
+        run: |
+          # Handle both workflow_dispatch and workflow_call contexts
+          MANUAL_OVERRIDE="${{ inputs.run_migrations || github.event.inputs.run_migrations }}"
+          MIGRATIONS_CHANGED="${{ steps.migration_check.outputs.migrations_changed }}"
+          
+          echo "📋 Migration input received: '$MANUAL_OVERRIDE'"
+          
+          if [ "$MANUAL_OVERRIDE" = "true" ]; then
+            echo "run_migrations=true" >> $GITHUB_OUTPUT
+            echo "🚀 Migrations will run (manual override)"
+          elif [ "$MANUAL_OVERRIDE" = "false" ]; then
+            echo "run_migrations=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Migrations skipped (manual override)"
+          elif [ "$MIGRATIONS_CHANGED" = "true" ]; then
+            echo "run_migrations=true" >> $GITHUB_OUTPUT
+            echo "🚀 Migrations will run (changes detected)"
+          else
+            echo "run_migrations=false" >> $GITHUB_OUTPUT
+            echo "⏭️ No migrations needed (no changes detected)"
+          fi
+
+      - name: Determine if seed should run
+        id: should_seed
+        run: |
+          SEED_INPUT="${{ inputs.run_seed || github.event.inputs.run_seed }}"
+          echo "📋 Seed input received: '$SEED_INPUT'"
+          if [ "$SEED_INPUT" = "true" ]; then
+            echo "run_seed=true" >> $GITHUB_OUTPUT
+            echo "🌱 Seed will run"
+          else
+            echo "run_seed=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.config.outputs.REGION }}
+          
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Build and push backend Docker image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_REPO }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "🔨 Building backend Docker image..."
+          cd backend
+          docker build -t $REGISTRY/$REPO:$TAG -t $REGISTRY/$REPO:latest -f Dockerfile.prod .
+          
+          echo "📤 Pushing to ECR..."
+          docker push $REGISTRY/$REPO:$TAG
+          docker push $REGISTRY/$REPO:latest
+          echo "✅ Image pushed: $REGISTRY/$REPO:$TAG"
+
+      - name: Build and push migration Docker image
+        if: steps.should_migrate.outputs.run_migrations == 'true'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "🔨 Building migration Docker image..."
+          cd backend
+          docker build -t $REGISTRY/$REPO:$TAG -f Dockerfile.migrate .
+          
+          echo "📤 Pushing migration image to ECR..."
+          docker push $REGISTRY/$REPO:$TAG
+          echo "✅ Migration image pushed: $REGISTRY/$REPO:$TAG"
+
+      - name: Run Database Migrations (one-off task)
+        if: steps.should_migrate.outputs.run_migrations == 'true'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_MIGRATE }}
+          TAG: ${{ github.sha }}
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          CLIENT: ${{ steps.config.outputs.CLIENT }}
+          REGION: ${{ steps.config.outputs.REGION }}
+        run: |
+          echo "🗄️ Running database migrations via one-off ECS task..."
+          
+          echo "📝 Ensuring CloudWatch log group exists..."
+          aws logs create-log-group \
+            --log-group-name /ecs/$CLIENT/migrate \
+            --region $REGION 2>/dev/null || echo "Log group already exists"
+          
+          echo "📦 Registering migration task definition..."
+          TASK_DEF=$(cat infra/ecs-task-definition-migrate.json | jq --arg IMAGE "$REGISTRY/$REPO:$TAG" \
+            '.containerDefinitions[0].image = $IMAGE')
+          
+          aws ecs register-task-definition \
+            --cli-input-json "$TASK_DEF" \
+            --region $REGION
+          
+          echo "🚀 Starting migration task..."
+          
+          # Get network configuration from backend service
+          NETWORK_CONFIG=$(aws ecs describe-services \
+            --cluster $CLUSTER \
+            --services ${{ steps.config.outputs.SERVICE }} \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration' \
+            --output json)
+          
+          SUBNETS=$(echo $NETWORK_CONFIG | jq -r '.subnets | join(",")')
+          SECURITY_GROUPS=$(echo $NETWORK_CONFIG | jq -r '.securityGroups | join(",")')
+          
+          # Run migration as one-off ECS task
+          TASK_ARN=$(aws ecs run-task \
+            --cluster $CLUSTER \
+            --launch-type FARGATE \
+            --task-definition $CLIENT-migrate \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}" \
+            --region $REGION \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "❌ Failed to start migration task"
+            exit 1
+          fi
+          
+          echo "⏳ Waiting for migrations to complete (Task: $TASK_ARN)..."
+          
+          # Wait for task to complete
+          aws ecs wait tasks-stopped \
+            --cluster $CLUSTER \
+            --tasks $TASK_ARN \
+            --region $REGION
+          
+          # Check exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster $CLUSTER \
+            --tasks $TASK_ARN \
+            --region $REGION \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+          
+          if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "None" ]; then
+            echo "❌ Migrations failed with exit code $EXIT_CODE"
+            
+            echo "📋 Task details:"
+            aws ecs describe-tasks \
+              --cluster $CLUSTER \
+              --tasks $TASK_ARN \
+              --region $REGION \
+              --query 'tasks[0].containers[0]' || true
+            
+            TASK_ID=$(echo $TASK_ARN | awk -F'/' '{print $NF}')
+            echo "📋 Migration logs (Task ID: $TASK_ID):"
+            
+            echo "Available log streams:"
+            aws logs describe-log-streams \
+              --log-group-name /ecs/$CLIENT/migrate \
+              --region $REGION \
+              --max-items 5 \
+              --order-by LastEventTime \
+              --descending || echo "Could not list log streams"
+            
+            aws logs tail /ecs/$CLIENT/migrate \
+              --since 15m \
+              --format short \
+              --region $REGION || echo "Could not retrieve logs"
+            
+            exit 1
+          elif [ "$EXIT_CODE" = "None" ]; then
+            echo "⚠️ Task stopped but exit code is None - checking task status..."
+            aws ecs describe-tasks \
+              --cluster $CLUSTER \
+              --tasks $TASK_ARN \
+              --region $REGION \
+              --query 'tasks[0]' || true
+            exit 1
+          fi
+          
+          echo "✅ Database migrations completed successfully"
+          
+      - name: Deploy to ECS
+        id: deploy
+        env:
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          SERVICE: ${{ steps.config.outputs.SERVICE }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: ${{ steps.config.outputs.ECR_REPO }}
+          TAG: ${{ github.sha }}
+        run: |
+          echo "🚀 Deploying to ECS..."
+          
+          # Get current task definition
+          TASK_DEF=$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE --query 'services[0].taskDefinition' --output text)
+          TASK_FAMILY=$(echo $TASK_DEF | cut -d'/' -f2 | cut -d':' -f1)
+          
+          echo "📋 Current task definition: $TASK_DEF"
+          echo "📋 Task family: $TASK_FAMILY"
+          
+          # Get task definition JSON and update image
+          aws ecs describe-task-definition --task-definition $TASK_FAMILY --query 'taskDefinition' > task-def.json
+          
+          # Update image in task definition
+          NEW_IMAGE="$REGISTRY/$REPO:$TAG"
+          echo "🔄 Updating image to: $NEW_IMAGE"
+          
+          cat task-def.json | jq --arg IMAGE "$NEW_IMAGE" '
+            .containerDefinitions = [.containerDefinitions[] | if .name == "backend" then .image = $IMAGE else . end] | 
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+          ' > new-task-def.json
+          
+          # Register new task definition
+          NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://new-task-def.json --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "✅ New task definition registered: $NEW_TASK_DEF"
+          
+          # Update service with new task definition
+          aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASK_DEF --force-new-deployment
+          
+          echo "⏳ Waiting for service to stabilize..."
+          MAX_ATTEMPTS=20
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "📊 Check $ATTEMPT/$MAX_ATTEMPTS..."
+            
+            SERVICE_STATUS=$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE \
+              --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Deployments:length(deployments)}' \
+              --output json)
+            
+            RUNNING=$(echo $SERVICE_STATUS | jq -r '.Running')
+            DESIRED=$(echo $SERVICE_STATUS | jq -r '.Desired')
+            DEPLOYMENTS=$(echo $SERVICE_STATUS | jq -r '.Deployments')
+            STATUS=$(echo $SERVICE_STATUS | jq -r '.Status')
+            
+            echo "   Status: $STATUS, Running: $RUNNING/$DESIRED, Active deployments: $DEPLOYMENTS"
+            
+            if [ "$STATUS" = "ACTIVE" ] && [ "$RUNNING" = "$DESIRED" ] && [ "$DEPLOYMENTS" = "1" ]; then
+              echo "✅ Service stabilized successfully!"
+              break
+            fi
+            
+            sleep 30
+          done
+          
+          echo "✅ ECS deployment initiated"
+
+      - name: Run database seed (optional)
+        if: steps.should_seed.outputs.run_seed == 'true'
+        env:
+          CLUSTER: ${{ steps.config.outputs.CLUSTER }}
+          SERVICE: ${{ steps.config.outputs.SERVICE }}
+        run: |
+          echo "🌱 Running database seed..."
+          echo "⚠️ Seed requires ECS Exec - skipping for now"
+          echo "To seed, run manually: aws ecs execute-command --cluster $CLUSTER --task <TASK_ARN> --container backend --interactive --command 'npx prisma db seed'"
+
+      - name: Deployment summary
+        run: |
+          echo "=========================================="
+          echo "📋 BACKEND DEPLOYMENT SUMMARY"
+          echo "=========================================="
+          echo "Client: ${{ steps.config.outputs.CLIENT }}"
+          echo "Region: ${{ steps.config.outputs.REGION }}"
+          echo "Cluster: ${{ steps.config.outputs.CLUSTER }}"
+          echo "Service: ${{ steps.config.outputs.SERVICE }}"
+          echo "Image Tag: ${{ github.sha }}"
+          echo "Migrations Run: ${{ steps.should_migrate.outputs.run_migrations }}"
+          echo "Seed Run: ${{ steps.should_seed.outputs.run_seed }}"
+          echo "=========================================="
+          echo "✅ Backend deployment complete!"

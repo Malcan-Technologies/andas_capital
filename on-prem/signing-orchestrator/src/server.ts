@@ -78,6 +78,9 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/health', healthRouter);
+// Also mount health at /orchestrator/health for Cloudflare tunnel routing
+// (Cloudflare passes full path, so /orchestrator/* routes receive /orchestrator/... paths)
+app.use('/orchestrator/health', healthRouter);
 app.use('/webhooks', webhooksRouter);
 app.use('/api', apiRouter);
 

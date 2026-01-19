@@ -3,20 +3,16 @@ import { NextResponse } from "next/server";
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
 
-export async function POST(
-	request: Request,
-	{ params }: { params: { id: string } }
-) {
-	// Handle status update with POST method
-	return handleStatusUpdate(request, params);
+export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    // Handle status update with POST method
+    return handleStatusUpdate(request, params);
 }
 
-export async function PATCH(
-	request: Request,
-	{ params }: { params: { id: string } }
-) {
-	// Handle status update with PATCH method
-	return handleStatusUpdate(request, params);
+export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    // Handle status update with PATCH method
+    return handleStatusUpdate(request, params);
 }
 
 // Shared function to handle status updates for both POST and PATCH

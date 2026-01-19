@@ -1,8 +1,7 @@
 import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
+import { docusealConfig, urlConfig, companySigningConfig, serverConfig } from './config';
+import { prisma } from './prisma';
 // import { TimeUtils } from './precisionUtils';
-
-const prisma = new PrismaClient();
 
 interface DocuSealConfig {
   baseUrl: string;
@@ -161,20 +160,19 @@ class DocuSealService {
 
   constructor() {
     this.config = {
-      baseUrl: process.env.DOCUSEAL_BASE_URL || 'http://192.168.0.100:3001', // For user-facing URLs
-      apiUrl: process.env.DOCUSEAL_API_URL || process.env.DOCUSEAL_BASE_URL || 'http://host.docker.internal:3001', // For backend API calls
-      apiToken: process.env.DOCUSEAL_API_TOKEN || ''
+      baseUrl: docusealConfig.baseUrl,
+      apiUrl: docusealConfig.apiUrl,
+      apiToken: docusealConfig.apiToken
     };
 
     console.log('DocuSeal Service Config:', {
       baseUrl: this.config.baseUrl,
-      hasApiToken: !!this.config.apiToken,
-      envBaseUrl: process.env.DOCUSEAL_BASE_URL,
-      envApiToken: process.env.DOCUSEAL_API_TOKEN ? 'SET' : 'NOT_SET'
+      apiUrl: this.config.apiUrl,
+      hasApiToken: !!this.config.apiToken
     });
 
-    // Temporarily allow development without real API token
-    if (!this.config.apiToken && process.env.NODE_ENV === 'production') {
+    // Require API token in production
+    if (!this.config.apiToken && serverConfig.isProduction) {
       throw new Error('DOCUSEAL_API_TOKEN environment variable is required');
     }
 
@@ -200,10 +198,13 @@ class DocuSealService {
       // Return default values if no settings found
       if (!companySettings) {
         return {
-          companyName: 'Kredit.my',
+          companyName: companySigningConfig.defaultCompanyName,
           companyRegNo: 'N/A',
           licenseNo: 'N/A',
-          companyAddress: 'Kuala Lumpur, Malaysia',
+          companyAddress: companySigningConfig.defaultCompanyAddress,
+          // Signing config - fall back to config values
+          signUrl: docusealConfig.baseUrl,
+          serverPublicIp: companySigningConfig.serverPublicIp,
         };
       }
 
@@ -212,15 +213,20 @@ class DocuSealService {
         companyRegNo: companySettings.companyRegNo || 'N/A',
         licenseNo: companySettings.licenseNo || 'N/A',
         companyAddress: companySettings.companyAddress,
+        // Signing config - prefer database values, fall back to config
+        signUrl: companySettings.signUrl || docusealConfig.baseUrl,
+        serverPublicIp: companySettings.serverPublicIp || companySigningConfig.serverPublicIp,
       };
     } catch (error) {
       console.error('Error fetching company settings:', error);
       // Return default values on error
       return {
-        companyName: 'Kredit.my',
+        companyName: companySigningConfig.defaultCompanyName,
         companyRegNo: 'N/A',
         licenseNo: 'N/A',
-        companyAddress: 'Kuala Lumpur, Malaysia',
+        companyAddress: companySigningConfig.defaultCompanyAddress,
+        signUrl: docusealConfig.baseUrl,
+        serverPublicIp: companySigningConfig.serverPublicIp,
       };
     }
   }
@@ -421,7 +427,7 @@ class DocuSealService {
         },
         {
           name: 'ip_address',
-          default_value: 'Digitally generated. IP Address: 210.186.80.101. URL: https://sign.creditxpress.com.my',
+          default_value: `Digitally generated.${companySettings.serverPublicIp ? ` IP Address: ${companySettings.serverPublicIp}.` : ''} URL: ${companySettings.signUrl}`,
           readonly: true
         }
       ];
@@ -431,16 +437,16 @@ class DocuSealService {
 
       // Create submission with all three parties and different redirect URLs
       const submission = await this.createSubmission({
-        template_id: process.env.DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID || '',
+        template_id: docusealConfig.templateId,
         send_email: true,
         external_id: application?.loan?.id ? `loan_${application.loan.id}` : `application_${applicationId}`, // Use loan ID if available, otherwise application ID
         submitters: [
           {
-            name: 'Kredit.my Sdn Bhd',
-            email: process.env.COMPANY_SIGNING_EMAIL || 'admin@creditxpress.com.my',
+            name: companySettings.companyName,
+            email: companySigningConfig.companyEmail,
             role: 'Company',
             fields: companyFields, // Company gets pre-filled data but must sign manually
-            completed_redirect_url: `${process.env.ADMIN_BASE_URL || 'http://localhost:3002'}/pki-signing?application=${applicationId}&signatory=COMPANY`
+            completed_redirect_url: `${urlConfig.admin}/pki-signing?application=${applicationId}&signatory=COMPANY`
             // Note: completed: true removed - company must sign manually
           },
           {
@@ -460,18 +466,18 @@ class DocuSealService {
                 readonly: true
               }
             ],
-            completed_redirect_url: `${process.env.FRONTEND_URL}/pki-signing?application=${applicationId}&status=processing`
+            completed_redirect_url: `${urlConfig.frontend}/pki-signing?application=${applicationId}&status=processing`
           },
           {
-            name: process.env.WITNESS_NAME || 'Legal Representative',
-            email: process.env.WITNESS_EMAIL || 'legal@creditxpress.com.my',
+            name: companySigningConfig.witnessName,
+            email: companySigningConfig.witnessEmail,
             role: 'Witness',
-            completed_redirect_url: `${process.env.ADMIN_BASE_URL || 'http://localhost:3002'}/pki-signing?application=${applicationId}&signatory=WITNESS`
+            completed_redirect_url: `${urlConfig.admin}/pki-signing?application=${applicationId}&signatory=WITNESS`
             // No fields array - witness signs but doesn't need pre-filled data
           }
         ],
         // Remove global redirect URL since we're using per-submitter URLs
-        expired_redirect_url: `${process.env.FRONTEND_URL}/dashboard/loans?tab=applications&signed=expired`
+        expired_redirect_url: `${urlConfig.frontend}/dashboard/loans?tab=applications&signed=expired`
       });
 
       // Store submission ID in the loan record for tracking (if loan exists)
@@ -608,7 +614,7 @@ class DocuSealService {
 
       // Create submission
       const submission = await this.createSubmission({
-        template_id: process.env.DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID || '',
+        template_id: docusealConfig.templateId,
         send_email: true,
         external_id: `loan_${loanId}`, // Add external_id for API mapping
         submitters: [{
@@ -628,8 +634,8 @@ class DocuSealService {
             }
           ]
         }],
-        completed_redirect_url: `${process.env.FRONTEND_URL}/dashboard/loans/${loanId}?signed=success`,
-        expired_redirect_url: `${process.env.FRONTEND_URL}/dashboard/loans/${loanId}?signed=expired`
+        completed_redirect_url: `${urlConfig.frontend}/dashboard/loans/${loanId}?signed=success`,
+        expired_redirect_url: `${urlConfig.frontend}/dashboard/loans/${loanId}?signed=expired`
       });
 
       // Store submission ID in database for tracking

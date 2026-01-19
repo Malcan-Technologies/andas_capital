@@ -22,6 +22,7 @@ import {
 	ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 
 interface NotificationTemplate {
 	id: string;
@@ -63,7 +64,6 @@ export default function NotificationManagementPage() {
 	const [activeTab, setActiveTab] = useState("send");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [success, setSuccess] = useState<string | null>(null);
 
 	// Send Notification State
 	const [notificationForm, setNotificationForm] = useState({
@@ -134,7 +134,7 @@ export default function NotificationManagementPage() {
 			]);
 		} catch (error) {
 			console.error("Error fetching initial data:", error);
-			setError("Failed to load data. Please refresh the page.");
+			toast.error("Failed to load data. Please refresh the page.");
 		} finally {
 			setLoading(false);
 		}
@@ -199,14 +199,14 @@ export default function NotificationManagementPage() {
 					: null,
 			};
 
-			await fetchWithAdminTokenRefresh("/api/admin/send-notification", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(payload),
-			});
+		await fetchWithAdminTokenRefresh("/api/admin/send-notification", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(payload),
+		});
 
-			setSuccess("Notification sent successfully!");
-			setNotificationForm({
+		toast.success("Notification sent successfully!");
+		setNotificationForm({
 				type: "SYSTEM",
 				priority: "MEDIUM",
 				title: "",
@@ -221,7 +221,7 @@ export default function NotificationManagementPage() {
 			fetchRecentNotifications();
 		} catch (error) {
 			console.error("Error sending notification:", error);
-			setError("Failed to send notification. Please try again.");
+			toast.error("Failed to send notification. Please try again.");
 		} finally {
 			setLoading(false);
 		}
@@ -242,7 +242,7 @@ export default function NotificationManagementPage() {
 						body: JSON.stringify(templateForm),
 					}
 				);
-				setSuccess("Template updated successfully!");
+				toast.success("Template updated successfully!");
 			} else {
 				await fetchWithAdminTokenRefresh(
 					"/api/admin/notification-templates",
@@ -252,7 +252,7 @@ export default function NotificationManagementPage() {
 						body: JSON.stringify(templateForm),
 					}
 				);
-				setSuccess("Template created successfully!");
+				toast.success("Template created successfully!");
 			}
 
 			setTemplateForm({
@@ -265,7 +265,7 @@ export default function NotificationManagementPage() {
 			fetchTemplates();
 		} catch (error) {
 			console.error("Error saving template:", error);
-			setError("Failed to save template. Please try again.");
+			toast.error("Failed to save template. Please try again.");
 		} finally {
 			setLoading(false);
 		}
@@ -292,7 +292,7 @@ export default function NotificationManagementPage() {
 						body: JSON.stringify(payload),
 					}
 				);
-				setSuccess("Group updated successfully!");
+				toast.success("Group updated successfully!");
 			} else {
 				await fetchWithAdminTokenRefresh(
 					"/api/admin/notification-groups",
@@ -302,7 +302,7 @@ export default function NotificationManagementPage() {
 						body: JSON.stringify(payload),
 					}
 				);
-				setSuccess("Group created successfully!");
+				toast.success("Group created successfully!");
 			}
 
 			setGroupForm({ name: "", description: "", filters: "{}" });
@@ -316,7 +316,7 @@ export default function NotificationManagementPage() {
 			fetchGroups();
 		} catch (error) {
 			console.error("Error saving group:", error);
-			setError("Failed to save group. Please try again.");
+			toast.error("Failed to save group. Please try again.");
 		} finally {
 			setLoading(false);
 		}
@@ -332,11 +332,11 @@ export default function NotificationManagementPage() {
 					method: "DELETE",
 				}
 			);
-			setSuccess("Template deleted successfully!");
+			toast.success("Template deleted successfully!");
 			fetchTemplates();
 		} catch (error) {
 			console.error("Error deleting template:", error);
-			setError("Failed to delete template.");
+			toast.error("Failed to delete template.");
 		}
 	};
 
@@ -350,11 +350,11 @@ export default function NotificationManagementPage() {
 					method: "DELETE",
 				}
 			);
-			setSuccess("Group deleted successfully!");
+			toast.success("Group deleted successfully!");
 			fetchGroups();
 		} catch (error) {
 			console.error("Error deleting group:", error);
-			setError("Failed to delete group.");
+			toast.error("Failed to delete group.");
 		}
 	};
 
@@ -505,16 +505,7 @@ export default function NotificationManagementPage() {
 			title="Notification Management"
 			description="Create and broadcast notifications to users"
 		>
-			{/* Success/Error Messages */}
-			{success && (
-				<div className="mb-6 bg-green-700/30 border border-green-600/30 text-green-300 px-4 py-3 rounded-lg flex items-center justify-between">
-					<span>{success}</span>
-					<button onClick={() => setSuccess(null)}>
-						<XMarkIcon className="h-5 w-5" />
-					</button>
-				</div>
-			)}
-
+			{/* Error Message */}
 			{error && (
 				<div className="mb-6 bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
 					<span>{error}</span>

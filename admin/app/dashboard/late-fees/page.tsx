@@ -20,6 +20,7 @@ import {
 	ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 
 interface LateFeeData {
 	id: string;
@@ -285,11 +286,17 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 		setSearchTerm(e.target.value);
 	};
 
-	const handleRefresh = () => {
+	const handleRefresh = async () => {
 		setRefreshing(true);
 		// Clear selected late fee to force re-selection with fresh data
 		setSelectedLateFee(null);
-		fetchLateFees();
+		try {
+			await fetchLateFees();
+			toast.success("Late fees refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing late fees:", error);
+			toast.error("Failed to refresh late fees");
+		}
 	};
 
 	const handleViewLateFee = (fee: LateFeeData) => {
@@ -343,20 +350,10 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 
 				// Show detailed success message
 				const message =
-					`Manual processing completed successfully!\n\n` +
-					`Late Fee Processing:\n` +
-					`• Found ${overdueRepayments} overdue repayments\n` +
-					`• Calculated ${feesCalculated} new fees\n` +
-					`• Total fee amount: $${totalFeeAmount.toFixed(2)}\n` +
-					`• Processing time: ${processingTimeMs}ms\n\n` +
-					`Default Processing:\n` +
-					`• ${riskLoansProcessed} loans flagged as default risk\n` +
-					`• ${defaultedLoans} loans moved to default status\n` +
-					`• ${pdfLettersGenerated} PDF letters generated\n` +
-					`• WhatsApp notifications will be sent at 10 AM\n\n` +
-					`Data will be refreshed automatically.`;
+					`Processing complete! Found ${overdueRepayments} overdue repayments, calculated ${feesCalculated} new fees ($${totalFeeAmount.toFixed(2)}). ` +
+					`${riskLoansProcessed} loans flagged as risk, ${defaultedLoans} defaulted, ${pdfLettersGenerated} PDF letters generated.`;
 
-				alert(message);
+				toast.success(message);
 
 				// Force a complete refresh of all data
 				setSelectedLateFee(null);
@@ -370,8 +367,8 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 			console.error("Error processing overdue payment fees:", error);
 			const errorMessage =
 				error instanceof Error ? error.message : "Unknown error";
-			alert(
-				`Failed to process overdue payment fees: ${errorMessage}\n\nPlease try again or check the system logs.`
+			toast.error(
+				`Failed to process overdue payment fees: ${errorMessage}. Please try again.`
 			);
 		} finally {
 			setProcessing(false);
@@ -859,13 +856,59 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 				<div className="lg:col-span-2">
 					{selectedLateFee ? (
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-								<h3 className="text-lg font-medium text-white">
-									Overdue Payment Details
-								</h3>
-								<span className="px-2 py-1 bg-blue-500/20 text-blue-200 text-xs font-medium rounded-full border border-blue-400/20">
-									{selectedLateFee.id}
+							<div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+								<div>
+									<h3 className="text-lg font-medium text-white">
+										Overdue Payment Details
+									</h3>
+									<div className="mt-1.5 flex items-center gap-2">
+										{(() => {
+											const statusColor = getStatusColor(selectedLateFee.status);
+											const StatusIcon = getStatusIcon(selectedLateFee.status);
+											return (
+												<span
+													className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
+												>
+													<StatusIcon className="h-3.5 w-3.5 mr-1" />
+													{selectedLateFee.status}
+												</span>
+											);
+										})()}
+									</div>
+								</div>
+								<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
+									ID: {selectedLateFee.id.substring(0, 8)}
 								</span>
+							</div>
+
+							{/* Action Bar */}
+							<div className="p-4 border-b border-gray-700/30">
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{selectedLateFee.loanRepayment.loan.application.id && (
+											<Link
+												href={`/dashboard/loans?search=${selectedLateFee.loanRepayment.loan.application.id}`}
+												className="flex items-center px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-xs"
+												title="View loan details"
+											>
+												<CreditCardIcon className="h-3 w-3 mr-1" />
+												View Loan Details
+											</Link>
+										)}
+										{selectedLateFee.loanRepayment.loan.id && (
+											<Link
+												href={`/dashboard/payments?search=${selectedLateFee.loanRepayment.loan.id}&status=all`}
+												className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+												title="View related payments"
+											>
+												<BanknotesIcon className="h-3 w-3 mr-1" />
+												View Related Payments
+											</Link>
+										)}
+									</div>
+								</div>
 							</div>
 
 							<div className="p-6">
@@ -1339,28 +1382,6 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 									</div>
 								</div>
 
-								{/* Action Buttons */}
-								<div className="flex flex-wrap gap-3">
-									{selectedLateFee.loanRepayment.loan
-										.application.id && (
-										<Link
-											href={`/dashboard/loans?search=${selectedLateFee.loanRepayment.loan.application.id}`}
-											className="px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors flex items-center"
-										>
-											<CreditCardIcon className="h-5 w-5 mr-2" />
-											View Loan Details
-										</Link>
-									)}
-									{selectedLateFee.loanRepayment.loan.id && (
-										<Link
-											href={`/dashboard/payments?search=${selectedLateFee.loanRepayment.loan.id}`}
-											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
-										>
-											<BanknotesIcon className="h-5 w-5 mr-2" />
-											View Related Payments
-										</Link>
-									)}
-								</div>
 							</div>
 						</div>
 					) : (

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
 	try {
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
 	try {
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {

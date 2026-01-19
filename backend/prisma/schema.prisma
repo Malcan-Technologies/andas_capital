@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum LegalFeeType {
+  PERCENTAGE
+  FIXED
+}
+
 model Product {
   id                   String            @id @default(cuid())
   code                 String            @unique
@@ -32,6 +37,8 @@ model Product {
   collateralRequired   Boolean           @default(false)
   stampingFee          Float             @default(0)
   legalFeeFixed        Float             @default(0)
+  legalFeeType         LegalFeeType      @default(FIXED)
+  legalFeeValue        Float             @default(0)
   applications         LoanApplication[]
 
   @@map("products")
@@ -75,6 +82,9 @@ model User {
   serviceLength                String?
   phoneVerified                Boolean              @default(false)
   educationLevel               String?
+  race                         String?
+  gender                       String?
+  occupation                   String?
   resetToken                   String?
   resetTokenExpiry             DateTime?
   kycSessions                  KycSession[]
@@ -546,7 +556,7 @@ model PaymentReceipt {
   @@map("payment_receipts")
 }
 
-/// Company settings for receipt generation
+/// Company settings for receipt generation and signing configuration
 model CompanySettings {
   id             String   @id @default(cuid())
   companyName    String   @default("Kredit.my")
@@ -562,6 +572,10 @@ model CompanySettings {
   updatedAt      DateTime @updatedAt
   createdBy      String?
   licenseNo      String?
+  
+  // Signing configuration (for digital signature attestation)
+  signUrl        String?  // DocuSeal/signing URL (e.g., https://sign.creditxpress.com.my)
+  serverPublicIp String?  // Server public IP for attestation (e.g., 210.186.80.101)
 
   @@map("company_settings")
 }
@@ -778,6 +792,45 @@ model CreditReportLog {
   @@index([requestedBy])
   @@index([createdAt])
   @@map("credit_report_logs")
+}
+
+/// Internal users with digital signing certificates (admins, attestors, witnesses)
+model InternalSigner {
+  id                String    @id @default(cuid())
+  
+  // User identity - may or may not be linked to User table
+  userId            String?   // Optional reference to User.id if user exists in system
+  icNumber          String    @unique  // IC number (cert tied to this)
+  fullName          String
+  email             String
+  phoneNumber       String?
+  signerRole        String    // ADMIN, ATTESTOR, WITNESS, COMPANY_REP
+  
+  // Certificate info (cached from MTSA GetCertInfo)
+  certSerialNo      String?
+  certStatus        String?   // Valid, Expired, Revoked (from MTSA)
+  certValidFrom     DateTime?
+  certValidTo       DateTime?
+  lastCertCheck     DateTime?
+  
+  // Verification status
+  status            String    @default("PENDING")  // PENDING, VERIFIED, EXPIRED, REVOKED, INACTIVE
+  pinVerifiedAt     DateTime? // When PIN was last verified
+  
+  // Enrollment tracking
+  enrolledAt        DateTime?
+  enrolledBy        String?   // IC/name of admin who added them
+  
+  // Notes
+  notes             String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([icNumber])
+  @@index([status])
+  @@index([signerRole])
+  @@map("internal_signers")
 }
 
 

@@ -1,0 +1,72 @@
+{
+  "client_slug": "creditxpress",
+  "client_name": "Credit Xpress",
+  "environment": "production",
+  
+  "aws": {
+    "region": "ap-southeast-5",
+    "account_id": "127521539053"
+  },
+  
+  "domains": {
+    "app": "creditxpress.com.my",
+    "admin": "admin.creditxpress.com.my",
+    "api": "api.creditxpress.com.my",
+    "sign": "sign.creditxpress.com.my"
+  },
+  
+  "ecr": {
+    "backend": "creditxpress/backend",
+    "frontend": "creditxpress/frontend",
+    "admin": "creditxpress/admin",
+    "migrate": "creditxpress/migrate"
+  },
+  
+  "ecs": {
+    "cluster": "creditxpress-cluster",
+    "backend_service": "creditxpress-backend",
+    "frontend_service": "creditxpress-frontend",
+    "admin_service": "creditxpress-admin"
+  },
+  
+  "rds": {
+    "identifier": "creditxpress-postgres",
+    "database": "creditxpress"
+  },
+  
+  "s3": {
+    "bucket": "creditxpress-prod-files"
+  },
+  
+  "secrets_prefix": "creditxpress/prod",
+  
+  "branding": {
+    "company_name": "OPG Capital Holdings Sdn. Bhd.",
+    "primary_color": "#1a365d",
+    "support_email": "support@creditxpress.com.my"
+  },
+
+  "docuseal": {
+    "template_id": "2",
+    "template_name": "Jadual J (Official)",
+    "template_external_id": "creditxpress-loan-agreement",
+    "company_signing_email": "admin@creditxpress.com.my",
+    "witness_email": "legal@creditxpress.com.my",
+    "witness_name": "Legal Representative"
+  },
+
+  "onprem": {
+    "enabled": true,
+    "server_ip": "100.76.8.62",
+    "ssh_user": "admin-kapital",
+    "ssh_host": "admin-kapital@100.76.8.62",
+    "base_dir": "/home/admin-kapital",
+    "mtsa": {
+      "env": "pilot",
+      "container_image": "mtsa-pilot:1.01"
+    },
+    "cloudflare": {
+      "tunnel_name": "creditxpress-onprem"
+    }
+  }
+}

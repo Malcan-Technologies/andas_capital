@@ -1,10 +1,11 @@
 import { Resend } from 'resend';
 import { prisma } from './prisma';
+import { resendConfig, signingConfig } from './config';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@creditxpress.com.my';
-const SIGNING_ORCHESTRATOR_URL = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-const SIGNING_ORCHESTRATOR_API_KEY = process.env.SIGNING_ORCHESTRATOR_API_KEY || '';
+const RESEND_API_KEY = resendConfig.apiKey;
+const RESEND_FROM_EMAIL = resendConfig.fromEmail;
+const SIGNING_ORCHESTRATOR_URL = signingConfig.url;
+const SIGNING_ORCHESTRATOR_API_KEY = signingConfig.apiKey;
 
 class EmailService {
   private resend: Resend | null = null;

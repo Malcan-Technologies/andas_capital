@@ -1,13 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 
 
-// Create a single Prisma client instance with logging enabled
+// Create a single Prisma client instance
+// Only log errors and warnings in production; enable query logging only in development if needed
 export const prisma = new PrismaClient({
   log: [
-    {
-      emit: 'stdout',
-      level: 'query',
-    },
     {
       emit: 'stdout',
       level: 'error',
@@ -18,3 +15,6 @@ export const prisma = new PrismaClient({
     },
   ],
 });
+
+// Default export for compatibility
+export default prisma;

@@ -432,25 +432,34 @@ export class DefaultProcessor {
 					);
 				}, 0);
 
-				// Send reminders at specific intervals (e.g., day 7 and day 12 of remedy period)
-				const shouldSendReminder = (daysSinceFlagged === 7 || daysSinceFlagged === 12) && 
+				// Mark loans that need reminders at specific intervals (e.g., day 7 and day 12 of remedy period)
+				// The actual WhatsApp notification will be sent at 10 AM by processDefaultNotifications()
+				const shouldMarkForReminder = (daysSinceFlagged === 7 || daysSinceFlagged === 12) && 
 					loan.defaultNoticesSent < 3; // Limit to 3 total notices
 
-				if (shouldSendReminder && settings.whatsappReminder) {
+				if (shouldMarkForReminder) {
 					const daysRemaining = Math.max(0, settings.remedyDays - daysSinceFlagged);
 					
-					await DefaultProcessor.sendDefaultReminder(
-						loan.id,
-						loan.user.phoneNumber,
-						{
-							userFullName: loan.user.fullName || 'Customer',
-							productName: loan.application.product.name,
+					// Create a log entry to mark this loan as needing a reminder notification
+					// The WhatsApp message will be sent at 10 AM by processDefaultNotifications()
+					await prisma.loanDefaultLog.create({
+						data: {
+							loanId: loan.id,
+							eventType: 'NOTICE_SENT',
+							daysOverdue: daysSinceFlagged + settings.riskDays, // Total days overdue
 							outstandingAmount,
 							totalLateFees,
-							daysRemaining,
-							remedyDeadline,
+							noticeType: 'REMINDER',
+							whatsappMessageId: null, // Will be updated at 10 AM when notification is sent
+							processedAt: new Date(),
+							metadata: {
+								daysRemaining,
+								remedyDeadline: remedyDeadline.toISOString(),
+								daysSinceFlagged,
+								pendingNotification: true, // Flag to indicate notification needs to be sent
+							}
 						}
-					);
+					});
 
 					// Update notice count
 					await prisma.loan.update({
@@ -460,7 +469,7 @@ export class DefaultProcessor {
 						}
 					});
 
-					// WhatsApp notifications are sent later at 10 AM, not during processing
+					logger.info(`Marked loan ${loan.id} for reminder notification (day ${daysSinceFlagged} of remedy period, ${daysRemaining} days remaining)`);
 				}
 
 				processed++;
@@ -889,55 +898,6 @@ export class DefaultProcessor {
 	}
 
 	/**
-	 * Send default reminder WhatsApp notification
-	 */
-	private static async sendDefaultReminder(
-		loanId: string,
-		phoneNumber: string,
-		data: {
-			userFullName: string;
-			productName: string;
-			outstandingAmount: number;
-			totalLateFees: number;
-			daysRemaining: number;
-			remedyDeadline: Date;
-		}
-	): Promise<void> {
-		try {
-			const { sendDefaultReminderMessage } = await import("./whatsappService");
-			
-			const messageId = await sendDefaultReminderMessage(phoneNumber, {
-				borrowerName: data.userFullName,
-				productName: data.productName,
-				outstandingAmount: data.outstandingAmount + data.totalLateFees,
-				daysRemaining: data.daysRemaining,
-				remedyDeadline: data.remedyDeadline,
-			});
-
-			// Log the reminder
-			await prisma.loanDefaultLog.create({
-				data: {
-					loanId,
-					eventType: 'NOTICE_SENT',
-					daysOverdue: 0, // Will be calculated from earliest due date
-					outstandingAmount: data.outstandingAmount,
-					totalLateFees: data.totalLateFees,
-					noticeType: 'REMINDER',
-					whatsappMessageId: messageId,
-					processedAt: new Date(),
-					metadata: {
-						daysRemaining: data.daysRemaining,
-						remedyDeadline: data.remedyDeadline.toISOString(),
-					}
-				}
-			});
-
-		} catch (error) {
-			logger.error('Error sending default reminder WhatsApp notification:', error);
-		}
-	}
-
-	/**
 	 * Default a loan (move to DEFAULT status)
 	 */
 	private static async defaultLoan(
@@ -1164,22 +1124,28 @@ export class DefaultProcessor {
 				return result;
 			}
 
+			// The 1 AM job processes defaults for "today" (Malaysia timezone)
+			// The 10 AM job sends notifications for items processed "today" (same Malaysia day)
+			// Both jobs run on the same calendar day in Malaysia timezone
 			const today = TimeUtils.malaysiaStartOfDay();
-			const yesterday = new Date(today.getTime() - (24 * 60 * 60 * 1000));
+			const tomorrow = new Date(today.getTime() + (24 * 60 * 60 * 1000));
 
-			// Find loans that were flagged as default risk yesterday but haven't received notifications yet
+			logger.info(`Processing default notifications for today: ${today.toISOString()} to ${tomorrow.toISOString()}`);
+
+			// Find loans that were flagged as default risk TODAY but haven't received notifications yet
+			// The 1 AM job flags loans, and this 10 AM job sends the notifications for the same day
 			const riskFlaggedLoans = await prisma.loan.findMany({
 				where: {
 					defaultRiskFlaggedAt: {
-						gte: yesterday,
-						lt: today
+						gte: today,
+						lt: tomorrow
 					},
-					// Check if risk notification was already sent
+					// Check if risk notification was already sent today
 					defaultLogs: {
 						none: {
 							eventType: 'RISK_FLAGGED',
 							whatsappMessageId: { not: null },
-							processedAt: { gte: yesterday }
+							processedAt: { gte: today }
 						}
 					}
 				},
@@ -1242,7 +1208,7 @@ export class DefaultProcessor {
 								where: {
 									loanId: loan.id,
 									eventType: 'RISK_FLAGGED',
-									processedAt: { gte: yesterday },
+									processedAt: { gte: today },
 									whatsappMessageId: null
 								},
 								data: {
@@ -1259,19 +1225,86 @@ export class DefaultProcessor {
 				}
 			}
 
-			// Find loans that were defaulted yesterday but haven't received final notifications yet
+			// Find pending reminder notifications that were created at 1 AM TODAY but haven't been sent yet
+			const pendingReminders = await prisma.loanDefaultLog.findMany({
+				where: {
+					eventType: 'NOTICE_SENT',
+					noticeType: 'REMINDER',
+					whatsappMessageId: null,
+					processedAt: {
+						gte: today,
+						lt: tomorrow
+					}
+				},
+				include: {
+					loan: {
+						include: {
+							user: {
+								select: {
+									fullName: true,
+									phoneNumber: true
+								}
+							},
+							application: {
+								include: {
+									product: {
+										select: { name: true }
+									}
+								}
+							}
+						}
+					}
+				}
+			});
+
+			// Send reminder notifications
+			for (const reminderLog of pendingReminders) {
+				if (settings.whatsappReminder && reminderLog.loan.user.phoneNumber) {
+					try {
+						const metadata = reminderLog.metadata as any;
+						const daysRemaining = metadata?.daysRemaining || 0;
+						const remedyDeadline = metadata?.remedyDeadline ? new Date(metadata.remedyDeadline) : new Date();
+
+						const { sendDefaultReminderMessage } = await import("./whatsappService");
+						
+						const messageId = await sendDefaultReminderMessage(reminderLog.loan.user.phoneNumber, {
+							borrowerName: reminderLog.loan.user.fullName || 'Customer',
+							productName: reminderLog.loan.application.product.name,
+							outstandingAmount: reminderLog.outstandingAmount + reminderLog.totalLateFees,
+							daysRemaining,
+							remedyDeadline,
+						});
+
+						if (messageId) {
+							// Update the log with WhatsApp message ID
+							await prisma.loanDefaultLog.update({
+								where: { id: reminderLog.id },
+								data: { whatsappMessageId: messageId }
+							});
+
+							result.reminderNotificationsSent++;
+							logger.info(`Sent remedy reminder notification for loan ${reminderLog.loanId} (${daysRemaining} days remaining)`);
+						}
+					} catch (error) {
+						logger.error(`Error sending reminder notification for loan ${reminderLog.loanId}:`, error);
+						result.errors++;
+					}
+				}
+			}
+
+			// Find loans that were defaulted TODAY but haven't received final notifications yet
 			const defaultedLoans = await prisma.loan.findMany({
 				where: {
 					defaultedAt: {
-						gte: yesterday,
-						lt: today
+						gte: today,
+						lt: tomorrow
 					},
-					// Check if final default notification was already sent
+					// Check if final default notification was already sent today
 					defaultLogs: {
 						none: {
 							eventType: 'DEFAULTED',
 							whatsappMessageId: { not: null },
-							processedAt: { gte: yesterday }
+							processedAt: { gte: today }
 						}
 					}
 				},
@@ -1331,7 +1364,7 @@ export class DefaultProcessor {
 								where: {
 									loanId: loan.id,
 									eventType: 'DEFAULTED',
-									processedAt: { gte: yesterday },
+									processedAt: { gte: today },
 									whatsappMessageId: null
 								},
 								data: {
@@ -1348,7 +1381,7 @@ export class DefaultProcessor {
 				}
 			}
 
-			logger.info(`Default notifications processed: ${result.riskNotificationsSent} risk notifications sent, ${result.finalNotificationsSent} final notifications sent`);
+			logger.info(`Default notifications processed for ${today.toISOString().split('T')[0]}: ${result.riskNotificationsSent} risk, ${result.reminderNotificationsSent} reminders, ${result.finalNotificationsSent} final notifications sent`);
 
 		} catch (error) {
 			logger.error('Error in default notification processing:', error);

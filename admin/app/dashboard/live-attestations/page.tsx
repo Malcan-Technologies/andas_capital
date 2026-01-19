@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
+import ConfirmationModal from "../../../components/ConfirmationModal";
 import {
 	VideoCameraIcon,
 	UserIcon,
@@ -18,6 +19,7 @@ import {
 	XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "@/lib/authUtils";
+import { toast } from "sonner";
 
 interface LoanApplication {
 	id: string;
@@ -54,6 +56,8 @@ export default function LiveAttestationsPage() {
 	const [selectedApplication, setSelectedApplication] = useState<LoanApplication | null>(null);
 	const [searchTerm, setSearchTerm] = useState("");
 	const [filteredApplications, setFilteredApplications] = useState<LoanApplication[]>([]);
+	const [showConfirmModal, setShowConfirmModal] = useState(false);
+	const [confirmApplicationId, setConfirmApplicationId] = useState<string | null>(null);
 
 	useEffect(() => {
 		loadLiveAttestationRequests();
@@ -98,9 +102,18 @@ export default function LiveAttestationsPage() {
 			setLoading(true);
 			setError(null);
 
-			const data = await fetchWithAdminTokenRefresh<LoanApplication[]>(
-				"/api/admin/applications/live-attestations"
-			);
+			const response = await fetchWithAdminTokenRefresh<
+				| LoanApplication[]
+				| { success: boolean; data: LoanApplication[] }
+			>("/api/admin/applications/live-attestations");
+
+			// Handle both direct array format and wrapped format { success, data }
+			let data: LoanApplication[] = [];
+			if (Array.isArray(response)) {
+				data = response;
+			} else if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
+				data = response.data;
+			}
 
 			setApplications(data);
 		} catch (error) {
@@ -115,12 +128,30 @@ export default function LiveAttestationsPage() {
 		setSearchTerm(e.target.value);
 	};
 
-	const handleCompleteAttestation = async (applicationId: string) => {
+	const handleRefresh = async () => {
 		try {
-			setProcessingId(applicationId);
+			await loadLiveAttestationRequests();
+			toast.success("Live attestations refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing live attestations:", error);
+			toast.error("Failed to refresh live attestations");
+		}
+	};
+
+	const handleMarkCompleteClick = (applicationId: string) => {
+		setConfirmApplicationId(applicationId);
+		setShowConfirmModal(true);
+	};
+
+	const handleCompleteAttestation = async () => {
+		if (!confirmApplicationId) return;
+		
+		try {
+			setProcessingId(confirmApplicationId);
+			setShowConfirmModal(false);
 
 			await fetchWithAdminTokenRefresh(
-				`/api/admin/applications/${applicationId}/complete-live-attestation`,
+				`/api/admin/applications/${confirmApplicationId}/complete-live-attestation`,
 				{
 					method: "POST",
 					body: JSON.stringify({
@@ -133,12 +164,13 @@ export default function LiveAttestationsPage() {
 			// Reload the list
 			await loadLiveAttestationRequests();
 
-			alert("Live attestation completed successfully!");
+			toast.success("Live attestation completed successfully!");
 		} catch (error) {
 			console.error("Error completing live attestation:", error);
-			alert("Failed to complete live attestation. Please try again.");
+			toast.error("Failed to complete live attestation. Please try again.");
 		} finally {
 			setProcessingId(null);
+			setConfirmApplicationId(null);
 		}
 	};
 
@@ -219,7 +251,7 @@ export default function LiveAttestationsPage() {
 					</p>
 				</div>
 				<button
-					onClick={loadLiveAttestationRequests}
+					onClick={handleRefresh}
 					className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors"
 				>
 					<ArrowPathIcon className="h-4 w-4 mr-2" />
@@ -335,24 +367,66 @@ export default function LiveAttestationsPage() {
 				<div className="lg:col-span-2">
 					{selectedApplication ? (
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-								<h3 className="text-lg font-medium text-white">
-									Attestation Details
-								</h3>
-								<span
-									className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
-										selectedApplication.attestationCompleted
-											? "bg-green-500/20 text-green-300 border-green-400/20"
-											: "bg-amber-500/20 text-amber-300 border-amber-400/20"
-									}`}
-								>
-									{selectedApplication.attestationCompleted ? (
-										<CheckCircleIcon className="h-3 w-3 mr-1" />
-									) : (
-										<ClockIcon className="h-3 w-3 mr-1" />
-									)}
-									{selectedApplication.attestationCompleted ? "Completed" : "Pending"}
+							<div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+								<div>
+									<h3 className="text-lg font-medium text-white">
+										Attestation Details
+									</h3>
+									<div className="mt-1.5 flex items-center gap-2">
+										<span
+											className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+												selectedApplication.attestationCompleted
+													? "bg-green-500/20 text-green-300 border-green-400/20"
+													: "bg-amber-500/20 text-amber-300 border-amber-400/20"
+											}`}
+										>
+											{selectedApplication.attestationCompleted ? (
+												<CheckCircleIcon className="h-3.5 w-3.5 mr-1" />
+											) : (
+												<ClockIcon className="h-3.5 w-3.5 mr-1" />
+											)}
+											{selectedApplication.attestationCompleted ? "Completed" : "Pending"}
+										</span>
+									</div>
+								</div>
+								<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
+									ID: {selectedApplication.id.substring(0, 8)}
 								</span>
+							</div>
+
+							{/* Action Bar */}
+							<div className="p-4 border-b border-gray-700/30">
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{!selectedApplication.attestationCompleted ? (
+											<button
+												onClick={() => handleMarkCompleteClick(selectedApplication.id)}
+												disabled={processingId === selectedApplication.id}
+												className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs disabled:opacity-50"
+												title="Mark attestation as complete"
+											>
+												{processingId === selectedApplication.id ? (
+													<>
+														<div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-1"></div>
+														Processing...
+													</>
+												) : (
+													<>
+														<CheckCircleIcon className="h-3 w-3 mr-1" />
+														Mark Complete
+													</>
+												)}
+											</button>
+										) : (
+											<div className="text-green-400 font-medium text-xs flex items-center px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-400/20">
+												<CheckCircleIcon className="h-3 w-3 mr-1" />
+												Attestation Completed
+											</div>
+										)}
+									</div>
+								</div>
 							</div>
 
 							<div className="p-6">
@@ -523,33 +597,6 @@ export default function LiveAttestationsPage() {
 									</div>
 								)}
 
-								{/* Action Buttons */}
-								<div className="flex flex-wrap gap-3">
-									{!selectedApplication.attestationCompleted ? (
-										<button
-											onClick={() => handleCompleteAttestation(selectedApplication.id)}
-											disabled={processingId === selectedApplication.id}
-											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
-										>
-											{processingId === selectedApplication.id ? (
-												<>
-													<div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
-													Processing...
-												</>
-											) : (
-												<>
-													<CheckCircleIcon className="h-5 w-5 mr-2" />
-													Mark Complete
-												</>
-											)}
-										</button>
-									) : (
-										<div className="text-green-400 font-medium text-sm flex items-center">
-											<CheckCircleIcon className="h-4 w-4 mr-1" />
-											Attestation Completed
-										</div>
-									)}
-								</div>
 							</div>
 						</div>
 					) : (
@@ -567,6 +614,28 @@ export default function LiveAttestationsPage() {
 					)}
 				</div>
 			</div>
+
+			{/* Confirmation Modal */}
+			<ConfirmationModal
+				open={showConfirmModal}
+				onClose={() => {
+					setShowConfirmModal(false);
+					setConfirmApplicationId(null);
+				}}
+				onConfirm={handleCompleteAttestation}
+				title="Confirm Attestation Completion"
+				message="Please confirm that the following has been completed:"
+				details={[
+					"The borrower has met with the lawyer via live video call",
+					"The lawyer has verified the borrower's identity",
+					"The attestation process has been successfully completed",
+					"⚠️ This action cannot be undone. The application will proceed to the next stage.",
+				]}
+				confirmText="Confirm Completion"
+				confirmColor="green"
+				isProcessing={processingId !== null}
+				processingText="Processing..."
+			/>
 		</AdminLayout>
 	);
 }

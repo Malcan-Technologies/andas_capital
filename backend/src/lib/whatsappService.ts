@@ -1,12 +1,11 @@
 import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { whatsappConfig } from './config';
+import { prisma } from './prisma';
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0';
-const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const USE_OTP_TEMPLATE = process.env.WHATSAPP_USE_OTP_TEMPLATE === 'true';
+const WHATSAPP_ACCESS_TOKEN = whatsappConfig.accessToken;
+const WHATSAPP_PHONE_NUMBER_ID = whatsappConfig.phoneNumberId;
+const USE_OTP_TEMPLATE = whatsappConfig.useOtpTemplate;
 
 interface WhatsAppOTPRequest {
 	to: string;
@@ -52,17 +51,8 @@ class WhatsAppService {
 	}
 	async sendOTP({ to, otp }: WhatsAppOTPRequest): Promise<WhatsAppResponse> {
 		try {
-			// Check if WhatsApp notifications are enabled globally
-			// OTP is mandatory for security, so we only check global setting
-			const isGlobalEnabled = await this.isWhatsAppEnabled();
-			
-			if (!isGlobalEnabled) {
-				console.log('WhatsApp notifications are globally disabled');
-				return {
-					success: false,
-					error: 'WhatsApp notifications are globally disabled'
-				};
-			}
+			// OTP is ALWAYS sent regardless of any toggle - it's critical for security/authentication
+			// No global toggle check here - OTP must always work
 
 			if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
 				console.error('WhatsApp credentials not configured');
@@ -760,7 +750,14 @@ class WhatsAppService {
 			remedyDays: number;
 		}
 	): Promise<WhatsAppResponse> {
+		// Check both global toggle and individual setting
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
 		const isEnabled = await this.isNotificationEnabled('WHATSAPP_DEFAULT_RISK');
+		
+		if (!isGlobalEnabled) {
+			console.log('WhatsApp notifications are globally disabled');
+			return { success: false, error: 'WhatsApp notifications are globally disabled' };
+		}
 		if (!isEnabled) {
 			console.log('Default risk WhatsApp notifications are disabled');
 			return { success: false, error: 'Notifications disabled' };
@@ -800,7 +797,14 @@ class WhatsAppService {
 			remedyDeadline: Date;
 		}
 	): Promise<WhatsAppResponse> {
+		// Check both global toggle and individual setting
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
 		const isEnabled = await this.isNotificationEnabled('WHATSAPP_DEFAULT_REMINDER');
+		
+		if (!isGlobalEnabled) {
+			console.log('WhatsApp notifications are globally disabled');
+			return { success: false, error: 'WhatsApp notifications are globally disabled' };
+		}
 		if (!isEnabled) {
 			console.log('Default reminder WhatsApp notifications are disabled');
 			return { success: false, error: 'Notifications disabled' };
@@ -834,7 +838,14 @@ class WhatsAppService {
 			outstandingAmount: number;
 		}
 	): Promise<WhatsAppResponse> {
+		// Check both global toggle and individual setting
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
 		const isEnabled = await this.isNotificationEnabled('WHATSAPP_DEFAULT_FINAL');
+		
+		if (!isGlobalEnabled) {
+			console.log('WhatsApp notifications are globally disabled');
+			return { success: false, error: 'WhatsApp notifications are globally disabled' };
+		}
 		if (!isEnabled) {
 			console.log('Default final WhatsApp notifications are disabled');
 			return { success: false, error: 'Notifications disabled' };

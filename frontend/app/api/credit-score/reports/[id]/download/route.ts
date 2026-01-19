@@ -4,11 +4,9 @@ import { fetchWithTokenRefresh } from "@/lib/authUtils";
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		// For now, return a mock download URL since we haven't integrated with CTOS yet
 		const mockDownloadUrl = {
 			downloadUrl: `https://example.com/mock-ctos-report-${params.id}.pdf`,

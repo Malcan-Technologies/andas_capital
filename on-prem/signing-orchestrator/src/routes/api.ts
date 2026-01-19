@@ -417,7 +417,9 @@ router.post('/verify-cert-pin', verifyApiKey, async (req, res) => {
     
     const statusCode = result?.statusCode || '9999';
     const statusMsg = result?.statusMsg || 'Unknown response';
-    const pinVerified = statusCode === '000';
+    const certStatus = result?.certStatus;
+    const certPinStatus = result?.certPinStatus;
+    const pinVerified = result?.pinVerified || false;
     
     res.status(200).json({
       success: pinVerified,
@@ -425,7 +427,8 @@ router.post('/verify-cert-pin', verifyApiKey, async (req, res) => {
       data: {
         statusCode: statusCode,
         pinVerified: pinVerified,
-        certPinStatus: pinVerified ? 'Valid' : 'Invalid'
+        certStatus: certStatus,
+        certPinStatus: certPinStatus
       },
       correlationId: req.correlationId,
     });
@@ -438,6 +441,67 @@ router.post('/verify-cert-pin', verifyApiKey, async (req, res) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Certificate PIN verification failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * Reset Certificate PIN endpoint
+ * POST /api/reset-cert-pin
+ */
+router.post('/reset-cert-pin', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { userId, certSerialNo, newPin } = req.body;
+    
+    if (!userId || !certSerialNo || !newPin) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required fields: userId, certSerialNo, newPin',
+      });
+      return;
+    }
+    
+    if (!/^\d{8}$/.test(newPin)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'New PIN must be exactly 8 digits',
+      });
+      return;
+    }
+    
+    log.info('Resetting certificate PIN', { userId, certSerialNo: certSerialNo.slice(0, 8) + '...' });
+    
+    const result = await mtsaClient.resetCertificatePin({
+      UserID: userId,
+      CertSerialNo: certSerialNo,
+      NewPin: newPin
+    }, req.correlationId!);
+    
+    const statusCode = result?.statusCode || '9999';
+    const statusMsg = result?.statusMsg || 'Unknown response';
+    const success = statusCode === '000';
+    
+    res.status(200).json({
+      success: success,
+      message: statusMsg,
+      data: {
+        statusCode: statusCode,
+        pinReset: success
+      },
+      correlationId: req.correlationId,
+    });
+    
+  } catch (error) {
+    log.error('Certificate PIN reset failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Certificate PIN reset failed',
       correlationId: req.correlationId,
     });
   }

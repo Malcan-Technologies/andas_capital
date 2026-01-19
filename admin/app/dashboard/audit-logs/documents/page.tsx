@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import AdminLayout from "../../../components/AdminLayout";
 import { fetchWithAdminTokenRefresh } from "../../../../lib/authUtils";
+import { toast } from "sonner";
 import {
   MagnifyingGlassIcon,
   ArrowDownTrayIcon,
@@ -125,9 +126,13 @@ export default function DocumentStorageLogsPage() {
         setScanStats(response.stats);
         // Refresh the logs after scan
         await fetchLogs();
+        toast.success(`Document scan completed: ${response.stats.totalScanned} files scanned, ${response.stats.matched} matched`);
+      } else {
+        toast.error("Document scan failed");
       }
     } catch (error) {
       console.error("Error scanning documents:", error);
+      toast.error("Failed to scan documents");
     } finally {
       setScanning(false);
     }
@@ -203,11 +208,13 @@ export default function DocumentStorageLogsPage() {
   const documentTypes = [
     "ALL",
     "KYC",
+    "USER_DOCUMENT",
     "DISBURSEMENT_SLIP",
     "PAYMENT_RECEIPT",
     "STAMPED_AGREEMENT",
     "STAMP_CERTIFICATE",
     "SIGNED_AGREEMENT",
+    "ORIGINAL_AGREEMENT",
     "DEFAULT_LETTER",
     "UNKNOWN",
   ];
@@ -220,7 +227,7 @@ export default function DocumentStorageLogsPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">Document Storage Logs</h1>
             <p className="text-sm text-gray-400 mt-1">
-              Track all documents stored on VPS and on-premises servers
+              Track all documents stored in S3 cloud storage and on-premises servers
             </p>
           </div>
           <div className="flex gap-2">
@@ -262,7 +269,7 @@ export default function DocumentStorageLogsPage() {
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-purple-400">{scanStats.vpsFiles}</div>
-                <div className="text-xs text-gray-400">VPS Files</div>
+                <div className="text-xs text-gray-400">S3 Files</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-cyan-400">{scanStats.onpremFiles}</div>
@@ -355,7 +362,7 @@ export default function DocumentStorageLogsPage() {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                 >
                   <option value="ALL">All Sources</option>
-                  <option value="VPS">VPS Uploads</option>
+                  <option value="S3">S3 Cloud Storage</option>
                   <option value="ONPREM">On-Premises</option>
                 </select>
               </div>
@@ -490,12 +497,14 @@ export default function DocumentStorageLogsPage() {
                       <td className="px-4 py-3 text-sm">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            log.source === "VPS_UPLOADS"
+                            log.source === "S3"
                               ? "bg-purple-500/20 text-purple-300"
-                              : "bg-cyan-500/20 text-cyan-300"
+                              : log.source === "ONPREM"
+                              ? "bg-cyan-500/20 text-cyan-300"
+                              : "bg-gray-500/20 text-gray-300"
                           }`}
                         >
-                          {log.source.replace("VPS_UPLOADS", "VPS").replace("ONPREM_", "")}
+                          {log.source === "S3" ? "S3" : log.source === "ONPREM" ? "On-Prem" : log.source}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">

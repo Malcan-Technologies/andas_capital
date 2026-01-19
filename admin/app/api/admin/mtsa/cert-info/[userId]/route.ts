@@ -5,10 +5,8 @@ export const dynamic = 'force-dynamic';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { userId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ userId: string }> }) {
+  const params = await props.params;
   try {
     // Verify admin token
     const token = request.headers.get('authorization')?.replace('Bearer ', '');
@@ -38,8 +36,8 @@ export async function GET(
       );
     }
 
-    // Forward request to backend MTSA API
-    const response = await fetch(`${BACKEND_URL}/api/mtsa/cert-info/${userId}`, {
+    // Forward request to backend admin MTSA API
+    const response = await fetch(`${BACKEND_URL}/api/admin/mtsa/cert-info/${userId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,

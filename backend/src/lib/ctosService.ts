@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import axios from 'axios';
+import { ctosConfig } from './config';
 
 interface CTOSConfig {
   apiKey: string;
@@ -85,19 +86,28 @@ export class CTOSService {
   private config: CTOSConfig;
 
   constructor() {
+    // Use centralized config which handles both individual env vars and JSON credentials
     this.config = {
-      apiKey: process.env.CTOS_API_KEY || '',
-      packageName: process.env.CTOS_PACKAGE_NAME || '',
-      securityKey: process.env.CTOS_SECURITY_KEY || '',
-      baseUrl: process.env.CTOS_BASE_URL || '',
-      webhookUrl: process.env.CTOS_WEBHOOK_URL || '',
-      ciphertext: process.env.CTOS_CIPHERTEXT || 'default16bytesiv', // 16 bytes for AES
-      cipher: process.env.CTOS_CIPHER || 'aes-256-cbc'
+      apiKey: ctosConfig.apiKey,
+      packageName: ctosConfig.packageName,
+      securityKey: ctosConfig.securityKey,
+      baseUrl: ctosConfig.baseUrl,
+      webhookUrl: ctosConfig.webhookUrl,
+      ciphertext: ctosConfig.ciphertext,
+      cipher: ctosConfig.cipher
     };
 
-    if (!this.config.apiKey || !this.config.packageName || !this.config.securityKey || !this.config.baseUrl) {
-      throw new Error('Missing required CTOS configuration');
+    // Log warning if CTOS config is incomplete
+    if (!this.isConfigured()) {
+      console.warn('CTOS configuration incomplete - CTOS features will be disabled. Set CTOS_CREDENTIALS or individual CTOS_* env vars.');
     }
+  }
+
+  /**
+   * Check if CTOS is properly configured
+   */
+  isConfigured(): boolean {
+    return !!(this.config.apiKey && this.config.packageName && this.config.securityKey && this.config.baseUrl);
   }
 
   /**

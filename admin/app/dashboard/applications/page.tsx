@@ -37,7 +37,14 @@ import {
   ArrowsUpDownIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
+  ArrowUpTrayIcon,
+  InformationCircleIcon,
+  FolderIcon,
+  Cog6ToothIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
+import ConfirmationModal, { ConfirmationModalColor } from "../../../components/ConfirmationModal";
 
 interface LoanApplication {
   id: string;
@@ -52,6 +59,12 @@ interface LoanApplication {
   monthlyRepayment?: number;
   interestRate?: number;
   netDisbursement?: number;
+  // Fee fields
+  stampingFee?: number;
+  legalFeeFixed?: number;
+  legalFee?: number;
+  originationFee?: number;
+  applicationFee?: number;
   user?: {
     fullName?: string;
     phoneNumber?: string;
@@ -66,8 +79,19 @@ interface LoanApplication {
     city?: string;
     state?: string;
     zipCode?: string;
+    country?: string;
     icNumber?: string;
     idNumber?: string;
+    nationality?: string;
+    educationLevel?: string;
+    serviceLength?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+    emergencyContactRelationship?: string;
+    // Demographics
+    race?: string;
+    gender?: string;
+    occupation?: string;
   };
   product?: {
     name?: string;
@@ -75,6 +99,11 @@ interface LoanApplication {
     description?: string;
     interestRate?: number;
     repaymentTerms?: any;
+    requiredDocuments?: string[];
+    collateralRequired?: boolean;
+    lateFeeRate?: number;
+    lateFeeFixedAmount?: number;
+    lateFeeFrequencyDays?: number;
   };
   documents?: Document[];
   history?: LoanApplicationHistory[];
@@ -91,6 +120,18 @@ interface LoanApplication {
       status: string;
       signedAt?: string;
     }[];
+  };
+  disbursement?: {
+    id: string;
+    referenceNumber: string;
+    amount: number;
+    bankName?: string;
+    bankAccountNumber?: string;
+    disbursedAt: string;
+    disbursedBy: string;
+    notes?: string;
+    status: string;
+    paymentSlipUrl?: string;
   };
 }
 
@@ -184,10 +225,83 @@ function AdminApplicationsPageContent() {
     return "details";
   };
 
+  // Helper function to get the appropriate tab for a given application status
+  const getTabForStatus = (status: string): string => {
+    if (status === "PENDING_APPROVAL") {
+      return "approval";
+    } else if (
+      [
+        "PENDING_SIGNATURE",
+        "PENDING_PKI_SIGNING",
+        "PENDING_SIGNING_COMPANY_WITNESS",
+        "PENDING_SIGNING_OTP_DS",
+      ].includes(status)
+    ) {
+      return "signatures";
+    } else if (status === "PENDING_STAMPING") {
+      return "stamping";
+    } else if (status === "PENDING_DISBURSEMENT") {
+      return "disbursement";
+    } else if (status === "COLLATERAL_REVIEW") {
+      return "collateral";
+    }
+    return "details";
+  };
+
   const [selectedTab, setSelectedTab] = useState<string>(getInitialTab());
   const [refreshing, setRefreshing] = useState(false);
   const [signaturesData, setSignaturesData] = useState<any>(null);
   const [loadingSignatures, setLoadingSignatures] = useState(false);
+  
+  // System-wide late fee grace period setting
+  const [lateFeeGraceDays, setLateFeeGraceDays] = useState<number>(3);
+  
+  // Document upload states
+  const [uploadingDocument, setUploadingDocument] = useState<string | null>(null); // document type being uploaded
+  const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
+  
+  // Actions tab states - hidden by default with warning
+  const [showActionsTab, setShowActionsTab] = useState(false);
+  const [showActionsWarningModal, setShowActionsWarningModal] = useState(false);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    details?: string[];
+    confirmText: string;
+    confirmColor: ConfirmationModalColor;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    details: [],
+    confirmText: "Confirm",
+    confirmColor: "blue",
+    onConfirm: () => {},
+  });
+
+  // Helper to show confirmation modal
+  const showConfirmModal = (config: {
+    title: string;
+    message: string;
+    details?: string[];
+    confirmText: string;
+    confirmColor: ConfirmationModalColor;
+    onConfirm: () => void;
+  }) => {
+    setConfirmModal({
+      open: true,
+      ...config,
+    });
+  };
+
+  // Helper to close confirmation modal
+  const closeConfirmModal = () => {
+    setConfirmModal((prev) => ({ ...prev, open: false }));
+  };
 
   // Helper function to check if application has pending company signature
   const hasPendingCompanySignature = (app: LoanApplication): boolean => {
@@ -222,6 +336,7 @@ function AdminApplicationsPageContent() {
     "PENDING_APPROVAL",
     "PENDING_FRESH_OFFER",
     "PENDING_ATTESTATION",
+    "CERT_CHECK",
     "PENDING_SIGNATURE",
     "PENDING_PKI_SIGNING",
     "PENDING_SIGNING_COMPANY_WITNESS",
@@ -273,7 +388,7 @@ function AdminApplicationsPageContent() {
     getInitialFilters()
   );
 
-  // Additional states for approval, attestation, and disbursement
+  // Additional states for approval and disbursement
   const [decisionNotes, setDecisionNotes] = useState("");
   const [collateralNotes, setCollateralNotes] = useState("");
   const [disbursementNotes, setDisbursementNotes] = useState("");
@@ -281,10 +396,6 @@ function AdminApplicationsPageContent() {
   const [processingDecision, setProcessingDecision] = useState(false);
   const [processingCollateral, setProcessingCollateral] = useState(false);
   const [processingDisbursement, setProcessingDisbursement] = useState(false);
-  const [disbursementSlipFile, setDisbursementSlipFile] = useState<File | null>(
-    null
-  );
-  const [uploadingSlip, setUploadingSlip] = useState(false);
 
   // Fresh offer states
   const [showFreshOfferForm, setShowFreshOfferForm] = useState(false);
@@ -310,17 +421,6 @@ function AdminApplicationsPageContent() {
   const [creditReport, setCreditReport] = useState<any | null>(null);
   const [lastKnownStatus, setLastKnownStatus] = useState<string | null>(null);
   const [showStatusChangeAlert, setShowStatusChangeAlert] = useState(false);
-
-  // Attestation states
-  const [attestationType, setAttestationType] = useState<
-    "IMMEDIATE" | "MEETING"
-  >("IMMEDIATE");
-  const [attestationNotes, setAttestationNotes] = useState("");
-  const [attestationVideoWatched, setAttestationVideoWatched] = useState(false);
-  const [attestationTermsAccepted, setAttestationTermsAccepted] =
-    useState(false);
-  const [meetingCompletedAt, setMeetingCompletedAt] = useState("");
-  const [processingAttestation, setProcessingAttestation] = useState(false);
 
   // Stamping states
   const [stampCertificateFile, setStampCertificateFile] = useState<File | null>(
@@ -379,6 +479,8 @@ function AdminApplicationsPageContent() {
         return ArrowsUpDownIcon;
       case "PENDING_ATTESTATION":
         return ClipboardDocumentCheckIcon;
+      case "CERT_CHECK":
+        return ShieldCheckIcon;
       case "PENDING_SIGNATURE":
         return DocumentTextIcon;
       case "PENDING_PKI_SIGNING":
@@ -424,6 +526,8 @@ function AdminApplicationsPageContent() {
         return "bg-pink-500/20 text-pink-200 border-pink-400/20";
       case "PENDING_ATTESTATION":
         return "bg-cyan-500/20 text-cyan-200 border-cyan-400/20";
+      case "CERT_CHECK":
+        return "bg-sky-500/20 text-sky-200 border-sky-400/20";
       case "PENDING_SIGNATURE":
         return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
       case "PENDING_PKI_SIGNING":
@@ -466,9 +570,11 @@ function AdminApplicationsPageContent() {
       case "PENDING_APPROVAL":
         return "Pending Approval";
       case "PENDING_FRESH_OFFER":
-        return "Fresh Offer Pending";
+        return "Counter Offer Pending";
       case "PENDING_ATTESTATION":
         return "Pending Attestation";
+      case "CERT_CHECK":
+        return "Certificate Check";
       case "PENDING_SIGNATURE":
         return "Pending Signature";
       case "PENDING_PKI_SIGNING":
@@ -518,12 +624,17 @@ function AdminApplicationsPageContent() {
       // ATTESTOR users get filtered applications from backend
       if (currentUserRole === "ATTESTOR") {
         try {
-          const applicationsData = await fetchWithAdminTokenRefresh<
-            LoanApplication[]
-          >("/api/admin/applications");
+          const response = await fetchWithAdminTokenRefresh<{
+            success: boolean;
+            data: LoanApplication[];
+            systemSettings?: { lateFeeGraceDays: number };
+          }>("/api/admin/applications");
 
-          if (applicationsData) {
-            setApplications(applicationsData);
+          if (response.success && response.data) {
+            setApplications(response.data);
+            if (response.systemSettings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+            }
           } else {
             setApplications([]);
           }
@@ -536,9 +647,56 @@ function AdminApplicationsPageContent() {
 
       // Try fetching applications from applications endpoint (ADMIN only)
       try {
-        const applicationsData = await fetchWithAdminTokenRefresh<
-          LoanApplication[]
+        const response = await fetchWithAdminTokenRefresh<
+          | {
+              success: boolean;
+              data: LoanApplication[];
+              systemSettings?: { lateFeeGraceDays: number };
+            }
+          | LoanApplication[]
+          | { error?: string; message?: string }
         >("/api/admin/applications");
+        
+        // Check for error responses
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          if ('error' in response || 'message' in response) {
+            const errorMsg = (response as { error?: string; message?: string }).error || 
+                            (response as { error?: string; message?: string }).message;
+            console.error('API returned error:', errorMsg);
+            setError(errorMsg || 'Failed to refresh applications');
+            return;
+          }
+        }
+        
+        // Extract applications - handle both wrapped format { success, data } and direct array format
+        let applicationsData: LoanApplication[] = [];
+        if (Array.isArray(response)) {
+          // Direct array format
+          applicationsData = response;
+        } else if (response && typeof response === 'object') {
+          // Wrapped format { success, data, systemSettings }
+          if ('data' in response && Array.isArray((response as { data?: unknown }).data)) {
+            applicationsData = (response as { data: LoanApplication[] }).data;
+          }
+          if ('systemSettings' in response) {
+            const settings = (response as { systemSettings?: { lateFeeGraceDays?: number } }).systemSettings;
+            if (settings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(settings.lateFeeGraceDays);
+            }
+          }
+        }
+
+        // Ensure applicationsData is always an array
+        if (!Array.isArray(applicationsData)) {
+          console.error('Applications data is not an array:', applicationsData);
+          applicationsData = [];
+        }
+
+        // If no applications, set empty array and return early
+        if (applicationsData.length === 0) {
+          setApplications([]);
+          return;
+        }
 
         // For each application, fetch its history
         const applicationsWithHistory = await Promise.all(
@@ -602,13 +760,16 @@ function AdminApplicationsPageContent() {
             }
           }
         }
+        toast.success("Applications refreshed successfully");
       } catch (appError) {
         console.error("Error fetching applications:", appError);
         setError("Failed to refresh applications. Please try again.");
+        toast.error("Failed to refresh applications");
       }
     } catch (error) {
       console.error("Error refreshing data:", error);
       setError("An unexpected error occurred during refresh.");
+      toast.error("An unexpected error occurred during refresh");
     } finally {
       setRefreshing(false);
     }
@@ -638,12 +799,17 @@ function AdminApplicationsPageContent() {
       // ATTESTOR users get filtered applications from backend
       if (currentUserRole === "ATTESTOR") {
         try {
-          const applicationsData = await fetchWithAdminTokenRefresh<
-            LoanApplication[]
-          >("/api/admin/applications");
+          const response = await fetchWithAdminTokenRefresh<{
+            success: boolean;
+            data: LoanApplication[];
+            systemSettings?: { lateFeeGraceDays: number };
+          }>("/api/admin/applications");
 
-          if (applicationsData) {
-            setApplications(applicationsData);
+          if (response.success && response.data) {
+            setApplications(response.data);
+            if (response.systemSettings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+            }
           } else {
             setApplications([]);
           }
@@ -657,9 +823,59 @@ function AdminApplicationsPageContent() {
 
       // Try fetching applications from applications endpoint (ADMIN only)
       try {
-        const applicationsData = await fetchWithAdminTokenRefresh<
-          LoanApplication[]
+        const response = await fetchWithAdminTokenRefresh<
+          | {
+              success: boolean;
+              data: LoanApplication[];
+              systemSettings?: { lateFeeGraceDays: number };
+            }
+          | LoanApplication[]
+          | { error?: string; message?: string }
         >("/api/admin/applications");
+        
+        // Check for error responses
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          if ('error' in response || 'message' in response) {
+            const errorMsg = (response as { error?: string; message?: string }).error || 
+                            (response as { error?: string; message?: string }).message;
+            console.error('API returned error:', errorMsg);
+            setError(errorMsg || 'Failed to load applications');
+            setApplications([]);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Extract applications - handle both wrapped format { success, data } and direct array format
+        let applicationsData: LoanApplication[] = [];
+        if (Array.isArray(response)) {
+          // Direct array format
+          applicationsData = response;
+        } else if (response && typeof response === 'object') {
+          // Wrapped format { success, data, systemSettings }
+          if ('data' in response && Array.isArray((response as { data?: unknown }).data)) {
+            applicationsData = (response as { data: LoanApplication[] }).data;
+          }
+          if ('systemSettings' in response) {
+            const settings = (response as { systemSettings?: { lateFeeGraceDays?: number } }).systemSettings;
+            if (settings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(settings.lateFeeGraceDays);
+            }
+          }
+        }
+
+        // Ensure applicationsData is always an array
+        if (!Array.isArray(applicationsData)) {
+          console.error('Applications data is not an array:', applicationsData);
+          applicationsData = [];
+        }
+
+        // If no applications, set empty array and return early
+        if (applicationsData.length === 0) {
+          setApplications([]);
+          setLoading(false);
+          return;
+        }
 
         // For each application, fetch its history
         const applicationsWithHistory = await Promise.all(
@@ -735,6 +951,23 @@ function AdminApplicationsPageContent() {
         if (selectedApp) {
           setSelectedApplication(selectedApp);
           setViewDialogOpen(true);
+          // Fetch full application details (includes product requiredDocuments, late fees, etc.)
+          try {
+            const detailResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${applicationId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
+                },
+              }
+            );
+            if (detailResponse.ok) {
+              const fullApplication = await detailResponse.json();
+              setSelectedApplication(fullApplication);
+            }
+          } catch (detailError) {
+            console.error("Error fetching application details:", detailError);
+          }
         }
       }
     } catch (error) {
@@ -778,10 +1011,10 @@ function AdminApplicationsPageContent() {
       }
 
       setEditingIcNumber(false);
-      alert("IC number updated successfully");
+      toast.success("IC number updated successfully");
     } catch (error) {
       console.error("Error updating IC number:", error);
-      alert(
+      toast.error(
         `Failed to update IC number: ${
           error instanceof Error ? error.message : "Unknown error"
         }`
@@ -865,7 +1098,7 @@ function AdminApplicationsPageContent() {
   };
 
   const formatCurrency = (amount?: number) => {
-    if (!amount) return "N/A";
+    if (amount === undefined || amount === null) return "N/A";
     return new Intl.NumberFormat("en-MY", {
       style: "currency",
       currency: "MYR",
@@ -939,29 +1172,8 @@ function AdminApplicationsPageContent() {
 
       // Auto-switch to appropriate tab based on status (unless tab is explicitly set via URL)
       if (!tabParam) {
-		if (firstApp.status === "PENDING_APPROVAL") {
-		  setSelectedTab("approval");
-		} else if (firstApp.status === "PENDING_ATTESTATION") {
-		  setSelectedTab("attestation");
-		} else if (
-		  [
-			"PENDING_SIGNATURE",
-			"PENDING_PKI_SIGNING",
-			"PENDING_SIGNING_COMPANY_WITNESS",
-			"PENDING_SIGNING_OTP_DS",
-		  ].includes(firstApp.status)
-		) {
-		  setSelectedTab("signatures");
-		} else if (firstApp.status === "PENDING_STAMPING") {
-		  setSelectedTab("stamping");
-		} else if (firstApp.status === "PENDING_DISBURSEMENT") {
-		  setSelectedTab("disbursement");
-		} else if (firstApp.status === "COLLATERAL_REVIEW") {
-		  setSelectedTab("collateral");
-		} else {
-		  setSelectedTab(getInitialTab());
-		}
-	  }
+        setSelectedTab(getTabForStatus(firstApp.status));
+      }
     }
     // Clear selection if no results
     else if (filteredApplications.length === 0) {
@@ -1015,42 +1227,39 @@ function AdminApplicationsPageContent() {
     return ALL_FILTERS.every((filter) => selectedFilters.includes(filter));
   };
 
+  // Fetch full application details (includes all product fields like requiredDocuments, late fees, etc.)
+  const fetchApplicationDetails = async (applicationId: string) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${applicationId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
+          },
+        }
+      );
+      if (response.ok) {
+        const fullApplication = await response.json();
+        setSelectedApplication(fullApplication);
+      }
+    } catch (error) {
+      console.error("Error fetching application details:", error);
+    }
+  };
+
   // Handle view application details
   const handleViewClick = (application: LoanApplication) => {
+    // Set initial data from list, then fetch full details
     setSelectedApplication(application);
+    
+    // Fetch full application details (includes product requiredDocuments, late fees, etc.)
+    fetchApplicationDetails(application.id);
 
     // Determine the appropriate tab based on status (unless tab is explicitly set via URL)
     let newTab = tabParam;
     if (!tabParam) {
-      if (application.status === "PENDING_APPROVAL") {
-        newTab = "approval";
-        setSelectedTab("approval");
-      } else if (application.status === "PENDING_ATTESTATION") {
-        newTab = "attestation";
-        setSelectedTab("attestation");
-      } else if (
-        [
-          "PENDING_SIGNATURE",
-          "PENDING_PKI_SIGNING",
-          "PENDING_SIGNING_COMPANY_WITNESS",
-          "PENDING_SIGNING_OTP_DS",
-        ].includes(application.status)
-      ) {
-        newTab = "signatures";
-        setSelectedTab("signatures");
-      } else if (application.status === "PENDING_STAMPING") {
-        newTab = "stamping";
-        setSelectedTab("stamping");
-      } else if (application.status === "PENDING_DISBURSEMENT") {
-        newTab = "disbursement";
-        setSelectedTab("disbursement");
-      } else if (application.status === "COLLATERAL_REVIEW") {
-        newTab = "collateral";
-        setSelectedTab("collateral");
-      } else {
-        newTab = getInitialTab();
-        setSelectedTab(getInitialTab());
-      }
+      newTab = getTabForStatus(application.status);
+      setSelectedTab(newTab);
     }
 
     // Update URL to reflect the selected application, preserving filter and tab
@@ -1065,8 +1274,6 @@ function AdminApplicationsPageContent() {
     
     // Use router.push to update URL without causing a full page reload
     router.push(`/dashboard/applications?${params.toString()}`, { scroll: false });
-
-    fetchApplicationHistory(application.id);
   };
 
   const handleViewClose = () => {
@@ -1159,10 +1366,8 @@ function AdminApplicationsPageContent() {
 
       // Handle specific error cases
       if (error.error === "LOAN_ALREADY_DISBURSED") {
-        alert(
-          `❌ Cannot modify this application.\n\n` +
-            `This loan has already been disbursed and cannot be changed.\n` +
-            `Disbursed: ${
+        toast.error(
+          `Cannot modify this application. This loan has already been disbursed. Disbursed: ${
               error.disbursedAt
                 ? new Date(error.disbursedAt).toLocaleString()
                 : "Unknown"
@@ -1176,15 +1381,8 @@ function AdminApplicationsPageContent() {
         setShowStatusChangeAlert(true);
       } else if (error.error === "STATUS_CONFLICT") {
         // Show notification and automatically refresh
-        alert(
-          `⚠️ Status Conflict Detected\n\n` +
-            `Another admin has already changed this application's status.\n\n` +
-            `Expected: ${error.expectedStatus}\n` +
-            `Current: ${error.actualStatus}\n` +
-            `Last updated: ${new Date(
-              error.lastUpdated
-            ).toLocaleString()}\n\n` +
-            `The page will automatically refresh to show the current status.`
+        toast.warning(
+          `Status Conflict: Another admin changed this application. Expected: ${error.expectedStatus}, Current: ${error.actualStatus}. Page will refresh.`
         );
 
         // Automatically refresh to keep all admins in sync
@@ -1201,9 +1399,8 @@ function AdminApplicationsPageContent() {
         // Show status change alert to indicate the page was refreshed
         setShowStatusChangeAlert(true);
       } else {
-        alert(
-          `Failed to update status: ${error.message || "Unknown error"}\n\n` +
-            `Please try again or refresh the page.`
+        toast.error(
+          `Failed to update status: ${error.message || "Unknown error"}. Please try again.`
         );
       }
     }
@@ -1375,9 +1572,146 @@ function AdminApplicationsPageContent() {
       }
     } catch (error) {
       console.error("Error updating document status:", error);
-      alert(
+      toast.error(
         "Failed to update document status. API endpoint may not be implemented yet."
       );
+    }
+  };
+
+  // Handle document upload by admin
+  const handleAdminDocumentUpload = async (
+    documentType: string,
+    file: File
+  ) => {
+    if (!selectedApplication) return;
+
+    try {
+      setUploadingDocument(documentType);
+      setDocumentUploadError(null);
+
+      // Validate file type
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        setDocumentUploadError('Only PDF, JPG, and PNG files are allowed');
+        setUploadingDocument(null);
+        return;
+      }
+
+      // Validate file size (50MB)
+      const maxSize = 50 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setDocumentUploadError('File size must be less than 50MB');
+        setUploadingDocument(null);
+        return;
+      }
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('documentType', documentType);
+
+      // Upload document
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${selectedApplication.id}/documents`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('adminToken')}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to upload document');
+      }
+
+      const result = await response.json();
+
+      // Update the application in state with the new document
+      if (selectedApplication) {
+        const newDocument = {
+          id: result.document.id,
+          type: result.document.type,
+          status: result.document.status,
+          fileUrl: result.document.fileUrl,
+          createdAt: result.document.createdAt,
+          updatedAt: result.document.createdAt,
+        };
+
+        const updatedDocuments = [...(selectedApplication.documents || []), newDocument];
+
+        setSelectedApplication({
+          ...selectedApplication,
+          documents: updatedDocuments,
+        });
+
+        // Also update in the applications list
+        setApplications(
+          applications.map((app) =>
+            app.id === selectedApplication.id
+              ? { ...app, documents: updatedDocuments }
+              : app
+          )
+        );
+      }
+
+      setUploadingDocument(null);
+    } catch (error: any) {
+      console.error('Error uploading document:', error);
+      setDocumentUploadError(error.message || 'Failed to upload document');
+      setUploadingDocument(null);
+    }
+  };
+
+  // Handle document deletion by admin
+  const handleAdminDocumentDelete = async (documentId: string) => {
+    if (!selectedApplication) return;
+
+    if (!confirm('Are you sure you want to delete this document?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${selectedApplication.id}/documents/${documentId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('adminToken')}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete document');
+      }
+
+      // Update the application in state
+      if (selectedApplication && selectedApplication.documents) {
+        const updatedDocuments = selectedApplication.documents.filter(
+          (doc) => doc.id !== documentId
+        );
+
+        setSelectedApplication({
+          ...selectedApplication,
+          documents: updatedDocuments,
+        });
+
+        // Also update in the applications list
+        setApplications(
+          applications.map((app) =>
+            app.id === selectedApplication.id
+              ? { ...app, documents: updatedDocuments }
+              : app
+          )
+        );
+      }
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
+      toast.error(error.message || 'Failed to delete document');
     }
   };
 
@@ -1392,6 +1726,31 @@ function AdminApplicationsPageContent() {
       return "Admin fetched credit report from CTOS";
     }
 
+    // Handle document upload by admin
+    if (changeReason === "ADMIN_DOCUMENT_UPLOAD" || newStatus === "DOCUMENT_UPLOADED") {
+      return "Admin uploaded document";
+    }
+
+    // Handle document deletion by admin
+    if (changeReason === "ADMIN_DOCUMENT_DELETE" || newStatus === "DOCUMENT_DELETED") {
+      return "Admin deleted document";
+    }
+
+    // Handle document approval by admin
+    if (changeReason === "ADMIN_DOCUMENT_APPROVED" || newStatus === "DOCUMENT_APPROVED") {
+      return "Admin approved document";
+    }
+
+    // Handle document rejection by admin
+    if (changeReason === "ADMIN_DOCUMENT_REJECTED" || newStatus === "DOCUMENT_REJECTED") {
+      return "Admin rejected document";
+    }
+
+    // Handle document status change by admin
+    if (newStatus === "DOCUMENT_STATUS_CHANGED") {
+      return "Admin changed document status";
+    }
+
     if (!previousStatus) {
       return `Application created with status: ${getStatusLabel(newStatus)}`;
     }
@@ -1399,17 +1758,9 @@ function AdminApplicationsPageContent() {
     return `Status changed to ${getStatusLabel(newStatus)}`;
   };
 
-  // Approval decision handler
-  const handleApprovalDecision = async (decision: "approve" | "reject") => {
+  // Process approval decision (called after confirmation)
+  const processApprovalDecision = async (decision: "approve" | "reject") => {
     if (!selectedApplication) return;
-
-    // Show confirmation dialog
-    const actionText = decision === "approve" ? "approve" : "reject";
-    const confirmMessage = `Are you sure you want to ${actionText} this loan application for ${selectedApplication.user?.fullName}?`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
 
     setProcessingDecision(true);
     try {
@@ -1422,6 +1773,17 @@ function AdminApplicationsPageContent() {
       setDecisionNotes("");
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
+      
+      // Update the selected application status and switch to appropriate tab
+      setSelectedApplication((prev) =>
+        prev ? { ...prev, status: newStatus } : null
+      );
+      setSelectedTab(getTabForStatus(newStatus));
+      
+      // Show success toast
+      toast.success(decision === "approve" 
+        ? `Application approved for ${selectedApplication.user?.fullName}` 
+        : `Application rejected for ${selectedApplication.user?.fullName}`);
     } catch (error) {
       console.error(`Error ${decision}ing application:`, error);
       // Error handling is already done in handleStatusChange
@@ -1430,17 +1792,31 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  // Collateral decision handler
-  const handleCollateralDecision = async (decision: "approve" | "reject") => {
+  // Approval decision handler - shows confirmation modal
+  const handleApprovalDecision = (decision: "approve" | "reject") => {
     if (!selectedApplication) return;
 
-    // Show confirmation dialog
-    const actionText = decision === "approve" ? "approve" : "reject";
-    const confirmMessage = `Are you sure you want to ${actionText} this collateral loan application for ${selectedApplication.user?.fullName}?`;
+    const isApprove = decision === "approve";
+    showConfirmModal({
+      title: isApprove ? "Approve Application" : "Reject Application",
+      message: `Are you sure you want to ${decision} this loan application?`,
+      details: [
+        `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+        `Amount: ${selectedApplication.amount ? `RM ${selectedApplication.amount.toLocaleString()}` : "Not set"}`,
+        `Product: ${selectedApplication.product?.name || "Unknown"}`,
+      ],
+      confirmText: isApprove ? "Approve Application" : "Reject Application",
+      confirmColor: isApprove ? "green" : "red",
+      onConfirm: () => {
+        closeConfirmModal();
+        processApprovalDecision(decision);
+      },
+    });
+  };
 
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
+  // Process collateral decision (called after confirmation)
+  const processCollateralDecision = async (decision: "approve" | "reject") => {
+    if (!selectedApplication) return;
 
     setProcessingCollateral(true);
     try {
@@ -1454,6 +1830,17 @@ function AdminApplicationsPageContent() {
       setCollateralNotes("");
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
+      
+      // Update the selected application status and switch to appropriate tab
+      setSelectedApplication((prev) =>
+        prev ? { ...prev, status: newStatus } : null
+      );
+      setSelectedTab(getTabForStatus(newStatus));
+      
+      // Show success toast
+      toast.success(decision === "approve" 
+        ? `Collateral approved for ${selectedApplication.user?.fullName}` 
+        : `Collateral rejected for ${selectedApplication.user?.fullName}`);
     } catch (error) {
       console.error(`Error ${decision}ing collateral application:`, error);
       // Error handling is already done in handleStatusChange
@@ -1462,115 +1849,34 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  // Attestation completion handler
-  const handleAttestationCompletion = async () => {
+  // Collateral decision handler - shows confirmation modal
+  const handleCollateralDecision = (decision: "approve" | "reject") => {
     if (!selectedApplication) return;
 
-    // Validation based on attestation type
-    if (attestationType === "IMMEDIATE") {
-      if (!attestationVideoWatched || !attestationTermsAccepted) {
-        setError(
-          "For immediate attestation, video must be watched and terms must be accepted"
-        );
-        return;
-      }
-    } else if (attestationType === "MEETING") {
-      if (!meetingCompletedAt) {
-        setError(
-          "For meeting attestation, please provide the meeting completion date"
-        );
-        return;
-      }
-    }
-
-    // Show confirmation dialog
-    const confirmMessage = `Are you sure you want to mark attestation as completed for ${selectedApplication.user?.fullName}?\n\nType: ${attestationType}\nThis will move the application to PENDING_SIGNATURE status.`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    setProcessingAttestation(true);
-    try {
-      const response = await fetch(
-        `/api/admin/applications/${selectedApplication.id}/complete-attestation`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
-          },
-          body: JSON.stringify({
-            attestationType,
-            attestationNotes:
-              attestationNotes ||
-              `${attestationType} attestation completed by admin`,
-            attestationVideoWatched:
-              attestationType === "IMMEDIATE" ? attestationVideoWatched : false,
-            attestationTermsAccepted:
-              attestationType === "IMMEDIATE" ? attestationTermsAccepted : true,
-            meetingCompletedAt:
-              attestationType === "MEETING" ? meetingCompletedAt : null,
-          }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        // Refresh the application data
-        await fetchApplications();
-        await fetchApplicationHistory(selectedApplication.id);
-
-        // Reset attestation form
-        setAttestationType("IMMEDIATE");
-        setAttestationNotes("");
-        setAttestationVideoWatched(false);
-        setAttestationTermsAccepted(false);
-        setMeetingCompletedAt("");
-
-        // Update selected application
-        setSelectedApplication((prev) =>
-          prev ? { ...prev, status: "PENDING_SIGNATURE" } : null
-        );
-      } else {
-        const errorData = await response.json();
-        console.error("Attestation completion error:", errorData);
-        setError(
-          errorData.error ||
-            errorData.message ||
-            "Failed to complete attestation"
-        );
-      }
-    } catch (error) {
-      console.error("Error completing attestation:", error);
-      setError("Failed to complete attestation");
-    } finally {
-      setProcessingAttestation(false);
-    }
+    const isApprove = decision === "approve";
+    showConfirmModal({
+      title: isApprove ? "Approve Collateral" : "Reject Collateral",
+      message: `Are you sure you want to ${decision} this collateral loan application?`,
+      details: [
+        `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+        `Amount: ${selectedApplication.amount ? `RM ${selectedApplication.amount.toLocaleString()}` : "Not set"}`,
+        `Product: ${selectedApplication.product?.name || "Unknown"}`,
+      ],
+      confirmText: isApprove ? "Approve Collateral" : "Reject Collateral",
+      confirmColor: isApprove ? "green" : "red",
+      onConfirm: () => {
+        closeConfirmModal();
+        processCollateralDecision(decision);
+      },
+    });
   };
 
-  // Disbursement handler
-  const handleDisbursement = async () => {
+  // Process disbursement (called after confirmation)
+  const processDisbursement = async () => {
     if (!selectedApplication || !disbursementReference) return;
-
-    // Show confirmation dialog
-    const disbursementAmount =
-      selectedApplication.netDisbursement || selectedApplication.amount;
-    const confirmMessage = `Are you sure you want to disburse ${formatCurrency(
-      disbursementAmount
-    )} to ${
-      selectedApplication.user?.fullName
-    }?\n\nReference: ${disbursementReference}\nBank: ${
-      selectedApplication.user?.bankName
-    }\nAccount: ${selectedApplication.user?.accountNumber}`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
 
     setProcessingDisbursement(true);
     try {
-
       const response = await fetch(
         `/api/admin/applications/${selectedApplication.id}/disburse`,
         {
@@ -1594,10 +1900,14 @@ function AdminApplicationsPageContent() {
         setDisbursementNotes("");
         setDisbursementReference("");
 
-        // Update selected application
+        // Update selected application and switch to details tab (ACTIVE loans don't have action tabs)
         setSelectedApplication((prev) =>
           prev ? { ...prev, status: "ACTIVE" } : null
         );
+        setSelectedTab("details");
+        
+        // Show success toast
+        toast.success(`Loan disbursed successfully for ${selectedApplication.user?.fullName}`);
       } else {
         const errorData = await response.json();
         console.error("Disbursement error:", errorData);
@@ -1613,104 +1923,39 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  // Disbursement slip upload handler
-  const handleDisbursementSlipUpload = async () => {
-    if (!selectedApplication || !disbursementSlipFile) return;
+  // Disbursement handler - shows confirmation modal
+  const handleDisbursement = () => {
+    if (!selectedApplication || !disbursementReference) return;
 
-    setUploadingSlip(true);
-    try {
-      const formData = new FormData();
-      formData.append("paymentSlip", disbursementSlipFile);
+    const disbursementAmount =
+      selectedApplication.netDisbursement || selectedApplication.amount;
 
-      const response = await fetch(
-        `/api/admin/applications/${selectedApplication.id}/upload-disbursement-slip`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
-          },
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      const data = await response.json();
-
-      alert("Payment slip uploaded successfully");
-      setDisbursementSlipFile(null);
-
-      // Refresh application data
-      await fetchApplications();
-    } catch (error) {
-      console.error("Error uploading payment slip:", error);
-      alert(
-        error instanceof Error ? error.message : "Failed to upload payment slip"
-      );
-    } finally {
-      setUploadingSlip(false);
-    }
+    showConfirmModal({
+      title: "Confirm Disbursement",
+      message: `Please confirm that you have already completed the bank transfer for the correct amount before proceeding.`,
+      details: [
+        `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+        `Amount: ${formatCurrency(disbursementAmount)}`,
+        `Reference: ${disbursementReference}`,
+        `Bank: ${selectedApplication.user?.bankName || "Not set"}`,
+        `Account: ${selectedApplication.user?.accountNumber || "Not set"}`,
+        ``,
+        `⚠️ IMPORTANT:`,
+        `• Ensure the bank transfer has been completed`,
+        `• Upload the disbursement slip later in Loans → Disbursements tab`,
+      ],
+      confirmText: "I Confirm - Disburse Loan",
+      confirmColor: "green",
+      onConfirm: () => {
+        closeConfirmModal();
+        processDisbursement();
+      },
+    });
   };
 
-  // Fresh offer handler
-  const handleFreshOfferSubmission = async () => {
+  // Process fresh offer (called after confirmation)
+  const processFreshOffer = async () => {
     if (!selectedApplication) return;
-
-    // Validate required fields
-    if (
-      !freshOfferAmount ||
-      !freshOfferTerm ||
-      !freshOfferInterestRate ||
-      !freshOfferMonthlyRepayment ||
-      !freshOfferNetDisbursement ||
-      !freshOfferStampingFee ||
-      !freshOfferLegalFeeFixed ||
-      !freshOfferProductId
-    ) {
-      setError(
-        "All fresh offer fields are required, including product selection and fee amounts"
-      );
-      return;
-    }
-
-    // Show confirmation dialog with fee breakdown
-    const legalFeeValue = parseFloat(freshOfferLegalFeeFixed) || 0;
-    const stampingFeeValue = parseFloat(freshOfferStampingFee) || 0;
-    const totalFees = legalFeeValue + stampingFeeValue;
-    const loanAmount = parseFloat(freshOfferAmount) || 0;
-
-    // Get product info to show stamping fee percentage
-    const selectedProduct = products.find((p) => p.id === freshOfferProductId);
-    const productStampingFeePercentage = selectedProduct?.stampingFee || 0;
-    const calculatedStampingFee = (loanAmount * productStampingFeePercentage) / 100;
-    
-    // Calculate actual percentage being charged (reverse-calculate from amount)
-    const actualStampingFeePercentage = loanAmount > 0 ? (stampingFeeValue / loanAmount) * 100 : 0;
-    const isManuallyAdjusted = Math.abs(stampingFeeValue - calculatedStampingFee) > 0.01;
-
-    const confirmMessage = `Are you sure you want to submit a fresh offer to ${
-      selectedApplication.user?.fullName
-    }?
-
-LOAN TERMS:
-• Loan Amount: RM${loanAmount.toFixed(2)}
-• Term: ${freshOfferTerm} months
-• Interest Rate: ${freshOfferInterestRate}% monthly
-• Monthly Repayment: RM${parseFloat(freshOfferMonthlyRepayment).toFixed(2)}
-
-FEES:
-• Legal Fee (Fixed): RM${legalFeeValue.toFixed(2)}
-• Stamping Fee${isManuallyAdjusted ? ` (${actualStampingFeePercentage.toFixed(2)}% - manually adjusted)` : ` (${productStampingFeePercentage}%)`}: RM${stampingFeeValue.toFixed(2)}
-• Total Fees: RM${totalFees.toFixed(2)}
-
-NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
 
     setProcessingFreshOffer(true);
     try {
@@ -1752,16 +1997,78 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
 
-      // Update selected application status
+      // Update selected application status and switch to details tab
       setSelectedApplication((prev) =>
         prev ? { ...prev, status: "PENDING_FRESH_OFFER" } : null
       );
+      setSelectedTab("details");
+      
+      // Show success toast
+      toast.success(`Counter offer sent to ${selectedApplication.user?.fullName}`);
     } catch (error) {
-      console.error("Error submitting fresh offer:", error);
-      setError("Failed to submit fresh offer");
+      console.error("Error submitting counter offer:", error);
+      setError("Failed to submit counter offer");
     } finally {
       setProcessingFreshOffer(false);
     }
+  };
+
+  // Fresh offer handler - shows confirmation modal
+  const handleFreshOfferSubmission = () => {
+    if (!selectedApplication) return;
+
+    // Validate required fields
+    if (
+      !freshOfferAmount ||
+      !freshOfferTerm ||
+      !freshOfferInterestRate ||
+      !freshOfferMonthlyRepayment ||
+      !freshOfferNetDisbursement ||
+      !freshOfferStampingFee ||
+      !freshOfferLegalFeeFixed ||
+      !freshOfferProductId
+    ) {
+      setError(
+        "All counter offer fields are required, including product selection and fee amounts"
+      );
+      return;
+    }
+
+    // Calculate fee breakdown for display
+    const legalFeeValue = parseFloat(freshOfferLegalFeeFixed) || 0;
+    const stampingFeeValue = parseFloat(freshOfferStampingFee) || 0;
+    const totalFees = legalFeeValue + stampingFeeValue;
+    const loanAmount = parseFloat(freshOfferAmount) || 0;
+
+    // Get product info to show stamping fee percentage
+    const selectedProduct = products.find((p) => p.id === freshOfferProductId);
+    const productStampingFeePercentage = selectedProduct?.stampingFee || 0;
+    const calculatedStampingFee = (loanAmount * productStampingFeePercentage) / 100;
+    
+    // Calculate actual percentage being charged (reverse-calculate from amount)
+    const actualStampingFeePercentage = loanAmount > 0 ? (stampingFeeValue / loanAmount) * 100 : 0;
+    const isManuallyAdjusted = Math.abs(stampingFeeValue - calculatedStampingFee) > 0.01;
+
+    showConfirmModal({
+      title: "Send Counter Offer",
+      message: `Are you sure you want to send a counter offer to ${selectedApplication.user?.fullName}?`,
+      details: [
+        `Loan Amount: RM ${loanAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Term: ${freshOfferTerm} months`,
+        `Interest Rate: ${freshOfferInterestRate}% monthly`,
+        `Monthly Repayment: RM ${parseFloat(freshOfferMonthlyRepayment).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Legal Fee: RM ${legalFeeValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Stamping Fee${isManuallyAdjusted ? ` (${actualStampingFeePercentage.toFixed(2)}%)` : ` (${productStampingFeePercentage}%)`}: RM ${stampingFeeValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Total Fees: RM ${totalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Net Disbursement: RM ${parseFloat(freshOfferNetDisbursement).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      ],
+      confirmText: "Send Counter Offer",
+      confirmColor: "purple",
+      onConfirm: () => {
+        closeConfirmModal();
+        processFreshOffer();
+      },
+    });
   };
 
   // Fetch products for selection
@@ -2246,25 +2553,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
           </button>
           <button
             onClick={() => {
-              setSelectedFilters(["PENDING_ATTESTATION"]);
-              router.push("/dashboard/applications?filter=pending-attestation");
-            }}
-            className={`px-4 py-2 rounded-lg border transition-colors ${
-              selectedFilters.length === 1 &&
-              selectedFilters.includes("PENDING_ATTESTATION")
-                ? "bg-cyan-500/30 text-cyan-100 border-cyan-400/30"
-                : "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-            }`}
-          >
-            Pending Attestation (
-            {
-              applications.filter((app) => app.status === "PENDING_ATTESTATION")
-                .length
-            }
-            )
-          </button>
-          <button
-            onClick={() => {
               setSelectedFilters([
                 "PENDING_SIGNATURE",
                 "PENDING_PKI_SIGNING",
@@ -2413,7 +2701,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                 : "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
             }`}
           >
-            Fresh Offers (
+            Counter Offers (
             {
               applications.filter((app) => app.status === "PENDING_FRESH_OFFER")
                 .length
@@ -2531,10 +2819,23 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
         <div className="lg:col-span-2">
           {selectedApplication ? (
             <div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-              <div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-                <h3 className="text-lg font-medium text-white">
-                  Application Details
-                </h3>
+              <div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-medium text-white">
+                    Application Details
+                  </h3>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    {(() => {
+                      const StatusIcon = getStatusIcon(selectedApplication.status);
+                      return (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedApplication.status)}`}>
+                          <StatusIcon className="h-3.5 w-3.5 mr-1" />
+                          {getStatusLabel(selectedApplication.status)}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
                 <span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
                   ID: {selectedApplication.id.substring(0, 8)}
                 </span>
@@ -2542,52 +2843,67 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
               <div className="p-6">
                 {/* Tab Navigation */}
-                <div className="flex border-b border-gray-700/30 mb-6">
+                <div className="flex flex-wrap border-b border-gray-700/30 mb-6">
                   <div
-                    className={`px-4 py-2 cursor-pointer transition-colors ${
+                    className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                       selectedTab === "details"
                         ? "border-b-2 border-blue-400 font-medium text-white"
                         : "text-gray-400 hover:text-gray-200"
                     }`}
                     onClick={() => setSelectedTab("details")}
                   >
+                    <InformationCircleIcon className="h-4 w-4 mr-1.5" />
                     Details
                   </div>
-                  {/* Documents tab - ADMIN only */}
+                  {/* Documents tab - ADMIN only, highlighted for collateral review */}
                   {userRole === "ADMIN" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "documents"
-                          ? "border-b-2 border-blue-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? selectedApplication.status === "COLLATERAL_REVIEW"
+                            ? "border-b-2 border-amber-400 font-medium text-white bg-amber-500/10"
+                            : "border-b-2 border-blue-400 font-medium text-white"
+                          : selectedApplication.status === "COLLATERAL_REVIEW"
+                            ? "text-amber-300 hover:text-amber-200 bg-amber-500/5 hover:bg-amber-500/10"
+                            : "text-gray-400 hover:text-gray-200"
                       }`}
                       onClick={() => setSelectedTab("documents")}
                     >
-                      <div className="flex items-center space-x-2">
-                        <span>Documents</span>
-                        {selectedApplication?.documents &&
-                          selectedApplication.documents.length > 0 && (
-                            <span className="bg-blue-500/20 text-blue-200 text-xs font-medium px-2 py-1 rounded-full border border-blue-400/20">
-                              {selectedApplication.documents.length}
-                            </span>
-                          )}
-                      </div>
+                      <FolderIcon className="h-4 w-4 mr-1.5" />
+                      <span>Documents</span>
+                      {selectedApplication?.documents &&
+                        selectedApplication.documents.length > 0 && (
+                          <span className={`ml-1.5 text-xs font-medium px-1.5 py-0.5 rounded-full border ${
+                            selectedApplication.status === "COLLATERAL_REVIEW"
+                              ? "bg-amber-500/20 text-amber-200 border-amber-400/20"
+                              : "bg-blue-500/20 text-blue-200 border-blue-400/20"
+                          }`}>
+                            {selectedApplication.documents.length}
+                          </span>
+                        )}
+                      {selectedApplication.status === "COLLATERAL_REVIEW" && (
+                        <span className="ml-1.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                      )}
                     </div>
                   )}
                   {/* Audit Trail tab - ADMIN only */}
                   {userRole === "ADMIN" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "audit"
                           ? "border-b-2 border-blue-400 font-medium text-white"
                           : "text-gray-400 hover:text-gray-200"
                       }`}
                       onClick={() => setSelectedTab("audit")}
                     >
+                      <DocumentTextIcon className="h-4 w-4 mr-1.5" />
                       Audit Trail
                     </div>
                   )}
-                  {/* Show Signatures tab for signature-related applications */}
+                  {/* Show Signatures tab for signature-related applications - ACTION REQUIRED */}
                   {[
                     "PENDING_SIGNATURE",
                     "PENDING_PKI_SIGNING",
@@ -2595,98 +2911,129 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                     "PENDING_SIGNING_OTP_DS",
                   ].includes(selectedApplication.status) && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "signatures"
-                          ? "border-b-2 border-blue-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
+                          ? "border-b-2 border-purple-400 font-medium text-white bg-purple-500/10"
+                          : "text-purple-300 hover:text-purple-200 bg-purple-500/5 hover:bg-purple-500/10"
                       }`}
                       onClick={() => setSelectedTab("signatures")}
                     >
-                      <PencilSquareIcon className="inline h-4 w-4 mr-1" />
+                      <PencilSquareIcon className="h-4 w-4 mr-1.5" />
                       Signatures
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-purple-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                      </span>
                     </div>
                   )}
-                  {/* Show Approval tab for PENDING_APPROVAL applications */}
-                  {selectedApplication.status === "PENDING_APPROVAL" && (
+                  {/* Show Credit Report tab for PENDING_APPROVAL applications - ADMIN only */}
+                  {selectedApplication.status === "PENDING_APPROVAL" && userRole === "ADMIN" && (
                     <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
-                        selectedTab === "approval"
-                          ? "border-b-2 border-amber-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
-                      }`}
-                      onClick={() => setSelectedTab("approval")}
-                    >
-                      <DocumentMagnifyingGlassIcon className="inline h-4 w-4 mr-1" />
-                      Approval
-                    </div>
-                  )}
-                  {/* Show Collateral Review tab for COLLATERAL_REVIEW applications */}
-                  {selectedApplication.status === "COLLATERAL_REVIEW" && (
-                    <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
-                        selectedTab === "collateral"
-                          ? "border-b-2 border-amber-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
-                      }`}
-                      onClick={() => setSelectedTab("collateral")}
-                    >
-                      <ClipboardDocumentCheckIcon className="inline h-4 w-4 mr-1" />
-                      Collateral Review
-                    </div>
-                  )}
-                  {/* Show Attestation tab for PENDING_ATTESTATION applications */}
-                  {selectedApplication.status === "PENDING_ATTESTATION" && (
-                    <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
-                        selectedTab === "attestation"
-                          ? "border-b-2 border-cyan-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
-                      }`}
-                      onClick={() => setSelectedTab("attestation")}
-                    >
-                      <ClipboardDocumentCheckIcon className="inline h-4 w-4 mr-1" />
-                      Attestation
-                    </div>
-                  )}
-                  {/* Show Stamping tab for PENDING_STAMPING applications */}
-                  {selectedApplication.status === "PENDING_STAMPING" && (
-                    <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
-                        selectedTab === "stamping"
-                          ? "border-b-2 border-teal-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
-                      }`}
-                      onClick={() => setSelectedTab("stamping")}
-                    >
-                      <DocumentTextIcon className="inline h-4 w-4 mr-1" />
-                      Stamping
-                    </div>
-                  )}
-                  {/* Show Disbursement tab for PENDING_DISBURSEMENT applications */}
-                  {selectedApplication.status === "PENDING_DISBURSEMENT" && (
-                    <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
-                        selectedTab === "disbursement"
-                          ? "border-b-2 border-green-400 font-medium text-white"
-                          : "text-gray-400 hover:text-gray-200"
-                      }`}
-                      onClick={() => setSelectedTab("disbursement")}
-                    >
-                      <BanknotesIcon className="inline h-4 w-4 mr-1" />
-                      Disbursement
-                    </div>
-                  )}
-                  {/* Actions tab - ADMIN only */}
-                  {userRole === "ADMIN" && (
-                    <div
-                      className={`px-4 py-2 cursor-pointer transition-colors ${
-                        selectedTab === "actions"
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+                        selectedTab === "credit-report"
                           ? "border-b-2 border-blue-400 font-medium text-white"
                           : "text-gray-400 hover:text-gray-200"
                       }`}
+                      onClick={() => setSelectedTab("credit-report")}
+                    >
+                      <ShieldCheckIcon className="h-4 w-4 mr-1.5" />
+                      Credit Report
+                    </div>
+                  )}
+                  {/* Show Approval tab for PENDING_APPROVAL applications - ACTION REQUIRED */}
+                  {selectedApplication.status === "PENDING_APPROVAL" && (
+                    <div
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+                        selectedTab === "approval"
+                          ? "border-b-2 border-amber-400 font-medium text-white bg-amber-500/10"
+                          : "text-amber-300 hover:text-amber-200 bg-amber-500/5 hover:bg-amber-500/10"
+                      }`}
+                      onClick={() => setSelectedTab("approval")}
+                    >
+                      <DocumentMagnifyingGlassIcon className="h-4 w-4 mr-1.5" />
+                      Approval
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      </span>
+                    </div>
+                  )}
+                  {/* Show Collateral Review tab for COLLATERAL_REVIEW applications - ACTION REQUIRED */}
+                  {selectedApplication.status === "COLLATERAL_REVIEW" && (
+                    <div
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+                        selectedTab === "collateral"
+                          ? "border-b-2 border-amber-400 font-medium text-white bg-amber-500/10"
+                          : "text-amber-300 hover:text-amber-200 bg-amber-500/5 hover:bg-amber-500/10"
+                      }`}
+                      onClick={() => setSelectedTab("collateral")}
+                    >
+                      <ClipboardDocumentCheckIcon className="h-4 w-4 mr-1.5" />
+                      Collateral Review
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      </span>
+                    </div>
+                  )}
+                  {/* Show Stamping tab for PENDING_STAMPING applications - ACTION REQUIRED */}
+                  {selectedApplication.status === "PENDING_STAMPING" && (
+                    <div
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+                        selectedTab === "stamping"
+                          ? "border-b-2 border-teal-400 font-medium text-white bg-teal-500/10"
+                          : "text-teal-300 hover:text-teal-200 bg-teal-500/5 hover:bg-teal-500/10"
+                      }`}
+                      onClick={() => setSelectedTab("stamping")}
+                    >
+                      <DocumentTextIcon className="h-4 w-4 mr-1.5" />
+                      Stamping
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-teal-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                      </span>
+                    </div>
+                  )}
+                  {/* Show Disbursement tab for PENDING_DISBURSEMENT applications - ACTION REQUIRED */}
+                  {selectedApplication.status === "PENDING_DISBURSEMENT" && (
+                    <div
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+                        selectedTab === "disbursement"
+                          ? "border-b-2 border-green-400 font-medium text-white bg-green-500/10"
+                          : "text-green-300 hover:text-green-200 bg-green-500/5 hover:bg-green-500/10"
+                      }`}
+                      onClick={() => setSelectedTab("disbursement")}
+                    >
+                      <BanknotesIcon className="h-4 w-4 mr-1.5" />
+                      Disbursement
+                      <span className="ml-1.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      </span>
+                    </div>
+                  )}
+                  {/* Actions tab - ADMIN only, hidden by default */}
+                  {userRole === "ADMIN" && showActionsTab && (
+                    <div
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+                        selectedTab === "actions"
+                          ? "border-b-2 border-red-400 font-medium text-white bg-red-500/10"
+                          : "text-red-400 hover:text-red-300 bg-red-500/5 hover:bg-red-500/10"
+                      }`}
                       onClick={() => setSelectedTab("actions")}
                     >
-                      Actions
+                      <ExclamationTriangleIcon className="h-4 w-4 mr-1.5" />
+                      <span className="text-xs">Dev Actions</span>
+                    </div>
+                  )}
+                  {/* Toggle to show Actions tab - ADMIN only */}
+                  {userRole === "ADMIN" && !showActionsTab && (
+                    <div
+                      className="px-2 py-2 cursor-pointer transition-colors flex items-center text-gray-500 hover:text-gray-400"
+                      onClick={() => setShowActionsWarningModal(true)}
+                      title="Show developer actions (testing only)"
+                    >
+                      <Cog6ToothIcon className="h-3.5 w-3.5" />
                     </div>
                   )}
                 </div>
@@ -2694,62 +3041,218 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                 {/* Tab Content */}
                 {selectedTab === "details" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    {/* Applicant Information */}
+                    {/* Applicant Information - Enhanced */}
                     <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
-                      <h4 className="text-lg font-medium text-white mb-3 flex items-center">
+                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
                         <UserCircleIcon className="h-5 w-5 mr-2 text-blue-400" />
                         Applicant Information
                       </h4>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-gray-400">Name:</span>{" "}
-                          <span className="text-white">
+                      
+                      {/* Basic Info */}
+                      <div className="space-y-2 text-sm mb-4">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Full Name</span>
+                          <span className="text-white font-medium">
                             {selectedApplication.user?.fullName || "N/A"}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-gray-400">Email:</span>{" "}
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">IC Number</span>
+                          <span className="text-white">
+                            {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Email</span>
                           <span className="text-white">
                             {selectedApplication.user?.email || "N/A"}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-gray-400">Phone:</span>{" "}
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Phone</span>
                           <span className="text-white">
                             {selectedApplication.user?.phoneNumber || "N/A"}
                           </span>
                         </div>
-                        {selectedApplication.user?.employmentStatus && (
-                          <div>
-                            <span className="text-gray-400">Employment:</span>{" "}
+                        {selectedApplication.user?.nationality && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Nationality</span>
                             <span className="text-white">
-                              {selectedApplication.user.employmentStatus}
+                              {selectedApplication.user.nationality}
                             </span>
                           </div>
                         )}
-                        {selectedApplication.user?.employerName && (
-                          <div>
-                            <span className="text-gray-400">Employer:</span>{" "}
+                        {selectedApplication.user?.race && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Race</span>
                             <span className="text-white">
-                              {selectedApplication.user.employerName}
+                              {selectedApplication.user.race}
                             </span>
                           </div>
                         )}
-                        {selectedApplication.user?.monthlyIncome && (
-                          <div>
-                            <span className="text-gray-400">
-                              Monthly Income:
-                            </span>{" "}
+                        {selectedApplication.user?.gender && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Gender</span>
                             <span className="text-white">
-                              {formatCurrency(
-                                parseFloat(
-                                  selectedApplication.user.monthlyIncome
-                                )
-                              )}
+                              {selectedApplication.user.gender}
                             </span>
                           </div>
                         )}
                       </div>
+
+                      {/* Employment Section */}
+                      {(selectedApplication.user?.employmentStatus || selectedApplication.user?.employerName || selectedApplication.user?.monthlyIncome || selectedApplication.user?.occupation || selectedApplication.user?.educationLevel) && (
+                        <div className="border-t border-gray-600/50 pt-3 mb-4">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Employment</p>
+                          <div className="space-y-2 text-sm">
+                            {selectedApplication.user?.employmentStatus && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Status</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.employmentStatus}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.occupation && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Occupation</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.occupation}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.employerName && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Employer</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.employerName}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.serviceLength && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Length of Service</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.serviceLength} years
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.monthlyIncome && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Monthly Income</span>
+                                <span className="text-emerald-400 font-medium">
+                                  {formatCurrency(parseFloat(selectedApplication.user.monthlyIncome))}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.educationLevel && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Education Level</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.educationLevel}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Address Section */}
+                      {(selectedApplication.user?.address1 || selectedApplication.user?.city) && (
+                        <div className="border-t border-gray-600/50 pt-3 mb-4">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Address</p>
+                          <div className="text-sm text-white">
+                            {selectedApplication.user?.address1 && (
+                              <p>{selectedApplication.user.address1}</p>
+                            )}
+                            {selectedApplication.user?.address2 && (
+                              <p>{selectedApplication.user.address2}</p>
+                            )}
+                            {(selectedApplication.user?.city || selectedApplication.user?.state || selectedApplication.user?.zipCode) && (
+                              <p>
+                                {[
+                                  selectedApplication.user?.city,
+                                  selectedApplication.user?.state,
+                                  selectedApplication.user?.zipCode
+                                ].filter(Boolean).join(', ')}
+                              </p>
+                            )}
+                            {selectedApplication.user?.country && (
+                              <p>{selectedApplication.user.country}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bank Details */}
+                      {(selectedApplication.user?.bankName || selectedApplication.user?.accountNumber) && (
+                        <div className="border-t border-gray-600/50 pt-3 mb-4">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Bank Details</p>
+                          <div className="space-y-2 text-sm">
+                            {selectedApplication.user?.bankName && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Bank</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.bankName}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.accountNumber && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-400">Account No.</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-mono">
+                                    {selectedApplication.user.accountNumber}
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(selectedApplication.user?.accountNumber || '');
+                                      toast.success("Account number copied to clipboard");
+                                    }}
+                                    className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-400/20 hover:bg-blue-500/30"
+                                    title="Copy"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Emergency Contact */}
+                      {(selectedApplication.user?.emergencyContactName || selectedApplication.user?.emergencyContactPhone) && (
+                        <div className="border-t border-gray-600/50 pt-3">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Emergency Contact</p>
+                          <div className="space-y-2 text-sm">
+                            {selectedApplication.user?.emergencyContactName && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Name</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.emergencyContactName}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.emergencyContactRelationship && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Relationship</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.emergencyContactRelationship}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.emergencyContactPhone && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Phone</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.emergencyContactPhone}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Loan Information */}
@@ -2801,90 +3304,470 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                         </div>
                       </div>
                     </div>
+
+                    {/* Financial Details - Full width breakdown */}
+                    <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 md:col-span-2">
+                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                        <BanknotesIcon className="h-5 w-5 mr-2 text-emerald-400" />
+                        Financial Breakdown
+                      </h4>
+                      
+                      <div className="space-y-4">
+                        {/* Loan Terms Row */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Loan Amount</span>
+                            <span className="text-white font-medium md:mt-1">
+                              {selectedApplication.amount
+                                ? formatCurrency(selectedApplication.amount)
+                                : "Not specified"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Loan Term</span>
+                            <span className="text-white font-medium md:mt-1">
+                              {selectedApplication.term
+                                ? `${selectedApplication.term} months`
+                                : "Not specified"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Interest Rate</span>
+                            <span className="text-white font-medium md:mt-1">
+                              {selectedApplication.interestRate
+                                ? `${selectedApplication.interestRate}% monthly`
+                                : "Not specified"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Monthly Repayment</span>
+                            <span className="text-purple-400 font-semibold md:mt-1">
+                              {selectedApplication.monthlyRepayment
+                                ? formatCurrency(selectedApplication.monthlyRepayment)
+                                : "Not calculated"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Fees Breakdown */}
+                        <div className="border-t border-gray-600/50 pt-4">
+                          <p className="text-sm font-medium text-gray-300 mb-3">Fees Deducted at Disbursement</p>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-400">Legal Fee</span>
+                              <span className="text-red-400">
+                                - {selectedApplication.legalFeeFixed !== undefined && selectedApplication.legalFeeFixed !== null && selectedApplication.legalFeeFixed > 0
+                                  ? formatCurrency(selectedApplication.legalFeeFixed)
+                                  : "RM 0.00"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-400">Stamping Fee</span>
+                              <span className="text-red-400">
+                                - {selectedApplication.stampingFee !== undefined && selectedApplication.stampingFee !== null && selectedApplication.stampingFee > 0
+                                  ? formatCurrency(selectedApplication.stampingFee)
+                                  : "RM 0.00"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2 border-t border-gray-600/30">
+                              <span className="text-gray-300 font-medium">Total Fees</span>
+                              <span className="text-red-400 font-medium">
+                                - {formatCurrency(
+                                  (selectedApplication.legalFeeFixed || 0) + 
+                                  (selectedApplication.stampingFee || 0)
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Net Disbursement - Highlighted */}
+                        <div className="bg-emerald-500/10 rounded-lg p-4 border border-emerald-500/30">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-emerald-400 font-medium">Net Disbursement</p>
+                              <p className="text-xs text-gray-400 mt-0.5">Amount credited to borrower's account</p>
+                            </div>
+                            <span className="text-emerald-400 text-xl font-semibold">
+                              {selectedApplication.netDisbursement
+                                ? formatCurrency(selectedApplication.netDisbursement)
+                                : selectedApplication.amount
+                                  ? formatCurrency(
+                                      selectedApplication.amount - 
+                                      (selectedApplication.legalFeeFixed || 0) - 
+                                      (selectedApplication.stampingFee || 0)
+                                    )
+                                  : "Not calculated"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Late Payment Fees from Product */}
+                        {selectedApplication.product && (
+                          <div className="border-t border-gray-600/50 pt-4">
+                            <p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees</p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                              <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                <span className="text-gray-400 block text-xs mb-1">Late Fee Rate</span>
+                                <span className="text-amber-400 font-medium">
+                                  {selectedApplication.product.lateFeeRate !== undefined && selectedApplication.product.lateFeeRate !== null
+                                    ? `${selectedApplication.product.lateFeeRate}%`
+                                    : "8%"} <span className="text-xs text-gray-400">per annum</span>
+                                </span>
+                              </div>
+                              <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                <span className="text-gray-400 block text-xs mb-1">Fixed Late Fee</span>
+                                <span className="text-amber-400 font-medium">
+                                  {selectedApplication.product.lateFeeFixedAmount !== undefined && selectedApplication.product.lateFeeFixedAmount !== null
+                                    ? formatCurrency(selectedApplication.product.lateFeeFixedAmount)
+                                    : "RM 0.00"}
+                                </span>
+                                {selectedApplication.product.lateFeeFrequencyDays !== undefined && selectedApplication.product.lateFeeFrequencyDays !== null && selectedApplication.product.lateFeeFrequencyDays > 0 && (
+                                  <span className="text-xs text-gray-400 block mt-1">every {selectedApplication.product.lateFeeFrequencyDays} days</span>
+                                )}
+                              </div>
+                              <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                <span className="text-gray-400 block text-xs mb-1">Grace Period</span>
+                                <span className="text-amber-400 font-medium">
+                                  {lateFeeGraceDays} days
+                                </span>
+                                <span className="text-xs text-gray-400 block mt-1">before fee applies</span>
+                                <span className="text-xs text-blue-400 block mt-0.5">(system-wide)</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* Documents Tab - ADMIN only */}
                 {selectedTab === "documents" && userRole === "ADMIN" && (
-                  <div>
-                    {/* Application Documents */}
-                    {selectedApplication.documents &&
-                      selectedApplication.documents.length > 0 && (
-                        <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">
-                          <h4 className="text-lg font-medium text-white mb-3 flex items-center">
-                            <DocumentTextIcon className="h-5 w-5 mr-2 text-amber-400" />
-                            Documents
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {selectedApplication.documents.map((doc) => (
-                              <div
-                                key={doc.id}
-                                className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30"
-                              >
-                                <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium text-white">
-                                    {getDocumentTypeName(doc.type)}
-                                  </span>
-                                  <span
-                                    className={`px-2 py-1 text-xs rounded-full ${
-                                      getDocumentStatusColor(doc.status).bg
-                                    } ${
-                                      getDocumentStatusColor(doc.status).text
-                                    }`}
-                                  >
-                                    {doc.status}
-                                  </span>
-                                </div>
-                                <div className="flex space-x-2 mt-2">
-                                  <a
-                                    href={formatDocumentUrl(
-                                      doc.fileUrl,
-                                      doc.id
-                                    )}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
-                                  >
-                                    View
-                                  </a>
-                                  <button
-                                    onClick={() =>
-                                      handleDocumentStatusChange(
-                                        doc.id,
-                                        "APPROVED"
-                                      )
-                                    }
-                                    disabled={doc.status === "APPROVED"}
-                                    className={`text-xs px-2 py-1 rounded border ${
-                                      doc.status === "APPROVED"
-                                        ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
-                                        : "bg-green-500/20 text-green-200 border-green-400/20 hover:bg-green-500/30"
-                                    }`}
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleDocumentStatusChange(
-                                        doc.id,
-                                        "REJECTED"
-                                      )
-                                    }
-                                    disabled={doc.status === "REJECTED"}
-                                    className={`text-xs px-2 py-1 rounded border ${
-                                      doc.status === "REJECTED"
-                                        ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
-                                        : "bg-red-500/20 text-red-200 border-red-400/20 hover:bg-red-500/30"
-                                    }`}
-                                  >
-                                    Reject
-                                  </button>
+                  <div className="space-y-6">
+                    {/* Document Summary */}
+                    {(() => {
+                      // Normalize document types - remove surrounding quotes if present
+                      const normalizeDocType = (docType: string | unknown): string => {
+                        if (typeof docType !== 'string') return String(docType);
+                        // Remove surrounding quotes that may come from JSON storage
+                        return docType.replace(/^["']|["']$/g, '').trim();
+                      };
+                      
+                      const rawRequiredDocs = selectedApplication.product?.requiredDocuments || [];
+                      const requiredDocs = rawRequiredDocs.map(normalizeDocType);
+                      const uploadedDocs = selectedApplication.documents || [];
+                      const uploadedDocTypes = Array.from(new Set(uploadedDocs.map(d => normalizeDocType(d.type))));
+                      const missingDocs = requiredDocs.filter((docType: string) => !uploadedDocTypes.includes(docType));
+                      const hasAllDocs = missingDocs.length === 0 && requiredDocs.length > 0;
+                      const isCollateralLoan = selectedApplication.product?.collateralRequired === true;
+                      
+                      return (
+                        <>
+                          {/* Summary Banner */}
+                          <div className={`rounded-lg p-4 border ${
+                            isCollateralLoan 
+                              ? "bg-amber-500/10 border-amber-500/30"
+                              : hasAllDocs 
+                                ? "bg-green-500/10 border-green-500/30" 
+                                : requiredDocs.length === 0
+                                  ? "bg-gray-700/30 border-gray-600/30"
+                                  : "bg-amber-500/10 border-amber-500/30"
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                {isCollateralLoan ? (
+                                  <ClipboardDocumentCheckIcon className="h-5 w-5 text-amber-400 mr-2" />
+                                ) : hasAllDocs ? (
+                                  <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+                                ) : requiredDocs.length === 0 ? (
+                                  <DocumentTextIcon className="h-5 w-5 text-gray-400 mr-2" />
+                                ) : (
+                                  <ExclamationTriangleIcon className="h-5 w-5 text-amber-400 mr-2" />
+                                )}
+                                <div>
+                                  <p className={`font-medium ${
+                                    isCollateralLoan 
+                                      ? "text-amber-200"
+                                      : hasAllDocs 
+                                        ? "text-green-200" 
+                                        : requiredDocs.length === 0
+                                          ? "text-gray-300"
+                                          : "text-amber-200"
+                                  }`}>
+                                    {isCollateralLoan 
+                                      ? "Collateral Loan - Documents Optional"
+                                      : hasAllDocs 
+                                        ? "All Required Documents Uploaded" 
+                                        : requiredDocs.length === 0
+                                          ? "No Required Documents for this Product"
+                                          : `${missingDocs.length} of ${requiredDocs.length} Required Documents Missing`}
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    {uploadedDocs.length} document{uploadedDocs.length !== 1 ? 's' : ''} uploaded
+                                    {requiredDocs.length > 0 && ` • ${requiredDocs.length} required by product`}
+                                  </p>
                                 </div>
                               </div>
-                            ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+
+                          {/* Required Documents Checklist */}
+                          {requiredDocs.length > 0 && (
+                            <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+                              <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                                <ClipboardDocumentCheckIcon className="h-5 w-5 mr-2 text-blue-400" />
+                                Required Documents
+                              </h4>
+                              <div className="space-y-3">
+                                {requiredDocs.map((docType: string) => {
+                                  const uploadedForType = uploadedDocs.filter(d => normalizeDocType(d.type) === docType);
+                                  const hasUpload = uploadedForType.length > 0;
+                                  const allApproved = hasUpload && uploadedForType.every(d => d.status === 'APPROVED');
+                                  const hasRejected = hasUpload && uploadedForType.some(d => d.status === 'REJECTED');
+                                  
+                                  return (
+                                    <div key={docType} className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30">
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex items-start">
+                                          <div className={`mt-0.5 mr-3 rounded-full p-1 ${
+                                            allApproved 
+                                              ? "bg-green-500/20" 
+                                              : hasRejected 
+                                                ? "bg-red-500/20"
+                                                : hasUpload 
+                                                  ? "bg-amber-500/20" 
+                                                  : "bg-gray-600/20"
+                                          }`}>
+                                            {allApproved ? (
+                                              <CheckCircleIcon className="h-4 w-4 text-green-400" />
+                                            ) : hasRejected ? (
+                                              <XCircleIcon className="h-4 w-4 text-red-400" />
+                                            ) : hasUpload ? (
+                                              <ClockIcon className="h-4 w-4 text-amber-400" />
+                                            ) : (
+                                              <XMarkIcon className="h-4 w-4 text-gray-500" />
+                                            )}
+                                          </div>
+                                          <div>
+                                            <p className="text-white font-medium">{getDocumentTypeName(docType)}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                              {!hasUpload 
+                                                ? "Not uploaded" 
+                                                : allApproved 
+                                                  ? `${uploadedForType.length} file(s) approved`
+                                                  : hasRejected
+                                                    ? "Needs re-upload"
+                                                    : `${uploadedForType.length} file(s) pending review`}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <span className={`px-2 py-1 text-xs rounded-full ${
+                                          allApproved 
+                                            ? "bg-green-500/20 text-green-200 border border-green-400/30"
+                                            : hasRejected 
+                                              ? "bg-red-500/20 text-red-200 border border-red-400/30"
+                                              : hasUpload 
+                                                ? "bg-amber-500/20 text-amber-200 border border-amber-400/30"
+                                                : "bg-gray-600/20 text-gray-400 border border-gray-500/30"
+                                        }`}>
+                                          {allApproved ? "Approved" : hasRejected ? "Rejected" : hasUpload ? "Pending" : "Missing"}
+                                        </span>
+                                      </div>
+                                      
+                                      {/* Show uploaded files for this type */}
+                                      {hasUpload && (
+                                        <div className="mt-3 pl-8 space-y-2">
+                                          {uploadedForType.map((doc) => (
+                                            <div key={doc.id} className="flex items-center justify-between text-sm bg-gray-700/30 rounded px-3 py-2">
+                                              <span className="text-gray-300 truncate max-w-[200px]">
+                                                {doc.fileUrl.split('/').pop()}
+                                              </span>
+                                              <div className="flex items-center space-x-2">
+                                                <span className={`px-1.5 py-0.5 text-xs rounded ${
+                                                  getDocumentStatusColor(doc.status).bg
+                                                } ${getDocumentStatusColor(doc.status).text}`}>
+                                                  {doc.status}
+                                                </span>
+                                                <a
+                                                  href={formatDocumentUrl(doc.fileUrl, doc.id)}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
+                                                >
+                                                  View
+                                                </a>
+                                                <button
+                                                  onClick={() => handleDocumentStatusChange(doc.id, "APPROVED")}
+                                                  disabled={doc.status === "APPROVED"}
+                                                  className={`text-xs px-2 py-1 rounded border ${
+                                                    doc.status === "APPROVED"
+                                                      ? "bg-gray-700/50 text-gray-400 border-gray-600/50 cursor-not-allowed"
+                                                      : "bg-green-500/20 text-green-200 border-green-400/20 hover:bg-green-500/30"
+                                                  }`}
+                                                >
+                                                  ✓
+                                                </button>
+                                                <button
+                                                  onClick={() => handleDocumentStatusChange(doc.id, "REJECTED")}
+                                                  disabled={doc.status === "REJECTED"}
+                                                  className={`text-xs px-2 py-1 rounded border ${
+                                                    doc.status === "REJECTED"
+                                                      ? "bg-gray-700/50 text-gray-400 border-gray-600/50 cursor-not-allowed"
+                                                      : "bg-red-500/20 text-red-200 border-red-400/20 hover:bg-red-500/30"
+                                                  }`}
+                                                >
+                                                  ✗
+                                                </button>
+                                                <button
+                                                  onClick={() => handleAdminDocumentDelete(doc.id)}
+                                                  className="text-xs px-2 py-1 rounded border bg-gray-600/20 text-gray-300 border-gray-500/30 hover:bg-red-500/20 hover:text-red-200 hover:border-red-400/30"
+                                                  title="Delete document"
+                                                >
+                                                  🗑
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Upload button for missing or additional documents */}
+                                      <div className="mt-3 pl-8">
+                                        <label className="relative cursor-pointer">
+                                          <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                handleAdminDocumentUpload(docType, file);
+                                                e.target.value = ''; // Reset input
+                                              }
+                                            }}
+                                            disabled={uploadingDocument === docType}
+                                          />
+                                          <span className={`inline-flex items-center text-xs px-3 py-1.5 rounded border transition-colors ${
+                                            uploadingDocument === docType
+                                              ? "bg-gray-600/50 text-gray-400 border-gray-500/30 cursor-wait"
+                                              : "bg-purple-500/20 text-purple-200 border-purple-400/30 hover:bg-purple-500/30"
+                                          }`}>
+                                            {uploadingDocument === docType ? (
+                                              <>
+                                                <svg className="animate-spin h-3 w-3 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Uploading...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <ArrowUpTrayIcon className="h-3 w-3 mr-1.5" />
+                                                {hasUpload ? "Add More" : "Upload"}
+                                              </>
+                                            )}
+                                          </span>
+                                        </label>
+                                        {documentUploadError && uploadingDocument === null && (
+                                          <p className="text-xs text-red-400 mt-1">{documentUploadError}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Additional Documents (uploaded but not in required list) */}
+                          {(() => {
+                            const additionalDocs = uploadedDocs.filter(
+                              (doc) => !requiredDocs.includes(normalizeDocType(doc.type))
+                            );
+                            if (additionalDocs.length === 0) return null;
+                            
+                            return (
+                              <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+                                <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                                  <DocumentTextIcon className="h-5 w-5 mr-2 text-purple-400" />
+                                  Additional Documents
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {additionalDocs.map((doc) => (
+                                    <div
+                                      key={doc.id}
+                                      className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30"
+                                    >
+                                      <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm font-medium text-white">
+                                          {getDocumentTypeName(doc.type)}
+                                        </span>
+                                        <span
+                                          className={`px-2 py-1 text-xs rounded-full ${
+                                            getDocumentStatusColor(doc.status).bg
+                                          } ${getDocumentStatusColor(doc.status).text}`}
+                                        >
+                                          {doc.status}
+                                        </span>
+                                      </div>
+                                      <div className="flex space-x-2 mt-2">
+                                        <a
+                                          href={formatDocumentUrl(doc.fileUrl, doc.id)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
+                                        >
+                                          View
+                                        </a>
+                                        <button
+                                          onClick={() => handleDocumentStatusChange(doc.id, "APPROVED")}
+                                          disabled={doc.status === "APPROVED"}
+                                          className={`text-xs px-2 py-1 rounded border ${
+                                            doc.status === "APPROVED"
+                                              ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
+                                              : "bg-green-500/20 text-green-200 border-green-400/20 hover:bg-green-500/30"
+                                          }`}
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          onClick={() => handleDocumentStatusChange(doc.id, "REJECTED")}
+                                          disabled={doc.status === "REJECTED"}
+                                          className={`text-xs px-2 py-1 rounded border ${
+                                            doc.status === "REJECTED"
+                                              ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
+                                              : "bg-red-500/20 text-red-200 border-red-400/20 hover:bg-red-500/30"
+                                          }`}
+                                        >
+                                          Reject
+                                        </button>
+                                        <button
+                                          onClick={() => handleAdminDocumentDelete(doc.id)}
+                                          className="text-xs px-2 py-1 rounded border bg-gray-600/20 text-gray-300 border-gray-500/30 hover:bg-red-500/20 hover:text-red-200 hover:border-red-400/30"
+                                          title="Delete document"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* No Documents Message */}
+                          {uploadedDocs.length === 0 && requiredDocs.length === 0 && (
+                            <div className="border border-gray-700/50 rounded-lg p-8 bg-gray-800/50 text-center">
+                              <DocumentTextIcon className="h-12 w-12 text-gray-500 mx-auto mb-3" />
+                              <p className="text-gray-400">No documents uploaded for this application</p>
+                              <p className="text-xs text-gray-500 mt-1">This product does not require any documents</p>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -2913,6 +3796,10 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                             Customer Actions
                           </span>
                         </div>
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-cyan-400 rounded-full mr-2"></div>
+                          <span className="text-gray-400">Document Changes</span>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         {selectedApplication.history &&
@@ -2932,9 +3819,17 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   <div className="flex-shrink-0 mt-1">
                                     <div
                                       className={`w-2 h-2 rounded-full ${
-                                        historyItem.changedBy
-                                          ?.toLowerCase()
-                                          .includes("system")
+                                        // Document-related events get cyan color
+                                        historyItem.newStatus === 'DOCUMENT_UPLOADED' ||
+                                        historyItem.newStatus === 'DOCUMENT_DELETED' ||
+                                        historyItem.newStatus === 'DOCUMENT_APPROVED' ||
+                                        historyItem.newStatus === 'DOCUMENT_REJECTED' ||
+                                        historyItem.newStatus === 'DOCUMENT_STATUS_CHANGED' ||
+                                        historyItem.changeReason?.includes('DOCUMENT')
+                                          ? "bg-cyan-400"
+                                          : historyItem.changedBy
+                                              ?.toLowerCase()
+                                              .includes("system")
                                           ? "bg-blue-400"
                                           : historyItem.changedBy &&
                                             (historyItem.changedBy.startsWith(
@@ -3205,37 +4100,61 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
                 {/* Approval Tab */}
                 {selectedTab === "approval" && (
-                  <div>
-                    {/* Credit Decision Section */}
-                    <div className="border border-amber-500/30 rounded-lg p-6 bg-amber-500/10 mb-6">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                  <div className="space-y-6">
+                    {/* Navigation Hint */}
+                    <div className="flex items-start gap-3 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
+                      <InformationCircleIcon className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-gray-300">
+                        <p className="mb-2">Before making a decision, please review:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => setSelectedTab("details")}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-colors border border-blue-500/30"
+                          >
+                            <UserCircleIcon className="h-4 w-4" />
+                            Details Tab
+                          </button>
+                          <button
+                            onClick={() => setSelectedTab("documents")}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-colors border border-blue-500/30"
+                          >
+                            <FolderIcon className="h-4 w-4" />
+                            Documents Tab
+                          </button>
+                          {userRole === "ADMIN" && (
+                            <button
+                              onClick={() => setSelectedTab("credit-report")}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg transition-colors border border-cyan-500/30"
+                            >
+                              <ShieldCheckIcon className="h-4 w-4" />
+                              Credit Report
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Credit Decision Card */}
+                    <div className="border border-amber-500/30 rounded-xl p-6 bg-gradient-to-br from-amber-500/10 to-amber-600/5">
+                      <h4 className="text-lg font-semibold text-white mb-5 flex items-center">
                         <DocumentMagnifyingGlassIcon className="h-6 w-6 mr-2 text-amber-400" />
-                        Credit Decision Required
+                        Credit Decision
                       </h4>
 
                       {/* Application Summary */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Applicant
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.user?.fullName}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.email}
-                          </p>
-                          
-                          {/* IC Number Section */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Applicant</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.fullName || "—"}</p>
+                          <p className="text-sm text-gray-400 mt-1">{selectedApplication.user?.email}</p>
+                          {/* IC Number with inline edit */}
                           <div className="mt-2 flex items-center gap-2">
+                            <span className="text-xs text-gray-500">IC:</span>
                             {!editingIcNumber ? (
                               <>
-                                <h5 className="text-sm text-white">
-                                  IC Number:
-                                </h5>
-								<p className="text-sm text-white">
-									{selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
-								</p>
+                                <span className="text-sm text-white font-mono">
+                                  {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
+                                </span>
                                 <button
                                   onClick={() => {
                                     setIcNumberValue(
@@ -3245,10 +4164,10 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                     );
                                     setEditingIcNumber(true);
                                   }}
-                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
                                   title="Edit IC Number"
                                 >
-                                  <PencilSquareIcon className="h-4 w-4" />
+                                  <PencilSquareIcon className="h-3.5 w-3.5" />
                                 </button>
                               </>
                             ) : (
@@ -3258,7 +4177,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   value={icNumberValue}
                                   onChange={(e) => setIcNumberValue(e.target.value)}
                                   placeholder="Enter IC number"
-                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500 font-mono"
                                   disabled={updatingIcNumber}
                                 />
                                 <button
@@ -3269,7 +4188,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   }}
                                   disabled={updatingIcNumber || !icNumberValue.trim()}
                                   className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Save IC Number"
+                                  title="Save"
                                 >
                                   {updatingIcNumber ? (
                                     <ArrowPathIcon className="h-4 w-4 animate-spin" />
@@ -3292,52 +4211,32 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                             )}
                           </div>
                         </div>
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Loan Details
-                          </h5>
-                          <p className="text-white">
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Loan Request</p>
+                          <p className="text-2xl font-bold text-amber-400">
                             {selectedApplication.amount
                               ? formatCurrency(selectedApplication.amount)
-                              : "Amount not set"}
+                              : "—"}
                           </p>
-                          <p className="text-sm text-gray-400">
+                          <p className="text-sm text-gray-400 mt-1">
                             {selectedApplication.term
-                              ? `${selectedApplication.term} months`
+                              ? `${selectedApplication.term} months • ${selectedApplication.product?.name || "Unknown Product"}`
                               : "Term not set"}
                           </p>
                         </div>
                       </div>
 
-                      {/* Credit Report Section - ADMIN only */}
-                      {userRole === "ADMIN" && (
-                        <CreditReportCard
-                          userId={selectedApplication.userId}
-                          applicationId={selectedApplication.id}
-                          userFullName={selectedApplication.user?.fullName || ""}
-                          userIcNumber={selectedApplication.user?.icNumber || selectedApplication.user?.idNumber}
-                          existingReport={creditReport}
-                          onReportFetched={(report) => {
-                            setCreditReport(report);
-                            // Refresh application to get updated history
-                            if (selectedApplication) {
-                              fetchApplications();
-                            }
-                          }}
-                        />
-                      )}
-
                       {/* Decision Notes */}
-                      <div className="mb-6">
+                      <div className="mb-5">
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Decision Notes (Optional)
+                          Decision Notes <span className="text-gray-500 font-normal">(Optional)</span>
                         </label>
                         <textarea
                           value={decisionNotes}
                           onChange={(e) => setDecisionNotes(e.target.value)}
                           placeholder="Add notes about your decision..."
-                          className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                          rows={3}
+                          className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                          rows={2}
                         />
                       </div>
 
@@ -3347,80 +4246,75 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           <div className="flex items-center">
                             <CheckCircleIcon className="h-6 w-6 text-blue-400 mr-3" />
                             <div>
-                              <p className="text-blue-200 font-medium">
-                                Loan Already Disbursed
-                              </p>
-                              <p className="text-blue-300/70 text-sm">
-                                This loan has been disbursed and cannot be
-                                modified.
-                              </p>
+                              <p className="text-blue-200 font-medium">Loan Already Disbursed</p>
+                              <p className="text-blue-300/70 text-sm">This loan has been disbursed and cannot be modified.</p>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex space-x-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <button
                             onClick={() => handleApprovalDecision("approve")}
                             disabled={processingDecision}
-                            className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
+                            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/30 disabled:shadow-none"
                           >
-                            <CheckCircleIcon className="h-5 w-5 mr-2" />
-                            {processingDecision
-                              ? "Processing..."
-                              : "Approve Application"}
+                            <CheckCircleIcon className="h-5 w-5" />
+                            {processingDecision ? "Processing..." : "Approve Application"}
                           </button>
                           <button
                             onClick={() => handleApprovalDecision("reject")}
                             disabled={processingDecision}
-                            className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 text-white font-medium rounded-lg transition-colors"
+                            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all"
                           >
-                            <XCircleIcon className="h-5 w-5 mr-2" />
-                            {processingDecision
-                              ? "Processing..."
-                              : "Reject Application"}
+                            <XCircleIcon className="h-5 w-5" />
+                            {processingDecision ? "Processing..." : "Reject Application"}
                           </button>
                         </div>
                       )}
 
-                      {/* Workflow Information */}
-                      <div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
-                        <h5 className="text-sm font-medium text-blue-200 mb-2">
-                          Next Steps
-                        </h5>
-                        <ul className="text-xs text-blue-200 space-y-1">
-                          <li>
-                            • <strong>Approve:</strong> Application will move to
-                            PENDING_SIGNATURE status
-                          </li>
-                          <li>
-                            • <strong>Reject:</strong> Application will be
-                            marked as REJECTED and user will be notified
-                          </li>
-                          <li>
-                            • All decisions are logged in the audit trail with
-                            timestamps
-                          </li>
-                        </ul>
+                      {/* Workflow Info */}
+                      <div className="mt-5 flex items-start gap-2 text-xs text-gray-500">
+                        <InformationCircleIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <p>
+                          <strong className="text-green-400">Approve</strong> → Moves to signing • 
+                          <strong className="text-red-400 ml-1">Reject</strong> → Marks as rejected & notifies user
+                        </p>
                       </div>
+                    </div>
 
-                      {/* Fresh Offer Section */}
-                      <div className="mt-6 p-4 bg-purple-500/10 border border-purple-400/20 rounded-lg">
-                        <div className="flex items-center justify-between mb-4">
-                          <h5 className="text-sm font-medium text-purple-200">
-                            Fresh Offer Option
-                          </h5>
+                    {/* Counter Offer Section */}
+                    <div className="border border-purple-500/30 rounded-xl overflow-hidden">
+                      <div 
+                        className={`p-5 bg-gradient-to-br from-purple-500/10 to-purple-600/5 ${!showFreshOfferForm ? 'cursor-pointer hover:from-purple-500/15' : ''}`}
+                        onClick={() => !showFreshOfferForm && populateFreshOfferForm()}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-purple-500/20 rounded-lg">
+                              <ArrowsUpDownIcon className="h-5 w-5 text-purple-400" />
+                            </div>
+                            <div>
+                              <h5 className="text-base font-semibold text-white">Counter Offer</h5>
+                              <p className="text-xs text-gray-400 mt-0.5">Propose alternative loan terms to the applicant</p>
+                            </div>
+                          </div>
                           {!showFreshOfferForm && (
                             <button
-                              onClick={populateFreshOfferForm}
-                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                populateFreshOfferForm();
+                              }}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-colors"
                             >
-                              Submit Fresh Offer
+                              Create Counter Offer
                             </button>
                           )}
                         </div>
+                      </div>
 
-                        {showFreshOfferForm && (
-                          <div className="space-y-4">
+                      {showFreshOfferForm && (
+                        <div className="p-5 pt-0 bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-t border-purple-500/20">
+                          <div className="space-y-5 mt-5">
                             {/* Product Selection */}
                             <div>
                               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -3428,16 +4322,13 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                               </label>
                               <select
                                 value={freshOfferProductId}
-                                onChange={(e) =>
-                                  setFreshOfferProductId(e.target.value)
-                                }
-                                className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                onChange={(e) => setFreshOfferProductId(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                               >
                                 <option value="">Select product</option>
                                 {products.map((product) => (
                                   <option key={product.id} value={product.id}>
-                                    {product.name} - {product.interestRate}%
-                                    interest
+                                    {product.name} - {product.interestRate}% interest
                                   </option>
                                 ))}
                               </select>
@@ -3452,11 +4343,9 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 <input
                                   type="number"
                                   value={freshOfferAmount}
-                                  onChange={(e) =>
-                                    setFreshOfferAmount(e.target.value)
-                                  }
+                                  onChange={(e) => setFreshOfferAmount(e.target.value)}
                                   placeholder="Enter amount"
-                                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                   step="0.01"
                                 />
                               </div>
@@ -3467,11 +4356,9 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 <input
                                   type="number"
                                   value={freshOfferTerm}
-                                  onChange={(e) =>
-                                    setFreshOfferTerm(e.target.value)
-                                  }
+                                  onChange={(e) => setFreshOfferTerm(e.target.value)}
                                   placeholder="Enter term"
-                                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                 />
                               </div>
                               <div>
@@ -3481,11 +4368,9 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 <input
                                   type="number"
                                   value={freshOfferInterestRate}
-                                  onChange={(e) =>
-                                    setFreshOfferInterestRate(e.target.value)
-                                  }
-                                  placeholder="Enter interest rate"
-                                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  onChange={(e) => setFreshOfferInterestRate(e.target.value)}
+                                  placeholder="Enter rate"
+                                  className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                   step="0.01"
                                 />
                               </div>
@@ -3500,14 +4385,14 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 {!feeEditMode ? (
                                   <button
                                     onClick={handleEditFees}
-                                    className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded-md transition-colors"
                                   >
                                     Edit Fees
                                   </button>
                                 ) : (
                                   <button
                                     onClick={handleSaveFees}
-                                    className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-500 text-white rounded-md transition-colors"
                                   >
                                     Save Fees
                                   </button>
@@ -3518,25 +4403,15 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   <label className="block text-sm font-medium text-gray-300 mb-1">
                                     Legal Fee (Fixed Amount - RM)
                                   </label>
-                                  {products.find(
-                                    (p) => p.id === freshOfferProductId
-                                  ) && (
+                                  {products.find((p) => p.id === freshOfferProductId) && (
                                     <p className="text-xs text-gray-400 mb-2">
-                                      Auto: RM
-                                      {
-                                        products.find(
-                                          (p) => p.id === freshOfferProductId
-                                        )?.legalFeeFixed
-                                      }{" "}
-                                      fixed
+                                      Auto: RM{products.find((p) => p.id === freshOfferProductId)?.legalFeeFixed} fixed
                                     </p>
                                   )}
                                   <input
                                     type="number"
                                     value={freshOfferLegalFeeFixed}
-                                    onChange={(e) =>
-                                      handleFeeChange("legalFixed", e.target.value)
-                                    }
+                                    onChange={(e) => handleFeeChange("legalFixed", e.target.value)}
                                     disabled={!feeEditMode}
                                     placeholder="Auto-calculated"
                                     className={`w-full px-3 py-2 border rounded-lg transition-colors ${
@@ -3551,29 +4426,18 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   <label className="block text-sm font-medium text-gray-300 mb-1">
                                     Stamping Fee (RM)
                                   </label>
-                                  {products.find(
-                                    (p) => p.id === freshOfferProductId
-                                  ) && (
+                                  {products.find((p) => p.id === freshOfferProductId) && (
                                     <p className="text-xs text-gray-400 mb-2">
-                                      Auto: {
-                                        products.find(
-                                          (p) => p.id === freshOfferProductId
-                                        )?.stampingFee
-                                      }% of loan amount (calculated)
+                                      Auto: {products.find((p) => p.id === freshOfferProductId)?.stampingFee}% of loan amount
                                     </p>
                                   )}
                                   <input
                                     type="number"
                                     value={freshOfferStampingFee}
-                                    onChange={(e) =>
-                                      handleFeeChange(
-                                        "stamping",
-                                        e.target.value
-                                      )
-                                    }
+                                    onChange={(e) => handleFeeChange("stamping", e.target.value)}
                                     disabled={!feeEditMode}
                                     placeholder="Auto-calculated"
-                                    className={`w-full px-3 py-2 border rounded-lg transition-colors step-0.01 ${
+                                    className={`w-full px-3 py-2 border rounded-lg transition-colors ${
                                       feeEditMode
                                         ? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         : "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
@@ -3616,45 +4480,131 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
                             <div>
                               <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Fresh Offer Notes (Optional)
+                                Notes <span className="text-gray-500 font-normal">(Optional)</span>
                               </label>
                               <textarea
                                 value={freshOfferNotes}
-                                onChange={(e) =>
-                                  setFreshOfferNotes(e.target.value)
-                                }
-                                placeholder="Add notes about the fresh offer..."
-                                className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                rows={3}
+                                onChange={(e) => setFreshOfferNotes(e.target.value)}
+                                placeholder="Explain the reason for the counter offer..."
+                                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                                rows={2}
                               />
                             </div>
 
-                            <div className="flex space-x-4">
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 pt-2">
                               <button
                                 onClick={handleFreshOfferSubmission}
                                 disabled={processingFreshOffer}
-                                className="flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white font-medium rounded-lg transition-colors"
+                                className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 disabled:shadow-none"
                               >
-                                {processingFreshOffer
-                                  ? "Submitting..."
-                                  : "Submit Fresh Offer"}
+                                {processingFreshOffer ? (
+                                  <>
+                                    <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ArrowsUpDownIcon className="h-5 w-5" />
+                                    Send Counter Offer
+                                  </>
+                                )}
                               </button>
                               <button
                                 onClick={() => setShowFreshOfferForm(false)}
                                 disabled={processingFreshOffer}
-                                className="flex items-center px-6 py-3 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-600/50 text-white font-medium rounded-lg transition-colors"
+                                className="px-6 py-3.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-medium rounded-xl transition-colors"
                               >
                                 Cancel
                               </button>
                             </div>
                           </div>
-                        )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                        <p className="text-xs text-purple-200/70 mt-2">
-                          Submit a fresh offer with revised terms. The user will
-                          be notified and can accept or reject the new offer.
-                        </p>
+                {/* Credit Report Tab - ADMIN only */}
+                {selectedTab === "credit-report" && userRole === "ADMIN" && (
+                  <div className="space-y-6">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-cyan-500/20 rounded-lg">
+                          <ShieldCheckIcon className="h-6 w-6 text-cyan-400" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-white">Credit Report (CTOS)</h4>
+                          <p className="text-sm text-gray-400">
+                            View or fetch credit report for {selectedApplication.user?.fullName}
+                          </p>
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Applicant Summary */}
+                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Applicant</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.fullName || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">IC Number</p>
+                          <p className="text-white font-mono">{selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Loan Amount</p>
+                          <p className="text-white font-medium">
+                            {selectedApplication.amount ? formatCurrency(selectedApplication.amount) : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Credit Report Card */}
+                    <CreditReportCard
+                      userId={selectedApplication.userId}
+                      applicationId={selectedApplication.id}
+                      userFullName={selectedApplication.user?.fullName || ""}
+                      userIcNumber={selectedApplication.user?.icNumber || selectedApplication.user?.idNumber}
+                      existingReport={creditReport}
+                      onReportFetched={(report) => {
+                        setCreditReport(report);
+                        if (selectedApplication) {
+                          fetchApplications();
+                        }
+                      }}
+                      onRequestConfirmation={(onConfirm) => {
+                        showConfirmModal({
+                          title: "Request Fresh Credit Report",
+                          message: "Are you sure you want to request a fresh credit report from CTOS?",
+                          details: [
+                            `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+                            `IC Number: ${selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}`,
+                            "",
+                            "⚠️ This will charge company credits.",
+                          ],
+                          confirmText: "Request Report",
+                          confirmColor: "blue",
+                          onConfirm: () => {
+                            closeConfirmModal();
+                            onConfirm();
+                          },
+                        });
+                      }}
+                    />
+
+                    {/* Back to Approval */}
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => setSelectedTab("approval")}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        <ArrowLeftIcon className="h-4 w-4" />
+                        Back to Approval Decision
+                      </button>
                     </div>
                   </div>
                 )}
@@ -3854,355 +4804,64 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                   </div>
                 )}
 
-                {/* Attestation Tab */}
-                {selectedTab === "attestation" && (
-                  <div>
-                    {/* Attestation Section */}
-                    <div className="border border-cyan-500/30 rounded-lg p-6 bg-cyan-500/10 mb-6">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
-                        <ClipboardDocumentCheckIcon className="h-6 w-6 mr-2 text-cyan-400" />
-                        Loan Terms Attestation
-                      </h4>
-
-                      {/* Application Summary */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Applicant
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.user?.fullName}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.email}
-                          </p>
-                          
-                          {/* IC Number Section */}
-                          <div className="mt-2 flex items-center gap-2">
-                            {!editingIcNumber ? (
-                              <>
-                                <p className="text-sm text-gray-400">
-                                  IC: {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
-                                </p>
-                                <button
-                                  onClick={() => {
-                                    setIcNumberValue(
-                                      selectedApplication.user?.icNumber || 
-                                      selectedApplication.user?.idNumber || 
-                                      ""
-                                    );
-                                    setEditingIcNumber(true);
-                                  }}
-                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
-                                  title="Edit IC Number"
-                                >
-                                  <PencilSquareIcon className="h-4 w-4" />
-                                </button>
-                              </>
-                            ) : (
-                              <div className="flex items-center gap-2 flex-1">
-                                <input
-                                  type="text"
-                                  value={icNumberValue}
-                                  onChange={(e) => setIcNumberValue(e.target.value)}
-                                  placeholder="Enter IC number"
-                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
-                                  disabled={updatingIcNumber}
-                                />
-                                <button
-                                  onClick={() => {
-                                    if (selectedApplication?.userId) {
-                                      updateUserIcNumber(selectedApplication.userId, icNumberValue);
-                                    }
-                                  }}
-                                  disabled={updatingIcNumber || !icNumberValue.trim()}
-                                  className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Save IC Number"
-                                >
-                                  {updatingIcNumber ? (
-                                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <CheckCircleIcon className="h-4 w-4" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingIcNumber(false);
-                                    setIcNumberValue("");
-                                  }}
-                                  disabled={updatingIcNumber}
-                                  className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Cancel"
-                                >
-                                  <XMarkIcon className="h-4 w-4" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Loan Details
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.amount
-                              ? formatCurrency(selectedApplication.amount)
-                              : "Amount not set"}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.term
-                              ? `${selectedApplication.term} months`
-                              : "Term not set"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Attestation Type Selection */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-300 mb-3">
-                          Attestation Type
-                        </label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div
-                            className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                              attestationType === "IMMEDIATE"
-                                ? "border-cyan-400/50 bg-cyan-500/10"
-                                : "border-gray-600 bg-gray-800/30 hover:border-gray-500"
-                            }`}
-                            onClick={() => setAttestationType("IMMEDIATE")}
-                          >
-                            <div className="flex items-center mb-2">
-                              <input
-                                type="radio"
-                                checked={attestationType === "IMMEDIATE"}
-                                onChange={() => setAttestationType("IMMEDIATE")}
-                                className="mr-2"
-                              />
-                              <h6 className="text-white font-medium">
-                                Immediate Attestation
-                              </h6>
-                            </div>
-                            <p className="text-sm text-gray-400">
-                              Customer watches video and accepts terms online
-                            </p>
-                          </div>
-                          <div
-                            className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                              attestationType === "MEETING"
-                                ? "border-cyan-400/50 bg-cyan-500/10"
-                                : "border-gray-600 bg-gray-800/30 hover:border-gray-500"
-                            }`}
-                            onClick={() => setAttestationType("MEETING")}
-                          >
-                            <div className="flex items-center mb-2">
-                              <input
-                                type="radio"
-                                checked={attestationType === "MEETING"}
-                                onChange={() => setAttestationType("MEETING")}
-                                className="mr-2"
-                              />
-                              <h6 className="text-white font-medium">
-                                Meeting with Lawyer
-                              </h6>
-                            </div>
-                            <p className="text-sm text-gray-400">
-                              Schedule meeting with legal counsel
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Immediate Attestation Form */}
-                      {attestationType === "IMMEDIATE" && (
-                        <div className="mb-6 p-4 bg-gray-800/30 rounded-lg">
-                          <h6 className="text-white font-medium mb-3">
-                            Immediate Attestation Requirements
-                          </h6>
-                          <div className="space-y-3">
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={attestationVideoWatched}
-                                onChange={(e) =>
-                                  setAttestationVideoWatched(e.target.checked)
-                                }
-                                className="mr-3"
-                              />
-                              <label className="text-gray-300">
-                                Customer has watched the loan terms video
-                              </label>
-                            </div>
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={attestationTermsAccepted}
-                                onChange={(e) =>
-                                  setAttestationTermsAccepted(e.target.checked)
-                                }
-                                className="mr-3"
-                              />
-                              <label className="text-gray-300">
-                                Customer has accepted the loan terms and
-                                conditions
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Meeting Attestation Form */}
-                      {attestationType === "MEETING" && (
-                        <div className="mb-6 p-4 bg-gray-800/30 rounded-lg">
-                          <h6 className="text-white font-medium mb-3">
-                            Meeting Attestation Details
-                          </h6>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Meeting Completion Date & Time
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={meetingCompletedAt}
-                              onChange={(e) =>
-                                setMeetingCompletedAt(e.target.value)
-                              }
-                              className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Attestation Notes */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Attestation Notes (Optional)
-                        </label>
-                        <textarea
-                          value={attestationNotes}
-                          onChange={(e) => setAttestationNotes(e.target.value)}
-                          placeholder="Add notes about the attestation process..."
-                          className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                          rows={3}
-                        />
-                      </div>
-
-                      {/* Complete Attestation Button */}
-                      <div className="flex space-x-4">
-                        <button
-                          onClick={handleAttestationCompletion}
-                          disabled={
-                            processingAttestation ||
-                            (attestationType === "IMMEDIATE" &&
-                              (!attestationVideoWatched ||
-                                !attestationTermsAccepted)) ||
-                            (attestationType === "MEETING" &&
-                              !meetingCompletedAt)
-                          }
-                          className="flex items-center px-6 py-3 bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-600/50 text-white font-medium rounded-lg transition-colors"
-                        >
-                          <CheckCircleIcon className="h-5 w-5 mr-2" />
-                          {processingAttestation
-                            ? "Processing..."
-                            : "Complete Attestation"}
-                        </button>
-                      </div>
-
-                      {/* Process Information */}
-                      <div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
-                        <h5 className="text-sm font-medium text-blue-200 mb-2">
-                          Attestation Process
-                        </h5>
-                        <ul className="text-xs text-blue-200 space-y-1">
-                          <li>
-                            • <strong>Immediate:</strong> Customer confirms they
-                            have watched the video and accepted terms
-                          </li>
-                          <li>
-                            • <strong>Meeting:</strong> Legal counsel meeting
-                            completed and terms explained
-                          </li>
-                          <li>
-                            • Application will move to PENDING_SIGNATURE status
-                            upon completion
-                          </li>
-                          <li>
-                            • All attestation details are logged in the audit
-                            trail
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Disbursement Tab */}
                 {selectedTab === "disbursement" && (
-                  <div>
-                    {/* Disbursement Section */}
-                    <div className="border border-green-500/30 rounded-lg p-6 bg-green-500/10 mb-6">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
-                        <BanknotesIcon className="h-6 w-6 mr-2 text-green-400" />
-                        Loan Disbursement
-                      </h4>
+                  <div className="space-y-6">
+                    {/* Transfer Details Card */}
+                    <div className="border border-green-500/30 rounded-xl p-6 bg-gradient-to-br from-green-500/10 to-green-600/5">
+                      <div className="flex items-center justify-between mb-6">
+                        <h4 className="text-lg font-semibold text-white flex items-center">
+                          <BanknotesIcon className="h-6 w-6 mr-2 text-green-400" />
+                          Transfer Details
+                        </h4>
+                        <span className="px-3 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full border border-green-500/30">
+                          Ready to Disburse
+                        </span>
+                      </div>
 
-                      {/* Loan Summary */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Borrower
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.user?.fullName}
+                      {/* Amount Highlight */}
+                      <div className="bg-gray-900/50 rounded-lg p-4 mb-6 text-center">
+                        <p className="text-sm text-gray-400 mb-1">Net Disbursement Amount</p>
+                        <p className="text-3xl font-bold text-green-400">
+                          {selectedApplication.netDisbursement
+                            ? formatCurrency(selectedApplication.netDisbursement)
+                            : selectedApplication.amount
+                            ? formatCurrency(selectedApplication.amount)
+                            : "Not set"}
+                        </p>
+                        {selectedApplication.netDisbursement && selectedApplication.amount && 
+                          selectedApplication.netDisbursement !== selectedApplication.amount && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Principal: {formatCurrency(selectedApplication.amount)}
                           </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.email}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.phoneNumber}
-                          </p>
+                        )}
+                      </div>
+
+                      {/* Bank Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Recipient</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.fullName || "—"}</p>
                         </div>
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Disbursement Details
-                          </h5>
-                          <p className="text-white">
-                            Disbursement Amount:{" "}
-                            {selectedApplication.netDisbursement
-                              ? formatCurrency(
-                                  selectedApplication.netDisbursement
-                                )
-                              : selectedApplication.amount
-                              ? formatCurrency(selectedApplication.amount)
-                              : "Not set"}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            Loan Amount:{" "}
-                            {selectedApplication.amount
-                              ? formatCurrency(selectedApplication.amount)
-                              : "Not set"}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            Bank:{" "}
-                            {selectedApplication.user?.bankName ||
-                              "Not provided"}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm text-gray-400">
-                              Account:{" "}
-                              {selectedApplication.user?.accountNumber ||
-                                "Not provided"}
-                            </p>
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Bank</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.bankName || "Not provided"}</p>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-4 md:col-span-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Account Number</p>
+                              <p className="text-white font-mono text-lg">{selectedApplication.user?.accountNumber || "Not provided"}</p>
+                            </div>
                             {selectedApplication.user?.accountNumber && (
                               <button
-                                onClick={() =>
-                                  navigator.clipboard.writeText(
-                                    selectedApplication.user?.accountNumber ||
-                                      ""
-                                  )
-                                }
-                                className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 rounded border border-blue-400/20"
-                                title="Copy account number"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(selectedApplication.user?.accountNumber || "");
+                                  toast.success("Account number copied to clipboard");
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-colors border border-blue-500/30"
                               >
+                                <ClipboardDocumentCheckIcon className="h-4 w-4" />
                                 Copy
                               </button>
                             )}
@@ -4210,107 +4869,87 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                         </div>
                       </div>
 
-                      {/* Reference Number */}
+                      {/* Reference Number Input */}
                       <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Bank Transfer Reference Number
+                          Bank Transfer Reference
                         </label>
-                        <div className="relative">
+                        <div className="flex gap-3">
                           <input
                             type="text"
                             value={disbursementReference}
-                            onChange={(e) =>
-                              setDisbursementReference(e.target.value)
-                            }
-                            placeholder="Enter bank transfer reference..."
-                            className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            onChange={(e) => setDisbursementReference(e.target.value)}
+                            placeholder="Enter or use auto-generated reference..."
+                            className="flex-1 px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono"
                           />
-                          <div className="mt-2 p-2 bg-blue-500/10 border border-blue-400/20 rounded text-xs text-blue-200">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <strong>Auto-generated reference:</strong>{" "}
-                                {disbursementReference}
-                                <br />
-                                <span className="text-blue-300">
-                                  Use this reference when making the bank
-                                  transfer
-                                </span>
-                              </div>
-                              {disbursementReference && (
-                                <button
-                                  onClick={() =>
-                                    navigator.clipboard.writeText(
-                                      disbursementReference
-                                    )
-                                  }
-                                  className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/20 rounded border border-blue-400/30 ml-2"
-                                  title="Copy reference number"
-                                >
-                                  Copy Ref
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                          <button
+                            onClick={() => {
+                              if (disbursementReference) {
+                                navigator.clipboard.writeText(disbursementReference);
+                                toast.success("Reference number copied to clipboard");
+                              }
+                            }}
+                            disabled={!disbursementReference}
+                            className="px-4 py-3 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg transition-colors"
+                            title="Copy reference"
+                          >
+                            <ClipboardDocumentCheckIcon className="h-5 w-5" />
+                          </button>
                         </div>
-                      </div>
-
-                      {/* Disbursement Notes */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Disbursement Notes (Optional)
-                        </label>
-                        <textarea
-                          value={disbursementNotes}
-                          onChange={(e) => setDisbursementNotes(e.target.value)}
-                          placeholder="Add notes about the disbursement..."
-                          className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          rows={3}
-                        />
-                      </div>
-
-                      {/* Disbursement Button */}
-                      <div className="flex space-x-4">
-                        <button
-                          onClick={handleDisbursement}
-                          disabled={
-                            processingDisbursement ||
-                            !disbursementReference.trim()
-                          }
-                          className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
-                        >
-                          <BanknotesIcon className="h-5 w-5 mr-2" />
-                          {processingDisbursement
-                            ? "Processing..."
-                            : "Disburse Loan"}
-                        </button>
-                        {!disbursementReference.trim() && (
-                          <p className="text-sm text-red-400 flex items-center">
-                            Reference number is required
+                        {disbursementReference && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Use this reference when making the bank transfer
                           </p>
                         )}
                       </div>
 
-                      {/* Process Information */}
-                      <div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
-                        <h5 className="text-sm font-medium text-blue-200 mb-2">
-                          Disbursement Process
-                        </h5>
-                        <ul className="text-xs text-blue-200 space-y-1">
-                          <li>
-                            • Funds will be transferred to the borrower's
-                            registered bank account
-                          </li>
-                          <li>
-                            • Loan status will change to ACTIVE upon successful
-                            disbursement
-                          </li>
-                          <li>
-                            • Borrower will receive SMS and email notifications
-                          </li>
-                          <li>
-                            • Repayment schedule will be automatically generated
-                          </li>
-                        </ul>
+                      {/* Notes (Collapsible feel - smaller) */}
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Notes <span className="text-gray-500 font-normal">(Optional)</span>
+                        </label>
+                        <textarea
+                          value={disbursementNotes}
+                          onChange={(e) => setDisbursementNotes(e.target.value)}
+                          placeholder="Add any notes about this disbursement..."
+                          className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                          rows={2}
+                        />
+                      </div>
+
+                      {/* Disburse Button */}
+                      <button
+                        onClick={handleDisbursement}
+                        disabled={processingDisbursement || !disbursementReference.trim()}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/30 disabled:shadow-none"
+                      >
+                        {processingDisbursement ? (
+                          <>
+                            <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                            Processing Disbursement...
+                          </>
+                        ) : (
+                          <>
+                            <BanknotesIcon className="h-5 w-5" />
+                            Disburse Loan
+                          </>
+                        )}
+                      </button>
+                      {!disbursementReference.trim() && (
+                        <p className="text-xs text-center text-amber-400 mt-2">
+                          Enter a reference number to enable disbursement
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Info Card */}
+                    <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                      <div className="flex items-start gap-3">
+                        <InformationCircleIcon className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-gray-400 space-y-1">
+                          <p>After disbursement, the loan becomes <span className="text-green-400 font-medium">ACTIVE</span> and repayment schedule is generated automatically.</p>
+                          <p>You can upload the payment slip from the <span className="text-blue-400">Loans</span> page after completing the bank transfer.</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4463,7 +5102,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   "Error downloading signed agreement:",
                                   error
                                 );
-                                alert("Failed to download signed agreement");
+                                toast.error("Failed to download signed agreement");
                               }
                             }}
                             className="flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
@@ -4510,7 +5149,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                     "Error downloading stamp certificate:",
                                     error
                                   );
-                                  alert("Failed to download stamp certificate");
+                                  toast.error("Failed to download stamp certificate");
                                 }
                               }}
                               className="flex items-center justify-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
@@ -4564,14 +5203,18 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                               </p>
                               <button
                                 onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      "Are you sure you want to replace the existing stamp certificate? The current certificate will be overwritten."
-                                    )
-                                  ) {
-                                    setReplacingStampCertificate(true);
-                                    setStampCertificateFile(null);
-                                  }
+                                  showConfirmModal({
+                                    title: "Replace Certificate",
+                                    message: "Are you sure you want to replace the existing stamp certificate?",
+                                    details: ["The current certificate will be overwritten."],
+                                    confirmText: "Replace Certificate",
+                                    confirmColor: "amber",
+                                    onConfirm: () => {
+                                      closeConfirmModal();
+                                      setReplacingStampCertificate(true);
+                                      setStampCertificateFile(null);
+                                    },
+                                  });
                                 }}
                                 className="text-xs px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md transition-colors"
                               >
@@ -4604,7 +5247,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                           <button
                             onClick={async () => {
                               if (!stampCertificateFile) {
-                                alert("Please select a stamp certificate file");
+                                toast.warning("Please select a stamp certificate file");
                                 return;
                               }
 
@@ -4619,7 +5262,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 const loanId = selectedApplication.loan?.id;
 
                                 if (!loanId) {
-                                  alert(
+                                  toast.error(
                                     "Missing loan ID. Please refresh and ensure the application has a linked loan."
                                   );
                                   return;
@@ -4680,15 +5323,15 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                 await fetchApplications();
 
                                 const message = replacingStampCertificate
-                                  ? 'Stamp certificate replaced successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.'
-                                  : 'Stamp certificate uploaded successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.';
-                                alert(message);
+                                  ? 'Stamp certificate replaced! Click "Confirm Stamping & Proceed to Disbursement" to continue.'
+                                  : 'Stamp certificate uploaded! Click "Confirm Stamping & Proceed to Disbursement" to continue.';
+                                toast.success(message);
                               } catch (error) {
                                 console.error(
                                   "Error uploading stamp certificate:",
                                   error
                                 );
-                                alert(
+                                toast.error(
                                   `Failed to upload stamp certificate: ${
                                     error instanceof Error
                                       ? error.message
@@ -4718,61 +5361,81 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                         !replacingStampCertificate && (
                           <div className="flex space-x-4">
                             <button
-                              onClick={async () => {
-                                const confirmMessage = `Are you sure you want to confirm stamping for ${selectedApplication.user?.fullName}?\n\nThis will move the application to PENDING_DISBURSEMENT status and allow loan disbursement.`;
+                              onClick={() => {
+                                showConfirmModal({
+                                  title: "Confirm Stamping",
+                                  message: `Are you sure you want to confirm stamping for this application?`,
+                                  details: [
+                                    `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+                                    "This will move the application to PENDING_DISBURSEMENT status",
+                                    "Loan disbursement will be enabled after confirmation",
+                                  ],
+                                  confirmText: "Confirm Stamping",
+                                  confirmColor: "green",
+                                  onConfirm: async () => {
+                                    closeConfirmModal();
+                                    setConfirmingStamping(true);
+                                    try {
+                                      const response = await fetch(
+                                        `/api/admin/applications/${selectedApplication.id}/confirm-stamping`,
+                                        {
+                                          method: "POST",
+                                          headers: {
+                                            Authorization: `Bearer ${localStorage.getItem(
+                                              "adminToken"
+                                            )}`,
+                                            "Content-Type": "application/json",
+                                          },
+                                        }
+                                      );
 
-                                if (!window.confirm(confirmMessage)) {
-                                  return;
-                                }
+                                      const data = await response.json();
 
-                                setConfirmingStamping(true);
-                                try {
+                                      if (!response.ok) {
+                                        throw new Error(
+                                          data.message || "Confirmation failed"
+                                        );
+                                      }
 
-                                  const response = await fetch(
-                                    `/api/admin/applications/${selectedApplication.id}/confirm-stamping`,
-                                    {
-                                      method: "POST",
-                                      headers: {
-                                        Authorization: `Bearer ${localStorage.getItem(
-                                          "adminToken"
-                                        )}`,
-                                        "Content-Type": "application/json",
-                                      },
+                                      toast.success(
+                                        "Stamping confirmed! Application moved to PENDING_DISBURSEMENT."
+                                      );
+
+                                      // Update selected application status to trigger disbursement reference generation
+                                      const updatedApp = {
+                                        ...selectedApplication,
+                                        status: "PENDING_DISBURSEMENT",
+                                      };
+                                      setSelectedApplication(updatedApp as any);
+
+                                      // Generate disbursement reference immediately
+                                      const reference = `DISB-${selectedApplication.id
+                                        .slice(-8)
+                                        .toUpperCase()}-${Date.now().toString().slice(-6)}`;
+                                      setDisbursementReference(reference);
+
+                                      // Refresh application data
+                                      await fetchApplications();
+                                      setSelectedTab("disbursement");
+                                      setSelectedFilters(["PENDING_DISBURSEMENT"]);
+                                      router.push("/dashboard/applications?filter=pending-disbursement");
+                                    } catch (error) {
+                                      console.error(
+                                        "❌ Error confirming stamping:",
+                                        error
+                                      );
+                                      toast.error(
+                                        `Failed to confirm stamping: ${
+                                          error instanceof Error
+                                            ? error.message
+                                            : "Unknown error"
+                                        }`
+                                      );
+                                    } finally {
+                                      setConfirmingStamping(false);
                                     }
-                                  );
-
-                                  const data = await response.json();
-
-                                  if (!response.ok) {
-                                    throw new Error(
-                                      data.message || "Confirmation failed"
-                                    );
-                                  }
-
-                                  alert(
-                                    "Stamping confirmed! Application moved to PENDING_DISBURSEMENT."
-                                  );
-
-                                  // Refresh application data
-                                  await fetchApplications();
-								  setSelectedTab("disbursement");
-								  setSelectedFilters(["PENDING_DISBURSEMENT"]);
-								  router.push("/dashboard/applications?filter=pending-disbursement");
-                                } catch (error) {
-                                  console.error(
-                                    "❌ Error confirming stamping:",
-                                    error
-                                  );
-                                  alert(
-                                    `Failed to confirm stamping: ${
-                                      error instanceof Error
-                                        ? error.message
-                                        : "Unknown error"
-                                    }`
-                                  );
-                                } finally {
-                                  setConfirmingStamping(false);
-                                }
+                                  },
+                                });
                               }}
                               disabled={confirmingStamping}
                               className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
@@ -4941,6 +5604,91 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       </div>
 
       {/* PIN signing now handled in separate admin PKI page */}
+
+      {/* Actions Tab Warning Modal */}
+      {showActionsWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowActionsWarningModal(false)}
+          />
+          {/* Modal */}
+          <div className="relative bg-gray-900 border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Warning Header */}
+            <div className="bg-red-500/20 border-b border-red-500/30 px-6 py-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 bg-red-500/20 rounded-full p-2">
+                  <ExclamationTriangleIcon className="h-6 w-6 text-red-400" />
+                </div>
+                <h3 className="ml-3 text-lg font-semibold text-red-400">
+                  Warning: Developer Actions
+                </h3>
+              </div>
+            </div>
+            {/* Content */}
+            <div className="px-6 py-5">
+              <div className="space-y-4">
+                <p className="text-gray-300">
+                  This tab contains <span className="font-semibold text-red-400">dangerous actions</span> that can break compliance and audit trails.
+                </p>
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                  <ul className="text-sm text-red-300 space-y-2">
+                    <li className="flex items-start">
+                      <XCircleIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Manual status changes bypass normal workflow validations</span>
+                    </li>
+                    <li className="flex items-start">
+                      <XCircleIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Actions here may not trigger required notifications</span>
+                    </li>
+                    <li className="flex items-start">
+                      <XCircleIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Audit records may be incomplete or inconsistent</span>
+                    </li>
+                  </ul>
+                </div>
+                <p className="text-sm text-gray-400 italic">
+                  This tab is intended for <span className="font-medium text-gray-300">testing and development purposes only</span>. 
+                  Do not use unless absolutely necessary.
+                </p>
+              </div>
+            </div>
+            {/* Actions */}
+            <div className="bg-gray-800/50 border-t border-gray-700/50 px-6 py-4 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowActionsWarningModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-700 border border-gray-600/50 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowActionsTab(true);
+                  setShowActionsWarningModal(false);
+                  setSelectedTab("actions");
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 border border-red-500 rounded-lg transition-colors flex items-center"
+              >
+                <ExclamationTriangleIcon className="h-4 w-4 mr-1.5" />
+                I Understand, Show Actions
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        open={confirmModal.open}
+        onClose={closeConfirmModal}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        details={confirmModal.details}
+        confirmText={confirmModal.confirmText}
+        confirmColor={confirmModal.confirmColor}
+      />
     </AdminLayout>
   );
 }

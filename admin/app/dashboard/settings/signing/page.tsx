@@ -1,20 +1,50 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../../components/AdminLayout';
-import { 
-  ShieldCheckIcon, 
-  DocumentTextIcon, 
-  ExclamationTriangleIcon,
-  CheckCircleIcon,
-  ArrowRightIcon,
-  UserIcon,
-  ClockIcon,
-  XCircleIcon
-} from '@heroicons/react/24/outline';
 import { fetchWithAdminTokenRefresh } from '../../../../lib/authUtils';
+import { toast } from 'sonner';
 
+// Shadcn UI Components
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+// Lucide Icons
+import {
+  ShieldCheck,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight,
+  User,
+  Clock,
+  XCircle,
+  Pencil,
+  X,
+  RefreshCw,
+  Plus,
+  Search,
+  KeyRound,
+  Loader2,
+  Users,
+} from 'lucide-react';
+
+// Types
 interface AdminUser {
   id: string;
   fullName: string;
@@ -27,8 +57,16 @@ interface AdminUser {
 interface CertificateStatus {
   hasValidCert: boolean;
   message: string;
-  certificateData?: any;
-  nextStep: 'kyc' | 'certificate' | 'enrollment' | 'complete';
+  certificateData?: {
+    certStatus: string;
+    certSerialNo: string;
+    validFrom: string;
+    validTo: string;
+    subject?: string; // Subject DN from certificate
+  };
+  nextStep: 'kyc' | 'certificate' | 'enrollment' | 'complete' | 'verify-type';
+  isExternalCert?: boolean; // True if user has external cert (needs internal enrollment)
+  isInternalCert?: boolean; // True if cert has EMP- serial (internal user)
 }
 
 interface KycSession {
@@ -49,19 +87,56 @@ interface OrganisationInfo {
   orgAddressState: string;
   orgAddressPostcode: string;
   orgAddressCountry: string;
-  orgRegistationNo: string; // Note: keeping the typo as per MTSA API
+  orgRegistationNo: string;
   orgRegistationType: 'NTRMY' | 'IRB' | 'RMC' | 'CIDB' | 'BAM' | 'GOV' | 'GOVSUB' | 'INT' | 'LEI';
   orgPhoneNo: string;
   orgFaxNo?: string;
 }
 
+interface InternalSigner {
+  id: string;
+  icNumber: string;
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  signerRole: string;
+  certSerialNo?: string;
+  certStatus?: string;
+  certValidFrom?: string;
+  certValidTo?: string;
+  lastCertCheck?: string;
+  status: string;
+  pinVerifiedAt?: string;
+  enrolledAt?: string;
+  enrolledBy?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// Helper function to get status badge variant
+function getStatusBadgeVariant(status: string): "default" | "success" | "warning" | "destructive" | "info" {
+  switch (status) {
+    case 'VERIFIED': return 'success';
+    case 'PENDING': return 'warning';
+    case 'EXPIRED': return 'destructive';
+    case 'REVOKED': return 'destructive';
+    case 'INACTIVE': return 'default';
+    default: return 'default';
+  }
+}
+
 export default function AdminSigningSettingsPage() {
-  const router = useRouter();
-  
   // User and certificate state
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('my-certificate');
+  
+  // Profile editing
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editFullName, setEditFullName] = useState('');
+  const [editIcNumber, setEditIcNumber] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
   
   // Certificate check state
   const [certificateStatus, setCertificateStatus] = useState<CertificateStatus | null>(null);
@@ -77,7 +152,6 @@ export default function AdminSigningSettingsPage() {
   const [kycInProgress, setKycInProgress] = useState(false);
   const [kycCompleted, setKycCompleted] = useState(false);
   const [ctosOnboardingUrl, setCtosOnboardingUrl] = useState<string | null>(null);
-  const [pollingKycId, setPollingKycId] = useState<string | null>(null);
   
   // PIN and Organisation state
   const [showPinStep, setShowPinStep] = useState(false);
@@ -100,17 +174,25 @@ export default function AdminSigningSettingsPage() {
   });
   const [submittingCertificate, setSubmittingCertificate] = useState(false);
 
+  // Dialog states
+  const [showVerifyPinDialog, setShowVerifyPinDialog] = useState(false);
+  const [showResetPinDialog, setShowResetPinDialog] = useState(false);
+  const [showRevokeDialog, setShowRevokeDialog] = useState(false);
+  const [showAddSignerDialog, setShowAddSignerDialog] = useState(false);
+  const [showSignerPinDialog, setShowSignerPinDialog] = useState(false);
+
   // PIN verification state
-  const [showPinVerification, setShowPinVerification] = useState(false);
   const [verificationPin, setVerificationPin] = useState('');
   const [verifyingPin, setVerifyingPin] = useState(false);
-  const [pinVerificationResult, setPinVerificationResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const [pinVerificationResult, setPinVerificationResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // PIN reset state
+  const [newPin, setNewPin] = useState('');
+  const [confirmNewPin, setConfirmNewPin] = useState('');
+  const [resettingPin, setResettingPin] = useState(false);
+  const [pinResetResult, setPinResetResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Revoke certificate state
-  const [showRevokeForm, setShowRevokeForm] = useState(false);
   const [revokeReason, setRevokeReason] = useState('keyCompromise');
   const [revokeBy, setRevokeBy] = useState('Self');
   const [revokeOtp, setRevokeOtp] = useState('');
@@ -118,18 +200,41 @@ export default function AdminSigningSettingsPage() {
   const [requestingOtp, setRequestingOtp] = useState(false);
   const [revokingCertificate, setRevokingCertificate] = useState(false);
 
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
+  // Internal Signers state
+  const [internalSigners, setInternalSigners] = useState<InternalSigner[]>([]);
+  const [loadingSigners, setLoadingSigners] = useState(false);
+  const [refreshingSigners, setRefreshingSigners] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [roleFilter, setRoleFilter] = useState<string>('');
 
+  // Add signer state
+  const [lookupIcNumber, setLookupIcNumber] = useState('');
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupResult, setLookupResult] = useState<{
+    userInfo?: { fullName: string; email: string; phoneNumber: string };
+    certificateInfo?: { certStatus: string; certSerialNo: string; certValidFrom: string; certValidTo: string; subject?: string; isInternalCert?: boolean };
+    hasCertificate: boolean;
+    alreadyExists: boolean;
+    isInternalCert?: boolean;
+  } | null>(null);
+  const [newSignerName, setNewSignerName] = useState('');
+  const [newSignerEmail, setNewSignerEmail] = useState('');
+  const [newSignerRole, setNewSignerRole] = useState('ATTESTOR');
+  const [addingSigner, setAddingSigner] = useState(false);
 
-  const fetchCurrentUser = async () => {
+  // Signer PIN verification
+  const [selectedSigner, setSelectedSigner] = useState<InternalSigner | null>(null);
+  const [signerPin, setSignerPin] = useState('');
+  const [verifyingSignerPin, setVerifyingSignerPin] = useState(false);
+
+  const fetchCurrentUser = useCallback(async () => {
     try {
       setLoading(true);
       const userData = await fetchWithAdminTokenRefresh<AdminUser>('/api/admin/me');
       setCurrentUser(userData);
+      setEditFullName(userData.fullName || '');
+      setEditIcNumber(userData.icNumber || '');
       
-      // Auto-start certificate check if IC number exists
       if (userData.icNumber) {
         await checkCertificate(userData.icNumber);
       } else {
@@ -140,29 +245,80 @@ export default function AdminSigningSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const fetchInternalSigners = useCallback(async () => {
+    try {
+      setLoadingSigners(true);
+      let url = '/api/admin/internal-signers';
+      const params = new URLSearchParams();
+      if (statusFilter) params.append('status', statusFilter);
+      if (roleFilter) params.append('signerRole', roleFilter);
+      if (params.toString()) url += `?${params.toString()}`;
+      
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; data: InternalSigner[] }>(url);
+      if (response.success) {
+        setInternalSigners(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching internal signers:', err);
+    } finally {
+      setLoadingSigners(false);
+    }
+  }, [statusFilter, roleFilter]);
+
+  useEffect(() => {
+    fetchCurrentUser();
+  }, [fetchCurrentUser]);
+
+  useEffect(() => {
+    if (activeTab === 'internal-signers') {
+      fetchInternalSigners();
+    }
+  }, [activeTab, fetchInternalSigners]);
 
   const checkCertificate = async (userId: string) => {
     try {
       setCheckingCertificate(true);
       setError(null);
       
-      const response = await fetchWithAdminTokenRefresh<any>(
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; data?: { certStatus: string; certSerialNo: string; validFrom: string; validTo: string; subject?: string } }>(
         `/api/admin/mtsa/cert-info/${userId}`
       );
       
       if (response.success && response.data?.certStatus === 'Valid') {
-        setCertificateStatus({
-          hasValidCert: true,
-          message: 'You have a valid digital certificate for signing documents.',
-          certificateData: response.data,
-          nextStep: 'complete'
-        });
-      } else {
-        // Check if user already has approved KYC before showing KYC step
+        // Check if it's an internal certificate by looking for EMP- in the subject SERIALNUMBER
+        // Internal certs have: SERIALNUMBER=EMP-00001
+        // External certs have: SERIALNUMBER=<IC_NUMBER>
+        const subject = response.data.subject || '';
+        const serialNumberMatch = subject.match(/SERIALNUMBER=([^,]+)/);
+        const certSerialNumber = serialNumberMatch ? serialNumberMatch[1] : '';
+        const isInternalCert = certSerialNumber.startsWith('EMP-');
         
+        if (isInternalCert) {
+          // Internal certificate detected - go straight to complete state with management options
+          setCertificateStatus({
+            hasValidCert: true,
+            message: 'You have a valid internal signing certificate.',
+            certificateData: response.data,
+            nextStep: 'complete',
+            isInternalCert: true,
+            isExternalCert: false
+          });
+        } else {
+          // External certificate (or unknown) - user needs to enroll as internal
+          setCertificateStatus({
+            hasValidCert: true,
+            message: 'You have an external (borrower) certificate. To sign as an internal user, you need to enroll for an internal certificate with PIN authentication.',
+            certificateData: response.data,
+            nextStep: 'kyc',
+            isInternalCert: false,
+            isExternalCert: true
+          });
+        }
+      } else {
         try {
-          const kycStatusResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/status');
+          const kycStatusResponse = await fetchWithAdminTokenRefresh<{ success: boolean; isAlreadyApproved?: boolean }>('/api/admin/kyc/status');
           
           if (kycStatusResponse.success && kycStatusResponse.isAlreadyApproved) {
             setCertificateStatus({
@@ -178,8 +334,7 @@ export default function AdminSigningSettingsPage() {
               nextStep: 'kyc'
             });
           }
-        } catch (kycError) {
-          console.error('KYC status check error:', kycError);
+        } catch {
           setCertificateStatus({
             hasValidCert: false,
             message: 'No valid digital certificate found. You need to complete KYC verification and certificate enrollment.',
@@ -199,15 +354,50 @@ export default function AdminSigningSettingsPage() {
     }
   };
 
-  const updateIcNumber = async () => {
-    if (!icNumber.trim()) {
-      setError('Please enter your IC number');
+  const handleSaveProfile = async () => {
+    if (!editFullName.trim()) {
+      setError('Name is required');
+      return;
+    }
+    if (editIcNumber && !/^\d{12}$/.test(editIcNumber)) {
+      setError('IC number must be 12 digits');
       return;
     }
 
-    // Validate IC number format (Malaysian IC: 12 digits)
-    const icPattern = /^\d{12}$/;
-    if (!icPattern.test(icNumber)) {
+    try {
+      setSavingProfile(true);
+      setError(null);
+
+      await fetchWithAdminTokenRefresh('/api/admin/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: editFullName.trim(),
+          icNumber: editIcNumber.trim() || undefined,
+        }),
+      });
+
+      setCurrentUser(prev => prev ? {
+        ...prev,
+        fullName: editFullName.trim(),
+        icNumber: editIcNumber.trim() || prev.icNumber,
+      } : null);
+
+      setIsEditingProfile(false);
+      toast.success('Profile updated successfully');
+      
+      if (editIcNumber && editIcNumber !== currentUser?.icNumber) {
+        await checkCertificate(editIcNumber);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const updateIcNumber = async () => {
+    if (!icNumber.trim() || !/^\d{12}$/.test(icNumber)) {
       setError('Please enter a valid IC number (12 digits)');
       return;
     }
@@ -216,29 +406,16 @@ export default function AdminSigningSettingsPage() {
       setUpdatingIc(true);
       setError(null);
 
-      // Update admin user IC number
       await fetchWithAdminTokenRefresh('/api/admin/me', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          icNumber: icNumber.trim(),
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ icNumber: icNumber.trim() }),
       });
 
-      // Update current user state
-      if (currentUser) {
-        setCurrentUser({
-          ...currentUser,
-          icNumber: icNumber.trim(),
-        });
-      }
-
-      // Hide IC input and start certificate check
+      setCurrentUser(prev => prev ? { ...prev, icNumber: icNumber.trim() } : null);
       setShowIcInput(false);
+      toast.success('IC number updated successfully');
       await checkCertificate(icNumber.trim());
-
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update IC number');
     } finally {
@@ -256,7 +433,7 @@ export default function AdminSigningSettingsPage() {
       setKycInProgress(true);
       setError(null);
 
-      const kycStatusResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/status');
+      const kycStatusResponse = await fetchWithAdminTokenRefresh<{ success: boolean; isAlreadyApproved?: boolean }>('/api/admin/kyc/status');
       
       if (kycStatusResponse.success && kycStatusResponse.isAlreadyApproved) {
         setKycCompleted(true);
@@ -269,11 +446,9 @@ export default function AdminSigningSettingsPage() {
         return;
       }
       
-      const response = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/start-ctos', {
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; kycId: string; onboardingUrl: string; onboardingId: string; message?: string }>('/api/admin/kyc/start-ctos', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documentName: currentUser.fullName,
           documentNumber: currentUser.icNumber,
@@ -281,31 +456,15 @@ export default function AdminSigningSettingsPage() {
         }),
       });
 
-      if (response.success) {
-        const kycData = {
-          id: response.kycId,
-          ctosOnboardingUrl: response.onboardingUrl,
-          ctosOnboardingId: response.onboardingId,
-          status: 'IN_PROGRESS'
-        };
-        
-        setKycSession(kycData);
-        
-        if (response.onboardingUrl) {
-          setCtosOnboardingUrl(response.onboardingUrl);
-          setPollingKycId(response.kycId);
-          
-          // Open CTOS eKYC in new tab
-          window.open(response.onboardingUrl, '_blank');
-          
-          // Start polling for status updates
-          startKycStatusPolling(response.kycId);
-        }
+      if (response.success && response.onboardingUrl) {
+        setKycSession({ id: response.kycId, status: 'IN_PROGRESS', ctosOnboardingUrl: response.onboardingUrl });
+        setCtosOnboardingUrl(response.onboardingUrl);
+        window.open(response.onboardingUrl, '_blank');
+        startKycStatusPolling(response.kycId);
       } else {
         throw new Error(response.message || 'Failed to start KYC verification');
       }
     } catch (err) {
-      console.error('KYC start error:', err);
       setError(err instanceof Error ? err.message : 'Failed to start KYC verification');
     } finally {
       setKycInProgress(false);
@@ -313,19 +472,13 @@ export default function AdminSigningSettingsPage() {
   };
 
   const startKycStatusPolling = (kycId: string) => {
-    const pollStatus = async () => {
+    const pollInterval = setInterval(async () => {
       try {
-        const statusResponse = await fetchWithAdminTokenRefresh<any>(
-          `/api/admin/kyc/status/${kycId}`
-        );
-
+        const statusResponse = await fetchWithAdminTokenRefresh<{ success: boolean; data?: KycSession }>(`/api/admin/kyc/status/${kycId}`);
         if (statusResponse.success && statusResponse.data) {
-          const kycData = statusResponse.data;
-          setKycSession(kycData);
-
-          if (kycData.ctosStatus === 2) { // Completed
+          setKycSession(statusResponse.data);
+          if (statusResponse.data.ctosStatus === 2) {
             setKycCompleted(true);
-            setKycInProgress(false);
             setCtosOnboardingUrl(null);
             clearInterval(pollInterval);
           }
@@ -333,82 +486,49 @@ export default function AdminSigningSettingsPage() {
       } catch (err) {
         console.error('KYC status polling error:', err);
       }
-    };
-
-    const pollInterval = setInterval(pollStatus, 3000);
+    }, 3000);
     
-    // Clean up after 30 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval);
-      setCtosOnboardingUrl(null);
-      setPollingKycId(null);
-    }, 30 * 60 * 1000);
+    setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
   };
 
   const handleAcceptKyc = async () => {
-    if (!kycSession || (kycSession.ctosResult !== 1)) {
+    if (!kycSession || kycSession.ctosResult !== 1) {
       setError('KYC verification not approved');
       return;
     }
-
-    // Proceed to PIN and organisation step
     setShowPinStep(true);
     setKycCompleted(false);
   };
 
   const validatePin = () => {
-    if (!pin || pin.length !== 8) {
+    if (!pin || !/^\d{8}$/.test(pin)) {
       setError('Please enter an 8-digit PIN');
       return false;
     }
-
-    if (!/^\d{8}$/.test(pin)) {
-      setError('PIN must contain only numbers');
-      return false;
-    }
-
     if (pin !== confirmPin) {
       setError('PINs do not match');
       return false;
     }
-
     return true;
   };
 
   const validateOrganisationInfo = () => {
-    const required = [
-      'orgName', 'orgUserDesignation', 'orgUserRegistrationNo', 
-      'orgAddress', 'orgAddressCity', 'orgAddressState', 
-      'orgAddressPostcode', 'orgRegistationNo', 'orgPhoneNo'
-    ];
-
+    const required = ['orgName', 'orgUserDesignation', 'orgUserRegistrationNo', 'orgAddress', 'orgAddressCity', 'orgAddressState', 'orgAddressPostcode', 'orgRegistationNo', 'orgPhoneNo'];
     for (const field of required) {
       if (!organisationInfo[field as keyof OrganisationInfo]) {
         setError(`Please fill in ${field.replace('org', '').replace(/([A-Z])/g, ' $1').toLowerCase().trim()}`);
         return false;
       }
     }
-
-    // Validate postcode
     if (!/^\d{5}$/.test(organisationInfo.orgAddressPostcode)) {
       setError('Postcode must be 5 digits');
       return false;
     }
-
-    // Validate phone number format
-    if (!/^\+?[\d\s-()]+$/.test(organisationInfo.orgPhoneNo)) {
-      setError('Please enter a valid phone number');
-      return false;
-    }
-
     return true;
   };
 
   const handleCertificateEnrollment = async () => {
-    if (!validatePin() || !validateOrganisationInfo()) {
-      return;
-    }
-
+    if (!validatePin() || !validateOrganisationInfo()) return;
     if (!currentUser?.icNumber) {
       setError('IC number is required for certificate enrollment');
       return;
@@ -418,41 +538,30 @@ export default function AdminSigningSettingsPage() {
       setSubmittingCertificate(true);
       setError(null);
 
-      // Get KYC images
-      const kycResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/images');
-
-      if (!kycResponse.images) {
+      const kycResponse = await fetchWithAdminTokenRefresh<{ images?: { front?: { url: string }; back?: { url: string }; selfie?: { url: string } } }>('/api/admin/kyc/images');
+      if (!kycResponse.images?.front?.url || !kycResponse.images?.back?.url || !kycResponse.images?.selfie?.url) {
         throw new Error('KYC documents not found. Please complete KYC verification first.');
       }
 
-      const { front, back, selfie } = kycResponse.images;
-      
-      if (!front?.url || !back?.url || !selfie?.url) {
-        throw new Error('Required KYC documents not found. Please complete KYC verification first.');
-      }
-
-      // Request certificate with userType = 2 for internal users
-      const certificateResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/request-certificate', {
+      const certificateResponse = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/mtsa/request-certificate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser.icNumber,
           fullName: currentUser.fullName,
           emailAddress: currentUser.email,
           mobileNo: currentUser.phoneNumber,
           nationality: 'MY',
-          userType: '2', // Internal user type
+          userType: '2',
           idType: 'N',
-          authFactor: pin, // Use PIN instead of OTP
-          nricFrontUrl: front.url,
-          nricBackUrl: back.url,
-          selfieImageUrl: selfie.url,
-          organisationInfo, // Add organisation info for internal users
+          authFactor: pin,
+          nricFrontUrl: kycResponse.images.front.url,
+          nricBackUrl: kycResponse.images.back.url,
+          selfieImageUrl: kycResponse.images.selfie.url,
+          organisationInfo,
           verificationData: {
             verifyStatus: 'Approved',
-            verifyDatetime: new Date().toISOString().replace('T', ' ').substring(0, 19), // Format: yyyy-MM-dd HH:mm:ss
+            verifyDatetime: new Date().toISOString().replace('T', ' ').substring(0, 19),
             verifyVerifier: 'CTOS',
             verifyMethod: 'e-KYC'
           },
@@ -460,79 +569,38 @@ export default function AdminSigningSettingsPage() {
       });
 
       if (certificateResponse.success) {
-        // Success - refresh certificate status
         await checkCertificate(currentUser.icNumber);
         setShowPinStep(false);
         setPin('');
         setConfirmPin('');
+        toast.success('Certificate enrolled successfully');
       } else {
         throw new Error(certificateResponse.message || 'Certificate enrollment failed');
       }
     } catch (err) {
-      console.error('Certificate enrollment error:', err);
       setError(err instanceof Error ? err.message : 'Failed to enroll certificate');
     } finally {
       setSubmittingCertificate(false);
     }
   };
 
-  const handleRequestOtpForRevoke = async () => {
-    if (!currentUser?.email) {
-      setError('Email address is required for OTP');
-      return;
-    }
-
-    try {
-      setRequestingOtp(true);
-      setError(null);
-
-      const response = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/request-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: currentUser.icNumber,
-          usage: 'DS', // Digital Signing usage
-          emailAddress: currentUser.email,
-        }),
-      });
-
-      if (response.success) {
-        setOtpRequested(true);
-      } else {
-        throw new Error(response.message || 'Failed to request OTP');
-      }
-    } catch (err) {
-      console.error('OTP request error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to request OTP');
-    } finally {
-      setRequestingOtp(false);
-    }
-  };
-
   const handleVerifyPin = async () => {
     if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
-      setError('User IC number and certificate serial number are required');
+      setError('Certificate information is required');
       return;
     }
-
-    if (!verificationPin || verificationPin.length !== 8) {
+    if (!/^\d{8}$/.test(verificationPin)) {
       setError('Please enter a valid 8-digit PIN');
       return;
     }
 
     try {
       setVerifyingPin(true);
-      setError(null);
       setPinVerificationResult(null);
 
-
-      const response = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/verify-cert-pin', {
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/mtsa/verify-cert-pin', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser.icNumber,
           certSerialNo: certificateStatus.certificateData.certSerialNo,
@@ -540,35 +608,150 @@ export default function AdminSigningSettingsPage() {
         }),
       });
 
-
       setPinVerificationResult({
         success: response.success,
-        message: response.message || (response.success ? 'PIN verified successfully' : 'PIN verification failed')
+        message: response.success ? 'PIN verified successfully!' : (response.message || 'PIN verification failed')
       });
-
-      if (response.success) {
-        // Clear PIN after successful verification
-        setVerificationPin('');
-      }
+      if (response.success) setVerificationPin('');
     } catch (err) {
-      console.error('PIN verification error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to verify PIN');
-      setPinVerificationResult({
-        success: false,
-        message: 'Failed to verify PIN'
-      });
+      setPinVerificationResult({ success: false, message: 'Failed to verify PIN' });
     } finally {
       setVerifyingPin(false);
     }
   };
 
-  const handleRevokeCertificate = async () => {
+  // Verify if certificate is internal (has PIN) or external (uses OTP)
+  const handleVerifyCertificateType = async () => {
     if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
-      setError('User IC number and certificate serial number are required');
+      setError('Certificate information is required');
+      return;
+    }
+    if (!/^\d{8}$/.test(verificationPin)) {
+      setError('Please enter a valid 8-digit PIN');
       return;
     }
 
-    if (!revokeOtp || revokeOtp.length !== 6) {
+    try {
+      setVerifyingPin(true);
+      setError(null);
+
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/mtsa/verify-cert-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.icNumber,
+          certSerialNo: certificateStatus.certificateData.certSerialNo,
+          certPin: verificationPin,
+        }),
+      });
+
+      if (response.success) {
+        // PIN verified - this is an internal certificate, mark as complete
+        setCertificateStatus({
+          ...certificateStatus,
+          message: 'You have a valid internal signing certificate.',
+          nextStep: 'complete',
+          isExternalCert: false
+        });
+        setVerificationPin('');
+      } else {
+        // PIN failed - this is likely an external certificate
+        setCertificateStatus({
+          ...certificateStatus,
+          message: 'Your existing certificate is an external (borrower) certificate that uses email OTP. To sign as an internal user (admin/attestor/witness), you need to enroll for an internal certificate with PIN authentication.',
+          nextStep: 'kyc',
+          isExternalCert: true
+        });
+        setVerificationPin('');
+      }
+    } catch (err) {
+      // Error could mean external cert or connection issue
+      setCertificateStatus({
+        ...certificateStatus,
+        message: 'Could not verify PIN. If you have an external certificate, you need to enroll for an internal certificate.',
+        nextStep: 'kyc',
+        isExternalCert: true
+      });
+      setVerificationPin('');
+    } finally {
+      setVerifyingPin(false);
+    }
+  };
+
+  const handleResetPin = async () => {
+    if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
+      setError('Certificate information is required');
+      return;
+    }
+    if (!/^\d{8}$/.test(newPin)) {
+      setError('New PIN must be 8 digits');
+      return;
+    }
+    if (newPin !== confirmNewPin) {
+      setError('PINs do not match');
+      return;
+    }
+
+    try {
+      setResettingPin(true);
+      setPinResetResult(null);
+
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/mtsa/reset-cert-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.icNumber,
+          certSerialNo: certificateStatus.certificateData.certSerialNo,
+          newPin: newPin,
+        }),
+      });
+
+      setPinResetResult({
+        success: response.success,
+        message: response.success ? 'PIN reset successfully!' : (response.message || 'PIN reset failed')
+      });
+      if (response.success) {
+        setNewPin('');
+        setConfirmNewPin('');
+      }
+    } catch (err) {
+      setPinResetResult({ success: false, message: 'Failed to reset PIN' });
+    } finally {
+      setResettingPin(false);
+    }
+  };
+
+  const handleRequestOtpForRevoke = async () => {
+    if (!currentUser?.email) return;
+
+    try {
+      setRequestingOtp(true);
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/mtsa/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.icNumber,
+          usage: 'DS',
+          emailAddress: currentUser.email,
+        }),
+      });
+
+      if (response.success) {
+        setOtpRequested(true);
+        toast.success('OTP sent to your email');
+      } else {
+        throw new Error(response.message || 'Failed to request OTP');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to request OTP');
+    } finally {
+      setRequestingOtp(false);
+    }
+  };
+
+  const handleRevokeCertificate = async () => {
+    if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) return;
+    if (!/^\d{6}$/.test(revokeOtp)) {
       setError('Please enter a valid 6-digit OTP');
       return;
     }
@@ -577,53 +760,173 @@ export default function AdminSigningSettingsPage() {
       setRevokingCertificate(true);
       setError(null);
 
-      // Get KYC images for revocation request
-      const kycResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/images');
-
-      if (!kycResponse.images) {
-        throw new Error('KYC documents not found. Cannot proceed with certificate revocation.');
+      const kycResponse = await fetchWithAdminTokenRefresh<{ images?: { front?: { url: string }; back?: { url: string } } }>('/api/admin/kyc/images');
+      if (!kycResponse.images?.front?.url || !kycResponse.images?.back?.url) {
+        throw new Error('KYC documents not found.');
       }
 
-      const { front, back } = kycResponse.images;
-      
-      if (!front?.url || !back?.url) {
-        throw new Error('Required KYC documents not found. Cannot proceed with certificate revocation.');
-      }
-
-      // Submit revocation request
-      const revokeResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/revoke-certificate', {
+      const revokeResponse = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/mtsa/revoke-certificate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser.icNumber,
           certSerialNo: certificateStatus.certificateData.certSerialNo,
           revokeReason,
           revokeBy,
           authFactor: revokeOtp,
-          idType: 'N', // Always NRIC for admin users
-          nricFrontUrl: front.url,
-          nricBackUrl: back.url,
+          idType: 'N',
+          nricFrontUrl: kycResponse.images.front.url,
+          nricBackUrl: kycResponse.images.back.url,
         }),
       });
 
       if (revokeResponse.success) {
-        // Success - refresh certificate status
         await checkCertificate(currentUser.icNumber);
-        setShowRevokeForm(false);
+        setShowRevokeDialog(false);
         setRevokeOtp('');
         setOtpRequested(false);
-        setRevokeReason('keyCompromise');
-        setRevokeBy('Self');
+        toast.success('Certificate revoked successfully');
       } else {
         throw new Error(revokeResponse.message || 'Certificate revocation failed');
       }
     } catch (err) {
-      console.error('Certificate revocation error:', err);
       setError(err instanceof Error ? err.message : 'Failed to revoke certificate');
     } finally {
       setRevokingCertificate(false);
+    }
+  };
+
+  // Internal Signers functions
+  const handleLookupIc = async () => {
+    if (!/^\d{12}$/.test(lookupIcNumber)) {
+      setError('Please enter a valid 12-digit IC number');
+      return;
+    }
+
+    try {
+      setLookingUp(true);
+      setError(null);
+      setLookupResult(null);
+
+      const response = await fetchWithAdminTokenRefresh<{
+        success: boolean;
+        alreadyExists: boolean;
+        userInfo?: { fullName: string; email: string; phoneNumber: string };
+        certificateInfo?: { certStatus: string; certSerialNo: string; certValidFrom: string; certValidTo: string };
+        hasCertificate: boolean;
+        message?: string;
+      }>(`/api/admin/internal-signers/lookup/${lookupIcNumber}`);
+
+      if (response.success) {
+        setLookupResult(response);
+        if (response.userInfo) {
+          setNewSignerName(response.userInfo.fullName || '');
+          setNewSignerEmail(response.userInfo.email || '');
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Lookup failed');
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
+  const handleAddSigner = async () => {
+    if (!newSignerName || !newSignerEmail) {
+      setError('Name and email are required');
+      return;
+    }
+
+    try {
+      setAddingSigner(true);
+      setError(null);
+
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/internal-signers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          icNumber: lookupIcNumber,
+          fullName: newSignerName,
+          email: newSignerEmail,
+          signerRole: newSignerRole,
+          certSerialNo: lookupResult?.certificateInfo?.certSerialNo,
+          certStatus: lookupResult?.certificateInfo?.certStatus,
+          certValidFrom: lookupResult?.certificateInfo?.certValidFrom,
+          certValidTo: lookupResult?.certificateInfo?.certValidTo,
+        }),
+      });
+
+      if (response.success) {
+        setShowAddSignerDialog(false);
+        setLookupIcNumber('');
+        setLookupResult(null);
+        setNewSignerName('');
+        setNewSignerEmail('');
+        toast.success('Signer added successfully');
+        fetchInternalSigners();
+      } else {
+        throw new Error(response.message || 'Failed to add signer');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add signer');
+    } finally {
+      setAddingSigner(false);
+    }
+  };
+
+  const handleVerifySignerPin = async () => {
+    if (!selectedSigner || !/^\d{8}$/.test(signerPin)) {
+      setError('Please enter a valid 8-digit PIN');
+      return;
+    }
+
+    try {
+      setVerifyingSignerPin(true);
+      setError(null);
+
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>(`/api/admin/internal-signers/${selectedSigner.id}/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: signerPin }),
+      });
+
+      if (response.success) {
+        setShowSignerPinDialog(false);
+        setSignerPin('');
+        setSelectedSigner(null);
+        toast.success('PIN verified successfully');
+        fetchInternalSigners();
+      } else {
+        setError(response.message || 'PIN verification failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to verify PIN');
+    } finally {
+      setVerifyingSignerPin(false);
+    }
+  };
+
+  const handleRefreshSigners = async () => {
+    try {
+      setRefreshingSigners(true);
+      await fetchWithAdminTokenRefresh('/api/admin/internal-signers/refresh', { method: 'POST' });
+      await fetchInternalSigners();
+    } catch (err) {
+      console.error('Error refreshing signers:', err);
+    } finally {
+      setRefreshingSigners(false);
+    }
+  };
+
+  const handleDeleteSigner = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this signer?')) return;
+
+    try {
+      await fetchWithAdminTokenRefresh(`/api/admin/internal-signers/${id}`, { method: 'DELETE' });
+      toast.success('Signer removed successfully');
+      fetchInternalSigners();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove signer');
     }
   };
 
@@ -632,7 +935,7 @@ export default function AdminSigningSettingsPage() {
       <AdminLayout>
         <div className="flex items-center justify-center min-h-96">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
             <p className="text-gray-400">Loading signing settings...</p>
           </div>
         </div>
@@ -642,298 +945,491 @@ export default function AdminSigningSettingsPage() {
 
   return (
     <AdminLayout>
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Digital Signing Settings</h1>
-          <p className="text-gray-400">Manage your digital certificate for document signing</p>
+          <p className="text-gray-400">Manage your digital certificate and internal signers</p>
         </div>
 
         {/* Error Display */}
         {error && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg">
-            <div className="flex items-center">
-              <XCircleIcon className="h-5 w-5 text-red-400 mr-2" />
-              <span className="text-red-400">{error}</span>
-            </div>
-          </div>
+          <Alert variant="destructive" className="mb-6">
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        {/* User Info Card */}
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
-          <div className="flex items-center mb-4">
-            <UserIcon className="h-6 w-6 text-purple-400 mr-3" />
-            <h2 className="text-xl font-semibold text-white">User Information</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-400">Name:</span>
-              <span className="text-white ml-2">{currentUser?.fullName}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Email:</span>
-              <span className="text-white ml-2">{currentUser?.email}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Phone:</span>
-              <span className="text-white ml-2">{currentUser?.phoneNumber}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">IC Number:</span>
-              <span className="text-white ml-2">{currentUser?.icNumber || 'Not set'}</span>
-            </div>
-          </div>
-        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="my-certificate" className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              My Certificate
+            </TabsTrigger>
+            <TabsTrigger value="internal-signers" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Internal Signers
+            </TabsTrigger>
+          </TabsList>
 
-        {/* IC Number Input */}
-        {showIcInput && (
-          <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
-            <h3 className="text-lg font-semibold text-white mb-4">IC Number Required</h3>
-            <p className="text-gray-400 mb-4">
-              Please enter your IC number to proceed with certificate verification.
-            </p>
-            
-            <div className="flex gap-4">
-              <input
-                type="text"
-                value={icNumber}
-                onChange={(e) => setIcNumber(e.target.value)}
-                placeholder="Enter 12-digit IC number"
-                className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                maxLength={12}
-              />
-              <button
-                onClick={updateIcNumber}
-                disabled={updatingIc}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {updatingIc ? 'Updating...' : 'Continue'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Certificate Status */}
-        {certificateStatus && !showIcInput && (
-          <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
-            <div className="flex items-center mb-4">
-              <ShieldCheckIcon className="h-6 w-6 text-purple-400 mr-3" />
-              <h2 className="text-xl font-semibold text-white">Certificate Status</h2>
-              {checkingCertificate && (
-                <div className="ml-auto">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500"></div>
+          {/* My Certificate Tab */}
+          <TabsContent value="my-certificate" className="space-y-6">
+            {/* User Profile Card */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5 text-blue-400" />
+                    Profile Information
+                  </CardTitle>
+                  <CardDescription>Your identity for digital signing</CardDescription>
                 </div>
-              )}
-            </div>
-
-            <div className={`p-4 rounded-lg border ${
-              certificateStatus.hasValidCert 
-                ? 'bg-green-900/20 border-green-700' 
-                : 'bg-yellow-900/20 border-yellow-700'
-            }`}>
-              <div className="flex items-center">
-                {certificateStatus.hasValidCert ? (
-                  <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (isEditingProfile) {
+                      setEditFullName(currentUser?.fullName || '');
+                      setEditIcNumber(currentUser?.icNumber || '');
+                    }
+                    setIsEditingProfile(!isEditingProfile);
+                  }}
+                >
+                  {isEditingProfile ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isEditingProfile ? (
+                  <div className="space-y-4">
+                    {certificateStatus?.hasValidCert && (
+                      <Alert variant="warning">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          Changing your name or IC number may require certificate re-enrollment.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Full Name</Label>
+                        <Input
+                          value={editFullName}
+                          onChange={(e) => setEditFullName(e.target.value)}
+                          placeholder="Enter full name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>IC Number</Label>
+                        <Input
+                          value={editIcNumber}
+                          onChange={(e) => setEditIcNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                          placeholder="12-digit IC number"
+                          maxLength={12}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleSaveProfile} disabled={savingProfile}>
+                        {savingProfile && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Save Changes
+                      </Button>
+                      <Button variant="outline" onClick={() => setIsEditingProfile(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
-                  <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-400">Name:</span>
+                      <span className="text-white ml-2">{currentUser?.fullName}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Email:</span>
+                      <span className="text-white ml-2">{currentUser?.email}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Phone:</span>
+                      <span className="text-white ml-2">{currentUser?.phoneNumber}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">IC Number:</span>
+                      <span className="text-white ml-2">{currentUser?.icNumber || 'Not set'}</span>
+                    </div>
+                  </div>
                 )}
-                <span className={certificateStatus.hasValidCert ? 'text-green-400' : 'text-yellow-400'}>
-                  {certificateStatus.message}
-                </span>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            {/* Certificate Details */}
-            {certificateStatus.hasValidCert && certificateStatus.certificateData && (
-              <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-                <h4 className="text-sm font-medium text-white mb-2">Certificate Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-gray-400">Status:</span>
-                    <span className="text-green-400 ml-2">{certificateStatus.certificateData.certStatus}</span>
+            {/* IC Number Input */}
+            {showIcInput && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>IC Number Required</CardTitle>
+                  <CardDescription>Please enter your IC number to proceed with certificate verification.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-4">
+                    <Input
+                      value={icNumber}
+                      onChange={(e) => setIcNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                      placeholder="Enter 12-digit IC number"
+                      maxLength={12}
+                      className="flex-1"
+                    />
+                    <Button onClick={updateIcNumber} disabled={updatingIc}>
+                      {updatingIc && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Continue
+                    </Button>
                   </div>
-                  <div>
-                    <span className="text-gray-400">Serial Number:</span>
-                    <span className="text-white ml-2">{certificateStatus.certificateData.certSerialNo}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Valid From:</span>
-                    <span className="text-white ml-2">{certificateStatus.certificateData.validFrom}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Valid To:</span>
-                    <span className="text-white ml-2">{certificateStatus.certificateData.validTo}</span>
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             )}
-          </div>
-        )}
 
-        {/* Action Buttons */}
-        {certificateStatus && !showIcInput && !checkingCertificate && (
-          <div className="space-y-4">
-            {/* KYC Step */}
-            {certificateStatus.nextStep === 'kyc' && !showPinStep && (
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-                <div className="flex items-center mb-4">
-                  <DocumentTextIcon className="h-6 w-6 text-purple-400 mr-3" />
-                  <h3 className="text-lg font-semibold text-white">Step 1: KYC Verification</h3>
-                </div>
-                
-                <p className="text-gray-400 mb-4">
-                  Complete KYC verification to proceed with certificate enrollment.
-                </p>
-
-                {/* KYC Status */}
-                {kycSession && (
-                  <div className="mb-4">
-                    {ctosOnboardingUrl && (
-                      <div className="p-4 bg-blue-900/20 border border-blue-700 rounded-lg mb-4">
-                        <div className="flex items-center mb-2">
-                          <ClockIcon className="h-5 w-5 text-blue-400 mr-2" />
-                          <span className="text-blue-400">KYC verification in progress...</span>
-                        </div>
-                        <a
-                          href={ctosOnboardingUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                          Continue KYC Verification
-                          <ArrowRightIcon className="h-4 w-4 ml-2" />
-                        </a>
-                      </div>
-                    )}
-
-                    {kycCompleted && kycSession.ctosResult === 1 && (
-                      <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg mb-4">
-                        <div className="flex items-center mb-2">
-                          <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
-                          <span className="text-green-400">KYC verification completed successfully!</span>
-                        </div>
-                        <button
-                          onClick={handleAcceptKyc}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                        >
-                          Proceed to Certificate Enrollment
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!kycSession && (
-                  <button
-                    onClick={handleStartKyc}
-                    disabled={kycInProgress}
-                    className="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {kycInProgress ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Starting KYC...
-                      </>
+            {/* Certificate Status */}
+            {certificateStatus && !showIcInput && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-blue-400" />
+                    Certificate Status
+                    {checkingCertificate && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Alert variant={certificateStatus.hasValidCert ? 'success' : 'warning'}>
+                    {certificateStatus.hasValidCert ? (
+                      <CheckCircle2 className="h-4 w-4" />
                     ) : (
-                      <>
-                        Start KYC Verification
-                        <ArrowRightIcon className="h-4 w-4 ml-2" />
-                      </>
+                      <AlertTriangle className="h-4 w-4" />
                     )}
-                  </button>
-                )}
-              </div>
+                    <AlertDescription>{certificateStatus.message}</AlertDescription>
+                  </Alert>
+
+                  {certificateStatus.hasValidCert && certificateStatus.certificateData && (
+                    <div className="p-4 bg-gray-800 rounded-lg">
+                      <h4 className="text-sm font-medium text-white mb-3">Certificate Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-400">Status:</span>
+                          <Badge variant="success" className="ml-2">{certificateStatus.certificateData.certStatus}</Badge>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Type:</span>
+                          {certificateStatus.isInternalCert ? (
+                            <Badge variant="default" className="ml-2 bg-blue-600">Internal (PIN)</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="ml-2">External (OTP)</Badge>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Serial Number:</span>
+                          <span className="text-white ml-2 font-mono text-xs">{certificateStatus.certificateData.certSerialNo}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Valid From:</span>
+                          <span className="text-white ml-2">{certificateStatus.certificateData.validFrom}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Valid To:</span>
+                          <span className="text-white ml-2">{certificateStatus.certificateData.validTo}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
-            {/* PIN and Organisation Step */}
-            {showPinStep && (
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-                <div className="flex items-center mb-4">
-                  <ShieldCheckIcon className="h-6 w-6 text-purple-400 mr-3" />
-                  <h3 className="text-lg font-semibold text-white">Step 2: Certificate Enrollment</h3>
-                </div>
-                
-                <p className="text-gray-400 mb-6">
-                  Set an 8-digit PIN and provide organisation information to complete certificate enrollment.
-                </p>
+            {/* Action Buttons for Complete Status */}
+            {certificateStatus?.nextStep === 'complete' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-400" />
+                    Certificate Management
+                    {certificateStatus.isInternalCert && (
+                      <Badge variant="default" className="ml-2 bg-blue-600">Internal</Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    {certificateStatus.isInternalCert 
+                      ? 'Your internal signing certificate is active. Use your 8-digit PIN when signing documents.'
+                      : 'Your digital certificate is active and ready for signing.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="outline" onClick={() => checkCertificate(currentUser?.icNumber!)} disabled={checkingCertificate}>
+                      <RefreshCw className={`h-4 w-4 mr-2 ${checkingCertificate ? 'animate-spin' : ''}`} />
+                      Refresh Status
+                    </Button>
+                    <Button onClick={() => { setShowVerifyPinDialog(true); setPinVerificationResult(null); setVerificationPin(''); }}>
+                      <ShieldCheck className="h-4 w-4 mr-2" />
+                      Verify PIN
+                    </Button>
+                    <Button variant="secondary" onClick={() => { setShowResetPinDialog(true); setPinResetResult(null); setNewPin(''); setConfirmNewPin(''); }}>
+                      <KeyRound className="h-4 w-4 mr-2" />
+                      Reset PIN
+                    </Button>
+                    <Button variant="destructive" onClick={() => { setShowRevokeDialog(true); setOtpRequested(false); setRevokeOtp(''); }}>
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Revoke Certificate
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-                <div className="space-y-6">
+            {/* Verify Certificate Type Step - Check if internal or external cert */}
+            {certificateStatus?.nextStep === 'verify-type' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-green-400" />
+                    Verify Your PIN
+                  </CardTitle>
+                  <CardDescription>
+                    {certificateStatus.isInternalCert 
+                      ? 'Internal signing certificate detected. Enter your 8-digit PIN to complete setup.'
+                      : 'A valid certificate was found. Enter your 8-digit PIN to verify it is an internal signing certificate.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {certificateStatus.isInternalCert ? (
+                    <Alert variant="success">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertDescription>
+                        Your certificate is registered as an internal signing certificate (Employee ID detected).
+                        Please verify your PIN to activate signing capabilities.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <Alert variant="info">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        Internal certificates use an 8-digit PIN for signing. External (borrower) certificates use email OTP.
+                        If you enrolled as a borrower previously, you will need to enroll a new internal certificate.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {certificateStatus.certificateData && (
+                    <div className="p-4 bg-gray-800 rounded-lg">
+                      <h4 className="text-sm font-medium text-white mb-3">Certificate Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-400">Status:</span>
+                          <Badge variant="success" className="ml-2">{certificateStatus.certificateData.certStatus}</Badge>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Serial Number:</span>
+                          <span className="text-white ml-2 font-mono text-xs">{certificateStatus.certificateData.certSerialNo}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Valid From:</span>
+                          <span className="text-white ml-2">{certificateStatus.certificateData.validFrom}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Valid To:</span>
+                          <span className="text-white ml-2">{certificateStatus.certificateData.validTo}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>Enter your 8-digit Certificate PIN</Label>
+                    <Input
+                      type="password"
+                      value={verificationPin}
+                      onChange={(e) => setVerificationPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      placeholder="Enter PIN to verify"
+                      maxLength={8}
+                      className="text-center tracking-widest max-w-xs"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button onClick={handleVerifyCertificateType} disabled={verifyingPin || verificationPin.length !== 8}>
+                      {verifyingPin && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Verify PIN
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setCertificateStatus({
+                          ...certificateStatus,
+                          message: 'You chose to enroll a new internal certificate.',
+                          nextStep: 'kyc',
+                          isExternalCert: true
+                        });
+                        setVerificationPin('');
+                      }}
+                    >
+                      I don&apos;t have a PIN / Enroll New Certificate
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* KYC Step */}
+            {certificateStatus?.nextStep === 'kyc' && !showPinStep && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-blue-400" />
+                    Step 1: KYC Verification
+                  </CardTitle>
+                  <CardDescription>
+                    {certificateStatus.isExternalCert 
+                      ? 'You need to enroll for an internal signing certificate. Complete KYC verification first.'
+                      : 'Complete KYC verification to proceed with certificate enrollment.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {certificateStatus.isExternalCert && (
+                    <Alert variant="warning">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        Your existing certificate is for external (borrower) signing and uses email OTP. 
+                        Internal signers (admins, attestors, witnesses) require a certificate with PIN authentication.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {kycSession && ctosOnboardingUrl && (
+                    <Alert variant="info">
+                      <Clock className="h-4 w-4" />
+                      <AlertDescription>
+                        KYC verification in progress...{' '}
+                        <a href={ctosOnboardingUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                          Continue verification
+                        </a>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {kycCompleted && kycSession?.ctosResult === 1 && (
+                    <Alert variant="success">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertDescription>
+                        KYC verification completed successfully!
+                        <Button size="sm" className="ml-4" onClick={handleAcceptKyc}>
+                          Proceed to Enrollment
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {!kycSession && (
+                    <Button onClick={handleStartKyc} disabled={kycInProgress}>
+                      {kycInProgress && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Start KYC Verification
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Enrollment Step */}
+            {certificateStatus?.nextStep === 'enrollment' && !showPinStep && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-blue-400" />
+                    Step 2: Certificate Enrollment
+                  </CardTitle>
+                  <CardDescription>KYC completed. You can now enroll for your digital certificate.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button onClick={() => setShowPinStep(true)}>
+                    Start Certificate Enrollment
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* PIN and Organisation Form */}
+            {showPinStep && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Certificate Enrollment</CardTitle>
+                  <CardDescription>Set your 8-digit PIN and provide organisation information.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                   {/* PIN Section */}
                   <div className="space-y-4">
                     <h4 className="text-white font-medium">Security PIN</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Enter 8-digit PIN</label>
-                        <input
+                      <div className="space-y-2">
+                        <Label>Enter 8-digit PIN</Label>
+                        <Input
                           type="password"
                           value={pin}
-                        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                        placeholder="••••••••"
-                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
-                        maxLength={8}
+                          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                          placeholder="••••••••"
+                          maxLength={8}
+                          className="text-center tracking-widest"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Confirm PIN</label>
-                        <input
+                      <div className="space-y-2">
+                        <Label>Confirm PIN</Label>
+                        <Input
                           type="password"
                           value={confirmPin}
-                        onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                        placeholder="••••••••"
-                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
-                        maxLength={8}
+                          onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                          placeholder="••••••••"
+                          maxLength={8}
+                          className="text-center tracking-widest"
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Organisation Information Section */}
+                  <Separator />
+
+                  {/* Organisation Information */}
                   <div className="space-y-4">
                     <h4 className="text-white font-medium">Organisation Information</h4>
                     
-                    {/* Organisation Name and User Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Organisation Name *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>Organisation Name *</Label>
+                        <Input
                           value={organisationInfo.orgName}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgName: e.target.value})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Enter organisation name"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Your Designation *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>Your Designation *</Label>
+                        <Input
                           value={organisationInfo.orgUserDesignation}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserDesignation: e.target.value})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="e.g., Director, Manager"
                         />
                       </div>
                     </div>
 
-                    {/* User Registration Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Registration Number *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>Registration Number *</Label>
+                        <Input
                           value={organisationInfo.orgUserRegistrationNo}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserRegistrationNo: e.target.value})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Professional/Employee ID"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Registration Type *</label>
+                      <div className="space-y-2">
+                        <Label>Registration Type *</Label>
                         <select
                           value={organisationInfo.orgUserRegistrationType}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserRegistrationType: e.target.value as 'P' | 'E'})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
                         >
                           <option value="E">Employee ID</option>
                           <option value="P">Professional Registration</option>
@@ -941,87 +1437,62 @@ export default function AdminSigningSettingsPage() {
                       </div>
                     </div>
 
-                    {/* Organisation Address */}
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-2">Organisation Address *</label>
-                      <textarea
+                    <div className="space-y-2">
+                      <Label>Organisation Address *</Label>
+                      <Textarea
                         value={organisationInfo.orgAddress}
                         onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddress: e.target.value})}
-                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         placeholder="Enter full address"
                         rows={2}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">City *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>City *</Label>
+                        <Input
                           value={organisationInfo.orgAddressCity}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddressCity: e.target.value})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">State *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>State *</Label>
+                        <Input
                           value={organisationInfo.orgAddressState}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddressState: e.target.value})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Postcode *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>Postcode *</Label>
+                        <Input
                           value={organisationInfo.orgAddressPostcode}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgAddressPostcode: e.target.value.replace(/\D/g, '').slice(0, 5)})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           maxLength={5}
                         />
                       </div>
                     </div>
 
-                    {/* Organisation Registration */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Organisation Registration No *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>Organisation Registration No *</Label>
+                        <Input
                           value={organisationInfo.orgRegistationNo}
-                          onChange={(e) => {
-                            // Limit ROC number to 20 characters to prevent database errors
-                            // Extract numerical part if full ROC format is entered
-                            let value = e.target.value;
-                            if (value.includes('(') && value.includes(')')) {
-                              // Extract just the number before the parentheses
-                              value = value.split('(')[0];
-                            }
-                            // Limit to 20 characters maximum
-                            value = value.slice(0, 20);
-                            setOrganisationInfo({...organisationInfo, orgRegistationNo: value});
-                          }}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Company registration number (e.g., 202101043135)"
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgRegistationNo: e.target.value.slice(0, 20)})}
+                          placeholder="Company registration number"
                           maxLength={20}
                         />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Enter just the numerical part without parentheses (max 20 characters)
-                        </p>
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Registration Type *</label>
+                      <div className="space-y-2">
+                        <Label>Registration Type *</Label>
                         <select
                           value={organisationInfo.orgRegistationType}
-                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgRegistationType: e.target.value as any})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgRegistationType: e.target.value as OrganisationInfo['orgRegistationType']})}
+                          className="w-full h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
                         >
                           <option value="NTRMY">Malaysia Trade Register</option>
                           <option value="IRB">Inland Revenue Board</option>
                           <option value="RMC">Royal Malaysia Customs</option>
-                          <option value="CIDB">Construction Industry Development Board</option>
+                          <option value="CIDB">CIDB</option>
                           <option value="BAM">Board of Architects Malaysia</option>
                           <option value="GOV">Government Entity</option>
                           <option value="GOVSUB">Government Subdivision</option>
@@ -1031,336 +1502,460 @@ export default function AdminSigningSettingsPage() {
                       </div>
                     </div>
 
-                    {/* Contact Information */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Phone Number *</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>Phone Number *</Label>
+                        <Input
                           value={organisationInfo.orgPhoneNo}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgPhoneNo: e.target.value})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="+60123456789"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Fax Number (Optional)</label>
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <Label>Fax Number (Optional)</Label>
+                        <Input
                           value={organisationInfo.orgFaxNo}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgFaxNo: e.target.value})}
-                          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="+60312345678"
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-4">
-                    <button
-                      onClick={handleCertificateEnrollment}
-                      disabled={submittingCertificate || pin.length !== 8 || confirmPin.length !== 8}
-                      className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  <Button
+                    onClick={handleCertificateEnrollment}
+                    disabled={submittingCertificate || pin.length !== 8 || confirmPin.length !== 8}
+                    className="w-full"
+                  >
+                    {submittingCertificate && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Enroll Certificate
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Internal Signers Tab */}
+          <TabsContent value="internal-signers" className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardTitle>Internal Signers Registry</CardTitle>
+                  <CardDescription>Manage internal users who can sign documents (admins, attestors, witnesses)</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleRefreshSigners} disabled={refreshingSigners}>
+                    <RefreshCw className={`h-4 w-4 mr-2 ${refreshingSigners ? 'animate-spin' : ''}`} />
+                    Refresh All
+                  </Button>
+                  <Button onClick={() => { setShowAddSignerDialog(true); setLookupResult(null); setLookupIcNumber(''); }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Signer
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Filters */}
+                <div className="flex gap-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-gray-400">Status:</Label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
                     >
-                      {submittingCertificate ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                          Enrolling Certificate...
-                        </>
-                      ) : (
-                        'Enroll Certificate'
-                      )}
-                    </button>
+                      <option value="">All</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="VERIFIED">Verified</option>
+                      <option value="EXPIRED">Expired</option>
+                      <option value="REVOKED">Revoked</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-gray-400">Role:</Label>
+                    <select
+                      value={roleFilter}
+                      onChange={(e) => setRoleFilter(e.target.value)}
+                      className="h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
+                    >
+                      <option value="">All</option>
+                      <option value="ADMIN">Admin</option>
+                      <option value="ATTESTOR">Attestor</option>
+                      <option value="WITNESS">Witness</option>
+                      <option value="COMPANY_REP">Company Rep</option>
+                    </select>
                   </div>
                 </div>
+
+                {/* Table */}
+                {loadingSigners ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  </div>
+                ) : internalSigners.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">
+                    No internal signers found. Click &quot;Add Signer&quot; to add one.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="text-left py-3 px-2 text-gray-400 font-medium">Name</th>
+                          <th className="text-left py-3 px-2 text-gray-400 font-medium">IC Number</th>
+                          <th className="text-left py-3 px-2 text-gray-400 font-medium">Role</th>
+                          <th className="text-left py-3 px-2 text-gray-400 font-medium">Status</th>
+                          <th className="text-left py-3 px-2 text-gray-400 font-medium">Cert Valid Until</th>
+                          <th className="text-left py-3 px-2 text-gray-400 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {internalSigners.map((signer) => (
+                          <tr key={signer.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                            <td className="py-3 px-2 text-white">{signer.fullName}</td>
+                            <td className="py-3 px-2 text-gray-300 font-mono text-xs">{signer.icNumber}</td>
+                            <td className="py-3 px-2">
+                              <Badge variant="default">{signer.signerRole}</Badge>
+                            </td>
+                            <td className="py-3 px-2">
+                              <Badge variant={getStatusBadgeVariant(signer.status)}>{signer.status}</Badge>
+                            </td>
+                            <td className="py-3 px-2 text-gray-300 text-xs">
+                              {signer.certValidTo ? new Date(signer.certValidTo).toLocaleDateString() : '-'}
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="flex gap-2">
+                                {signer.status === 'PENDING' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => { setSelectedSigner(signer); setShowSignerPinDialog(true); setSignerPin(''); }}
+                                  >
+                                    Verify PIN
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteSigner(signer.id)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Verify PIN Dialog */}
+        <Dialog open={showVerifyPinDialog} onOpenChange={setShowVerifyPinDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Verify Certificate PIN</DialogTitle>
+              <DialogDescription>Enter your 8-digit PIN to verify access to your certificate.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Certificate PIN</Label>
+                <Input
+                  type="password"
+                  value={verificationPin}
+                  onChange={(e) => setVerificationPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="Enter 8-digit PIN"
+                  maxLength={8}
+                  className="text-center tracking-widest"
+                />
               </div>
-            )}
+              {pinVerificationResult && (
+                <Alert variant={pinVerificationResult.success ? 'success' : 'destructive'}>
+                  {pinVerificationResult.success ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                  <AlertDescription>{pinVerificationResult.message}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowVerifyPinDialog(false)}>Cancel</Button>
+              <Button onClick={handleVerifyPin} disabled={verifyingPin || verificationPin.length !== 8}>
+                {verifyingPin && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Verify PIN
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-            {/* Certificate Enrollment Step */}
-            {certificateStatus.nextStep === 'enrollment' && !showPinStep && (
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-                <div className="flex items-center mb-4">
-                  <ShieldCheckIcon className="h-6 w-6 text-purple-400 mr-3" />
-                  <h3 className="text-lg font-semibold text-white">Step 2: Certificate Enrollment</h3>
-                </div>
-                
-                <p className="text-gray-400 mb-6">
-                  KYC verification completed successfully. You can now enroll for your digital certificate.
-                </p>
+        {/* Reset PIN Dialog */}
+        <Dialog open={showResetPinDialog} onOpenChange={setShowResetPinDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset Certificate PIN</DialogTitle>
+              <DialogDescription>Enter a new 8-digit PIN for your certificate.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>New PIN</Label>
+                <Input
+                  type="password"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="Enter new 8-digit PIN"
+                  maxLength={8}
+                  className="text-center tracking-widest"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Confirm New PIN</Label>
+                <Input
+                  type="password"
+                  value={confirmNewPin}
+                  onChange={(e) => setConfirmNewPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="Confirm new PIN"
+                  maxLength={8}
+                  className="text-center tracking-widest"
+                />
+              </div>
+              {pinResetResult && (
+                <Alert variant={pinResetResult.success ? 'success' : 'destructive'}>
+                  {pinResetResult.success ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                  <AlertDescription>{pinResetResult.message}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowResetPinDialog(false)}>Cancel</Button>
+              <Button onClick={handleResetPin} disabled={resettingPin || newPin.length !== 8 || newPin !== confirmNewPin}>
+                {resettingPin && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Reset PIN
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-                <button
-                  onClick={() => setShowPinStep(true)}
-                  className="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+        {/* Revoke Certificate Dialog */}
+        <Dialog open={showRevokeDialog} onOpenChange={setShowRevokeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Revoke Certificate</DialogTitle>
+              <DialogDescription>This action is permanent. You will need to re-enroll to get a new certificate.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>Certificate revocation cannot be undone.</AlertDescription>
+              </Alert>
+              <div className="space-y-2">
+                <Label>Revocation Reason</Label>
+                <select
+                  value={revokeReason}
+                  onChange={(e) => setRevokeReason(e.target.value)}
+                  className="w-full h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
                 >
-                  Start Certificate Enrollment
-                  <ArrowRightIcon className="h-4 w-4 ml-2" />
-                </button>
+                  <option value="keyCompromise">Key Compromise</option>
+                  <option value="CACompromise">CA Compromise</option>
+                  <option value="affiliationChanged">Affiliation Changed</option>
+                  <option value="superseded">Superseded</option>
+                  <option value="cessationOfOperation">Cessation of Operation</option>
+                </select>
               </div>
-            )}
-
-            {/* Complete Status */}
-            {certificateStatus.nextStep === 'complete' && (
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-                <div className="flex items-center mb-4">
-                  <CheckCircleIcon className="h-6 w-6 text-green-400 mr-3" />
-                  <h3 className="text-lg font-semibold text-white">Certificate Ready</h3>
-                </div>
-                
-                <p className="text-gray-400 mb-4">
-                  Your digital certificate is active and ready for document signing.
-                </p>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => checkCertificate(currentUser?.icNumber!)}
-                    disabled={checkingCertificate}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    {checkingCertificate ? 'Refreshing...' : 'Refresh Status'}
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowPinVerification(true)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                  >
-                    Verify PIN
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowRevokeForm(true)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    Revoke Certificate
-                  </button>
-                </div>
+              <div className="space-y-2">
+                <Label>Requested By</Label>
+                <select
+                  value={revokeBy}
+                  onChange={(e) => setRevokeBy(e.target.value)}
+                  className="w-full h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
+                >
+                  <option value="Self">Self</option>
+                  <option value="Admin">Admin</option>
+                </select>
               </div>
-            )}
-
-            {/* PIN Verification Form */}
-            {showPinVerification && certificateStatus?.nextStep === 'complete' && (
-              <div className="bg-gray-800 rounded-lg border border-purple-700 p-6 mt-4">
-                <div className="flex items-center mb-4">
-                  <ShieldCheckIcon className="h-6 w-6 text-purple-400 mr-3" />
-                  <h3 className="text-lg font-semibold text-white">Verify Certificate PIN</h3>
-                </div>
-                
-                <p className="text-gray-400 mb-6">
-                  Verify your 8-digit certificate PIN to confirm access to your digital certificate.
-                </p>
-
-                <div className="space-y-6">
-                  {/* Certificate Information */}
-                  <div className="p-4 bg-gray-700 rounded-lg">
-                    <h4 className="text-sm font-medium text-white mb-2">Certificate Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-gray-400">User ID:</span>
-                        <span className="text-white ml-2">{currentUser?.icNumber}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Serial Number:</span>
-                        <span className="text-white ml-2">{certificateStatus?.certificateData?.certSerialNo}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* PIN Input */}
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Certificate PIN *</label>
-                    <input
-                      type="password"
-                      value={verificationPin}
-                      onChange={(e) => setVerificationPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                      placeholder="Enter 8-digit PIN"
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
-                      maxLength={8}
-                      disabled={verifyingPin}
+              <div className="space-y-2">
+                <Label>Email OTP Verification</Label>
+                {!otpRequested ? (
+                  <Button variant="outline" onClick={handleRequestOtpForRevoke} disabled={requestingOtp} className="w-full">
+                    {requestingOtp && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Send OTP to {currentUser?.email}
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <Alert variant="success">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertDescription>OTP sent to {currentUser?.email}</AlertDescription>
+                    </Alert>
+                    <Input
+                      value={revokeOtp}
+                      onChange={(e) => setRevokeOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Enter 6-digit OTP"
+                      maxLength={6}
+                      className="text-center tracking-widest"
                     />
                   </div>
-
-                  {/* Verification Result */}
-                  {pinVerificationResult && (
-                    <div className={`p-4 rounded-lg border ${
-                      pinVerificationResult.success 
-                        ? 'bg-green-900/20 border-green-700' 
-                        : 'bg-red-900/20 border-red-700'
-                    }`}>
-                      <div className="flex items-center">
-                        {pinVerificationResult.success ? (
-                          <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
-                        ) : (
-                          <XCircleIcon className="h-5 w-5 text-red-400 mr-2" />
-                        )}
-                        <span className={pinVerificationResult.success ? 'text-green-400' : 'text-red-400'}>
-                          {pinVerificationResult.message}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-4 pt-4">
-                    <button
-                      onClick={() => {
-                        setShowPinVerification(false);
-                        setVerificationPin('');
-                        setPinVerificationResult(null);
-                      }}
-                      className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                    >
-                      Cancel
-                    </button>
-                    
-                    <button
-                      onClick={handleVerifyPin}
-                      disabled={verifyingPin || verificationPin.length !== 8}
-                      className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                    >
-                      {verifyingPin ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                          Verifying PIN...
-                        </>
-                      ) : (
-                        'Verify PIN'
-                      )}
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRevokeDialog(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={handleRevokeCertificate}
+                disabled={revokingCertificate || !otpRequested || revokeOtp.length !== 6}
+              >
+                {revokingCertificate && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Revoke Certificate
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-            {/* Revoke Certificate Form */}
-            {showRevokeForm && certificateStatus?.nextStep === 'complete' && (
-              <div className="bg-gray-800 rounded-lg border border-red-700 p-6 mt-4">
-                <div className="flex items-center mb-4">
-                  <ExclamationTriangleIcon className="h-6 w-6 text-red-400 mr-3" />
-                  <h3 className="text-lg font-semibold text-white">Revoke Certificate</h3>
-                </div>
-                
-                <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-6">
-                  <div className="flex items-center">
-                    <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2" />
-                    <span className="text-red-400">
-                      <strong>Warning:</strong> Certificate revocation is permanent and cannot be undone. 
-                      You will need to complete the enrollment process again to get a new certificate.
-                    </span>
-                  </div>
-                </div>
+        {/* Add Signer Dialog */}
+        <Dialog open={showAddSignerDialog} onOpenChange={setShowAddSignerDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Add Internal Signer</DialogTitle>
+              <DialogDescription>Look up a user by IC number and add them to the registry.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="flex gap-2">
+                <Input
+                  value={lookupIcNumber}
+                  onChange={(e) => setLookupIcNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  placeholder="Enter 12-digit IC number"
+                  maxLength={12}
+                  className="flex-1"
+                />
+                <Button onClick={handleLookupIc} disabled={lookingUp || lookupIcNumber.length !== 12}>
+                  {lookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
 
-                <div className="space-y-6">
-                  {/* Revoke Reason */}
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Revocation Reason *</label>
-                    <select
-                      value={revokeReason}
-                      onChange={(e) => setRevokeReason(e.target.value)}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    >
-                      <option value="keyCompromise">Key Compromise</option>
-                      <option value="CACompromise">CA Compromise</option>
-                      <option value="affiliationChanged">Affiliation Changed</option>
-                      <option value="superseded">Superseded</option>
-                      <option value="cessationOfOperation">Cessation of Operation</option>
-                    </select>
-                  </div>
+              {lookupResult && (
+                <div className="space-y-4">
+                  {lookupResult.alreadyExists ? (
+                    <Alert variant="warning">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>This IC number is already registered as an internal signer.</AlertDescription>
+                    </Alert>
+                  ) : (
+                    <>
+                      {lookupResult.hasCertificate ? (
+                        lookupResult.isInternalCert ? (
+                          <Alert variant="success">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <AlertDescription>
+                              <strong>Internal certificate detected</strong> ({lookupResult.certificateInfo?.certStatus}).
+                              After adding, they will need to verify their PIN to complete registration.
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <Alert variant="warning">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertDescription>
+                              <strong>External (borrower) certificate found.</strong> This user has a certificate but it&apos;s 
+                              registered for external signing (uses email OTP). They need to enroll for an internal certificate 
+                              with PIN authentication to be added as an internal signer.
+                            </AlertDescription>
+                          </Alert>
+                        )
+                      ) : (
+                        <Alert variant="warning">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>
+                            No valid certificate found for this IC number. This user needs to enroll for an internal 
+                            signing certificate first. They can do this by logging into the admin panel and going to 
+                            Settings → Signing.
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
-                  {/* Revoke By */}
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Requested By *</label>
-                    <select
-                      value={revokeBy}
-                      onChange={(e) => setRevokeBy(e.target.value)}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    >
-                      <option value="Self">Self</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-                  </div>
-
-                  {/* OTP Section */}
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Email OTP Verification *</label>
-                    
-                    {!otpRequested ? (
                       <div className="space-y-4">
-                        <p className="text-sm text-gray-400">
-                          An OTP will be sent to your email address: <span className="text-white">{currentUser?.email}</span>
-                        </p>
-                        <button
-                          onClick={handleRequestOtpForRevoke}
-                          disabled={requestingOtp}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {requestingOtp ? 'Sending OTP...' : 'Send OTP'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg">
-                          <div className="flex items-center">
-                            <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
-                            <span className="text-green-400">OTP sent to {currentUser?.email}</span>
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <input
-                            type="text"
-                            value={revokeOtp}
-                            onChange={(e) => setRevokeOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            placeholder="Enter 6-digit OTP"
-                            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent text-center text-lg tracking-widest"
-                            maxLength={6}
+                        <div className="space-y-2">
+                          <Label>Full Name *</Label>
+                          <Input
+                            value={newSignerName}
+                            onChange={(e) => setNewSignerName(e.target.value)}
+                            placeholder="Enter full name"
                           />
                         </div>
-                        
-                        <button
-                          onClick={handleRequestOtpForRevoke}
-                          disabled={requestingOtp}
-                          className="text-sm text-blue-400 hover:text-blue-300 disabled:opacity-50"
-                        >
-                          {requestingOtp ? 'Sending...' : 'Resend OTP'}
-                        </button>
+                        <div className="space-y-2">
+                          <Label>Email *</Label>
+                          <Input
+                            value={newSignerEmail}
+                            onChange={(e) => setNewSignerEmail(e.target.value)}
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Role *</Label>
+                          <select
+                            value={newSignerRole}
+                            onChange={(e) => setNewSignerRole(e.target.value)}
+                            className="w-full h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
+                          >
+                            <option value="ADMIN">Admin</option>
+                            <option value="ATTESTOR">Attestor</option>
+                            <option value="WITNESS">Witness</option>
+                            <option value="COMPANY_REP">Company Representative</option>
+                          </select>
+                        </div>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-4 pt-4">
-                    <button
-                      onClick={() => {
-                        setShowRevokeForm(false);
-                        setRevokeOtp('');
-                        setOtpRequested(false);
-                        setRevokeReason('keyCompromise');
-                        setRevokeBy('Self');
-                      }}
-                      className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                    >
-                      Cancel
-                    </button>
-                    
-                    <button
-                      onClick={handleRevokeCertificate}
-                      disabled={revokingCertificate || !otpRequested || revokeOtp.length !== 6}
-                      className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                    >
-                      {revokingCertificate ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                          Revoking Certificate...
-                        </>
-                      ) : (
-                        'Revoke Certificate'
-                      )}
-                    </button>
-                  </div>
+                    </>
+                  )}
                 </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddSignerDialog(false)}>Cancel</Button>
+              {lookupResult && !lookupResult.alreadyExists && lookupResult.isInternalCert && (
+                <Button onClick={handleAddSigner} disabled={addingSigner || !newSignerName || !newSignerEmail}>
+                  {addingSigner && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Add as Pending
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Signer PIN Verification Dialog */}
+        <Dialog open={showSignerPinDialog} onOpenChange={setShowSignerPinDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Verify Signer PIN</DialogTitle>
+              <DialogDescription>
+                Have {selectedSigner?.fullName} enter their 8-digit certificate PIN to verify.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-gray-800 rounded-lg text-sm">
+                <div><span className="text-gray-400">Name:</span> <span className="text-white">{selectedSigner?.fullName}</span></div>
+                <div><span className="text-gray-400">IC:</span> <span className="text-white font-mono">{selectedSigner?.icNumber}</span></div>
               </div>
-            )}
-          </div>
-        )}
+              <div className="space-y-2">
+                <Label>Certificate PIN</Label>
+                <Input
+                  type="password"
+                  value={signerPin}
+                  onChange={(e) => setSignerPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="Enter 8-digit PIN"
+                  maxLength={8}
+                  className="text-center tracking-widest"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowSignerPinDialog(false)}>Cancel</Button>
+              <Button onClick={handleVerifySignerPin} disabled={verifyingSignerPin || signerPin.length !== 8}>
+                {verifyingSignerPin && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Verify PIN
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );

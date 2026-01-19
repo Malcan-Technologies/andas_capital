@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
-export async function POST(
-	request: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const { id } = params;
 		
 		// Get authorization header

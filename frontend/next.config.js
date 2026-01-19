@@ -1,16 +1,20 @@
 /** @type {import('next').NextConfig} */
 const config = {
 	reactStrictMode: true,
-	swcMinify: true,
 	typescript: {
 		ignoreBuildErrors: true,
 	},
-	eslint: {
-		ignoreDuringBuilds: true,
-	},
 	distDir: ".next",
-	skipMiddlewareUrlNormalize: true,
 	skipTrailingSlashRedirect: true,
+	// Enable standalone output for Docker deployment
+	output: "standalone",
+	// Set turbopack root to this directory to avoid lockfile confusion
+	turbopack: {
+		root: __dirname,
+	},
+	images: {
+		qualities: [100, 75],
+	},
 };
 
 module.exports = config;

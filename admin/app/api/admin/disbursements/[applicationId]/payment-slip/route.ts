@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { applicationId: string } }
+  props: { params: Promise<{ applicationId: string }> }
 ) {
+  const params = await props.params;
   try {
     const token = request.headers.get('authorization')?.replace('Bearer ', '');
 

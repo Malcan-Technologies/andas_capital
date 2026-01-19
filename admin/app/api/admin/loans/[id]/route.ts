@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
 		const loanId = params.id;
 
 		const response = await fetch(

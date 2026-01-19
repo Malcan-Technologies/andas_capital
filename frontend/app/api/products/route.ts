@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 	try {
 
 		// Get the access token from cookies
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const accessToken = cookieStore.get("token")?.value;
 
 		if (!accessToken) {

@@ -24,8 +24,14 @@ import {
 	PencilIcon,
 	PlusIcon,
 	DocumentCheckIcon,
+	ClipboardDocumentCheckIcon,
+	XCircleIcon,
+	FolderIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
+import CreditReportCard from "../../components/CreditReportCard";
+import ConfirmationModal, { ConfirmationModalColor } from "../../../components/ConfirmationModal";
 
 interface LoanRepayment {
 	id: string;
@@ -109,9 +115,21 @@ interface LoanData {
 	nextPaymentDue: string | null;
 	status: string;
 	disbursedAt: string | null;
+	dischargedAt?: string | null;
 	createdAt: string;
 	updatedAt: string;
 	totalPaid?: number;
+	// Early settlement fields (legacy - kept for backward compatibility)
+	earlySettlementAmount?: number | null;
+	earlySettlementDiscount?: number | null;
+	// Early settlement info from loan application history
+	earlySettlementInfo?: {
+		totalSettlement: number | null;
+		discountAmount: number | null;
+		feeAmount: number | null;
+		netSavings: number | null;
+		approvedAt: string | null;
+	} | null;
 	remainingPrepayment?: number;
 	// Calculation method metadata stored at time of disbursement
 	calculationMethod?: string | null; // RULE_OF_78 or STRAIGHT_LINE
@@ -132,9 +150,25 @@ interface LoanData {
 		amount: number;
 		purpose: string;
 		status?: string;
+		// Fee fields for financial breakdown
+		stampingFee?: number;
+		legalFeeFixed?: number;
+		legalFee?: number;
+		originationFee?: number;
+		applicationFee?: number;
+		netDisbursement?: number;
+		interestRate?: number;
+		monthlyRepayment?: number;
 		product: {
 			name: string;
 			code: string;
+			// Late fee fields
+			lateFeeRate?: number;
+			lateFeeFixedAmount?: number;
+			lateFeeFrequencyDays?: number;
+			// Document requirements
+			requiredDocuments?: string[];
+			collateralRequired?: boolean;
 		};
 		user: {
 			id: string;
@@ -146,13 +180,65 @@ interface LoanData {
 			monthlyIncome?: string;
 			bankName?: string;
 			accountNumber?: string;
+			// Address fields
+			address1?: string;
+			address2?: string;
+			city?: string;
+			state?: string;
+			zipCode?: string;
+			country?: string;
+			// Education and employment fields
+			educationLevel?: string;
+			serviceLength?: string;
+			nationality?: string;
+			icNumber?: string;
+			idNumber?: string;
+			// Demographics
+			race?: string;
+			gender?: string;
+			occupation?: string;
 		};
+		// Documents associated with this application
+		documents?: {
+			id: string;
+			type: string;
+			status: string;
+			fileUrl: string;
+			createdAt: string;
+			updatedAt?: string;
+		}[];
 	};
 	user: {
 		id: string;
 		fullName: string;
 		email: string;
 		phoneNumber: string;
+		// Address fields
+		address1?: string;
+		address2?: string;
+		city?: string;
+		state?: string;
+		zipCode?: string;
+		country?: string;
+		// Additional fields
+		icNumber?: string;
+		idNumber?: string;
+		nationality?: string;
+		educationLevel?: string;
+		employmentStatus?: string;
+		employerName?: string;
+		serviceLength?: string;
+		monthlyIncome?: string;
+		bankName?: string;
+		accountNumber?: string;
+		// Emergency contact fields
+		emergencyContactName?: string;
+		emergencyContactPhone?: string;
+		emergencyContactRelationship?: string;
+		// Demographics
+		race?: string;
+		gender?: string;
+		occupation?: string;
 	};
 	repayments?: LoanRepayment[];
 	overdueInfo?: {
@@ -235,7 +321,6 @@ function ActiveLoansContent() {
 		active: 0,
 		pending_discharge: 0,
 		pending_early_settlement: 0,
-		pending_stamped: 0,
 		discharged: 0,
 		late: 0,
 		potential_default: 0,
@@ -311,6 +396,46 @@ function ActiveLoansContent() {
 
 	// Get user role from API
 	const [userRole, setUserRole] = useState<string>("");
+	
+	// System-wide late fee grace period setting
+	const [lateFeeGraceDays, setLateFeeGraceDays] = useState<number>(3);
+
+	// Credit report state
+	const [creditReport, setCreditReport] = useState<any | null>(null);
+
+	// Confirmation modal state
+	const [confirmModal, setConfirmModal] = useState<{
+		open: boolean;
+		title: string;
+		message: string;
+		details?: string[];
+		confirmText: string;
+		confirmColor: ConfirmationModalColor;
+		onConfirm: () => void;
+	}>({
+		open: false,
+		title: "",
+		message: "",
+		details: [],
+		confirmText: "Confirm",
+		confirmColor: "blue",
+		onConfirm: () => {},
+	});
+
+	const showConfirmModal = (config: {
+		title: string;
+		message: string;
+		details?: string[];
+		confirmText: string;
+		confirmColor: ConfirmationModalColor;
+		onConfirm: () => void;
+	}) => {
+		setConfirmModal({ ...config, open: true });
+	};
+
+	const closeConfirmModal = () => {
+		setConfirmModal((prev) => ({ ...prev, open: false }));
+	};
 
 	useEffect(() => {
 		const fetchUserRole = async () => {
@@ -429,6 +554,7 @@ function ActiveLoansContent() {
 					scheduleType: string;
 					customDueDate: number;
 					prorationCutoffDate: number;
+					lateFeeGraceDays: number;
 				};
 			}>("/api/admin/loans");
 
@@ -440,6 +566,8 @@ function ActiveLoansContent() {
 				if (response.systemSettings) {
 					// Store in state if needed, or use directly in rendering
 					(window as any).loanSystemSettings = response.systemSettings;
+					// Store late fee grace days from system settings
+					setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays ?? 3);
 				}
 			} else {
 				setError("Failed to load loans data");
@@ -488,11 +616,11 @@ function ActiveLoansContent() {
 				a.download = `disbursement-slip-${refNumber}.pdf`;
 				a.click();
 			} else {
-				alert('Payment slip not found');
+				toast.error('Payment slip not found');
 			}
 		} catch (error) {
 			console.error('Error downloading slip:', error);
-			alert('Failed to download payment slip');
+			toast.error('Failed to download payment slip');
 		}
 	};
 
@@ -503,14 +631,14 @@ function ActiveLoansContent() {
 		// Check file size (10MB limit set by backend Multer)
 		const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
 		if (file.size > MAX_FILE_SIZE) {
-			alert(`File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds the maximum limit of 10MB. Please compress the file or use a smaller file.`);
+			toast.warning(`File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 10MB limit. Please compress or use a smaller file.`);
 			fileInput.value = ''; // Clear file input
 			return;
 		}
 
 		// Check file type
 		if (file.type !== 'application/pdf') {
-			alert('Only PDF files are allowed for payment slips.');
+			toast.warning('Only PDF files are allowed for payment slips.');
 			fileInput.value = ''; // Clear file input
 			return;
 		}
@@ -550,7 +678,7 @@ function ActiveLoansContent() {
 
 			const data = await response.json();
 			
-			alert('Payment slip uploaded successfully');
+			toast.success('Payment slip uploaded successfully');
 			fileInput.value = ''; // Clear file input
 			
 			// Refresh disbursements
@@ -558,7 +686,7 @@ function ActiveLoansContent() {
 		} catch (error) {
 			console.error('Error uploading payment slip:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Failed to upload payment slip';
-			alert(`❌ Upload Failed\n\n${errorMessage}`);
+			toast.error(`Upload failed: ${errorMessage}`);
 			fileInput.value = ''; // Clear file input on error
 		} finally {
 			setUploadingSlipFor(null);
@@ -576,10 +704,15 @@ function ActiveLoansContent() {
 
 			if (response.success && response.data) {
 
-				// Update the selected loan with repayments data
+				// Update the selected loan with repayments data and totalPaid from backend
 				setSelectedLoan((prev) =>
 					prev
-						? { ...prev, repayments: response.data.repayments }
+						? { 
+							...prev, 
+							repayments: response.data.repayments,
+							// Also update totalPaid from backend calculation (based on wallet transactions)
+							totalPaid: (response.data as any).totalPaid ?? prev.totalPaid
+						}
 						: null
 				);
 			} else {
@@ -748,7 +881,7 @@ function ActiveLoansContent() {
 			}
 		} catch (error) {
 			console.error("Error generating PDF letter:", error);
-			alert(`Failed to generate PDF letter: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to generate PDF letter: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setGeneratingPDF(false);
 		}
@@ -785,7 +918,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading PDF letter:', error);
-			alert('Failed to download PDF letter');
+			toast.error('Failed to download PDF letter');
 		}
 	};
 
@@ -806,7 +939,6 @@ function ActiveLoansContent() {
 			}).length,
 			pending_discharge: loans.filter((loan) => loan.status === "PENDING_DISCHARGE").length,
 			pending_early_settlement: loans.filter((loan) => loan.status === "PENDING_EARLY_SETTLEMENT").length,
-			pending_stamped: loans.filter((loan) => loan.pkiSignedPdfUrl && (!loan.pkiStampedPdfUrl || !loan.pkiStampCertificateUrl) && loan.status !== "DEFAULT").length,
 			discharged: loans.filter((loan) => loan.status === "DISCHARGED").length,
 			late: loans.filter((loan) => {
 				// Priority: DEFAULT > Default Risk > Late
@@ -867,10 +999,6 @@ function ActiveLoansContent() {
 		} else if (statusFilter === "pending_early_settlement") {
 			filtered = filtered.filter(
 				(loan) => loan.status === "PENDING_EARLY_SETTLEMENT"
-			);
-		} else if (statusFilter === "pending_stamped") {
-			filtered = filtered.filter(
-				(loan) => loan.pkiSignedPdfUrl && (!loan.pkiStampedPdfUrl || !loan.pkiStampCertificateUrl) && loan.status !== "DEFAULT"
 			);
 		} else if (statusFilter === "discharged") {
 			filtered = filtered.filter((loan) => loan.status === "DISCHARGED");
@@ -1082,12 +1210,15 @@ function ActiveLoansContent() {
 						fetchSignatureStatus(currentSelectedLoanId);
 					}
 				}
+				toast.success("Loans refreshed successfully");
 			} else {
 				setError("Failed to load loans data");
+				toast.error("Failed to load loans data");
 			}
 		} catch (error) {
 			console.error("Error refreshing loans:", error);
 			setError("Failed to refresh loans. Please try again.");
+			toast.error("Failed to refresh loans");
 		} finally {
 			setRefreshing(false);
 		}
@@ -1122,15 +1253,15 @@ function ActiveLoansContent() {
 
 		// Validation
 		if (dischargeAction === "request" && !dischargeReason.trim()) {
-			alert("Please provide a reason for the discharge request");
+			toast.warning("Please provide a reason for the discharge request");
 			return;
 		}
 		if (dischargeAction === "approve" && !dischargeNotes.trim()) {
-			alert("Please provide admin notes for the discharge approval");
+			toast.warning("Please provide admin notes for the discharge approval");
 			return;
 		}
 		if (dischargeAction === "reject" && !dischargeReason.trim()) {
-			alert("Please provide a reason for rejecting the discharge");
+			toast.warning("Please provide a reason for rejecting the discharge");
 			return;
 		}
 
@@ -1174,15 +1305,15 @@ function ActiveLoansContent() {
 						: dischargeAction === "approve"
 						? "approved"
 						: "rejected";
-				alert(`Loan discharge ${actionText} successfully`);
+				toast.success(`Loan discharge ${actionText} successfully`);
 			} else {
-				alert(
+				toast.error(
 					response.message || `Failed to ${dischargeAction} discharge`
 				);
 			}
 		} catch (error) {
 			console.error(`Error ${dischargeAction}ing discharge:`, error);
-			alert(`Failed to ${dischargeAction} discharge. Please try again.`);
+			toast.error(`Failed to ${dischargeAction} discharge. Please try again.`);
 		} finally {
 			setProcessingDischarge(false);
 		}
@@ -1203,13 +1334,13 @@ function ActiveLoansContent() {
 
 	const handleManualPaymentSubmit = async () => {
 		if (!manualPaymentForm.loanId || !manualPaymentForm.amount || !manualPaymentForm.reference) {
-			alert("Please fill in all required fields (Loan ID, Amount, Reference)");
+			toast.warning("Please fill in all required fields (Loan ID, Amount, Reference)");
 			return;
 		}
 
 		const amount = parseFloat(manualPaymentForm.amount);
 		if (isNaN(amount) || amount <= 0) {
-			alert("Please enter a valid payment amount greater than 0");
+			toast.warning("Please enter a valid payment amount greater than 0");
 			return;
 		}
 
@@ -1250,7 +1381,7 @@ function ActiveLoansContent() {
 			}
 		} catch (error) {
 			console.error("Error creating manual payment:", error);
-			alert(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
+			toast.error(`Failed to create manual payment: ${error instanceof Error ? error.message : "Unknown error"}`);
 		} finally {
 			setProcessingManualPayment(false);
 		}
@@ -1312,7 +1443,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading receipt:', error);
-			alert('Failed to download receipt');
+			toast.error('Failed to download receipt');
 		}
 	};
 
@@ -1356,7 +1487,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading signed agreement:', error);
-			alert(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			toast.error(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -1395,7 +1526,7 @@ function ActiveLoansContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error("❌ Error downloading stamped agreement:", error);
-			alert(error instanceof Error ? error.message : "Failed to download stamped agreement");
+			toast.error(error instanceof Error ? error.message : "Failed to download stamped agreement");
 		}
 	};
 
@@ -1435,7 +1566,53 @@ function ActiveLoansContent() {
 
 		} catch (error) {
 			console.error("❌ Error downloading stamp certificate:", error);
-			alert(error instanceof Error ? error.message : "Failed to download stamp certificate");
+			toast.error(error instanceof Error ? error.message : "Failed to download stamp certificate");
+		}
+	};
+
+	const downloadLampiranA = async (loanId: string) => {
+		try {
+			toast.info("Generating Lampiran A...");
+			const token = localStorage.getItem("adminToken");
+			const response = await fetch(
+				`/api/admin/loans/${loanId}/lampiran-a`,
+				{
+					method: 'GET',
+					headers: {
+						"Authorization": `Bearer ${token}`,
+					},
+				}
+			);
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			
+			// Extract filename from Content-Disposition header or use default
+			const contentDisposition = response.headers.get('Content-Disposition');
+			let filename = `Lampiran-A-${loanId.substring(0, 8)}.pdf`;
+			if (contentDisposition) {
+				const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+				if (filenameMatch) {
+					filename = filenameMatch[1];
+				}
+			}
+			
+			link.download = filename;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+			toast.success("Lampiran A downloaded successfully");
+		} catch (error) {
+			console.error('Error downloading Lampiran A:', error);
+			toast.error(`Failed to download Lampiran A: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -1480,7 +1657,7 @@ function ActiveLoansContent() {
 
 	const handleUploadStampedSubmit = async () => {
 		if (!uploadStampedFile || !manualPaymentForm.loanId) {
-			alert("Please select a PDF file to upload");
+			toast.warning("Please select a PDF file to upload");
 			return;
 		}
 
@@ -1517,7 +1694,7 @@ function ActiveLoansContent() {
 
 		} catch (error) {
 			console.error("❌ Error uploading stamped agreement:", error);
-			alert(error instanceof Error ? error.message : "Failed to upload stamped agreement");
+			toast.error(error instanceof Error ? error.message : "Failed to upload stamped agreement");
 		} finally {
 			setUploadStampedLoading(false);
 		}
@@ -1525,7 +1702,7 @@ function ActiveLoansContent() {
 
 	const handleUploadCertificateSubmit = async () => {
 		if (!uploadCertificateFile || !uploadCertificateLoanId) {
-			alert("Please select a PDF file to upload");
+			toast.warning("Please select a PDF file to upload");
 			return;
 		}
 
@@ -1562,7 +1739,7 @@ function ActiveLoansContent() {
 
 		} catch (error) {
 			console.error("❌ Error uploading stamp certificate:", error);
-			alert(error instanceof Error ? error.message : "Failed to upload stamp certificate");
+			toast.error(error instanceof Error ? error.message : "Failed to upload stamp certificate");
 		} finally {
 			setUploadCertificateLoading(false);
 		}
@@ -1609,9 +1786,9 @@ function ActiveLoansContent() {
 	const getLateStatusColor = (daysLate: number) => {
 		if (daysLate === 0)
 			return {
-				bg: "bg-green-500/20",
-				text: "text-green-200",
-				border: "border-green-400/20",
+				bg: "bg-blue-500/20",
+				text: "text-blue-200",
+				border: "border-blue-400/20",
 			};
 		if (daysLate <= 15)
 			return {
@@ -1625,38 +1802,59 @@ function ActiveLoansContent() {
 				text: "text-orange-200",
 				border: "border-orange-400/20",
 			};
+		// 31+ days - red/critical
 		return {
 			bg: "bg-red-500/20",
 			text: "text-red-200",
 			border: "border-red-400/20",
 		};
 	};
+	
+	// Helper to check if loan is in any late/risk/default state
+	const isLoanInTrouble = (loan: LoanData) => {
+		const isDefaulted = loan.status === "DEFAULT" || loan.defaultedAt;
+		const isDefaultRisk = loan.defaultRiskFlaggedAt && !loan.defaultedAt;
+		const daysLate = getDaysLate(loan);
+		return isDefaulted || isDefaultRisk || daysLate > 0;
+	};
 
 	const getLoanStatusColor = (status: string) => {
 		switch (status) {
 			case "ACTIVE":
 				return {
-					bg: "bg-green-500/20",
-					text: "text-green-200",
-					border: "border-green-400/20",
-				};
-			case "PENDING_DISCHARGE":
-				return {
-					bg: "bg-yellow-500/20",
-					text: "text-yellow-200",
-					border: "border-yellow-400/20",
-				};
-			case "PENDING_EARLY_SETTLEMENT":
-				return {
 					bg: "bg-blue-500/20",
 					text: "text-blue-200",
 					border: "border-blue-400/20",
 				};
-			case "DISCHARGED":
+			case "PENDING_DISCHARGE":
 				return {
 					bg: "bg-purple-500/20",
 					text: "text-purple-200",
 					border: "border-purple-400/20",
+				};
+			case "PENDING_EARLY_SETTLEMENT":
+				return {
+					bg: "bg-purple-500/20",
+					text: "text-purple-200",
+					border: "border-purple-400/20",
+				};
+			case "DISCHARGED":
+				return {
+					bg: "bg-green-500/20",
+					text: "text-green-200",
+					border: "border-green-400/20",
+				};
+			case "DEFAULT":
+				return {
+					bg: "bg-red-800/50",
+					text: "text-red-100",
+					border: "border-red-600/50",
+				};
+			case "DEFAULT_RISK":
+				return {
+					bg: "bg-rose-600/30",
+					text: "text-rose-200",
+					border: "border-rose-400/30",
 				};
 			default:
 				return {
@@ -1676,13 +1874,29 @@ function ActiveLoansContent() {
 	};
 
 	const calculateProgress = (loan: LoanData) => {
-		const totalLoanAmount = loan.totalAmount || loan.principalAmount;
-		if (totalLoanAmount === 0) return 0;
-		// Calculate progress based on principal paid (excluding late fees)
-		const principalPaid = loan.repayments?.reduce((total, repayment) => {
-			return total + (repayment.principalPaid || 0);
+		// For discharged or settled loans, show 100% progress
+		const isSettled = loan.status === "DISCHARGED" || 
+						  loan.status === "PENDING_DISCHARGE" || 
+						  loan.status === "PENDING_EARLY_SETTLEMENT";
+		if (isSettled) return 100;
+		
+		// Calculate total amount including late fees
+		const baseLoanAmount = loan.totalAmount || loan.principalAmount;
+		const totalLateFeesAssessed = loan.repayments?.reduce((total, repayment) => {
+			return total + (repayment.lateFeeAmount || 0);
 		}, 0) || 0;
-		return (principalPaid / totalLoanAmount) * 100;
+		const totalAmountDue = baseLoanAmount + totalLateFeesAssessed;
+		
+		if (totalAmountDue === 0) return 0;
+		
+		// Calculate total paid using actualAmount (the actual amount paid)
+		// Include both COMPLETED and PARTIAL repayments since actualAmount reflects actual payments made
+		const totalPaid = loan.repayments?.reduce((total, repayment) => {
+			if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+			return total + (repayment.actualAmount || 0);
+		}, 0) || 0;
+		
+		return Math.min((totalPaid / totalAmountDue) * 100, 100);
 	};
 
 	const getRepaymentStatusColor = (status: string) => {
@@ -1761,6 +1975,23 @@ function ActiveLoansContent() {
 		newStatus: string,
 		changeReason?: string
 	): string => {
+		// Handle document-related events with readable descriptions
+		if (newStatus === "DOCUMENT_UPLOADED") {
+			return "Document Uploaded";
+		}
+		if (newStatus === "DOCUMENT_DELETED") {
+			return "Document Deleted";
+		}
+		if (newStatus === "DOCUMENT_APPROVED") {
+			return "Document Approved";
+		}
+		if (newStatus === "DOCUMENT_REJECTED") {
+			return "Document Rejected";
+		}
+		if (newStatus === "DOCUMENT_STATUS_CHANGED") {
+			return "Document Status Changed";
+		}
+		
 		// If changeReason is provided, use it directly
 		if (changeReason) {
 			return changeReason;
@@ -1773,6 +2004,50 @@ function ActiveLoansContent() {
 
 		// Otherwise, this is a status change
 		return `Status changed to ${getStatusLabel(newStatus)}`;
+	};
+
+	// Document helper functions for Documents tab
+	const getDocumentTypeName = (type: string): string => {
+		const documentTypeMap: Record<string, string> = {
+			ID: "Identification Document",
+			PAYSLIP: "Pay Slip",
+			BANK_STATEMENT: "Bank Statement",
+			UTILITY_BILL: "Utility Bill",
+			EMPLOYMENT_LETTER: "Employment Letter",
+			OTHER: "Other Document",
+		};
+		return documentTypeMap[type] || type;
+	};
+
+	const getDocumentStatusColor = (
+		status: string
+	): { bg: string; text: string } => {
+		const statusMap: Record<string, { bg: string; text: string }> = {
+			PENDING: { bg: "bg-yellow-500/20", text: "text-yellow-200" },
+			APPROVED: { bg: "bg-green-500/20", text: "text-green-200" },
+			REJECTED: { bg: "bg-red-500/20", text: "text-red-200" },
+		};
+		return statusMap[status] || { bg: "bg-gray-500/20", text: "text-gray-300" };
+	};
+
+	// Format document URL for viewing
+	const formatDocumentUrl = (fileUrl: string, documentId: string, applicationId: string): string => {
+		if (!fileUrl) return "";
+
+		// If the URL already includes http(s), it's already an absolute URL
+		if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+			return fileUrl;
+		}
+
+		// For relative URLs, use the loan-applications API endpoint
+		if (applicationId && documentId) {
+			return `${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${applicationId}/documents/${documentId}`;
+		}
+
+		// Fallback to direct file access
+		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+		const cleanFileUrl = fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl;
+		return `${backendUrl}/${cleanFileUrl}`;
 	};
 
 	const getNextPaymentDetails = (repayments: LoanRepayment[]) => {
@@ -2018,6 +2293,230 @@ function ActiveLoansContent() {
 		} catch (error) {
 			console.error('Error downloading CSV:', error);
 			setError('Failed to download CSV file');
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
+	/**
+	 * Download all loans in KPKT format for uploading to KPKT portal
+	 * Format follows the contoh_upload.csv template
+	 */
+	const downloadKPKTExport = async () => {
+		try {
+			setRefreshing(true);
+			
+			// KPKT CSV headers (exact column names from template)
+			const headers = [
+				'JenisPemohon',
+				'NamaPemohon',
+				'JenisSyarikat',
+				'NomborPerniagaan',
+				'NoKp',
+				'NomborTelefon',
+				'Bangsa',
+				'Jantina',
+				'Pekerjaan',
+				'Pendapatan',
+				'Majikan',
+				'Alamat',
+				'StatusCagaran',
+				'JenisCagaran',
+				'NilaiCagaran',
+				'TarikhPinjaman',
+				'PinjamanPokok',
+				'JumlahFaedahKeseluruhan',
+				'JumlahPinjamanKeseluruhan',
+				'KadarFaedah',
+				'TempohBayaran',
+				'BakiPinjamanKeseluruhan',
+				'JumlahNpl',
+				'Nota'
+			];
+
+			// Helper to get Majikan (Employer type) for KPKT format
+			// Valid values: Kerajaan, Swasta, Berniaga, Kerja Sendiri, Tidak Bekerja
+			const getMajikanForKPKT = (employmentStatus?: string): string => {
+				if (!employmentStatus) return 'Tiada Maklumat';
+				const s = employmentStatus.toUpperCase();
+				// Check UNEMPLOYED first before EMPLOYED (since UNEMPLOYED contains EMPLOYED)
+				// Student, Retired, Unemployed, Not Working all fall under Tidak Bekerja
+				if (s.includes('UNEMPLOYED') || s.includes('NOT WORKING') || s.includes('TIDAK BEKERJA') || 
+				    s.includes('STUDENT') || s.includes('PELAJAR') || s.includes('RETIRED') || s.includes('PENCEN')) {
+					return 'Tidak Bekerja';
+				}
+				if (s.includes('GOVERNMENT') || s.includes('KERAJAAN')) return 'Kerajaan';
+				if (s.includes('PRIVATE') || s.includes('SWASTA') || s.includes('EMPLOYED')) return 'Swasta';
+				if (s.includes('BUSINESS') || s.includes('BERNIAGA')) return 'Berniaga';
+				if (s.includes('SELF') || s.includes('FREELANCE') || s.includes('SENDIRI')) return 'Kerja Sendiri';
+				return 'Tiada Maklumat';
+			};
+
+			// Helper to get Pekerjaan (Occupation/Job title) for KPKT format
+			// This is the actual job title (e.g., Manager, Salesman)
+			// If not provided, return "Tiada Maklumat"
+			const getPekerjaanForKPKT = (occupation?: string): string => {
+				return occupation || 'Tiada Maklumat';
+			};
+
+			// Helper to translate gender to Jantina (Lelaki/Perempuan)
+			const getJantinaForKPKT = (gender?: string): string => {
+				if (!gender) return '';
+				const g = gender.toUpperCase();
+				if (g === 'MALE' || g === 'M' || g === 'LELAKI') return 'Lelaki';
+				if (g === 'FEMALE' || g === 'F' || g === 'PEREMPUAN') return 'Perempuan';
+				return '';
+			};
+
+			// Helper to translate race to Bangsa for KPKT
+			const getBangsaForKPKT = (race?: string): string => {
+				if (!race) return 'Tiada Maklumat';
+				const r = race.toUpperCase();
+				if (r.includes('MALAY') || r === 'MELAYU') return 'Melayu';
+				if (r.includes('CHINESE') || r === 'CINA') return 'Cina';
+				if (r.includes('INDIAN') || r === 'INDIA') return 'India';
+				if (r.includes('SABAH') || r.includes('SARAWAK') || r.includes('BUMIPUTRA') || r.includes('KADAZAN') || r.includes('IBAN') || r.includes('BIDAYUH')) return 'Bumiputra(Sabah/Sarawak)';
+				if (r.includes('OTHER') || r.includes('LAIN')) return 'Lain - lain';
+				return 'Lain - lain';
+			};
+
+			// Helper to translate nationality to Bangsa (fallback if race not available)
+			const translateNationalityToKPKT = (nationality?: string): string => {
+				if (!nationality) return 'Tiada Maklumat';
+				const n = nationality.toUpperCase();
+				if (n.includes('MALAY') || n === 'MELAYU') return 'Melayu';
+				if (n.includes('CHINESE') || n === 'CINA') return 'Cina';
+				if (n.includes('INDIAN') || n === 'INDIA') return 'India';
+				if (n.includes('SABAH') || n.includes('SARAWAK') || n.includes('BUMIPUTRA') || n.includes('KADAZAN') || n.includes('IBAN') || n.includes('BIDAYUH')) return 'Bumiputra(Sabah/Sarawak)';
+				if (n.includes('MALAYSIA') || n.includes('WARGANEGARA')) return 'Lain - lain';
+				if (n.includes('FOREIGN') || n.includes('ASING') || !n.includes('MALAYSIA')) return 'Bukan Warganegara';
+				return 'Lain - lain';
+			};
+
+			// Helper to get loan status in KPKT Nota format
+			const getLoanNota = (loan: LoanData): string => {
+				const status = loan.status.toUpperCase();
+				if (status === 'DISCHARGED' || status === 'COMPLETED' || status === 'SETTLED') {
+					return 'PINJAMAN SELESAI';
+				}
+				if (status === 'DEFAULTED' || status === 'DEFAULT' || status === 'IN_COURT' || status === 'LEGAL_ACTION' || loan.defaultedAt) {
+					return 'DALAM TINDAKAN MAHKAMAH';
+				}
+				if (status === 'POTENTIAL_DEFAULT' || status === 'RECOVERY' || status === 'COLLECTION' || status === 'OVERDUE' || loan.defaultRiskFlaggedAt) {
+					return 'DALAM PROSES DAPAT BALIK';
+				}
+				return 'PINJAMAN SEMASA';
+			};
+
+			// Helper to format date as DD/MM/YYYY
+			const formatKPKTDate = (dateString: string | null): string => {
+				if (!dateString) return '';
+				const date = new Date(dateString);
+				const day = date.getDate().toString().padStart(2, '0');
+				const month = (date.getMonth() + 1).toString().padStart(2, '0');
+				const year = date.getFullYear();
+				return `${day}/${month}/${year}`;
+			};
+
+			// Helper to format address
+			const formatKPKTAddress = (user: any): string => {
+				const parts = [
+					user?.address1,
+					user?.address2,
+					user?.city,
+					user?.state,
+					user?.zipCode,
+				].filter(Boolean);
+				return parts.join(', ') || '';
+			};
+
+			// Build CSV data
+			const csvData: string[][] = [headers];
+
+			for (const loan of filteredLoans) {
+				const user = loan.application?.user || loan.user;
+				const isCompany = false; // Currently all loans are individual - can be extended if needed
+				
+				// Calculate total interest
+				const totalInterest = (loan.totalAmount || loan.principalAmount) - loan.principalAmount;
+				
+				// Calculate annualized interest rate
+				// Formula: (Total Interest / Principal) / (Term in Years) * 100
+				// Example: Principal 150,000, Interest 27,000, Term 12 months
+				//   Annual Rate = (27,000 / 150,000) / (12/12) * 100 = 18%
+				const termInYears = loan.term / 12;
+				const annualizedInterestRate = loan.principalAmount > 0 && termInYears > 0
+					? (totalInterest / loan.principalAmount) / termInYears * 100
+					: loan.interestRate; // Fallback to stored rate if calculation fails
+				
+				// Calculate NPL amount (if in default or recovery status)
+				const isNPL = loan.status === 'DEFAULTED' || loan.status === 'DEFAULT' || 
+				              loan.status === 'POTENTIAL_DEFAULT' || loan.defaultedAt || loan.defaultRiskFlaggedAt;
+				const nplAmount = isNPL ? loan.outstandingBalance : 0;
+
+				const row = [
+					isCompany ? 'Syarikat' : 'Individu',                           // JenisPemohon
+					user?.fullName || '',                                           // NamaPemohon
+					isCompany ? '' : '',                                            // JenisSyarikat (empty for individuals)
+					isCompany ? '' : '',                                            // NomborPerniagaan (empty for individuals)
+					user?.icNumber || user?.idNumber || '',                         // NoKp
+					user?.phoneNumber || '',                                        // NomborTelefon
+					getBangsaForKPKT(user?.race) || translateNationalityToKPKT(user?.nationality), // Bangsa (use race, fallback to nationality)
+					getJantinaForKPKT(user?.gender),                                // Jantina
+					getPekerjaanForKPKT(user?.occupation),                          // Pekerjaan (job title)
+					user?.monthlyIncome || '',                                      // Pendapatan
+					getMajikanForKPKT(user?.employmentStatus),                      // Majikan (employer type)
+					formatKPKTAddress(user),                                        // Alamat
+					loan.application?.product?.collateralRequired ? 'Bercagar' : 'Tidak Bercagar', // StatusCagaran
+					loan.application?.product?.collateralRequired ? 'Lain-lain' : '', // JenisCagaran
+					'',                                                             // NilaiCagaran
+					formatKPKTDate(loan.disbursedAt || loan.createdAt),            // TarikhPinjaman
+					Math.round(loan.principalAmount).toString(),                    // PinjamanPokok
+					Math.round(totalInterest).toString(),                           // JumlahFaedahKeseluruhan
+					Math.round(loan.totalAmount || loan.principalAmount).toString(), // JumlahPinjamanKeseluruhan
+					Math.round(annualizedInterestRate).toString(),                  // KadarFaedah (annualized %)
+					loan.term.toString(),                                           // TempohBayaran
+					Math.round(loan.outstandingBalance).toString(),                 // BakiPinjamanKeseluruhan
+					Math.round(nplAmount).toString(),                               // JumlahNpl
+					getLoanNota(loan)                                               // Nota
+				];
+
+				csvData.push(row);
+			}
+
+			// Convert to CSV string
+			const csvContent = csvData
+				.map(row => 
+					row.map(cell => {
+						const cellString = String(cell || '');
+						// Escape quotes and wrap in quotes if contains comma, quote, or newline
+						if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
+							return '"' + cellString.replace(/"/g, '""') + '"';
+						}
+						return cellString;
+					}).join(',')
+				)
+				.join('\n');
+
+			// Create and download the file
+			const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+			const link = document.createElement('a');
+			
+			if (link.download !== undefined) {
+				const url = URL.createObjectURL(blob);
+				link.setAttribute('href', url);
+				link.setAttribute('download', `KPKT_Export_${new Date().toISOString().split('T')[0]}.csv`);
+				link.style.visibility = 'hidden';
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			}
+
+			toast.success('KPKT export downloaded successfully');
+		} catch (error) {
+			console.error('Error downloading KPKT export:', error);
+			setError('Failed to download KPKT export file');
+			toast.error('Failed to download KPKT export');
 		} finally {
 			setRefreshing(false);
 		}
@@ -2360,16 +2859,30 @@ function ActiveLoansContent() {
 				</div>
 				<div className="mt-4 md:mt-0 flex gap-3">
 					<button
-						onClick={downloadCSV}
+						onClick={downloadKPKTExport}
 						disabled={refreshing}
-						className="flex items-center px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors"
+						className="flex items-center px-4 py-2 bg-amber-500/20 text-amber-200 rounded-lg border border-amber-400/20 hover:bg-amber-500/30 transition-colors"
+						title="Export all loans in KPKT format for portal upload"
 					>
 						{refreshing ? (
 							<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
 						) : (
 							<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
 						)}
-						Download All (CSV)
+						KPKT Export (CSV)
+					</button>
+					<button
+						onClick={downloadCSV}
+						disabled={refreshing}
+						className="flex items-center px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors"
+						title="Download detailed audit trail with repayments and history"
+					>
+						{refreshing ? (
+							<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+						) : (
+							<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+						)}
+						Audit Trail (CSV)
 					</button>
 					<button
 						onClick={handleRefresh}
@@ -2462,7 +2975,7 @@ function ActiveLoansContent() {
 						onClick={() => setStatusFilter("active")}
 						className={`px-4 py-2 rounded-lg border transition-colors ${
 							statusFilter === "active"
-								? "bg-green-500/30 text-green-100 border-green-400/30"
+								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
 								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 						}`}
 					>
@@ -2472,7 +2985,7 @@ function ActiveLoansContent() {
 						onClick={() => setStatusFilter("pending_discharge")}
 						className={`px-4 py-2 rounded-lg border transition-colors ${
 							statusFilter === "pending_discharge"
-								? "bg-yellow-500/30 text-yellow-100 border-yellow-400/30"
+								? "bg-purple-500/30 text-purple-100 border-purple-400/30"
 								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 						}`}
 					>
@@ -2482,27 +2995,17 @@ function ActiveLoansContent() {
 						onClick={() => setStatusFilter("pending_early_settlement")}
 						className={`px-4 py-2 rounded-lg border transition-colors ${
 							statusFilter === "pending_early_settlement"
-								? "bg-blue-500/30 text-blue-100 border-blue-400/30"
+								? "bg-purple-500/30 text-purple-100 border-purple-400/30"
 								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 						}`}
 					>
 						Early Settlement ({filterCounts.pending_early_settlement})
 					</button>
 					<button
-						onClick={() => setStatusFilter("pending_stamped")}
-						className={`px-4 py-2 rounded-lg border transition-colors ${
-							statusFilter === "pending_stamped"
-								? "bg-teal-500/30 text-teal-100 border-teal-400/30"
-								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-						}`}
-					>
-						Pending Stamped ({filterCounts.pending_stamped})
-					</button>
-					<button
 						onClick={() => setStatusFilter("discharged")}
 						className={`px-4 py-2 rounded-lg border transition-colors ${
 							statusFilter === "discharged"
-								? "bg-purple-500/30 text-purple-100 border-purple-400/30"
+								? "bg-green-500/30 text-green-100 border-green-400/30"
 								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 						}`}
 					>
@@ -2522,7 +3025,7 @@ function ActiveLoansContent() {
 						onClick={() => setStatusFilter("potential_default")}
 						className={`px-4 py-2 rounded-lg border transition-colors ${
 							statusFilter === "potential_default"
-								? "bg-amber-500/30 text-amber-100 border-amber-400/30"
+								? "bg-rose-600/30 text-rose-100 border-rose-400/30"
 								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 						}`}
 					>
@@ -2532,7 +3035,7 @@ function ActiveLoansContent() {
 						onClick={() => setStatusFilter("defaulted")}
 						className={`px-4 py-2 rounded-lg border transition-colors ${
 							statusFilter === "defaulted"
-								? "bg-red-600/30 text-red-100 border-red-500/30"
+								? "bg-red-800/50 text-red-100 border-red-600/50"
 								: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 						}`}
 					>
@@ -2594,61 +3097,181 @@ function ActiveLoansContent() {
 														</p>
 													</div>
 													<div className="text-right ml-4">
-														{/* Status Display */}
-														{loan.status ===
-														"ACTIVE" ? (
-															/* Show payment status for active loans */
-															<span
-																className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border ${lateStatus.bg} ${lateStatus.text} ${lateStatus.border} mb-1`}
-															>
-																{getPaymentStatusText(
-																	daysLate
-																)}
-															</span>
-														) : (
-															/* Show loan status for non-active loans */
-															<span
-																className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border ${loanStatus.bg} ${loanStatus.text} ${loanStatus.border} mb-1`}
-															>
-																{loan.status ===
-																"PENDING_DISCHARGE"
-																	? "Pending Discharge"
-																	: loan.status ===
-																	  "PENDING_EARLY_SETTLEMENT"
-																	? "Early Settlement Pending"
-																	: loan.status ===
-																	  "DISCHARGED"
-																	? "Discharged"
-																	: loan.status}
-															</span>
-														)}
+														{/* Status Display - Priority: DEFAULT > Default Risk > Late > Active */}
+														{(() => {
+															// Check for defaulted status (highest priority)
+															const isDefaulted = loan.status === "DEFAULT" || loan.defaultedAt;
+															if (isDefaulted) {
+																const defaultedStatus = getLoanStatusColor("DEFAULT");
+																return (
+																	<span
+																		className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border ${defaultedStatus.bg} ${defaultedStatus.text} ${defaultedStatus.border} mb-1`}
+																	>
+																		Loan Defaulted
+																	</span>
+																);
+															}
+															
+															// Check for default risk (second priority)
+															const isDefaultRisk = loan.defaultRiskFlaggedAt && !loan.defaultedAt;
+															if (isDefaultRisk) {
+																const defaultRiskStatus = getLoanStatusColor("DEFAULT_RISK");
+																return (
+																	<span
+																		className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border ${defaultRiskStatus.bg} ${defaultRiskStatus.text} ${defaultRiskStatus.border} mb-1`}
+																	>
+																		Default Risk
+																	</span>
+																);
+															}
+															
+															// For ACTIVE loans, show payment status (late/current)
+															if (loan.status === "ACTIVE") {
+																return (
+																	<span
+																		className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border ${lateStatus.bg} ${lateStatus.text} ${lateStatus.border} mb-1`}
+																	>
+																		{getPaymentStatusText(daysLate)}
+																	</span>
+																);
+															}
+															
+															// For other non-active statuses
+															return (
+																<span
+																	className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border ${loanStatus.bg} ${loanStatus.text} ${loanStatus.border} mb-1`}
+																>
+																	{loan.status === "PENDING_DISCHARGE"
+																		? "Pending Discharge"
+																		: loan.status === "PENDING_EARLY_SETTLEMENT"
+																		? "Early Settlement Pending"
+																		: loan.status === "DISCHARGED"
+																		? "Discharged"
+																		: loan.status}
+																</span>
+															);
+														})()}
 
 														<p className="text-xs text-gray-400 mt-2">
 															Outstanding:
 														</p>
-														<p className="text-xs font-medium text-white">
+														<p className="text-xs font-medium">
 															{(() => {
 																const isPendingSettlement = loan.status === "PENDING_EARLY_SETTLEMENT" || 
 																						   loan.status === "PENDING_DISCHARGE" ||
 																						   loan.status === "DISCHARGED";
 																if (isPendingSettlement) {
+																	// Calculate total paid from completed/partial repayments (this is the actual amount paid)
+																	const totalPaid = loan.repayments?.reduce((total, repayment) => {
+																		if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+																		// For completed/partial repayments, use actualAmount which reflects actual payment
+																		return total + (repayment.actualAmount || 0);
+																	}, 0) || 0;
+																	
+																	// Get discount info if available
+																	const discount = loan.earlySettlementInfo?.discountAmount || loan.earlySettlementDiscount || 0;
+																	
+																	// Always show total paid from repayments (actual amount paid)
 																	return (
-																		<span className="text-orange-300">
-																			{formatCurrency(0)} 
-																			<span className="text-xs text-gray-400 ml-1">(settled)</span>
+																		<span className="text-green-300">
+																			Paid: {formatCurrency(totalPaid)}
+																			{discount > 0 && (
+																				<span className="text-xs text-green-400 block">
+																					-{formatCurrency(discount)} discount
+																				</span>
+																			)}
 																		</span>
 																	);
 																}
-																return formatCurrency(loan.outstandingBalance);
+																
+																// Calculate late fees for late/default loans
+																const unpaidLateFees = loan.repayments?.reduce((total, repayment) => {
+																	const assessed = repayment.lateFeeAmount || 0;
+																	const paid = repayment.lateFeesPaid || 0;
+																	return total + Math.max(0, assessed - paid);
+																}, 0) || 0;
+																const totalOutstanding = loan.outstandingBalance + unpaidLateFees;
+																
+																// Check if loan is in trouble (late, default risk, or defaulted)
+																const isDefaulted = loan.status === "DEFAULT" || loan.defaultedAt;
+																const isDefaultRisk = loan.defaultRiskFlaggedAt && !loan.defaultedAt;
+																const isLate = daysLate > 0;
+																
+																if (isDefaulted) {
+																	return (
+																		<span className="text-red-300 font-semibold">
+																			{formatCurrency(totalOutstanding)}
+																			{unpaidLateFees > 0 && (
+																				<span className="text-xs text-red-400 block">
+																					incl. {formatCurrency(unpaidLateFees)} fees
+																				</span>
+																			)}
+																		</span>
+																	);
+																}
+																if (isDefaultRisk) {
+																	return (
+																		<span className="text-rose-300">
+																			{formatCurrency(totalOutstanding)}
+																			{unpaidLateFees > 0 && (
+																				<span className="text-xs text-rose-400 block">
+																					incl. {formatCurrency(unpaidLateFees)} fees
+																				</span>
+																			)}
+																		</span>
+																	);
+																}
+																if (isLate) {
+																	return (
+																		<span className="text-orange-300">
+																			{formatCurrency(totalOutstanding)}
+																			{unpaidLateFees > 0 && (
+																				<span className="text-xs text-orange-400 block">
+																					incl. {formatCurrency(unpaidLateFees)} fees
+																				</span>
+																			)}
+																		</span>
+																	);
+																}
+																return (
+																	<span className="text-white">
+																		{formatCurrency(loan.outstandingBalance)}
+																	</span>
+																);
 															})()}
 														</p>
 														<p className="text-xs text-blue-300 mt-1">
-															of{" "}
-															{formatCurrency(
-																loan.totalAmount ||
-																	loan.principalAmount
-															)}{" "}
-															total
+															{(() => {
+																const isPendingSettlement = loan.status === "PENDING_EARLY_SETTLEMENT" || 
+																						   loan.status === "PENDING_DISCHARGE" ||
+																						   loan.status === "DISCHARGED";
+																// For settled loans, show original loan amount
+																if (isPendingSettlement) {
+																	return (
+																		<span className="text-gray-400">
+																			Loan: {formatCurrency(loan.totalAmount || loan.principalAmount)}
+																		</span>
+																	);
+																}
+																// For late loans, show total including late fees
+																const totalLateFeesAssessed = loan.repayments?.reduce((total, repayment) => {
+																	return total + (repayment.lateFeeAmount || 0);
+																}, 0) || 0;
+																const baseLoanAmount = loan.totalAmount || loan.principalAmount;
+																
+																if (totalLateFeesAssessed > 0) {
+																	return (
+																		<>
+																			of {formatCurrency(baseLoanAmount + totalLateFeesAssessed)} total
+																		</>
+																	);
+																}
+																return (
+																	<>
+																		of {formatCurrency(baseLoanAmount)} total
+																	</>
+																);
+															})()}
 														</p>
 													</div>
 												</div>
@@ -2677,48 +3300,156 @@ function ActiveLoansContent() {
 				<div className="lg:col-span-2">
 					{selectedLoan ? (
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-								<div className="flex items-center gap-3">
+							<div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+								<div>
 									<h3 className="text-lg font-medium text-white">
 										Loan Details
 									</h3>
+									<div className="mt-1.5 flex items-center gap-2">
+										{(() => {
+											const statusColor = getLoanStatusColor(selectedLoan.status);
+											const statusLabels: Record<string, string> = {
+												'ACTIVE': 'Active',
+												'PENDING_DISCHARGE': 'Pending Discharge',
+												'PENDING_EARLY_SETTLEMENT': 'Early Settlement',
+												'DISCHARGED': 'Discharged',
+												'DEFAULT': 'Defaulted',
+												'DEFAULT_RISK': 'Default Risk'
+											};
+											return (
+												<span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColor.bg} ${statusColor.text} border ${statusColor.border}`}>
+													{statusLabels[selectedLoan.status] || selectedLoan.status}
+												</span>
+											);
+										})()}
+									</div>
+								</div>
+								<div className="flex items-center gap-3">
 									<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
 										ID: {selectedLoan.id.substring(0, 8)}
 									</span>
 								</div>
-								<div className="flex items-center gap-2">
-									{/* Manual Payment Button - Show for ACTIVE loans */}
-									{selectedLoan.status === "ACTIVE" && (
-										<button
-											onClick={() => handleCreateManualPayment(selectedLoan.id)}
-											className="flex items-center px-3 py-1.5 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors text-xs"
-											title="Create manual payment for this loan"
-										>
-											<CurrencyDollarIcon className="h-3 w-3 mr-1" />
-											Manual Payment
-										</button>
-									)}
-									<button
-										onClick={() => downloadIndividualLoanCSV(selectedLoan)}
-										disabled={refreshing}
-										className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
-										title="Download loan data as CSV"
-									>
-										{refreshing ? (
-											<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
-										) : (
-											<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
+							</div>
+							<div className="p-4 border-b border-gray-700/30 space-y-3">
+								{/* Row 1: View Actions */}
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider w-20">View</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{/* View Disbursement - Show if applicationId exists */}
+										{selectedLoan.applicationId && (
+											<Link
+												href={`/dashboard/disbursements?search=${selectedLoan.applicationId}`}
+												className="flex items-center px-3 py-1.5 bg-teal-500/20 text-teal-200 rounded-lg border border-teal-400/20 hover:bg-teal-500/30 transition-colors text-xs"
+												title="View disbursement details"
+											>
+												<BanknotesIcon className="h-3 w-3 mr-1" />
+												Disbursement
+											</Link>
 										)}
-										Download CSV
-									</button>
+										{/* View Related Payments - Show if there are repayments */}
+										{selectedLoan.repayments && selectedLoan.repayments.length > 0 && (
+											<Link
+												href={`/dashboard/payments?search=${selectedLoan.id}&status=all`}
+												className="flex items-center px-3 py-1.5 bg-teal-500/20 text-teal-200 rounded-lg border border-teal-400/20 hover:bg-teal-500/30 transition-colors text-xs"
+												title="View related payments"
+											>
+												<CreditCardIcon className="h-3 w-3 mr-1" />
+												Payments
+											</Link>
+										)}
+									</div>
 								</div>
+
+								{/* Row 2: Download Actions */}
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider w-20">Downloads</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										<button
+											onClick={() => downloadIndividualLoanCSV(selectedLoan)}
+											disabled={refreshing}
+											className="flex items-center px-3 py-1.5 bg-emerald-500/20 text-emerald-200 rounded-lg border border-emerald-400/20 hover:bg-emerald-500/30 transition-colors text-xs"
+											title="Download loan audit trail as CSV"
+										>
+											{refreshing ? (
+												<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
+											) : (
+												<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
+											)}
+											Audit Trail (CSV)
+										</button>
+										{/* Lampiran A - Compliance Document */}
+										<button
+											onClick={() => downloadLampiranA(selectedLoan.id)}
+											className="flex items-center px-3 py-1.5 bg-indigo-500/20 text-indigo-200 rounded-lg border border-indigo-400/20 hover:bg-indigo-500/30 transition-colors text-xs"
+											title="Download Lampiran A (Borrower Account Ledger) - Compliance document under Moneylenders Act 1951"
+										>
+											<ClipboardDocumentCheckIcon className="h-3 w-3 mr-1" />
+											Lampiran A (PDF)
+										</button>
+									</div>
+								</div>
+
+								{/* Row 3: Actions */}
+								{(selectedLoan.status === "ACTIVE" || selectedLoan.status === "PENDING_DISCHARGE") && (
+									<div className="flex items-center gap-3">
+										<span className="text-xs font-medium text-gray-400 uppercase tracking-wider w-20">Actions</span>
+										<div className="h-4 w-px bg-gray-600/50"></div>
+										<div className="flex items-center gap-2 flex-wrap">
+											{/* Manual Payment Button - Show for ACTIVE loans */}
+											{selectedLoan.status === "ACTIVE" && (
+												<button
+													onClick={() => handleCreateManualPayment(selectedLoan.id)}
+													className="flex items-center px-3 py-1.5 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors text-xs"
+													title="Create manual payment for this loan"
+												>
+													<CurrencyDollarIcon className="h-3 w-3 mr-1" />
+													Manual Payment
+												</button>
+											)}
+											{/* Request Discharge - Show for ACTIVE loans with zero balance */}
+											{selectedLoan.status === "ACTIVE" && selectedLoan.outstandingBalance === 0 && (
+												<button
+													onClick={() => handleDischargeRequest("request")}
+													className="flex items-center px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-xs"
+													title="Request loan discharge"
+												>
+													<CheckCircleIcon className="h-3 w-3 mr-1" />
+													Request Discharge
+												</button>
+											)}
+											{/* Discharge Actions - Show for PENDING_DISCHARGE status */}
+											{selectedLoan.status === "PENDING_DISCHARGE" && (
+												<>
+													<button
+														onClick={() => handleDischargeRequest("approve")}
+														className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+														title="Approve loan discharge"
+													>
+														<CheckCircleIcon className="h-3 w-3 mr-1" />
+														Approve Discharge
+													</button>
+													<button
+														onClick={() => handleDischargeRequest("reject")}
+														className="flex items-center px-3 py-1.5 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors text-xs"
+														title="Reject loan discharge"
+													>
+														<XMarkIcon className="h-3 w-3 mr-1" />
+														Reject Discharge
+													</button>
+												</>
+											)}
+										</div>
+									</div>
+								)}
 							</div>
 
 							<div className="p-6">
 								{/* Tab Navigation */}
 								<div className="flex border-b border-gray-700/30 mb-6">
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "details"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
@@ -2730,7 +3461,7 @@ function ActiveLoansContent() {
 										Details
 									</div>
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "repayments"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
@@ -2739,31 +3470,56 @@ function ActiveLoansContent() {
 											setSelectedTab("repayments")
 										}
 									>
-										<ArrowsRightLeftIcon className="inline h-4 w-4 mr-1" />
+										<ArrowsRightLeftIcon className="h-4 w-4 mr-1.5" />
 										Repayments
 									</div>
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "audit"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
 										}`}
 										onClick={() => setSelectedTab("audit")}
 									>
-										<DocumentTextIcon className="inline h-4 w-4 mr-1" />
+										<DocumentTextIcon className="h-4 w-4 mr-1.5" />
 										Audit Trail
 									</div>
 									<div
-										className={`px-4 py-2 cursor-pointer transition-colors ${
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 											selectedTab === "signatures"
 												? "border-b-2 border-blue-400 font-medium text-white"
 												: "text-gray-400 hover:text-gray-200"
 										}`}
 										onClick={() => setSelectedTab("signatures")}
 									>
-										<PencilIcon className="inline h-4 w-4 mr-1" />
+										<PencilIcon className="h-4 w-4 mr-1.5" />
 										Signatures
 									</div>
+									<div
+										className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+											selectedTab === "documents"
+												? "border-b-2 border-blue-400 font-medium text-white"
+												: "text-gray-400 hover:text-gray-200"
+										}`}
+										onClick={() => setSelectedTab("documents")}
+									>
+										<FolderIcon className="h-4 w-4 mr-1.5" />
+										Documents
+									</div>
+									{/* Credit Report tab - ADMIN only */}
+									{userRole === "ADMIN" && (
+										<div
+											className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+												selectedTab === "credit-report"
+													? "border-b-2 border-blue-400 font-medium text-white"
+													: "text-gray-400 hover:text-gray-200"
+											}`}
+											onClick={() => setSelectedTab("credit-report")}
+										>
+											<DocumentCheckIcon className="h-4 w-4 mr-1.5" />
+											Credit Report
+										</div>
+									)}
 									{/* Only show Default Letters tab for loans that need default-related letters */}
 									{(() => {
 										// Show tab for loans that are Late, Default Risk, or Defaulted
@@ -2777,14 +3533,14 @@ function ActiveLoansContent() {
 										if (isLate || isDefaultRisk || isDefaulted) {
 											return (
 												<div
-													className={`px-4 py-2 cursor-pointer transition-colors ${
+													className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
 														selectedTab === "pdf-letters"
 															? "border-b-2 border-blue-400 font-medium text-white"
 															: "text-gray-400 hover:text-gray-200"
 													}`}
 													onClick={() => setSelectedTab("pdf-letters")}
 												>
-													<DocumentArrowDownIcon className="inline h-4 w-4 mr-1" />
+													<DocumentArrowDownIcon className="h-4 w-4 mr-1.5" />
 													Default Letters
 												</div>
 											);
@@ -2805,19 +3561,66 @@ function ActiveLoansContent() {
 												</p>
 												<p className="text-2xl font-bold text-white">
 													{(() => {
+														// Check statuses in priority order
 														const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
 																				   selectedLoan.status === "PENDING_DISCHARGE" ||
 																				   selectedLoan.status === "DISCHARGED";
 														if (isPendingSettlement) {
+															const textColor = selectedLoan.status === "DISCHARGED" ? "text-green-300" : "text-purple-300";
 															return (
-																<span className="text-orange-300">
+																<span className={`${textColor} text-center`}>
 																	{formatCurrency(0)}
-																	<span className="text-xs text-gray-400 mt-1 font-normal block">
+																	<span className="text-xs text-gray-400 mt-1 font-normal block text-center">
 																		{selectedLoan.status === "DISCHARGED" ? "Discharged" : "Early Settlement"}
 																	</span>
 																</span>
 															);
 														}
+														
+														// Check for defaulted
+														const isDefaulted = selectedLoan.status === "DEFAULT" || selectedLoan.defaultedAt;
+														if (isDefaulted) {
+															return (
+																<span className="text-red-300 text-center">
+																	{formatCurrency(selectedLoan.outstandingBalance)}
+																	<span className="text-xs text-red-400 mt-1 font-normal block text-center">
+																		Defaulted
+																	</span>
+																</span>
+															);
+														}
+														
+														// Check for default risk
+														const isDefaultRisk = selectedLoan.defaultRiskFlaggedAt && !selectedLoan.defaultedAt;
+														if (isDefaultRisk) {
+															return (
+																<span className="text-rose-300 text-center">
+																	{formatCurrency(selectedLoan.outstandingBalance)}
+																	<span className="text-xs text-rose-400 mt-1 font-normal block text-center">
+																		Default Risk
+																	</span>
+																</span>
+															);
+														}
+														
+														// Check for late payment
+														const daysLate = getDaysLate(selectedLoan);
+														if (daysLate > 0) {
+															// Use color gradient based on days late
+															let textColor = "text-yellow-300";
+															if (daysLate > 30) textColor = "text-red-300";
+															else if (daysLate > 15) textColor = "text-orange-300";
+															
+															return (
+																<span className={`${textColor} text-center`}>
+																	{formatCurrency(selectedLoan.outstandingBalance)}
+																	<span className={`text-xs ${textColor} mt-1 font-normal block text-center`}>
+																		{daysLate} days late
+																	</span>
+																</span>
+															);
+														}
+														
 														return formatCurrency(selectedLoan.outstandingBalance);
 													})()}
 												</p>
@@ -2856,11 +3659,16 @@ function ActiveLoansContent() {
 												<p className="text-2xl font-bold text-white">
 													{(() => {
 														const repayments = selectedLoan.repayments || [];
-														const totalPaid = repayments.reduce((total, repayment) => {
-															// Sum all actualAmount values (actual amount paid by user)
-															// Include CANCELLED repayments as they may have partial payments before cancellation
+														// Calculate from repayments (primary method)
+														// Include both COMPLETED and PARTIAL since actualAmount reflects actual payments
+														const calculatedFromRepayments = repayments.reduce((total, repayment) => {
+															if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
 															return total + (repayment.actualAmount || 0);
 														}, 0);
+														// Use calculated value, or fall back to backend-provided totalPaid if calculation returns 0
+														const totalPaid = calculatedFromRepayments > 0 
+															? calculatedFromRepayments 
+															: (selectedLoan.totalPaid || 0);
 														return formatCurrency(totalPaid);
 													})()}
 												</p>
@@ -2879,12 +3687,13 @@ function ActiveLoansContent() {
 																			   selectedLoan.status === "PENDING_DISCHARGE" ||
 																			   selectedLoan.status === "DISCHARGED";
 													if (isPendingSettlement) {
+														const statusColor = selectedLoan.status === "DISCHARGED" ? "text-green-300" : "text-purple-300";
 														return (
 															<>
 																<p className="text-gray-400 text-sm mb-1">
 																	Payment Status
 																</p>
-																<p className="text-2xl font-bold text-orange-300">
+																<p className={`text-2xl font-bold ${statusColor}`}>
 																	{selectedLoan.status === "PENDING_EARLY_SETTLEMENT" ? "Settlement Pending" : 
 																	 selectedLoan.status === "PENDING_DISCHARGE" ? "Fully Settled" : "Discharged"}
 																</p>
@@ -2894,6 +3703,63 @@ function ActiveLoansContent() {
 																		: selectedLoan.status === "PENDING_DISCHARGE"
 																		? "Awaiting final discharge"
 																		: "Loan completed"}
+																</p>
+															</>
+														);
+													}
+													
+													// Check if loan has overdue payments (late, default risk, defaulted)
+													const hasOverduePayments = selectedLoan.overdueInfo?.hasOverduePayments;
+													const isDefaulted = selectedLoan.status === "DEFAULT" || selectedLoan.defaultedAt;
+													const isDefaultRisk = selectedLoan.defaultRiskFlaggedAt && !selectedLoan.defaultedAt;
+													const daysLate = getDaysLate(selectedLoan);
+													const isLate = daysLate > 0;
+													
+													if (hasOverduePayments || isDefaulted || isDefaultRisk || isLate) {
+														// Calculate total amount to clear late status
+														const overdueAmount = selectedLoan.overdueInfo?.totalOverdueAmount || 0;
+														const overdueLateFees = selectedLoan.overdueInfo?.totalLateFees || 0;
+														const totalToClear = overdueAmount + overdueLateFees;
+														const overdueCount = selectedLoan.overdueInfo?.overdueRepayments?.length || 0;
+														
+														// Determine color based on status
+														let statusColor = "text-yellow-300";
+														let statusLabel = "Late Payment";
+														if (isDefaulted) {
+															statusColor = "text-red-300";
+															statusLabel = "Defaulted";
+														} else if (isDefaultRisk) {
+															statusColor = "text-rose-300";
+															statusLabel = "Default Risk";
+														} else if (daysLate > 30) {
+															statusColor = "text-red-300";
+															statusLabel = `${daysLate} Days Late`;
+														} else if (daysLate > 15) {
+															statusColor = "text-orange-300";
+															statusLabel = `${daysLate} Days Late`;
+														} else if (daysLate > 0) {
+															statusColor = "text-yellow-300";
+															statusLabel = `${daysLate} Days Late`;
+														}
+														
+														return (
+															<>
+																<p className="text-gray-400 text-sm mb-1">
+																	Amount to Clear
+																</p>
+																<p className={`text-2xl font-bold ${statusColor}`}>
+																	{formatCurrency(totalToClear)}
+																</p>
+																<p className="text-xs text-gray-400 mt-1">
+																	{overdueCount > 1 ? `${overdueCount} overdue payments` : "1 overdue payment"}
+																	{overdueLateFees > 0 && (
+																		<span className="block text-red-400">
+																			incl. {formatCurrency(overdueLateFees)} late fees
+																		</span>
+																	)}
+																</p>
+																<p className={`text-xs ${statusColor} mt-1 font-medium`}>
+																	{statusLabel}
 																</p>
 															</>
 														);
@@ -2943,17 +3809,49 @@ function ActiveLoansContent() {
 													const repayments =
 														selectedLoan.repayments ||
 														[];
-													const completedRepayments =
-														repayments.filter(
-															(r) =>
-																r.status ===
-																"COMPLETED"
-														);
+													
+													// Find early settlement repayment if exists
+													const earlySettlementRepayment = repayments.find(
+														(r) => r.paymentType === "EARLY_SETTLEMENT" && r.status === "COMPLETED"
+													);
+													const earlySettlementDate = earlySettlementRepayment 
+														? new Date(earlySettlementRepayment.actualPaymentDate || earlySettlementRepayment.paidAt || earlySettlementRepayment.createdAt)
+														: null;
+													
+													// Get all scheduled repayments (excluding early settlement type)
+													const scheduledRepayments = repayments.filter(
+														(r) => r.paymentType !== "EARLY_SETTLEMENT"
+													);
+													
+													// For early settlement loans, consider repayments that were due before settlement
+													// Completed payments
+													const completedRepayments = scheduledRepayments.filter(
+														(r) => r.status === "COMPLETED"
+													);
+													
+													// Cancelled repayments - split into overdue (missed) vs cleared early via settlement
+													const cancelledRepayments = scheduledRepayments.filter((r) => r.status === "CANCELLED");
+													
+													// Cancelled repayments that were overdue at time of early settlement (missed)
+													const cancelledOverdueRepayments = cancelledRepayments.filter((r) => {
+														if (!earlySettlementDate) return false;
+														const dueDate = new Date(r.dueDate);
+														// Was due before early settlement date (was overdue/missed)
+														return dueDate < earlySettlementDate;
+													});
+													
+													// Cancelled repayments that were NOT yet due at time of early settlement (cleared early)
+													const cancelledSettledEarlyRepayments = cancelledRepayments.filter((r) => {
+														if (!earlySettlementDate) return false;
+														const dueDate = new Date(r.dueDate);
+														// Was due on or after early settlement date (cleared early via settlement)
+														return dueDate >= earlySettlementDate;
+													});
+													
+													// Total repayments to consider = completed + all cancelled
+													const totalRepaymentsToConsider = completedRepayments.length + cancelledRepayments.length;
 
-													if (
-														completedRepayments.length ===
-														0
-													) {
+													if (totalRepaymentsToConsider === 0) {
 														return (
 															<>
 																<p className="text-gray-400 text-sm mb-1">
@@ -2965,12 +3863,13 @@ function ActiveLoansContent() {
 																</p>
 																<p className="text-xs text-gray-400 mt-1">
 																	No payments
-																	made yet
+																	due yet
 																</p>
 															</>
 														);
 													}
 
+													// On-time payments from completed repayments
 													const onTimeOrEarlyPayments =
 														completedRepayments.filter(
 															(r) => {
@@ -2990,13 +3889,41 @@ function ActiveLoansContent() {
 																);
 															}
 														);
+													
+													// Late payments from completed repayments
+													const latePayments = completedRepayments.filter((r) => {
+														const paymentDate = new Date(
+															r.actualPaymentDate || r.paidAt || r.createdAt
+														);
+														const dueDate = new Date(r.dueDate);
+														return paymentDate > dueDate;
+													});
+													
+													// Missed payments = cancelled overdue
+													const missedPayments = cancelledOverdueRepayments.length;
+													
+													// Settled early = cancelled but not yet due (count as on-time)
+													const settledEarlyPayments = cancelledSettledEarlyRepayments.length;
+													
+													// On-time includes both actual on-time payments AND those cleared early via settlement
+													const totalOnTime = onTimeOrEarlyPayments.length + settledEarlyPayments;
 
 													const percentage =
 														Math.round(
-															(onTimeOrEarlyPayments.length /
-																completedRepayments.length) *
+															(totalOnTime /
+																totalRepaymentsToConsider) *
 																100
 														);
+													
+													// Determine color based on performance
+													let performanceColor = "text-green-400";
+													if (percentage < 50) {
+														performanceColor = "text-red-400";
+													} else if (percentage < 75) {
+														performanceColor = "text-orange-400";
+													} else if (percentage < 100) {
+														performanceColor = "text-yellow-400";
+													}
 
 													return (
 														<>
@@ -3004,18 +3931,23 @@ function ActiveLoansContent() {
 																Payment
 																Performance
 															</p>
-															<p className="text-2xl font-bold text-white">
+															<p className={`text-2xl font-bold ${performanceColor}`}>
 																{percentage}%
 															</p>
 															<p className="text-xs text-gray-400 mt-1">
-																{
-																	onTimeOrEarlyPayments.length
-																}{" "}
-																of{" "}
-																{
-																	completedRepayments.length
-																}{" "}
-																on-time
+																{onTimeOrEarlyPayments.length} on-time
+																{settledEarlyPayments > 0 && (
+																	<span className="text-purple-400"> / {settledEarlyPayments} settled early</span>
+																)}
+																{latePayments.length > 0 && (
+																	<span className="text-yellow-400"> / {latePayments.length} late</span>
+																)}
+																{missedPayments > 0 && (
+																	<span className="text-red-400"> / {missedPayments} missed</span>
+																)}
+															</p>
+															<p className="text-xs text-gray-500 mt-0.5">
+																of {totalRepaymentsToConsider} scheduled
 															</p>
 														</>
 													);
@@ -3062,6 +3994,98 @@ function ActiveLoansContent() {
 												})()}
 											</div>
 										</div>
+
+										{/* Loan Status Alert - Discharged / Defaulted / Default Risk */}
+										{(() => {
+											const isDefaulted = selectedLoan.status === "DEFAULT" || selectedLoan.defaultedAt;
+											const isDefaultRisk = selectedLoan.defaultRiskFlaggedAt && !selectedLoan.defaultedAt;
+											const isDischarged = selectedLoan.status === "DISCHARGED";
+											
+											if (isDischarged) {
+												const dischargedStatus = getLoanStatusColor("DISCHARGED");
+												return (
+													<div
+														className={`p-4 rounded-lg mb-6 border ${dischargedStatus.bg} ${dischargedStatus.border}`}
+													>
+														<div className="flex items-start">
+															<CheckCircleIcon className="h-5 w-5 mr-2 mt-0.5 text-green-200" />
+															<div>
+																<p className={`font-medium ${dischargedStatus.text}`}>
+																	Loan Discharged
+																</p>
+																<p className="text-sm text-gray-300 mt-1">
+																	This loan has been fully settled and discharged
+																	{selectedLoan.dischargedAt ? (
+																		<span> on {formatDate(selectedLoan.dischargedAt)}</span>
+																	) : selectedLoan.updatedAt && (
+																		<span> on {formatDate(selectedLoan.updatedAt)}</span>
+																	)}
+																</p>
+																<p className="text-xs text-green-300 mt-1">
+																	Total loan amount: {formatCurrency(selectedLoan.totalAmount || selectedLoan.principalAmount)}
+																</p>
+															</div>
+														</div>
+													</div>
+												);
+											}
+											
+											if (isDefaulted) {
+												const defaultedStatus = getLoanStatusColor("DEFAULT");
+												return (
+													<div
+														className={`p-4 rounded-lg mb-6 border ${defaultedStatus.bg} ${defaultedStatus.border}`}
+													>
+														<div className="flex items-start">
+															<ExclamationTriangleIcon className="h-5 w-5 mr-2 mt-0.5 text-red-200" />
+															<div>
+																<p className={`font-medium ${defaultedStatus.text}`}>
+																	Loan Defaulted
+																</p>
+																<p className="text-sm text-gray-300 mt-1">
+																	This loan has been marked as defaulted
+																	{selectedLoan.defaultedAt && (
+																		<span> on {formatDate(selectedLoan.defaultedAt)}</span>
+																	)}
+																</p>
+																<p className="text-xs text-red-300 mt-1">
+																	Outstanding balance: {formatCurrency(selectedLoan.outstandingBalance)}
+																</p>
+															</div>
+														</div>
+													</div>
+												);
+											}
+											
+											if (isDefaultRisk) {
+												const defaultRiskStatus = getLoanStatusColor("DEFAULT_RISK");
+												return (
+													<div
+														className={`p-4 rounded-lg mb-6 border ${defaultRiskStatus.bg} ${defaultRiskStatus.border}`}
+													>
+														<div className="flex items-start">
+															<ExclamationTriangleIcon className="h-5 w-5 mr-2 mt-0.5 text-rose-200" />
+															<div>
+																<p className={`font-medium ${defaultRiskStatus.text}`}>
+																	Default Risk
+																</p>
+																<p className="text-sm text-gray-300 mt-1">
+																	This loan has been flagged for potential default
+																	{selectedLoan.defaultRiskFlaggedAt && (
+																		<span> on {formatDate(selectedLoan.defaultRiskFlaggedAt)}</span>
+																	)}
+																</p>
+																<p className="text-xs text-rose-300 mt-1">
+																	Outstanding balance: {formatCurrency(selectedLoan.outstandingBalance)}
+																</p>
+															</div>
+														</div>
+													</div>
+												);
+											}
+											
+											return null;
+										})()}
 
 										{/* Payment Status Alert */}
 										{(() => {
@@ -3176,30 +4200,98 @@ function ActiveLoansContent() {
 
 												<div className="flex justify-between text-sm text-gray-400">
 													<div>
-														<p>Principal Paid</p>
+														<p>Total Paid</p>
 														<p className="text-white font-medium">
 															{formatCurrency(
 																(() => {
-																	// Calculate total principal paid from repayments (excluding late fees)
-																	return selectedLoan.repayments?.reduce((total, repayment) => {
-																		return total + (repayment.principalPaid || 0);
+																	// Calculate total paid using actualAmount (the actual amount paid)
+																	// Include both COMPLETED and PARTIAL since actualAmount reflects actual payments
+																	const calculatedFromRepayments = selectedLoan.repayments?.reduce((total, repayment) => {
+																		if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+																		return total + (repayment.actualAmount || 0);
 																	}, 0) || 0;
+																	// Use calculated value, or fall back to backend-provided totalPaid
+																	return calculatedFromRepayments > 0 
+																		? calculatedFromRepayments 
+																		: (selectedLoan.totalPaid || 0);
 																})()
 															)}
 														</p>
 													</div>
 													<div className="text-right">
-														<p>Outstanding Balance</p>
+														<p>Outstanding (incl. late fees)</p>
 														<p className="text-white font-medium">
 															{(() => {
 																const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
 																						   selectedLoan.status === "PENDING_DISCHARGE" ||
 																						   selectedLoan.status === "DISCHARGED";
 																if (isPendingSettlement) {
+																	const textColor = selectedLoan.status === "DISCHARGED" ? "text-green-300" : "text-purple-300";
+																	const statusText = selectedLoan.status === "DISCHARGED" ? "discharged" : "settling";
 																	return (
-																		<span className="text-orange-300">
+																		<span className={textColor}>
 																			{formatCurrency(0)} 
-																			<span className="text-xs text-gray-400 block">(settled)</span>
+																			<span className="text-xs text-gray-400 block">({statusText})</span>
+																		</span>
+																	);
+																}
+																
+																// Calculate outstanding including unpaid late fees
+																const unpaidLateFees = selectedLoan.repayments?.reduce((total, repayment) => {
+																	const assessed = repayment.lateFeeAmount || 0;
+																	const paid = repayment.lateFeesPaid || 0;
+																	return total + Math.max(0, assessed - paid);
+																}, 0) || 0;
+																const totalOutstanding = selectedLoan.outstandingBalance + unpaidLateFees;
+																
+																// Check for defaulted
+																const isDefaulted = selectedLoan.status === "DEFAULT" || selectedLoan.defaultedAt;
+																if (isDefaulted) {
+																	return (
+																		<span className="text-red-300">
+																			{formatCurrency(totalOutstanding)}
+																			{unpaidLateFees > 0 && (
+																				<span className="text-xs text-red-400 block">
+																					(incl. {formatCurrency(unpaidLateFees)} fees)
+																				</span>
+																			)}
+																		</span>
+																	);
+																}
+																
+																// Check for default risk
+																const isDefaultRisk = selectedLoan.defaultRiskFlaggedAt && !selectedLoan.defaultedAt;
+																if (isDefaultRisk) {
+																	return (
+																		<span className="text-rose-300">
+																			{formatCurrency(totalOutstanding)}
+																			{unpaidLateFees > 0 && (
+																				<span className="text-xs text-rose-400 block">
+																					(incl. {formatCurrency(unpaidLateFees)} fees)
+																				</span>
+																			)}
+																		</span>
+																	);
+																}
+																
+																// Check for late (has unpaid late fees or overdue)
+																if (unpaidLateFees > 0) {
+																	const daysLate = getDaysLate(selectedLoan);
+																	let textColor = "text-yellow-300";
+																	let subTextColor = "text-yellow-400";
+																	if (daysLate > 30) {
+																		textColor = "text-red-300";
+																		subTextColor = "text-red-400";
+																	} else if (daysLate > 15) {
+																		textColor = "text-orange-300";
+																		subTextColor = "text-orange-400";
+																	}
+																	return (
+																		<span className={textColor}>
+																			{formatCurrency(totalOutstanding)}
+																			<span className={`text-xs ${subTextColor} block`}>
+																				(incl. {formatCurrency(unpaidLateFees)} late fees)
+																			</span>
 																		</span>
 																	);
 																}
@@ -3208,12 +4300,130 @@ function ActiveLoansContent() {
 														</p>
 													</div>
 												</div>
+												
+												{/* Early Settlement / Payment Breakdown */}
+												{(() => {
+													const isPendingSettlement = selectedLoan.status === "PENDING_EARLY_SETTLEMENT" || 
+																			   selectedLoan.status === "PENDING_DISCHARGE" ||
+																			   selectedLoan.status === "DISCHARGED";
+													
+													if (!isPendingSettlement) return null;
+													
+													// Calculate payments breakdown
+													const regularPayments = selectedLoan.repayments?.filter(r => 
+														r.status === "COMPLETED" && r.paymentType !== "EARLY_SETTLEMENT"
+													) || [];
+													const earlySettlementPayment = selectedLoan.repayments?.find(r => 
+														r.paymentType === "EARLY_SETTLEMENT" && r.status === "COMPLETED"
+													);
+													
+													// Total paid before early settlement (regular installments)
+													const paidBeforeSettlement = regularPayments.reduce((total, repayment) => {
+														return total + (repayment.actualAmount || repayment.amount || 0);
+													}, 0);
+													
+													// Late fees paid (from all completed/partial repayments)
+													const totalLateFeesPaid = selectedLoan.repayments?.reduce((total, repayment) => {
+														if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+														return total + (repayment.lateFeesPaid || 0);
+													}, 0) || 0;
+													
+													// Early settlement payment amount
+													const earlySettlementPaid = earlySettlementPayment?.actualAmount || earlySettlementPayment?.amount || 0;
+													
+													// Get discount info if available
+													const discountAmount = selectedLoan.earlySettlementInfo?.discountAmount || selectedLoan.earlySettlementDiscount || 0;
+													const feeAmount = selectedLoan.earlySettlementInfo?.feeAmount || 0;
+													
+													// Grand total paid
+													const grandTotalPaid = paidBeforeSettlement + earlySettlementPaid;
+													
+													return (
+														<div className="mt-4 pt-4 border-t border-gray-700/30">
+															<p className="text-gray-400 text-sm mb-3">Payment Breakdown</p>
+															<div className="space-y-2 text-sm">
+																{/* Regular payments before settlement */}
+																{paidBeforeSettlement > 0 && (
+																	<div>
+																		<div className="flex justify-between">
+																			<span className="text-gray-400">
+																				Regular Installments ({regularPayments.length} payments)
+																			</span>
+																			<span className="text-white font-medium">
+																				{formatCurrency(paidBeforeSettlement)}
+																			</span>
+																		</div>
+																		{/* Late fees included info */}
+																		{totalLateFeesPaid > 0 && (
+																			<div className="flex justify-between text-xs mt-0.5">
+																				<span className="text-gray-500 pl-2">
+																					↳ incl. {formatCurrency(totalLateFeesPaid)} late fees
+																				</span>
+																			</div>
+																		)}
+																	</div>
+																)}
+																
+																{/* Early settlement payment */}
+																{earlySettlementPaid > 0 && (
+																	<div className="flex justify-between">
+																		<span className="text-gray-400">Early Settlement Payment</span>
+																		<span className="text-green-300 font-medium">
+																			{formatCurrency(earlySettlementPaid)}
+																		</span>
+																	</div>
+																)}
+																
+																{/* Divider and total */}
+																<div className="border-t border-gray-600/50 pt-2 mt-2">
+																	<div className="flex justify-between">
+																		<span className="text-white font-medium">Total Paid</span>
+																		<span className="text-green-300 font-bold">
+																			{formatCurrency(grandTotalPaid)}
+																		</span>
+																	</div>
+																</div>
+																
+																{/* Savings info (separate from total - these are savings, not payments) */}
+																{(discountAmount > 0 || feeAmount > 0) && (
+																	<div className="border-t border-gray-600/50 pt-2 mt-2">
+																		<p className="text-gray-500 text-xs mb-1">Early Settlement Details</p>
+																		{discountAmount > 0 && (
+																			<div className="flex justify-between text-xs">
+																				<span className="text-gray-400">Interest Saved</span>
+																				<span className="text-green-400">
+																					{formatCurrency(discountAmount)}
+																				</span>
+																			</div>
+																		)}
+																		{feeAmount > 0 && (
+																			<div className="flex justify-between text-xs">
+																				<span className="text-gray-400">Settlement Fee</span>
+																				<span className="text-yellow-300">
+																					{formatCurrency(feeAmount)}
+																				</span>
+																			</div>
+																		)}
+																		{discountAmount > 0 && feeAmount > 0 && (
+																			<div className="flex justify-between text-xs mt-1">
+																				<span className="text-gray-400">Net Savings</span>
+																				<span className={discountAmount - feeAmount > 0 ? "text-green-400" : "text-red-400"}>
+																					{formatCurrency(discountAmount - feeAmount)}
+																				</span>
+																			</div>
+																		)}
+																	</div>
+																)}
+															</div>
+														</div>
+													);
+												})()}
 											</div>
 										</div>
 
 										{/* Loan Details */}
 										<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-											{/* Customer Information */}
+											{/* Customer Information - Enhanced */}
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
 												<h4 className="text-white font-medium mb-3 flex items-center justify-between">
 													<div className="flex items-center">
@@ -3231,65 +4441,219 @@ function ActiveLoansContent() {
 														View Profile
 													</Link>
 												</h4>
-												<div className="space-y-3">
-													<div>
-														<p className="text-gray-400 text-sm">
-															Full Name
-														</p>
-														<p className="text-white">
-															{
-																selectedLoan
-																	.user
-																	.fullName
-															}
-														</p>
+												
+												{/* Basic Info */}
+												<div className="space-y-2 text-sm mb-4">
+													<div className="flex justify-between">
+														<span className="text-gray-400">Full Name</span>
+														<span className="text-white font-medium">
+															{selectedLoan.user.fullName}
+														</span>
 													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Email
-														</p>
-														<p className="text-white">
-															{
-																selectedLoan
-																	.user.email
-															}
-														</p>
+													<div className="flex justify-between">
+														<span className="text-gray-400">IC Number</span>
+														<span className="text-white">
+															{selectedLoan.user.icNumber || selectedLoan.user.idNumber || "N/A"}
+														</span>
 													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Phone
-														</p>
-														<p className="text-white">
-															{selectedLoan.user
-																.phoneNumber ||
-																"N/A"}
-														</p>
+													<div className="flex justify-between">
+														<span className="text-gray-400">Email</span>
+														<span className="text-white">
+															{selectedLoan.user.email}
+														</span>
 													</div>
-													{selectedLoan.application
-														?.user
-														?.employmentStatus && (
-														<div>
-															<p className="text-gray-400 text-sm">
-																Employment
-															</p>
-															<p className="text-white">
-																{
-																	selectedLoan
-																		.application
-																		.user
-																		.employmentStatus
-																}
-															</p>
+													<div className="flex justify-between">
+														<span className="text-gray-400">Phone</span>
+														<span className="text-white">
+															{selectedLoan.user.phoneNumber || "N/A"}
+														</span>
+													</div>
+													{selectedLoan.user.nationality && (
+														<div className="flex justify-between">
+															<span className="text-gray-400">Nationality</span>
+															<span className="text-white">
+																{selectedLoan.user.nationality}
+															</span>
+														</div>
+													)}
+													{selectedLoan.user.race && (
+														<div className="flex justify-between">
+															<span className="text-gray-400">Race</span>
+															<span className="text-white">
+																{selectedLoan.user.race}
+															</span>
+														</div>
+													)}
+													{selectedLoan.user.gender && (
+														<div className="flex justify-between">
+															<span className="text-gray-400">Gender</span>
+															<span className="text-white">
+																{selectedLoan.user.gender}
+															</span>
 														</div>
 													)}
 												</div>
+
+												{/* Employment Section */}
+												{(selectedLoan.user.employmentStatus || selectedLoan.user.employerName || selectedLoan.user.monthlyIncome || selectedLoan.user.occupation || selectedLoan.user.educationLevel) && (
+													<div className="border-t border-gray-600/50 pt-3 mb-4">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Employment</p>
+														<div className="space-y-2 text-sm">
+															{selectedLoan.user.employmentStatus && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Status</span>
+																	<span className="text-white">
+																		{selectedLoan.user.employmentStatus}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.occupation && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Occupation</span>
+																	<span className="text-white">
+																		{selectedLoan.user.occupation}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.employerName && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Employer</span>
+																	<span className="text-white">
+																		{selectedLoan.user.employerName}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.serviceLength && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Length of Service</span>
+																	<span className="text-white">
+																		{selectedLoan.user.serviceLength} years
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.monthlyIncome && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Monthly Income</span>
+																	<span className="text-emerald-400 font-medium">
+																		{formatCurrency(parseFloat(selectedLoan.user.monthlyIncome))}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.educationLevel && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Education Level</span>
+																	<span className="text-white">
+																		{selectedLoan.user.educationLevel}
+																	</span>
+																</div>
+															)}
+														</div>
+													</div>
+												)}
+
+												{/* Address Section */}
+												{(selectedLoan.user.address1 || selectedLoan.user.city) && (
+													<div className="border-t border-gray-600/50 pt-3 mb-4">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Address</p>
+														<div className="text-sm text-white">
+															{selectedLoan.user.address1 && (
+																<p>{selectedLoan.user.address1}</p>
+															)}
+															{selectedLoan.user.address2 && (
+																<p>{selectedLoan.user.address2}</p>
+															)}
+															{(selectedLoan.user.city || selectedLoan.user.state || selectedLoan.user.zipCode) && (
+																<p>
+																	{[
+																		selectedLoan.user.city,
+																		selectedLoan.user.state,
+																		selectedLoan.user.zipCode
+																	].filter(Boolean).join(', ')}
+																</p>
+															)}
+															{selectedLoan.user.country && (
+																<p>{selectedLoan.user.country}</p>
+															)}
+														</div>
+													</div>
+												)}
+
+												{/* Bank Details */}
+												{(selectedLoan.user.bankName || selectedLoan.user.accountNumber) && (
+													<div className="border-t border-gray-600/50 pt-3 mb-4">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Bank Details</p>
+														<div className="space-y-2 text-sm">
+															{selectedLoan.user.bankName && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Bank</span>
+																	<span className="text-white">
+																		{selectedLoan.user.bankName}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.accountNumber && (
+																<div className="flex justify-between items-center">
+																	<span className="text-gray-400">Account No.</span>
+																	<div className="flex items-center gap-2">
+																		<span className="text-white font-mono">
+																			{selectedLoan.user.accountNumber}
+																		</span>
+																		<button
+																			onClick={() => {
+																				navigator.clipboard.writeText(selectedLoan.user.accountNumber || '');
+																				toast.success("Account number copied to clipboard");
+																			}}
+																			className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-400/20 hover:bg-blue-500/30"
+																			title="Copy"
+																		>
+																			Copy
+																		</button>
+																	</div>
+																</div>
+															)}
+														</div>
+													</div>
+												)}
+
+												{/* Emergency Contact */}
+												{(selectedLoan.user.emergencyContactName || selectedLoan.user.emergencyContactPhone) && (
+													<div className="border-t border-gray-600/50 pt-3">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Emergency Contact</p>
+														<div className="space-y-2 text-sm">
+															{selectedLoan.user.emergencyContactName && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Name</span>
+																	<span className="text-white">
+																		{selectedLoan.user.emergencyContactName}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.emergencyContactRelationship && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Relationship</span>
+																	<span className="text-white">
+																		{selectedLoan.user.emergencyContactRelationship}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.emergencyContactPhone && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Phone</span>
+																	<span className="text-white">
+																		{selectedLoan.user.emergencyContactPhone}
+																	</span>
+																</div>
+															)}
+														</div>
+													</div>
+												)}
 											</div>
 
-											{/* Loan Terms */}
+											{/* Calculation Method */}
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
 												<h4 className="text-white font-medium mb-3 flex items-center">
 													<DocumentTextIcon className="h-5 w-5 mr-2 text-green-400" />
-													Loan Terms & Calculation Method
+													Calculation Method
 												</h4>
 												<div className="space-y-3">
 													<div>
@@ -3312,26 +4676,6 @@ function ActiveLoansContent() {
 																.application
 																?.purpose ||
 																"N/A"}
-														</p>
-													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Term
-														</p>
-														<p className="text-white">
-															{selectedLoan.term}{" "}
-															months
-														</p>
-													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Interest Rate
-														</p>
-														<p className="text-white">
-															{
-																selectedLoan.interestRate
-															}
-															% p.a.
 														</p>
 													</div>
 													<div>
@@ -3441,6 +4785,133 @@ function ActiveLoansContent() {
 												</div>
 											</div>
 
+											{/* Loan Terms - Full width */}
+											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 md:col-span-2">
+												<h4 className="text-white font-medium mb-4 flex items-center">
+													<BanknotesIcon className="h-5 w-5 mr-2 text-emerald-400" />
+													Loan Terms
+												</h4>
+												
+												<div className="space-y-4">
+													{/* Loan Terms Row */}
+													<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Loan Amount</span>
+															<span className="text-white font-medium md:mt-1">
+																{selectedLoan.application?.amount
+																	? formatCurrency(selectedLoan.application.amount)
+																	: formatCurrency(selectedLoan.principalAmount)}
+															</span>
+														</div>
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Loan Term</span>
+															<span className="text-white font-medium md:mt-1">
+																{selectedLoan.term} months
+															</span>
+														</div>
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Interest Rate</span>
+															<span className="text-white font-medium md:mt-1">
+																{selectedLoan.interestRate}% p.a.
+															</span>
+														</div>
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Monthly Repayment</span>
+															<span className="text-purple-400 font-semibold md:mt-1">
+																{formatCurrency(selectedLoan.monthlyPayment)}
+															</span>
+														</div>
+													</div>
+
+													{/* Fees Breakdown */}
+													<div className="border-t border-gray-600/50 pt-4">
+														<p className="text-sm font-medium text-gray-300 mb-3">Fees Deducted at Disbursement</p>
+														<div className="space-y-2 text-sm">
+															<div className="flex justify-between items-center">
+																<span className="text-gray-400">Legal Fee</span>
+																<span className="text-red-400">
+																	- {selectedLoan.application?.legalFeeFixed !== undefined && selectedLoan.application?.legalFeeFixed !== null && selectedLoan.application?.legalFeeFixed > 0
+																		? formatCurrency(selectedLoan.application.legalFeeFixed)
+																		: "RM 0.00"}
+																</span>
+															</div>
+															<div className="flex justify-between items-center">
+																<span className="text-gray-400">Stamping Fee</span>
+																<span className="text-red-400">
+																	- {selectedLoan.application?.stampingFee !== undefined && selectedLoan.application?.stampingFee !== null && selectedLoan.application?.stampingFee > 0
+																		? formatCurrency(selectedLoan.application.stampingFee)
+																		: "RM 0.00"}
+																</span>
+															</div>
+															<div className="flex justify-between items-center pt-2 border-t border-gray-600/30">
+																<span className="text-gray-300 font-medium">Total Fees</span>
+																<span className="text-red-400 font-medium">
+																	- {formatCurrency(
+																		(selectedLoan.application?.legalFeeFixed || 0) + 
+																		(selectedLoan.application?.stampingFee || 0)
+																	)}
+																</span>
+															</div>
+														</div>
+													</div>
+
+													{/* Net Disbursement - Highlighted */}
+													<div className="bg-emerald-500/10 rounded-lg p-4 border border-emerald-500/30">
+														<div className="flex justify-between items-center">
+															<div>
+																<p className="text-emerald-400 font-medium">Net Disbursement</p>
+																<p className="text-xs text-gray-400 mt-0.5">Amount credited to borrower's account</p>
+															</div>
+															<span className="text-emerald-400 text-xl font-semibold">
+																{selectedLoan.application?.netDisbursement
+																	? formatCurrency(selectedLoan.application.netDisbursement)
+																	: formatCurrency(
+																		(selectedLoan.application?.amount || selectedLoan.principalAmount) - 
+																		(selectedLoan.application?.legalFeeFixed || 0) - 
+																		(selectedLoan.application?.stampingFee || 0)
+																	)}
+															</span>
+														</div>
+													</div>
+
+													{/* Late Payment Fees from Product */}
+													{selectedLoan.application?.product && (
+														<div className="border-t border-gray-600/50 pt-4">
+															<p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees</p>
+															<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+																	<span className="text-gray-400 block text-xs mb-1">Late Fee Rate</span>
+																	<span className="text-amber-400 font-medium">
+																		{selectedLoan.application.product.lateFeeRate !== undefined && selectedLoan.application.product.lateFeeRate !== null
+																			? `${selectedLoan.application.product.lateFeeRate}%`
+																			: "8%"} <span className="text-xs text-gray-400">per annum</span>
+																	</span>
+																</div>
+																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+																	<span className="text-gray-400 block text-xs mb-1">Fixed Late Fee</span>
+																	<span className="text-amber-400 font-medium">
+																		{selectedLoan.application.product.lateFeeFixedAmount !== undefined && selectedLoan.application.product.lateFeeFixedAmount !== null
+																			? formatCurrency(selectedLoan.application.product.lateFeeFixedAmount)
+																			: "RM 0.00"}
+																	</span>
+																	{selectedLoan.application.product.lateFeeFrequencyDays !== undefined && selectedLoan.application.product.lateFeeFrequencyDays !== null && selectedLoan.application.product.lateFeeFrequencyDays > 0 && (
+																		<span className="text-xs text-gray-400 block mt-1">every {selectedLoan.application.product.lateFeeFrequencyDays} days</span>
+																	)}
+																</div>
+																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+																	<span className="text-gray-400 block text-xs mb-1">Grace Period</span>
+																	<span className="text-amber-400 font-medium">
+																		{lateFeeGraceDays} days
+																	</span>
+																	<span className="text-xs text-gray-400 block mt-1">before fee applies</span>
+																	<span className="text-xs text-blue-400 block mt-0.5">(system-wide)</span>
+																</div>
+															</div>
+														</div>
+													)}
+												</div>
+											</div>
+
 											{/* Agreement Information */}
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
 												<h4 className="text-white font-medium mb-3 flex items-center">
@@ -3494,71 +4965,71 @@ function ActiveLoansContent() {
 											</div>
 										</div>
 
-										{/* Action Buttons */}
-										<div className="flex flex-wrap gap-3">
-											{selectedLoan.applicationId && (
-												<Link
-													href={`/dashboard/disbursements?search=${selectedLoan.applicationId}`}
-													className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
-												>
-													<BanknotesIcon className="h-5 w-5 mr-2" />
-													View Disbursement
-												</Link>
-											)}
-
-											{/* Discharge Actions */}
-											{selectedLoan.status === "ACTIVE" &&
-												selectedLoan.outstandingBalance ===
-													0 && (
-													<button
-														onClick={() =>
-															handleDischargeRequest(
-																"request"
-															)
-														}
-														className="px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors flex items-center"
-													>
-														<CheckCircleIcon className="h-5 w-5 mr-2" />
-														Request Discharge
-													</button>
-												)}
-
-											{selectedLoan.status ===
-												"PENDING_DISCHARGE" && (
-												<>
-													<button
-														onClick={() =>
-															handleDischargeRequest(
-																"approve"
-															)
-														}
-														className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
-													>
-														<CheckCircleIcon className="h-5 w-5 mr-2" />
-														Approve Discharge
-													</button>
-													<button
-														onClick={() =>
-															handleDischargeRequest(
-																"reject"
-															)
-														}
-														className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center"
-													>
-														<XMarkIcon className="h-5 w-5 mr-2" />
-														Reject Discharge
-													</button>
-												</>
-											)}
-										</div>
 									</>
 								)}
 
 								{/* Repayments Tab */}
 								{selectedTab === "repayments" && (
 									<div>
+										{/* Early Settlement / Discharged Banner */}
 										{(() => {
-											return null;
+											const isSettled = selectedLoan.status === "DISCHARGED" || 
+															  selectedLoan.status === "PENDING_DISCHARGE" || 
+															  selectedLoan.status === "PENDING_EARLY_SETTLEMENT";
+											if (!isSettled) return null;
+											
+											const statusColor = selectedLoan.status === "DISCHARGED" 
+												? "bg-green-500/20 border-green-400/30 text-green-200"
+												: "bg-purple-500/20 border-purple-400/30 text-purple-200";
+											const statusText = selectedLoan.status === "DISCHARGED" 
+												? "Loan Discharged" 
+												: selectedLoan.status === "PENDING_EARLY_SETTLEMENT"
+												? "Early Settlement Pending"
+												: "Discharge Pending";
+											
+											return (
+												<div className={`p-4 rounded-lg mb-6 border ${statusColor}`}>
+													<div className="flex items-center justify-between">
+														<div className="flex items-center">
+															<CheckCircleIcon className="h-5 w-5 mr-2" />
+															<div>
+																<p className="font-medium">{statusText}</p>
+																{selectedLoan.dischargedAt && (
+																	<p className="text-sm text-gray-300">
+																		Discharged on {formatDate(selectedLoan.dischargedAt)}
+																	</p>
+																)}
+															</div>
+														</div>
+														{(() => {
+															// Check for early settlement info from backend (preferred)
+															const hasSettlementInfo = selectedLoan.earlySettlementInfo?.totalSettlement;
+															// Fallback to legacy fields
+															const hasLegacyInfo = selectedLoan.earlySettlementAmount || selectedLoan.earlySettlementDiscount;
+															
+															if (!hasSettlementInfo && !hasLegacyInfo) return null;
+															
+															const settlementAmount = selectedLoan.earlySettlementInfo?.totalSettlement || selectedLoan.earlySettlementAmount || 0;
+															const discountAmount = selectedLoan.earlySettlementInfo?.discountAmount || selectedLoan.earlySettlementDiscount || 0;
+															
+															return (
+																<div className="text-right">
+																	{settlementAmount > 0 && (
+																		<p className="text-sm">
+																			Settlement: <span className="font-medium">{formatCurrency(settlementAmount)}</span>
+																		</p>
+																	)}
+																	{discountAmount > 0 && (
+																		<p className="text-xs text-green-300">
+																			Discount: -{formatCurrency(discountAmount)}
+																		</p>
+																	)}
+																</div>
+															);
+														})()}
+													</div>
+												</div>
+											);
 										})()}
 										{loadingRepayments ? (
 											<div className="flex items-center justify-center py-12">
@@ -3578,19 +5049,10 @@ function ActiveLoansContent() {
 													<div className="mb-6">
 														<div className="flex justify-between text-sm mb-2">
 															<span className="text-gray-400">
-																Loan Progress
+																Loan Progress (incl. late fees)
 															</span>
 															<span className="text-white">
-																{(() => {
-																	// Calculate progress based on principal paid (excluding late fees)
-																	const totalLoanAmount = selectedLoan.totalAmount || selectedLoan.principalAmount;
-																	const principalPaid = selectedLoan.repayments?.reduce((total, repayment) => {
-																		return total + (repayment.principalPaid || 0);
-																	}, 0) || 0;
-																	const progressPercent = totalLoanAmount > 0 ? Math.round((principalPaid / totalLoanAmount) * 100) : 0;
-																	return progressPercent;
-																})()}
-																% Complete
+																{Math.round(calculateProgress(selectedLoan))}% Complete
 															</span>
 														</div>
 														<div className="w-full bg-gray-700 rounded-full h-4 relative overflow-hidden">
@@ -3598,14 +5060,7 @@ function ActiveLoansContent() {
 															<div
 																className="bg-gradient-to-r from-blue-500 to-green-500 h-4 rounded-full transition-all duration-300"
 																style={{
-																	width: `${(() => {
-																		// Calculate progress based on principal paid (excluding late fees)
-																		const totalLoanAmount = selectedLoan.totalAmount || selectedLoan.principalAmount;
-																		const principalPaid = selectedLoan.repayments?.reduce((total, repayment) => {
-																			return total + (repayment.principalPaid || 0);
-																		}, 0) || 0;
-																		return totalLoanAmount > 0 ? Math.round((principalPaid / totalLoanAmount) * 100) : 0;
-																	})()}%`,
+																	width: `${calculateProgress(selectedLoan)}%`,
 																}}
 															></div>
 
@@ -3717,26 +5172,61 @@ function ActiveLoansContent() {
 													</div>
 
 													{/* Payment Statistics */}
-													<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+													<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 														<div className="text-center">
 															<p className="text-gray-400 text-sm">
-																Principal Paid
+																Total Paid
 															</p>
 															<p className="text-white font-medium text-lg">
 																{formatCurrency(
 																	(() => {
-																		// Calculate total principal paid from repayments (excluding late fees)
-																		return selectedLoan.repayments?.reduce((total, repayment) => {
-																			return total + (repayment.principalPaid || 0);
+																		// Calculate total paid using actualAmount (the actual amount paid)
+																		// Include both COMPLETED and PARTIAL since actualAmount reflects actual payments
+																		const calculatedFromRepayments = selectedLoan.repayments?.reduce((total, repayment) => {
+																			if (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL") return total;
+																			return total + (repayment.actualAmount || 0);
 																		}, 0) || 0;
+																		// Use calculated value, or fall back to backend-provided totalPaid
+																		return calculatedFromRepayments > 0 
+																			? calculatedFromRepayments 
+																			: (selectedLoan.totalPaid || 0);
 																	})()
 																)}
 															</p>
 														</div>
 														<div className="text-center">
 															<p className="text-gray-400 text-sm">
-																Outstanding
-																Balance
+																Late Fees Paid
+															</p>
+															<p className="text-white font-medium text-lg">
+																{(() => {
+																	const lateFeesPaid = selectedLoan.repayments?.reduce((total, repayment) => {
+																		return total + (repayment.lateFeesPaid || 0);
+																	}, 0) || 0;
+																	const lateFeesAssessed = selectedLoan.repayments?.reduce((total, repayment) => {
+																		return total + (repayment.lateFeeAmount || 0);
+																	}, 0) || 0;
+																	const unpaid = lateFeesAssessed - lateFeesPaid;
+																	
+																	if (lateFeesAssessed === 0) {
+																		return <span className="text-gray-400">None</span>;
+																	}
+																	return (
+																		<>
+																			{formatCurrency(lateFeesPaid)}
+																			{unpaid > 0 && (
+																				<span className="text-xs text-red-400 block">
+																					{formatCurrency(unpaid)} unpaid
+																				</span>
+																			)}
+																		</>
+																	);
+																})()}
+															</p>
+														</div>
+														<div className="text-center">
+															<p className="text-gray-400 text-sm">
+																Outstanding (incl. fees)
 															</p>
 															<p className="text-white font-medium text-lg">
 																{(() => {
@@ -3744,8 +5234,9 @@ function ActiveLoansContent() {
 																							   selectedLoan.status === "PENDING_DISCHARGE" ||
 																							   selectedLoan.status === "DISCHARGED";
 																	if (isPendingSettlement) {
+																		const textColor = selectedLoan.status === "DISCHARGED" ? "text-green-300" : "text-purple-300";
 																		return (
-																			<span className="text-orange-300">
+																			<span className={textColor}>
 																				{formatCurrency(0)}
 																				<br />
 																				<span className="text-xs text-gray-400">
@@ -3754,6 +5245,48 @@ function ActiveLoansContent() {
 																			</span>
 																		);
 																	}
+																	
+																	// Calculate outstanding including unpaid late fees
+																	const unpaidLateFees = selectedLoan.repayments?.reduce((total, repayment) => {
+																		const assessed = repayment.lateFeeAmount || 0;
+																		const paid = repayment.lateFeesPaid || 0;
+																		return total + Math.max(0, assessed - paid);
+																	}, 0) || 0;
+																	const totalOutstanding = selectedLoan.outstandingBalance + unpaidLateFees;
+																	
+																	// Check for defaulted
+																	const isDefaulted = selectedLoan.status === "DEFAULT" || selectedLoan.defaultedAt;
+																	if (isDefaulted) {
+																		return (
+																			<span className="text-red-300">
+																				{formatCurrency(totalOutstanding)}
+																			</span>
+																		);
+																	}
+																	
+																	// Check for default risk
+																	const isDefaultRisk = selectedLoan.defaultRiskFlaggedAt && !selectedLoan.defaultedAt;
+																	if (isDefaultRisk) {
+																		return (
+																			<span className="text-rose-300">
+																				{formatCurrency(totalOutstanding)}
+																			</span>
+																		);
+																	}
+																	
+																	// Check for late (has unpaid late fees)
+																	if (unpaidLateFees > 0) {
+																		const daysLate = getDaysLate(selectedLoan);
+																		let textColor = "text-yellow-300";
+																		if (daysLate > 30) textColor = "text-red-300";
+																		else if (daysLate > 15) textColor = "text-orange-300";
+																		return (
+																			<span className={textColor}>
+																				{formatCurrency(totalOutstanding)}
+																			</span>
+																		);
+																	}
+																	
 																	return formatCurrency(selectedLoan.outstandingBalance);
 																})()}
 															</p>
@@ -3863,15 +5396,18 @@ function ActiveLoansContent() {
 													</div>
 												</div>
 
-												{/* Payment Allocation Information */}
-												<div className="bg-blue-900/20 p-4 rounded-lg border border-blue-400/20 mb-6">
-													<h5 className="text-blue-200 font-medium mb-3 flex items-center">
+												{/* Payment Allocation Information - Collapsible */}
+												<details className="bg-blue-900/20 rounded-lg border border-blue-400/20 mb-6">
+													<summary className="p-4 cursor-pointer text-blue-200 font-medium flex items-center list-none">
 														<svg className="h-5 w-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 														</svg>
 														Payment Allocation Hierarchy
-													</h5>
-													<div className="text-sm text-blue-100 space-y-2">
+														<svg className="h-4 w-4 ml-auto text-blue-400 transition-transform details-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+														</svg>
+													</summary>
+													<div className="px-4 pb-4 text-sm text-blue-100 space-y-2">
 														<p>When payments are received, amounts are allocated in the following priority order:</p>
 														<div className="flex flex-wrap gap-4 mt-3">
 															<div className="flex items-center">
@@ -3892,7 +5428,7 @@ function ActiveLoansContent() {
 															RM 20 covers late fees, RM 30 covers interest, RM 50 covers principal. All paid amounts are shown in green.
 														</p>
 													</div>
-												</div>
+												</details>
 
 												{/* Repayment Schedule Table */}
 												<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 overflow-hidden">
@@ -4224,6 +5760,15 @@ function ActiveLoansContent() {
 																									)}
 																								</div>
 																								{(() => {
+																									// Check if this is an early settlement payment
+																									if (repayment.paymentType === "EARLY_SETTLEMENT") {
+																										return (
+																											<div className="text-xs text-purple-400 mt-1">
+																												Early Settlement
+																											</div>
+																										);
+																									}
+																									
 																									const paymentDate =
 																										new Date(
 																											repayment.actualPaymentDate ||
@@ -4319,47 +5864,6 @@ function ActiveLoansContent() {
 														</table>
 													</div>
 												</div>
-
-												{/* Prepayment Summary */}
-												{selectedLoan.totalPaid &&
-													selectedLoan.totalPaid >
-														0 && (
-														<div className="mt-6 bg-green-800/20 p-4 rounded-lg border border-green-400/20">
-															<h5 className="text-green-200 font-medium mb-3">
-																Prepayment
-																Summary
-															</h5>
-															<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-																<div>
-																	<p className="text-green-300">
-																		Total
-																		Prepaid
-																		Amount
-																	</p>
-																	<p className="text-white font-medium text-lg">
-																		{formatCurrency(
-																			selectedLoan.totalPaid
-																		)}
-																	</p>
-																</div>
-																{selectedLoan.remainingPrepayment &&
-																	selectedLoan.remainingPrepayment >
-																		0 && (
-																		<div>
-																			<p className="text-green-300">
-																				Remaining
-																				Prepayment
-																			</p>
-																			<p className="text-white font-medium text-lg">
-																				{formatCurrency(
-																					selectedLoan.remainingPrepayment
-																				)}
-																			</p>
-																		</div>
-																	)}
-															</div>
-														</div>
-													)}
 											</>
 										) : (
 											<div className="text-center py-12">
@@ -4425,7 +5929,7 @@ function ActiveLoansContent() {
 																		}
 																	} catch (error) {
 																		console.error('Error opening unsigned agreement:', error);
-																		alert('Failed to open unsigned agreement');
+																		toast.error('Failed to open unsigned agreement');
 																	}
 																}}
 																className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -4519,7 +6023,7 @@ function ActiveLoansContent() {
 																				) : signature.status === 'PENDING' ? (
 																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-800/20 text-yellow-400 border border-yellow-800/30">
 																						<ClockIcon className="h-3 w-3 mr-1" />
-																						Pending DocuSeal
+																						Pending Signature
 																					</span>
 																				) : signature.status === 'PENDING_PKI_SIGNING' ? (
 																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-800/20 text-blue-400 border border-blue-800/30">
@@ -4552,12 +6056,7 @@ function ActiveLoansContent() {
 																					Audit Only
 																				</span>
 																			)
-																		) : (
-																			/* Loans page only shows status - no signing actions */
-																			<span className="text-gray-400 text-xs">
-																				Use Applications page to sign
-																			</span>
-																		)}
+																		) : null}
 																	</div>
 																</div>
 															</div>
@@ -4625,6 +6124,10 @@ function ActiveLoansContent() {
 															<div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
 															<span className="text-gray-400">Payment Transactions</span>
 														</div>
+														<div className="flex items-center">
+															<div className="w-2 h-2 bg-cyan-400 rounded-full mr-2"></div>
+															<span className="text-gray-400">Document Changes</span>
+														</div>
 													</div>
 												</div>
 												<div className="overflow-y-auto max-h-[60vh]">
@@ -4671,7 +6174,15 @@ function ActiveLoansContent() {
 																			<div className="flex items-start space-x-3">
 																				<div className="flex-shrink-0 mt-1">
 																					<div className={`w-2 h-2 rounded-full ${
-																						event.data.changedBy?.toLowerCase().includes('system')
+																						// Document-related events get cyan color
+																						event.data.newStatus === 'DOCUMENT_UPLOADED' || 
+																						event.data.newStatus === 'DOCUMENT_DELETED' ||
+																						event.data.newStatus === 'DOCUMENT_APPROVED' ||
+																						event.data.newStatus === 'DOCUMENT_REJECTED' ||
+																						event.data.newStatus === 'DOCUMENT_STATUS_CHANGED' ||
+																						event.data.changeReason?.includes('DOCUMENT')
+																							? "bg-cyan-400"
+																							: event.data.changedBy?.toLowerCase().includes('system')
 																							? "bg-blue-400" 
 																							: event.data.changedBy && (
 																								event.data.changedBy.startsWith('admin_') || 
@@ -4899,6 +6410,308 @@ function ActiveLoansContent() {
 												</div>
 											)}
 										</div>
+									</div>
+								)}
+
+								{/* Documents Tab - Read Only */}
+								{selectedTab === "documents" && (
+									<div className="space-y-6">
+										{(() => {
+											// Normalize document types - remove surrounding quotes if present
+											const normalizeDocType = (docType: string | unknown): string => {
+												if (typeof docType !== 'string') return String(docType);
+												return docType.replace(/^["']|["']$/g, '').trim();
+											};
+											
+											const rawRequiredDocs = selectedLoan.application?.product?.requiredDocuments || [];
+											const requiredDocs = rawRequiredDocs.map(normalizeDocType);
+											const uploadedDocs = selectedLoan.application?.documents || [];
+											const uploadedDocTypes = Array.from(new Set(uploadedDocs.map(d => normalizeDocType(d.type))));
+											const missingDocs = requiredDocs.filter((docType: string) => !uploadedDocTypes.includes(docType));
+											const hasAllDocs = missingDocs.length === 0 && requiredDocs.length > 0;
+											const isCollateralLoan = selectedLoan.application?.product?.collateralRequired === true;
+											
+											return (
+												<>
+													{/* Summary Banner */}
+													<div className={`rounded-lg p-4 border ${
+														isCollateralLoan 
+															? "bg-amber-500/10 border-amber-500/30"
+															: hasAllDocs 
+																? "bg-green-500/10 border-green-500/30" 
+																: requiredDocs.length === 0
+																	? "bg-gray-700/30 border-gray-600/30"
+																	: "bg-amber-500/10 border-amber-500/30"
+													}`}>
+														<div className="flex items-center justify-between">
+															<div className="flex items-center">
+																{isCollateralLoan ? (
+																	<ClipboardDocumentCheckIcon className="h-5 w-5 text-amber-400 mr-2" />
+																) : hasAllDocs ? (
+																	<CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+																) : requiredDocs.length === 0 ? (
+																	<DocumentTextIcon className="h-5 w-5 text-gray-400 mr-2" />
+																) : (
+																	<ExclamationTriangleIcon className="h-5 w-5 text-amber-400 mr-2" />
+																)}
+																<div>
+																	<p className={`font-medium ${
+																		isCollateralLoan 
+																			? "text-amber-200"
+																			: hasAllDocs 
+																				? "text-green-200" 
+																				: requiredDocs.length === 0
+																					? "text-gray-300"
+																					: "text-amber-200"
+																	}`}>
+																		{isCollateralLoan 
+																			? "Collateral Loan - Documents Optional"
+																			: hasAllDocs 
+																				? "All Required Documents Uploaded" 
+																				: requiredDocs.length === 0
+																					? "No Required Documents for this Product"
+																					: `${missingDocs.length} of ${requiredDocs.length} Required Documents Missing`}
+																	</p>
+																	<p className="text-xs text-gray-400 mt-0.5">
+																		{uploadedDocs.length} document{uploadedDocs.length !== 1 ? 's' : ''} uploaded
+																		{requiredDocs.length > 0 && ` • ${requiredDocs.length} required by product`}
+																	</p>
+																</div>
+															</div>
+															<span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-1 rounded">
+																Read Only
+															</span>
+														</div>
+													</div>
+
+													{/* Required Documents Checklist */}
+													{requiredDocs.length > 0 && (
+														<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+															<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+																<ClipboardDocumentCheckIcon className="h-5 w-5 mr-2 text-blue-400" />
+																Required Documents
+															</h4>
+															<div className="space-y-3">
+																{requiredDocs.map((docType: string) => {
+																	const uploadedForType = uploadedDocs.filter(d => normalizeDocType(d.type) === docType);
+																	const hasUpload = uploadedForType.length > 0;
+																	const allApproved = hasUpload && uploadedForType.every(d => d.status === 'APPROVED');
+																	const hasRejected = hasUpload && uploadedForType.some(d => d.status === 'REJECTED');
+																	
+																	return (
+																		<div key={docType} className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30">
+																			<div className="flex justify-between items-start">
+																				<div className="flex items-start">
+																					<div className={`mt-0.5 mr-3 rounded-full p-1 ${
+																						allApproved 
+																							? "bg-green-500/20" 
+																							: hasRejected 
+																								? "bg-red-500/20"
+																								: hasUpload 
+																									? "bg-amber-500/20" 
+																									: "bg-gray-600/20"
+																					}`}>
+																						{allApproved ? (
+																							<CheckCircleIcon className="h-4 w-4 text-green-400" />
+																						) : hasRejected ? (
+																							<XCircleIcon className="h-4 w-4 text-red-400" />
+																						) : hasUpload ? (
+																							<ClockIcon className="h-4 w-4 text-amber-400" />
+																						) : (
+																							<XMarkIcon className="h-4 w-4 text-gray-500" />
+																						)}
+																					</div>
+																					<div>
+																						<p className="text-white font-medium">{getDocumentTypeName(docType)}</p>
+																						<p className="text-xs text-gray-400 mt-0.5">
+																							{!hasUpload 
+																								? "Not uploaded" 
+																								: allApproved 
+																									? `${uploadedForType.length} file(s) approved`
+																									: hasRejected
+																										? "Needs re-upload"
+																										: `${uploadedForType.length} file(s) pending review`}
+																						</p>
+																					</div>
+																				</div>
+																				<span className={`px-2 py-1 text-xs rounded-full ${
+																					allApproved 
+																						? "bg-green-500/20 text-green-200 border border-green-400/30"
+																						: hasRejected 
+																							? "bg-red-500/20 text-red-200 border border-red-400/30"
+																							: hasUpload 
+																								? "bg-amber-500/20 text-amber-200 border border-amber-400/30"
+																								: "bg-gray-600/20 text-gray-400 border border-gray-500/30"
+																				}`}>
+																					{allApproved ? "Approved" : hasRejected ? "Rejected" : hasUpload ? "Pending" : "Missing"}
+																				</span>
+																			</div>
+																			
+																			{/* Show uploaded files for this type */}
+																			{hasUpload && (
+																				<div className="mt-3 pl-8 space-y-2">
+																					{uploadedForType.map((doc) => (
+																						<div key={doc.id} className="flex items-center justify-between text-sm bg-gray-700/30 rounded px-3 py-2">
+																							<span className="text-gray-300 truncate max-w-[200px]">
+																								{doc.fileUrl.split('/').pop()}
+																							</span>
+																							<div className="flex items-center space-x-2">
+																								<span className={`px-1.5 py-0.5 text-xs rounded ${
+																									getDocumentStatusColor(doc.status).bg
+																								} ${getDocumentStatusColor(doc.status).text}`}>
+																									{doc.status}
+																								</span>
+																								<a
+																									href={formatDocumentUrl(doc.fileUrl, doc.id, selectedLoan.applicationId)}
+																									target="_blank"
+																									rel="noopener noreferrer"
+																									className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
+																								>
+																									View
+																								</a>
+																							</div>
+																						</div>
+																					))}
+																				</div>
+																			)}
+																		</div>
+																	);
+																})}
+															</div>
+														</div>
+													)}
+
+													{/* Additional Documents (uploaded but not in required list) */}
+													{(() => {
+														const additionalDocs = uploadedDocs.filter(
+															(doc) => !requiredDocs.includes(normalizeDocType(doc.type))
+														);
+														if (additionalDocs.length === 0) return null;
+														
+														return (
+															<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+																<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+																	<DocumentTextIcon className="h-5 w-5 mr-2 text-purple-400" />
+																	Additional Documents
+																</h4>
+																<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+																	{additionalDocs.map((doc) => (
+																		<div
+																			key={doc.id}
+																			className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30"
+																		>
+																			<div className="flex justify-between items-center mb-2">
+																				<span className="text-sm font-medium text-white">
+																					{getDocumentTypeName(doc.type)}
+																				</span>
+																				<span
+																					className={`px-2 py-1 text-xs rounded-full ${
+																						getDocumentStatusColor(doc.status).bg
+																					} ${getDocumentStatusColor(doc.status).text}`}
+																				>
+																					{doc.status}
+																				</span>
+																			</div>
+																			<p className="text-xs text-gray-400 truncate mb-2">
+																				{doc.fileUrl.split('/').pop()}
+																			</p>
+																			<a
+																				href={formatDocumentUrl(doc.fileUrl, doc.id, selectedLoan.applicationId)}
+																				target="_blank"
+																				rel="noopener noreferrer"
+																				className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30 inline-block"
+																			>
+																				View Document
+																			</a>
+																		</div>
+																	))}
+																</div>
+															</div>
+														);
+													})()}
+
+													{/* No documents message */}
+													{uploadedDocs.length === 0 && requiredDocs.length === 0 && (
+														<div className="border border-gray-700/50 rounded-lg p-8 bg-gray-800/50 text-center">
+															<FolderIcon className="mx-auto h-12 w-12 text-gray-500 mb-4" />
+															<h4 className="text-white font-medium mb-2">No Documents</h4>
+															<p className="text-gray-400 text-sm">
+																No documents have been uploaded for this loan application.
+															</p>
+														</div>
+													)}
+												</>
+											);
+										})()}
+									</div>
+								)}
+
+								{/* Credit Report Tab */}
+								{selectedTab === "credit-report" && userRole === "ADMIN" && (
+									<div className="space-y-6">
+										{/* User Summary Card */}
+										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+											<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+												<UserCircleIcon className="h-5 w-5 mr-2 text-blue-400" />
+												Borrower Information
+											</h4>
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+												<div>
+													<p className="text-gray-400 text-xs">Full Name</p>
+													<p className="text-white font-medium">
+														{selectedLoan.user?.fullName || "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-gray-400 text-xs">IC Number</p>
+													<p className="text-white font-medium">
+														{selectedLoan.user?.icNumber || selectedLoan.user?.idNumber || "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-gray-400 text-xs">Phone</p>
+													<p className="text-white font-medium">
+														{selectedLoan.user?.phoneNumber || "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-gray-400 text-xs">Loan Amount</p>
+													<p className="text-white font-medium">
+														{formatCurrency(selectedLoan.principalAmount)}
+													</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Credit Report Card */}
+										<CreditReportCard
+											userId={selectedLoan.userId}
+											applicationId={selectedLoan.applicationId}
+											userFullName={selectedLoan.user?.fullName || ""}
+											userIcNumber={selectedLoan.user?.icNumber || selectedLoan.user?.idNumber}
+											existingReport={creditReport}
+											onReportFetched={(report) => {
+												setCreditReport(report);
+											}}
+											onRequestConfirmation={(onConfirm) => {
+												showConfirmModal({
+													title: "Request Fresh Credit Report",
+													message: "Are you sure you want to request a fresh credit report from CTOS?",
+													details: [
+														`Borrower: ${selectedLoan.user?.fullName || "Unknown"}`,
+														`IC Number: ${selectedLoan.user?.icNumber || selectedLoan.user?.idNumber || "Not set"}`,
+														"",
+														"⚠️ This will charge company credits.",
+													],
+													confirmText: "Request Report",
+													confirmColor: "blue",
+													onConfirm: () => {
+														closeConfirmModal();
+														onConfirm();
+													},
+												});
+											}}
+										/>
 									</div>
 								)}
 							</div>
@@ -5389,7 +7202,7 @@ function ActiveLoansContent() {
 										const file = e.target.files?.[0];
 										if (file) {
 											if (file.type !== 'application/pdf') {
-												alert('Please select a PDF file');
+												toast.warning('Please select a PDF file');
 												e.target.value = '';
 												return;
 											}
@@ -5485,7 +7298,7 @@ function ActiveLoansContent() {
 										const file = e.target.files?.[0];
 										if (file) {
 											if (file.type !== 'application/pdf') {
-												alert('Please select a PDF file');
+												toast.warning('Please select a PDF file');
 												e.target.value = '';
 												return;
 											}
@@ -5701,6 +7514,18 @@ function ActiveLoansContent() {
 					)}
 				</div>
 			)}
+
+			{/* Confirmation Modal */}
+			<ConfirmationModal
+				open={confirmModal.open}
+				onClose={closeConfirmModal}
+				onConfirm={confirmModal.onConfirm}
+				title={confirmModal.title}
+				message={confirmModal.message}
+				details={confirmModal.details}
+				confirmText={confirmModal.confirmText}
+				confirmColor={confirmModal.confirmColor}
+			/>
 		</AdminLayout>
 	);
 }

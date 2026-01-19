@@ -1,10 +1,10 @@
 import { Router, Response } from "express";
-import { PrismaClient, WalletTransactionStatus } from "@prisma/client";
+import { WalletTransactionStatus } from "@prisma/client";
 import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils } from "../lib/precisionUtils";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Helper function to update repayment status based on all payments (Hybrid Approach)
 async function updateRepaymentStatusFromTransactions(loanId: string, tx: any) {
@@ -220,6 +220,13 @@ export async function calculateOutstandingBalance(loanId: string, tx: any) {
 
 	if (!loan) {
 		throw new Error(`Loan ${loanId} not found`);
+	}
+
+	// Skip recalculation for loans that have been settled/discharged
+	// Early settlement loans may have interest discounts that don't match the principalPaid-based calculation
+	if (loan.status === "PENDING_DISCHARGE" || loan.status === "PENDING_EARLY_SETTLEMENT" || loan.status === "DISCHARGED") {
+		console.log(`Skipping outstanding balance recalculation for loan ${loanId} with status ${loan.status}`);
+		return loan.outstandingBalance;
 	}
 
 	// Get total unpaid late fees for this loan using new schema

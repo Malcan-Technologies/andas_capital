@@ -23,6 +23,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.968.0",
+    "@aws-sdk/s3-request-presigner": "^3.968.0",
     "@prisma/client": "^5.22.0",
     "@react-pdf/renderer": "^3.4.5",
     "@types/bcrypt": "^5.0.2",
@@ -68,6 +70,6 @@
     "typescript": "^5.8.3"
   },
   "prisma": {
-    "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"
+    "seed": "node dist/prisma/seed.js || ts-node --project prisma/tsconfig.json prisma/seed.ts"
   }
 }

@@ -12,11 +12,13 @@ interface Product {
 	loanTypes?: string[];
 	repaymentTerms: number[]; // Array of months
 	interestRate: number; // Monthly interest rate in percentage
-	legalFee: number; // Legal fee in percentage (old)
-	originationFee: number; // Origination fee in percentage (old)
-	applicationFee: number; // Application fee as fixed amount (old)
-	stampingFee: number; // Stamping fee in percentage (new)
-	legalFeeFixed: number; // Legal fee as fixed amount (new)
+	legalFee: number; // Legal fee in percentage (old - deprecated)
+	originationFee: number; // Origination fee in percentage (old - deprecated)
+	applicationFee: number; // Application fee as fixed amount (old - deprecated)
+	stampingFee: number; // Stamping fee in percentage (always percentage)
+	legalFeeFixed: number; // Legal fee as fixed amount (old - deprecated)
+	legalFeeType?: 'PERCENTAGE' | 'FIXED'; // New: determines how legal fee is calculated
+	legalFeeValue?: number; // New: the legal fee value (interpreted based on legalFeeType)
 }
 
 interface ApplicationDetails {
@@ -194,20 +196,25 @@ function ApplicationDetailsFormContent({
 				termInMonths
 			);
 
-			// Calculate new fee structure
-			const legalFeeFixedValue = selectedProduct.legalFeeFixed || 0;
-			const stampingFeeValue = (loanAmount * (selectedProduct.stampingFee || 0)) / 100;
+			// Calculate legal fee based on legalFeeType
+			const legalFeeValue = selectedProduct.legalFeeValue ?? selectedProduct.legalFeeFixed ?? 0;
+			const legalFeeAmount = selectedProduct.legalFeeType === 'PERCENTAGE'
+				? (loanAmount * legalFeeValue) / 100
+				: legalFeeValue;
+
+			// Stamping fee is always a percentage
+			const stampingFeeAmount = (loanAmount * (selectedProduct.stampingFee || 0)) / 100;
 
 			// Calculate net disbursement with new fees
-			const netDisbursementValue = loanAmount - legalFeeFixedValue - stampingFeeValue;
+			const netDisbursementValue = loanAmount - legalFeeAmount - stampingFeeAmount;
 
 			const submissionValues = {
 				...formValues,
 				monthlyRepayment: monthlyRepayment.toFixed(2),
 				interestRate: selectedProduct.interestRate.toString(), // Keep as percentage
 				// New fee structure
-				stampingFee: stampingFeeValue.toFixed(2),
-				legalFeeFixed: legalFeeFixedValue.toFixed(2),
+				stampingFee: stampingFeeAmount.toFixed(2),
+				legalFeeFixed: legalFeeAmount.toFixed(2), // Store calculated amount regardless of type
 				// Old fees set to 0 for backward compatibility
 				legalFee: "0",
 				originationFee: "0",
@@ -344,19 +351,27 @@ function ApplicationDetailsFormContent({
 							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
 								Loan Purpose
 							</label>
-							<select
-								name="loanPurpose"
-								value={formValues.loanPurpose || ""}
-								onChange={handleSelectChange}
-								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-							>
-								<option value="">Select loan purpose</option>
-								{getValidLoanTypes().map((type) => (
-									<option key={type} value={type}>
-										{type}
-									</option>
-								))}
-							</select>
+							<div className="relative">
+								<select
+									name="loanPurpose"
+									value={formValues.loanPurpose || ""}
+									onChange={handleSelectChange}
+									className="w-full px-4 pr-10 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none"
+								>
+									<option value="">Select loan purpose</option>
+									{getValidLoanTypes().map((type) => (
+										<option key={type} value={type}>
+											{type}
+										</option>
+									))}
+								</select>
+								{/* Custom dropdown arrow */}
+								<div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+									<svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+										<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+									</svg>
+								</div>
+							</div>
 							{errors.loanPurpose && (
 								<p className="mt-1 text-sm text-red-600 font-body">
 									{errors.loanPurpose}
@@ -369,19 +384,27 @@ function ApplicationDetailsFormContent({
 						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
 							Loan Term
 						</label>
-						<select
-							name="loanTerm"
-							value={formValues.loanTerm}
-							onChange={handleSelectChange}
-							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-						>
-							<option value="">Select loan term</option>
-							{selectedProduct.repaymentTerms.map((term) => (
-								<option key={term} value={term.toString()}>
-									{formatTermDisplay(term)}
-								</option>
-							))}
-						</select>
+						<div className="relative">
+							<select
+								name="loanTerm"
+								value={formValues.loanTerm}
+								onChange={handleSelectChange}
+								className="w-full px-4 pr-10 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none"
+							>
+								<option value="">Select loan term</option>
+								{selectedProduct.repaymentTerms.map((term) => (
+									<option key={term} value={term.toString()}>
+										{formatTermDisplay(term)}
+									</option>
+								))}
+							</select>
+							{/* Custom dropdown arrow */}
+							<div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+								<svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+									<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+								</svg>
+							</div>
+						</div>
 						{errors.loanTerm && (
 							<p className="mt-1 text-sm text-red-600 font-body">
 								{errors.loanTerm}

@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { authenticateToken, AuthRequest } from '../../middleware/auth';
+import { signingConfig } from '../../lib/config';
 
 const router = Router();
 
@@ -48,10 +49,10 @@ router.get('/cert-info/:userId', authenticateToken, adminOrAttestorMiddleware, a
     console.log('Admin getting certificate info for user:', { userId, adminUserId: req.user?.userId });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/cert/${userId}`, {
+    const response = await fetch(`${signingConfig.url}/api/cert/${userId}`, {
       method: 'GET',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
     });
@@ -141,10 +142,10 @@ router.post('/verify-cert-pin', authenticateToken, adminOrAttestorMiddleware, as
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/verify-cert-pin`, {
+    const response = await fetch(`${signingConfig.url}/api/verify-cert-pin`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -173,6 +174,104 @@ router.post('/verify-cert-pin', authenticateToken, adminOrAttestorMiddleware, as
     return res.status(500).json({
       success: false,
       message: 'Failed to verify certificate PIN'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/mtsa/reset-cert-pin:
+ *   post:
+ *     summary: Reset certificate PIN (admin only)
+ *     tags: [Admin, MTSA]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - certSerialNo
+ *               - newPin
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: User ID (IC number)
+ *               certSerialNo:
+ *                 type: string
+ *                 description: Certificate serial number
+ *               newPin:
+ *                 type: string
+ *                 description: New 8-digit PIN
+ *     responses:
+ *       200:
+ *         description: PIN reset processed successfully
+ *       400:
+ *         description: Invalid request parameters
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to reset PIN
+ */
+router.post('/reset-cert-pin', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, certSerialNo, newPin } = req.body;
+    
+    if (!userId || !certSerialNo || !newPin) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID, certificate serial number, and new PIN are required'
+      });
+    }
+
+    if (!/^\d{8}$/.test(newPin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'New PIN must be exactly 8 digits'
+      });
+    }
+
+    console.log('Admin resetting certificate PIN for user:', { 
+      userId, 
+      certSerialNo: certSerialNo.slice(0, 8) + '...', // Partial log for security
+      adminUserId: req.user?.userId 
+    });
+
+    // Make request to signing orchestrator
+    const response = await fetch(`${signingConfig.url}/api/reset-cert-pin`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': signingConfig.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        certSerialNo,
+        newPin
+      }),
+    });
+
+    const data = await response.json();
+    
+    console.log('PIN reset response:', { 
+      userId, 
+      success: data.success,
+      statusCode: data.data?.statusCode
+    });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error resetting certificate PIN:', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.body.userId 
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to reset certificate PIN'
     });
   }
 });
@@ -235,10 +334,10 @@ router.post('/request-otp', authenticateToken, adminOrAttestorMiddleware, async 
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/otp`, {
+    const response = await fetch(`${signingConfig.url}/api/otp`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -420,10 +519,10 @@ router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware
     });
 
     // Make request to signing orchestrator with userType = 2 for internal users
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/certificate`, {
+    const response = await fetch(`${signingConfig.url}/api/certificate`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -646,10 +745,10 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/revoke`, {
+    const response = await fetch(`${signingConfig.url}/api/revoke`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(revocationData),

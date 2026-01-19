@@ -2,9 +2,7 @@ import cron from "node-cron";
 import { LateFeeProcessor } from "./lateFeeProcessor";
 import { PaymentNotificationProcessor } from "./upcomingPaymentProcessor";
 import { DefaultProcessor } from "./defaultProcessor";
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from './prisma';
 
 export class CronScheduler {
 	private static instance: CronScheduler;

@@ -6,12 +6,10 @@ export const dynamic = "force-dynamic";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export async function POST(
-	req: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
-		const cookieStore = cookies();
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {
@@ -44,12 +42,10 @@ export async function POST(
 	}
 }
 
-export async function GET(
-	req: NextRequest,
-	{ params }: { params: { id: string } }
-) {
-	try {
-		const cookieStore = cookies();
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    try {
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {
