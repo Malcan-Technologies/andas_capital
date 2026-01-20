@@ -244,6 +244,17 @@ jobs:
           echo "MTSA Image: $MTSA_CONTAINER_IMAGE"
           cd on-prem
           
+          # Stop any existing containers using port 8080
+          echo "Stopping any existing MTSA containers..."
+          docker ps -q --filter "publish=8080" | xargs -r docker stop || true
+          docker ps -aq --filter "publish=8080" | xargs -r docker rm || true
+          
+          # Also stop by common MTSA container names
+          for name in mtsa mtsa-pilot mtsa-prod andas-mtsa "${CLIENT_SLUG}-mtsa"; do
+            docker stop "$name" 2>/dev/null || true
+            docker rm "$name" 2>/dev/null || true
+          done
+          
           # Check if MTSA image exists
           if docker images | grep -q "$(echo $MTSA_CONTAINER_IMAGE | cut -d: -f1)"; then
             echo "MTSA image found: $MTSA_CONTAINER_IMAGE"
