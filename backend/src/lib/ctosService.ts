@@ -256,6 +256,51 @@ export class CTOSService {
   async createTransaction(params: CreateTransactionRequest): Promise<CreateTransactionResponse> {
     const requestTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
+    // Log all config values for debugging
+    console.log('=== CTOS CONFIG DEBUG ===');
+    console.log('baseUrl:', this.config.baseUrl);
+    console.log('webhookUrl:', this.config.webhookUrl);
+    console.log('apiKey:', this.config.apiKey ? `${this.config.apiKey.substring(0, 8)}...` : 'NOT SET');
+    console.log('packageName:', this.config.packageName);
+    console.log('ciphertext:', this.config.ciphertext);
+    console.log('cipher:', this.config.cipher);
+    console.log('=== END CTOS CONFIG DEBUG ===');
+
+    // Log incoming params
+    console.log('=== CTOS TRANSACTION PARAMS ===');
+    console.log('response_url:', params.response_url);
+    console.log('backend_url:', params.backend_url);
+    console.log('=== END PARAMS ===');
+
+    // Validate URLs before proceeding
+    const targetUrl = `${this.config.baseUrl}/v2/gateway/create-transaction`;
+    console.log('Target CTOS URL:', targetUrl);
+    
+    try {
+      new URL(targetUrl);
+    } catch (urlError) {
+      console.error('Invalid CTOS base URL:', this.config.baseUrl);
+      throw new Error(`Invalid CTOS base URL configured: "${this.config.baseUrl}"`);
+    }
+
+    if (params.response_url) {
+      try {
+        new URL(params.response_url);
+      } catch (urlError) {
+        console.error('Invalid response_url:', params.response_url);
+        throw new Error(`Invalid response_url: "${params.response_url}"`);
+      }
+    }
+
+    if (params.backend_url) {
+      try {
+        new URL(params.backend_url);
+      } catch (urlError) {
+        console.error('Invalid backend_url (webhook):', params.backend_url);
+        throw new Error(`Invalid backend_url (webhook): "${params.backend_url}"`);
+      }
+    }
+
     const requestBody = {
       ref_id: params.ref_id,
       document_name: params.document_name,
@@ -295,8 +340,9 @@ export class CTOSService {
       console.log(JSON.stringify(encryptedPayload, null, 2));
       console.log('=== END ENCRYPTED PAYLOAD ===');
 
+      console.log('Making request to:', targetUrl);
       const response = await axios.post(
-        `${this.config.baseUrl}/v2/gateway/create-transaction`,
+        targetUrl,
         encryptedPayload,
         {
           headers: {
