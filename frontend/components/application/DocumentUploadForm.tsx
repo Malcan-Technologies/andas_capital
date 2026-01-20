@@ -1044,7 +1044,7 @@ export default function DocumentUploadForm({
 								onSuccess();
 							}
 						}}
-						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors font-body"
+						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-colors font-body"
 					>
 						Continue
 					</button>
@@ -1320,25 +1320,23 @@ export default function DocumentUploadForm({
 				))}
 			</List>
 
-			<Box className="flex justify-between pt-6">
-				<Button
+			<div className="flex justify-between pt-6">
+				<button
 					type="button"
-					variant="outlined"
 					onClick={handleBack}
-					className="text-gray-700 border-gray-300 hover:bg-gray-50"
+					className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body"
 				>
 					Back
-				</Button>
-				<Button
+				</button>
+				<button
 					type="submit"
-					variant="contained"
-					className="bg-indigo-600 hover:bg-indigo-700 text-white"
+					className="px-8 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl"
 				>
 					{documents.some((doc) => doc.files && doc.files.length > 0)
 						? "Continue"
 						: "Continue Without Uploading"}
-				</Button>
-			</Box>
+				</button>
+			</div>
 
 			<Dialog
 				open={showConfirmDialog}
@@ -1424,23 +1422,23 @@ export default function DocumentUploadForm({
 					)}
 				</DialogContent>
 				<DialogActions>
-					<Button
+					<button
 						onClick={() => setShowConfirmDialog(false)}
-						variant="outlined"
+						className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body"
 					>
 						Go Back
-					</Button>
-					<Button
+					</button>
+					<button
 						onClick={() => {
 							setShowConfirmDialog(false);
 							submitDocuments();
 						}}
-						variant="contained"
+						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl"
 					>
 						{confirmDialogType === "none"
 							? "Continue Without Documents"
 							: "Continue With Incomplete Documents"}
-					</Button>
+					</button>
 				</DialogActions>
 			</Dialog>
 
@@ -1556,19 +1554,19 @@ export default function DocumentUploadForm({
 					)}
 				</DialogContent>
 				<DialogActions>
-					<Button
+					<button
 						onClick={() => setShowPreviousDocsDialog(false)}
-						variant="outlined"
+						className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body"
 					>
 						Cancel
-					</Button>
-					<Button
+					</button>
+					<button
 						onClick={handleLinkPreviousDocuments}
-						variant="contained"
 						disabled={selectedPreviousDocs.length === 0}
+						className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						Link Selected Documents ({selectedPreviousDocs.length})
-					</Button>
+					</button>
 				</DialogActions>
 			</Dialog>
 
@@ -1671,24 +1669,24 @@ export default function DocumentUploadForm({
 					)}
 				</DialogContent>
 				<DialogActions>
-					<Button
+					<button
 						onClick={() => setShowPreviewDialog(false)}
-						variant="outlined"
+						className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body"
 					>
 						Close Preview
-					</Button>
+					</button>
 					{previewFile && (
-						<Button
+						<button
 							onClick={() => {
 								window.open(
 									getDocumentAccessUrl(previewFile),
 									"_blank"
 								);
 							}}
-							variant="contained"
+							className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl"
 						>
 							Open in New Tab
-						</Button>
+						</button>
 					)}
 				</DialogActions>
 			</Dialog>

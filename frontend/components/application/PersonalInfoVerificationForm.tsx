@@ -388,8 +388,8 @@ function PersonalInfoVerificationFormContent({
 				{/* Personal Information Section */}
 				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
 					<div className="flex items-center space-x-2 mb-6">
-						<UserIcon className="h-5 w-5 text-blue-400" />
-						<h3 className="text-lg font-heading font-semibold text-blue-400">
+						<UserIcon className="h-5 w-5 text-slate-700" />
+						<h3 className="text-lg font-heading font-semibold text-slate-700">
 							Personal Information
 						</h3>
 						<SectionBadge isComplete={isPersonalInfoComplete()} />
@@ -518,8 +518,8 @@ function PersonalInfoVerificationFormContent({
 			{/* Education & Employment Section */}
 				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
 					<div className="flex items-center space-x-2 mb-6">
-						<BriefcaseIcon className="h-5 w-5 text-blue-400" />
-						<h3 className="text-lg font-heading font-semibold text-blue-400">
+						<BriefcaseIcon className="h-5 w-5 text-slate-700" />
+						<h3 className="text-lg font-heading font-semibold text-slate-700">
 							Education & Employment
 						</h3>
 						<SectionBadge isComplete={isEducationEmploymentComplete()} />
@@ -689,8 +689,8 @@ function PersonalInfoVerificationFormContent({
 				{/* Address Section */}
 				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
 					<div className="flex items-center space-x-2 mb-6">
-						<HomeIcon className="h-5 w-5 text-blue-400" />
-						<h3 className="text-lg font-heading font-semibold text-blue-400">
+						<HomeIcon className="h-5 w-5 text-slate-700" />
+						<h3 className="text-lg font-heading font-semibold text-slate-700">
 							Residential Address
 						</h3>
 						<SectionBadge isComplete={isAddressComplete()} />
@@ -788,8 +788,8 @@ function PersonalInfoVerificationFormContent({
 				{/* Bank Details Section */}
 				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
 					<div className="flex items-center space-x-2 mb-6">
-						<BanknotesIcon className="h-5 w-5 text-blue-400" />
-						<h3 className="text-lg font-heading font-semibold text-blue-400">
+						<BanknotesIcon className="h-5 w-5 text-slate-700" />
+						<h3 className="text-lg font-heading font-semibold text-slate-700">
 							Bank Account Details
 						</h3>
 						<SectionBadge isComplete={isBankDetailsComplete()} />
@@ -878,7 +878,7 @@ function PersonalInfoVerificationFormContent({
 					</button>
 					<button
 						type="submit"
-						className="px-8 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl"
+						className="px-8 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl"
 					>
 						Continue →
 					</button>

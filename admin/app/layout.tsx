@@ -5,8 +5,8 @@ import Providers from "@/components/Providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-	title: "CreditXpress | Admin",
-	description: "Admin dashboard for CreditXpress",
+	title: "Andas Capital | Admin",
+	description: "Admin dashboard for Andas Capital",
 	icons: {
 		icon: [
 			{ url: "/favicon.svg" },

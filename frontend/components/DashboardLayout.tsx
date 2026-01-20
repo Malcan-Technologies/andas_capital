@@ -89,7 +89,7 @@ export default function DashboardLayout({
   // Update document title when title prop changes
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.title = `${title} | Kredit`;
+      document.title = `${title} | Andas Capital`;
     }
   }, [title]);
 
@@ -109,7 +109,7 @@ export default function DashboardLayout({
       <AppSidebar userName={userName} />
       <SidebarInset>
         {/* Header */}
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+        <header className="flex h-20 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4 py-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-14">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1 text-slate-600 hover:text-slate-900 hover:bg-gray-100" />
             <Separator

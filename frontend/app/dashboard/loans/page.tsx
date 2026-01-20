@@ -39,16 +39,13 @@ import BankTransferModal from "@/components/modals/BankTransferModal";
 import AttestationMethodModal from "@/components/modals/AttestationMethodModal";
 import LiveCallConfirmationModal from "@/components/modals/LiveCallConfirmationModal";
 import { 
-	BarChart, 
-	Bar, 
+	AreaChart,
+	Area,
 	XAxis, 
 	YAxis, 
 	CartesianGrid, 
 	Tooltip, 
-	Legend, 
 	ResponsiveContainer,
-	Cell,
-	LabelList 
 } from 'recharts';
 
 interface LoanSummary {
@@ -1334,7 +1331,7 @@ function LoansPageContent() {
 				
 				return (
 					<div className="space-y-2">
-						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700">
+						<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900">
 							{formatValue(safeFreshOffer)}
 						</p>
 						<div className="text-xs text-gray-400">
@@ -1346,7 +1343,7 @@ function LoansPageContent() {
 				// Show no change text
 				return (
 					<div className="space-y-2">
-						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700">
+						<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900">
 							{formatValue(displayValue)}
 						</p>
 						<div className="text-xs text-gray-400">
@@ -1359,7 +1356,7 @@ function LoansPageContent() {
 
 		// Regular display for non-fresh offers
 		return (
-			<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+			<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 				{formatValue(displayValue)}
 			</p>
 		);
@@ -1418,7 +1415,7 @@ function LoansPageContent() {
 			);
 		case "PENDING_EARLY_SETTLEMENT":
 			return (
-				<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200 font-body">
+				<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-600 border border-blue-200 font-body">
 					<ClockIcon className="h-3 w-3 mr-1" />
 					Early Settlement Pending
 				</span>
@@ -1457,7 +1454,7 @@ function LoansPageContent() {
 				);
 			default:
 				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 font-body">
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-slate-600 border border-gray-200 font-body">
 						{status}
 					</span>
 				);
@@ -1575,7 +1572,7 @@ function LoansPageContent() {
 			case "PENDING_APP_FEE":
 			case "PENDING_KYC":
 			case "PENDING_APPROVAL":
-				return "bg-blue-100 text-blue-800";
+				return "bg-teal-100 text-teal-800";
 			case "PENDING_FRESH_OFFER":
 				return "bg-purple-100 text-purple-800";
 			case "PENDING_ATTESTATION":
@@ -1778,7 +1775,7 @@ function LoansPageContent() {
 	};
 
 	const getPerformanceColor = (percentage: number | null) => {
-		if (percentage === null) return "text-gray-500";
+		if (percentage === null) return "text-slate-500";
 		if (percentage >= 90) return "text-green-600";
 		if (percentage >= 75) return "text-blue-tertiary";
 		if (percentage >= 60) return "text-yellow-600";
@@ -2112,7 +2109,7 @@ function LoansPageContent() {
 		return (
 			<DashboardLayout userName={userName} title="Loans">
 				<div className="flex items-center justify-center h-64">
-					<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin"></div>
+					<div className="w-16 h-16 border-4 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
 				</div>
 			</DashboardLayout>
 		);
@@ -2120,7 +2117,7 @@ function LoansPageContent() {
 
 	return (
 		<DashboardLayout userName={userName} title="Loans & Applications">
-			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+			<div className="w-full min-h-screen">
 				<div className="space-y-6">
 					{/* Success and Warning Messages */}
 					{successMessage && (
@@ -2177,14 +2174,14 @@ function LoansPageContent() {
 						<div className="p-6 lg:p-8">
 							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
 								<div className="flex items-center min-w-0">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
-										<CreditCardIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-teal-500/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+										<CreditCardIcon className="h-6 w-6 lg:h-7 lg:w-7 text-teal-500" />
 									</div>
 									<div className="min-w-0">
-										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+										<h3 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-1">
 											Quick Actions
 									</h3>
-										<p className="text-sm lg:text-base text-blue-600 font-semibold">
+										<p className="text-sm lg:text-base text-teal-500 font-semibold">
 											Manage your loans
 								
 										</p>
@@ -2193,13 +2190,13 @@ function LoansPageContent() {
 								<div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 flex-shrink-0">
 									<button
 										onClick={handleLoanRepayClick}
-										className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md"
+										className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md"
 									>
 										Make Payment
 									</button>
 									<Link
 										href="/dashboard/apply"
-										className="bg-white hover:bg-gray-50 text-blue-600 border border-blue-600/20 px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md text-center"
+										className="bg-white hover:bg-gray-50 text-teal-500 border border-teal-500/20 px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md text-center"
 									>
 										Apply for Loan
 									</Link>
@@ -2208,64 +2205,205 @@ function LoansPageContent() {
 						</div>
 					</div> */}
 
-					{/* Main Stats Cards - Due This Month & Loan Progress */}
-					
-								
+					{/* Payment Summary Stats */}
+					{(() => {
+						// Calculate summary stats from active loans - include ACTIVE, PENDING_DISCHARGE, DEFAULT, and default risk flagged
+						const activeLoans = loans.filter(
+							(loan) =>
+								loan.status === "ACTIVE" ||
+								loan.status === "PENDING_DISCHARGE" ||
+								loan.status === "DEFAULT" ||
+								(loan.defaultRiskFlaggedAt && !loan.defaultedAt)
+						);
 
-										{/* Recharts Version - Repayment Timeline */}
+						const totalBorrowed = activeLoans.reduce(
+							(sum, loan) => sum + (loan.totalAmount || 0),
+							0
+						);
+
+						const totalOutstanding = activeLoans.reduce(
+							(sum, loan) => sum + (loan.outstandingBalance || 0),
+							0
+						);
+
+						// Calculate total principal paid by iterating through repayments (matching dashboard)
+						const totalPaid = activeLoans.reduce((sum, loan) => {
+							if (!loan.repayments) return sum;
+							const loanPrincipalPaid = loan.repayments.reduce(
+								(loanSum: number, repayment: any) => {
+									if (repayment.status === "COMPLETED") {
+										return loanSum + (Number(repayment.principalPaid) || Number(repayment.amount) || 0);
+									} else if (repayment.status === "PARTIAL") {
+										return loanSum + (Number(repayment.principalPaid) || Number(repayment.actualAmount) || 0);
+									}
+									return loanSum;
+								},
+								0
+							);
+							return sum + loanPrincipalPaid;
+						}, 0);
+
+						const progressPercentage = totalBorrowed > 0 ? Math.round((totalPaid / totalBorrowed) * 100) : 0;
+						
+						// Get next payment info
+						const nextPayment = activeLoans
+							.filter(loan => loan.nextPaymentDue)
+							.sort((a, b) => new Date(a.nextPaymentDue).getTime() - new Date(b.nextPaymentDue).getTime())[0];
+						
+						// Check for overdue amounts
+						const totalOverdue = activeLoans.reduce((sum, loan) => {
+							return sum + (loan.overdueInfo?.totalOverdueAmount || 0) + (loan.overdueInfo?.totalLateFees || 0);
+						}, 0);
+
+						return (
+							<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+								{/* Total Paid */}
+								<div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+									<div className="flex items-center gap-3 mb-3">
+										<div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center">
+											<CheckCircleIcon className="h-5 w-5 text-teal-600" />
+										</div>
+										<span className="text-sm text-slate-500 font-body">Total Paid</span>
+									</div>
+									<p className="text-2xl font-heading font-semibold text-slate-900">
+										{formatCurrency(totalPaid)}
+									</p>
+									<div className="mt-2 flex items-center gap-2">
+										<div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+											<div 
+												className="h-full bg-teal-500 rounded-full transition-all duration-500"
+												style={{ width: `${progressPercentage}%` }}
+											/>
+										</div>
+										<span className="text-xs text-teal-600 font-medium">{progressPercentage}%</span>
+									</div>
+								</div>
+
+								{/* Outstanding Balance */}
+								<div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+									<div className="flex items-center gap-3 mb-3">
+										<div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+											<BanknotesIcon className="h-5 w-5 text-slate-600" />
+										</div>
+										<span className="text-sm text-slate-500 font-body">Outstanding</span>
+									</div>
+									<p className="text-2xl font-heading font-semibold text-slate-900">
+										{formatCurrency(totalOutstanding)}
+									</p>
+									<p className="text-xs text-slate-500 mt-2 font-body">
+										of {formatCurrency(totalBorrowed)} total
+									</p>
+								</div>
+
+								{/* Next Payment */}
+								<div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+									<div className="flex items-center gap-3 mb-3">
+										<div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+											<CalendarIcon className="h-5 w-5 text-amber-600" />
+										</div>
+										<span className="text-sm text-slate-500 font-body">Next Payment</span>
+									</div>
+									{nextPayment ? (
+										<>
+											<p className="text-2xl font-heading font-semibold text-slate-900">
+												{formatCurrency(nextPayment.nextPaymentInfo?.amount || nextPayment.monthlyPayment)}
+											</p>
+											<p className="text-xs text-slate-500 mt-2 font-body">
+												Due {formatDate(nextPayment.nextPaymentDue)}
+											</p>
+										</>
+									) : (
+										<p className="text-lg text-slate-400 font-body">No upcoming</p>
+									)}
+								</div>
+
+								{/* Overdue / Active Loans */}
+								{totalOverdue > 0 ? (
+									<div className="bg-red-50 rounded-xl border border-red-200 p-5 shadow-sm">
+										<div className="flex items-center gap-3 mb-3">
+											<div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+												<ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
+											</div>
+											<span className="text-sm text-red-600 font-body">Overdue</span>
+										</div>
+										<p className="text-2xl font-heading font-semibold text-red-700">
+											{formatCurrency(totalOverdue)}
+										</p>
+										<p className="text-xs text-red-600 mt-2 font-body">
+											Requires immediate attention
+										</p>
+									</div>
+								) : (
+									<div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+										<div className="flex items-center gap-3 mb-3">
+											<div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center">
+												<CreditCardIcon className="h-5 w-5 text-teal-600" />
+											</div>
+											<span className="text-sm text-slate-500 font-body">Active Loans</span>
+										</div>
+										<p className="text-2xl font-heading font-semibold text-slate-900">
+											{activeLoans.length}
+										</p>
+										<p className="text-xs text-teal-600 mt-2 font-body">
+											All payments on track
+										</p>
+									</div>
+								)}
+							</div>
+						);
+					})()}
+
+					{/* Payment Timeline Area Chart */}
 					<div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full min-w-0 overflow-hidden">
-						<div className="p-6 lg:p-8 min-w-0">
-							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-4 sm:space-y-0">
+						<div className="p-6 min-w-0">
+							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
 								<div className="flex items-center min-w-0">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
-										<ChartBarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
+									<div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-xl flex items-center justify-center mr-3 flex-shrink-0 shadow-md shadow-teal-200">
+										<ChartBarIcon className="h-5 w-5 text-white" />
 									</div>
 									<div className="min-w-0">
-										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-											Repayment Timeline
+										<h3 className="text-lg font-heading font-semibold text-slate-900">
+											Payment Flow
 										</h3>
-										<p className="text-sm lg:text-base text-blue-600 font-semibold">
-											Track your payment progress over time
+										<p className="text-sm text-slate-500 font-body">
+											Cumulative payments over time
 										</p>
 									</div>
 								</div>
 
 								{/* Time Filter Buttons */}
-								<div className="flex bg-gray-100 rounded-xl p-1 border border-gray-200 w-full sm:w-auto flex-shrink-0 min-w-0">
+								<div className="flex bg-slate-100 rounded-full p-1 w-full sm:w-auto flex-shrink-0 min-w-0">
 									<button
 										onClick={() => setChartTimeFilter("year")}
-										className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors font-body font-medium ${
+										className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-full transition-all font-body font-medium ${
 											chartTimeFilter === "year"
-											? "bg-blue-600 text-white shadow-sm"
-											: "text-gray-600 hover:text-blue-600 hover:bg-white"
+											? "bg-teal-500 text-white shadow-md shadow-teal-200"
+											: "text-slate-600 hover:text-slate-900"
 										}`}
 									>
-										<span className="hidden sm:inline">This Year</span>
-										<span className="sm:hidden">Year</span>
+										This Year
 									</button>
 									<button
 										onClick={() => setChartTimeFilter("all")}
-										className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors font-body font-medium ${
+										className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-full transition-all font-body font-medium ${
 											chartTimeFilter === "all"
-											? "bg-blue-600 text-white shadow-sm"
-											: "text-gray-600 hover:text-blue-600 hover:bg-white"
+											? "bg-teal-500 text-white shadow-md shadow-teal-200"
+											: "text-slate-600 hover:text-slate-900"
 										}`}
 									>
-										<span className="hidden sm:inline">All Time</span>
-										<span className="sm:hidden">All</span>
+										All Time
 									</button>
 								</div>
 							</div>
 
-											{/* Recharts Bar Chart */}
-			<div className="mb-6 min-w-0 overflow-x-auto">
-				<div className="min-w-[320px] w-full">
-					{(() => {
-						// Generate monthly data for all loans using proper payment allocation
-						const monthlyData = new Map();
-						const now = new Date();
+							{/* Area Chart */}
+							<div className="w-full">
+								{(() => {
+									// Generate monthly data for cumulative payment visualization
+									const monthlyData = new Map();
+									const now = new Date();
 
-									// Process each loan individually
+									// Process each loan - include ACTIVE, PENDING_DISCHARGE, DEFAULT, and default risk flagged
 									loans
 										.filter(
 											(loan) =>
@@ -2277,379 +2415,182 @@ function LoansPageContent() {
 										.forEach((loan) => {
 											if (!loan.repayments) return;
 
-											// Sort repayments by due date (chronological order)
-										const sortedRepayments = [...loan.repayments].sort(
-												(a, b) =>
-												new Date(a.dueDate).getTime() -
-												new Date(b.dueDate).getTime()
-										);
+											loan.repayments.forEach((repayment: any) => {
+												const dueDate = new Date(repayment.dueDate);
+												const monthKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}`;
 
-										// Process each repayment individually
-										sortedRepayments.forEach((repayment) => {
-											const dueDate = new Date(repayment.dueDate);
-													const monthKey = `${dueDate.getFullYear()}-${String(
-														dueDate.getMonth() + 1
-													).padStart(2, "0")}`;
-
-											if (!monthlyData.has(monthKey)) {
-												monthlyData.set(monthKey, {
-																month: monthKey,
-													monthName: dueDate.toLocaleDateString("en-US", {
-														month: "short",
-														year: "2-digit",
-													}),
-																date: dueDate,
-																totalScheduled: 0,
-													totalPrincipalPaid: 0,
-																totalOutstanding: 0,
-													overdueOutstanding: 0,
-													currentMonthOutstanding: 0,
-													regularOutstanding: 0,
-													lateFees: 0,
-													paidLateFees: 0,
-													unpaidLateFees: 0,
-												});
-											}
-
-											const monthData = monthlyData.get(monthKey);
-
-													// Get late fee information directly from the repayment data
-													const repaymentLateFees = repayment.lateFeeAmount || 0;
-													const repaymentLateFeesPaid = repayment.lateFeesPaid || 0;
-
-											// Add to total scheduled for this month
-											monthData.totalScheduled += (repayment.amount || 0);
-											monthData.lateFees += (repaymentLateFees || 0);
-
-											// Helper function to categorize outstanding amounts by due date
-											const categorizeOutstanding = (outstanding: number) => {
-												if (outstanding <= 0) return;
-												
-												const repaymentYear = dueDate.getFullYear();
-												const repaymentMonth = dueDate.getMonth();
-												const nowYear = now.getFullYear();
-												const nowMonth = now.getMonth();
-												const hasLateFees = repaymentLateFees > repaymentLateFeesPaid;
-												
-												if (repaymentYear < nowYear || (repaymentYear === nowYear && repaymentMonth < nowMonth)) {
-													// Past month - overdue
-													monthData.overdueOutstanding += outstanding;
-												} else if (repaymentYear === nowYear && repaymentMonth === nowMonth) {
-													// Current month - check specific due date and late fees
-													if (dueDate < now || hasLateFees) {
-														monthData.overdueOutstanding += outstanding;
-													} else {
-														monthData.currentMonthOutstanding += outstanding;
-													}
-												} else {
-													// Future month
-													monthData.regularOutstanding += outstanding;
+												if (!monthlyData.has(monthKey)) {
+													monthlyData.set(monthKey, {
+														month: monthKey,
+														monthName: dueDate.toLocaleDateString("en-US", {
+															month: "short",
+														}),
+														date: dueDate,
+														paid: 0,
+														scheduled: 0,
+													});
 												}
-											};
 
-											// Determine payment status
-											if (repayment.status === "COMPLETED") {
-														// For early settlement, use actualAmount as it includes all fees
-														const principalPaid = Number(repayment.paymentType === "EARLY_SETTLEMENT" 
-															? (repayment.actualAmount || 0)
-															: (repayment.principalPaid ?? (repayment.amount || 0))) || 0;
-												monthData.totalPrincipalPaid += principalPaid;
+												const monthData = monthlyData.get(monthKey);
+												monthData.scheduled += repayment.amount || 0;
 
-														if (repaymentLateFees > 0) {
-															monthData.paidLateFees += repaymentLateFeesPaid;
-															const remainingLateFees = repaymentLateFees - repaymentLateFeesPaid;
-															if (remainingLateFees > 0) {
-																monthData.unpaidLateFees += remainingLateFees;
-															}
-														}
-
-														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
-														const totalPaid = principalPaid + repaymentLateFeesPaid;
-														const outstanding = Math.max(0, totalAmountDue - totalPaid);
-														monthData.totalOutstanding += outstanding;
-														categorizeOutstanding(outstanding);
-													} else if (
-														repayment.status === "PARTIAL" ||
-														(repayment.status === "PENDING" &&
-														repayment.paymentType === "PARTIAL" &&
-														(repayment.actualAmount ?? 0) > 0)
-													) {
-														// For early settlement, use actualAmount as it includes all fees
-														const principalPaid = Number(repayment.paymentType === "EARLY_SETTLEMENT" 
-															? (repayment.actualAmount || 0)
-															: (repayment.principalPaid ?? (repayment.actualAmount || 0))) || 0;
-
-												monthData.totalPrincipalPaid += principalPaid;
-														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
-														const totalPaid = principalPaid + repaymentLateFeesPaid;
-														const outstanding = Math.max(0, totalAmountDue - totalPaid);
-														monthData.totalOutstanding += outstanding;
-														categorizeOutstanding(outstanding);
-
-														if (repaymentLateFees > 0) {
-															monthData.paidLateFees += repaymentLateFeesPaid;
-															const remainingLateFees = repaymentLateFees - repaymentLateFeesPaid;
-															if (remainingLateFees > 0) {
-																monthData.unpaidLateFees += remainingLateFees;
-															}
-														}
-													} else {
-												// PENDING - nothing paid yet
-														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
-														monthData.totalOutstanding += totalAmountDue;
-														categorizeOutstanding(totalAmountDue);
-
-														if (repaymentLateFees > 0) {
-															monthData.paidLateFees += repaymentLateFeesPaid;
-															const remainingLateFees = repaymentLateFees - repaymentLateFeesPaid;
-															if (remainingLateFees > 0) {
-																monthData.unpaidLateFees += remainingLateFees;
-															}
-														}
-													}
-										});
+												// Use same calculation logic as dashboard
+												if (repayment.status === "COMPLETED") {
+													monthData.paid += Number(repayment.principalPaid) || Number(repayment.amount) || 0;
+												} else if (repayment.status === "PARTIAL") {
+													monthData.paid += Number(repayment.principalPaid) || Number(repayment.actualAmount) || 0;
+												}
+											});
 										});
 
-									// Sort months chronologically and apply time filter
-								let sortedMonths = Array.from(monthlyData.values()).sort(
-									(a, b) => a.date.getTime() - b.date.getTime()
+									// Sort and filter
+									let sortedMonths = Array.from(monthlyData.values()).sort(
+										(a, b) => a.date.getTime() - b.date.getTime()
 									);
 
-																	// Apply time filter
-								if (chartTimeFilter === "year") {
-								const currentYear = new Date().getFullYear();
-									sortedMonths = sortedMonths.filter(
-									(month) => month.date.getFullYear() === currentYear
-								);
-							}
+									if (chartTimeFilter === "year") {
+										const currentYear = new Date().getFullYear();
+										sortedMonths = sortedMonths.filter(
+											(month) => month.date.getFullYear() === currentYear
+										);
+									}
 
-							// Store original count before limiting
-							const totalMonths = sortedMonths.length;
-							
-							// For mobile optimization, prioritize current and future months
-							const currentDate = new Date();
-							const currentMonthIndex = sortedMonths.findIndex(month => 
-								month.date.getMonth() === currentDate.getMonth() && 
-								month.date.getFullYear() === currentDate.getFullYear()
-							);
-							
-							// If current month exists, start from there and take 12 months
-							if (currentMonthIndex !== -1 && totalMonths > 12) {
-								sortedMonths = sortedMonths.slice(currentMonthIndex, currentMonthIndex + 12);
-							} else {
-								// Otherwise, limit to maximum 12 bars to prevent horizontal scrolling
-								sortedMonths = sortedMonths.slice(0, 12);
-							}
+									// Limit to 12 months
+									if (sortedMonths.length > 12) {
+										const currentMonthIndex = sortedMonths.findIndex(
+											(month) =>
+												month.date.getMonth() === now.getMonth() &&
+												month.date.getFullYear() === now.getFullYear()
+										);
+										if (currentMonthIndex !== -1) {
+											sortedMonths = sortedMonths.slice(
+												Math.max(0, currentMonthIndex - 2),
+												currentMonthIndex + 10
+											);
+										} else {
+											sortedMonths = sortedMonths.slice(-12);
+										}
+									}
 
-							// Transform data for Recharts with color categorization
-							const chartData = sortedMonths.map((month) => {
-									// Use pre-categorized amounts from the data processing
-									const regularOutstanding = month.regularOutstanding || 0;
-									const currentMonthOutstanding = month.currentMonthOutstanding || 0;
-									const overdueOutstanding = month.overdueOutstanding || 0;
-
+									// Calculate cumulative values
+									let cumulativePaid = 0;
+									let cumulativeScheduled = 0;
+									const chartData = sortedMonths.map((month) => {
+										cumulativePaid += month.paid;
+										cumulativeScheduled += month.scheduled;
 										return {
-										month: month.monthName,
-										scheduled: month.totalScheduled,
-										principalPaid: month.totalPrincipalPaid,
-										outstanding: regularOutstanding,
-										currentMonthOutstanding: currentMonthOutstanding,
-										overdueOutstanding: overdueOutstanding,
-										lateFees: month.unpaidLateFees,
-									};
-								});
+											month: month.monthName,
+											paid: cumulativePaid,
+											scheduled: cumulativeScheduled,
+										};
+									});
 
-								if (chartData.length === 0) {
+									if (chartData.length === 0) {
 										return (
-											<div className="text-center text-gray-500 py-8 md:py-12">
-												<div className="bg-gray-50 rounded-lg p-6 md:p-8 border border-gray-200">
-													<ChartBarIcon className="h-12 w-12 md:h-16 md:w-16 text-gray-400 mx-auto mb-4" />
-													<p className="text-base md:text-lg font-medium font-heading text-gray-700">
-													No repayment schedule available
-													</p>
-													<p className="text-sm text-gray-500 mt-2 font-body">
-													Apply for a loan to see your payment timeline
-													</p>
+											<div className="text-center py-12">
+												<div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+													<ChartBarIcon className="h-8 w-8 text-gray-400" />
 												</div>
+												<p className="text-lg font-heading font-medium text-slate-900 mb-1">
+													No payment data yet
+												</p>
+												<p className="text-sm text-slate-500 font-body">
+													Apply for a loan to see your payment timeline
+												</p>
 											</div>
 										);
 									}
 
 									return (
-										<div className="space-y-4 min-w-0">
-										{/* Show truncation indicator if needed */}
-										{totalMonths > 12 && (
-											<div className="text-xs text-gray-500 text-center mb-2">
-												Showing 12 of {totalMonths} months
-											</div>
-										)}
-										{/* Recharts Bar Chart - styled like original */}
-											<div className="h-64 sm:h-72 lg:h-80 w-full">
-												<ResponsiveContainer width="100%" height="100%">
-													<BarChart
-														data={chartData}
-														margin={{
-															top: 4,
-															right: 8,
-															left: 8,
-															bottom: 10,
-														}}
-														barCategoryGap="3%"
-														maxBarSize={chartData.length <= 3 ? 50 : chartData.length <= 6 ? 35 : chartData.length <= 9 ? 25 : 20}
-													>
-
-														{/* Simple bottom border like original */}
-														<XAxis 
-															dataKey="month" 
-															axisLine={{ stroke: '#E5E7EB', strokeWidth: 1 }}
-															tickLine={false}
-															tick={({ x, y, payload }) => {
-																// Responsive font size based on screen width
-																const getResponsiveFontSize = () => {
-																	if (typeof window !== 'undefined') {
-																		if (window.innerWidth >= 1024) return 14; // lg screens
-																		if (window.innerWidth >= 768) return 12;  // md screens
-																		return 10; // sm screens
-																	}
-																	return 10; // default for SSR
-																};
-																
+										<div className="h-64 w-full">
+											<ResponsiveContainer width="100%" height="100%">
+												<AreaChart
+													data={chartData}
+													margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+												>
+													<defs>
+														<linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1">
+															<stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
+															<stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+														</linearGradient>
+														<linearGradient id="colorScheduled" x1="0" y1="0" x2="0" y2="1">
+															<stop offset="5%" stopColor="#94a3b8" stopOpacity={0.2} />
+															<stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
+														</linearGradient>
+													</defs>
+													<CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+													<XAxis
+														dataKey="month"
+														axisLine={false}
+														tickLine={false}
+														tick={{ fill: "#64748b", fontSize: 12, fontFamily: "Poppins, sans-serif" }}
+													/>
+													<YAxis
+														axisLine={false}
+														tickLine={false}
+														tick={{ fill: "#64748b", fontSize: 12, fontFamily: "Poppins, sans-serif" }}
+														tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+														width={50}
+													/>
+													<Tooltip
+														content={({ active, payload, label }) => {
+															if (active && payload && payload.length) {
+																const paid = payload.find((p) => p.dataKey === "paid")?.value || 0;
+																const scheduled = payload.find((p) => p.dataKey === "scheduled")?.value || 0;
 																return (
-																	<text
-																		x={x}
-																		y={y + 8}
-																		fill="#6B7280"
-																		fontFamily="Inter, sans-serif"
-																		fontSize={getResponsiveFontSize()}
-																		textAnchor="end"
-																		transform={`rotate(-45 ${x} ${y + 8})`}
-																	>
-																		{payload.value}
-																	</text>
-																);
-															}}
-															height={typeof window !== 'undefined' && window.innerWidth >= 1024 ? 65 : typeof window !== 'undefined' && window.innerWidth >= 768 ? 60 : 55}
-															interval={0}
-														/>
-														<YAxis hide />
-																												<Tooltip 
-															content={({ active, payload, label }) => {
-																if (active && payload && payload.length) {
-																	const totalPaid = payload.find(p => p.dataKey === 'principalPaid')?.value || 0;
-																	const outstanding = payload.find(p => p.dataKey === 'outstanding')?.value || 0;
-																	const currentMonthOutstanding = payload.find(p => p.dataKey === 'currentMonthOutstanding')?.value || 0;
-																	const overdueOutstanding = payload.find(p => p.dataKey === 'overdueOutstanding')?.value || 0;
-																	const lateFees = payload.find(p => p.dataKey === 'lateFees')?.value || 0;
-																	const totalOutstanding = Number(outstanding) + Number(currentMonthOutstanding) + Number(overdueOutstanding);
-																	const total = Number(totalPaid) + totalOutstanding + Number(lateFees);
-
-																				return (
-																		<div className="bg-white border border-gray-200 shadow-lg text-gray-700 text-xs px-3 py-2 rounded-lg">
-																			<div className="font-medium mb-1">{label}</div>
-																			{Number(totalPaid) > 0 && (
-																				<div className="text-blue-600 font-medium">
-																					Principal Paid: {formatCurrency(Number(totalPaid))}
-																					</div>
-																			)}
-																																		{Number(outstanding) > 0 && (
-																				<div className="text-gray-600 font-medium">
-																					Outstanding: {formatCurrency(Number(outstanding))}
-																				</div>
-															)}
-																			{Number(currentMonthOutstanding) > 0 && (
-																				<div className="text-amber-600 font-medium">
-																					Due This Month: {formatCurrency(Number(currentMonthOutstanding))}
-																					</div>
-																				)}
-																			{Number(overdueOutstanding) > 0 && (
-																					<div className="text-red-600 font-medium">
-																					Overdue: {formatCurrency(Number(overdueOutstanding))}
-																					</div>
-																				)}
-																			{Number(lateFees) > 0 && (
-																				<div className="text-red-600 font-medium">
-																					Late Fees: {formatCurrency(Number(lateFees))}
-																				</div>
-																					)}
-																			{/* {total > 0 && (
-																					<div className="font-medium border-t border-gray-200 pt-1 mt-1">
-																					Total: {formatCurrency(total)}
-																					</div>
-																				)} */}
+																	<div className="bg-white border border-gray-200 shadow-lg rounded-xl px-4 py-3">
+																		<p className="font-medium text-slate-900 mb-2">{label}</p>
+																		<div className="space-y-1 text-sm">
+																			<div className="flex items-center gap-2">
+																				<div className="w-2 h-2 rounded-full bg-teal-500" />
+																				<span className="text-slate-600">Paid:</span>
+																				<span className="font-medium text-slate-900">{formatCurrency(Number(paid))}</span>
+																			</div>
+																			<div className="flex items-center gap-2">
+																				<div className="w-2 h-2 rounded-full bg-slate-400" />
+																				<span className="text-slate-600">Scheduled:</span>
+																				<span className="font-medium text-slate-900">{formatCurrency(Number(scheduled))}</span>
+																			</div>
+																		</div>
 																	</div>
 																);
 															}
-																return null;
-															}}
-														/>
-														<Bar 
-															dataKey="principalPaid" 
-															fill="#2563eb" 
-															stackId="stack"
-														/>
-														<Bar 
-															dataKey="outstanding" 
-															fill="#f5f5f5" 
-															stackId="stack"
-														>
-															
-														</Bar>
-														<Bar 
-															dataKey="currentMonthOutstanding" 
-															fill="#fef3c7" 
-															stackId="stack"
-														>
-															
-														</Bar>
-														<Bar 
-															dataKey="overdueOutstanding" 
-															fill="#fee2e2" 
-															stackId="stack"
-														>
-															
-														</Bar>
-														<Bar 
-															dataKey="lateFees" 
-															fill="#fee2e2" 
-															stackId="stack"
-														/>
-													</BarChart>
-												</ResponsiveContainer>
-											</div>
-
-																														{/* Legend - matching all color categories */}
-											<div className="flex flex-wrap justify-center gap-2 sm:gap-4 md:gap-6 text-xs">
-												<div className="flex items-center gap-1 sm:gap-2">
-												<div className="w-3 h-3 bg-blue-600 rounded"></div>
-													<span className="text-gray-600 font-body">
-														Paid
-													</span>
-												</div>
-												<div className="flex items-center gap-1 sm:gap-2">
-												<div className="w-3 h-3 bg-gray-200 rounded"></div>
-													<span className="text-gray-600 font-body">
-														Upcoming
-													</span>
-												</div>
-												<div className="flex items-center gap-1 sm:gap-2">
-												<div className="w-3 h-3 bg-amber-200 rounded"></div>
-													<span className="text-gray-600 font-body">
-														Due This Month
-													</span>
-												</div>
-												<div className="flex items-center gap-1 sm:gap-2">
-												<div className="w-3 h-3 bg-red-200 rounded"></div>
-													<span className="text-gray-600 font-body">
-														Overdue
-													</span>
-												</div>
-											</div>
+															return null;
+														}}
+													/>
+													<Area
+														type="monotone"
+														dataKey="scheduled"
+														stroke="#94a3b8"
+														strokeWidth={2}
+														fill="url(#colorScheduled)"
+													/>
+													<Area
+														type="monotone"
+														dataKey="paid"
+														stroke="#14b8a6"
+														strokeWidth={2}
+														fill="url(#colorPaid)"
+													/>
+												</AreaChart>
+											</ResponsiveContainer>
 										</div>
 									);
 								})()}
 							</div>
+
+							{/* Legend */}
+							<div className="flex justify-center gap-6 mt-4 pt-4 border-t border-gray-100">
+								<div className="flex items-center gap-2">
+									<div className="w-3 h-3 rounded-full bg-teal-500" />
+									<span className="text-sm text-slate-600 font-body">Cumulative Paid</span>
+								</div>
+								<div className="flex items-center gap-2">
+									<div className="w-3 h-3 rounded-full bg-slate-400" />
+									<span className="text-sm text-slate-600 font-body">Cumulative Scheduled</span>
+								</div>
+							</div>
 						</div>
-					</div>
 					</div>
 
 					{/* Loans and Applications Tabs */}
@@ -2658,14 +2599,14 @@ function LoansPageContent() {
 						<div className="p-6 lg:p-8 pb-0">
 							<div className="flex items-center justify-between mb-4">
 								<div className="flex items-center">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3">
-										<DocumentIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-teal-500/10 rounded-xl flex items-center justify-center mr-3">
+										<DocumentIcon className="h-6 w-6 lg:h-7 lg:w-7 text-teal-500" />
 									</div>
 									<div>
-										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+										<h3 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-1">
 										Your Loans
 									</h3>
-										<p className="text-sm lg:text-base text-blue-600 font-semibold">
+										<p className="text-sm lg:text-base text-teal-500 font-semibold">
 											Active and completed loans
 										</p>
 									</div>
@@ -2686,12 +2627,12 @@ function LoansPageContent() {
 										}
 									}}
 									disabled={refreshing}
-									className="group inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 bg-white hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 rounded-lg shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
+									className="group inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 bg-white hover:bg-teal-50 hover:text-teal-700 border border-gray-200 hover:border-teal-200 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 									title="Refresh all loan and application data"
 								>
-									<ArrowPathIcon className={`h-4 w-4 mr-2 text-gray-500 group-hover:text-blue-600 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
-									<span className="group-hover:text-blue-700 transition-colors">
-										{refreshing ? 'Refreshing...' : 'Refresh All Data'}
+									<ArrowPathIcon className={`h-4 w-4 mr-2 text-slate-500 group-hover:text-teal-600 ${refreshing ? 'animate-spin' : ''}`} />
+									<span className="group-hover:text-teal-700 transition-colors">
+										{refreshing ? 'Refreshing...' : 'Refresh'}
 									</span>
 								</button>
 							</div>
@@ -2707,8 +2648,8 @@ function LoansPageContent() {
 									onClick={() => handleTabSwitch("loans")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "loans"
-											? "border-blue-600 text-blue-600"
-											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+											? "border-teal-500 text-teal-600"
+											: "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
 									}`}
 								>
 									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
@@ -2726,7 +2667,7 @@ function LoansPageContent() {
 												loan.status.toUpperCase()
 											) || (loan.defaultRiskFlaggedAt && !loan.defaultedAt)
 										).length > 0 && (
-											<span className="bg-blue-600/10 text-blue-600 py-0.5 px-1.5 rounded-full text-xs font-medium border border-blue-600/20 font-body sm:px-2">
+											<span className="bg-teal-100 text-teal-600 py-0.5 px-1.5 rounded-full text-xs font-medium font-body sm:px-2">
 												{
 													loans.filter((loan) =>
 														[
@@ -2747,8 +2688,8 @@ function LoansPageContent() {
 									onClick={() => handleTabSwitch("discharged")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "discharged"
-											? "border-blue-600 text-blue-600"
-											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+											? "border-teal-500 text-teal-600"
+											: "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
 									}`}
 								>
 									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
@@ -2777,8 +2718,8 @@ function LoansPageContent() {
 									onClick={() => handleTabSwitch("applications")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "applications"
-											? "border-blue-600 text-blue-600"
-											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+											? "border-teal-500 text-teal-600"
+											: "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
 									}`}
 								>
 									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
@@ -2797,7 +2738,7 @@ function LoansPageContent() {
 													app.status.toUpperCase()
 												)
 										).length > 0 && (
-											<span className="bg-gray-200 text-gray-600 py-0.5 px-1.5 rounded-full text-xs font-medium border border-gray-300 font-body sm:px-2">
+											<span className="bg-gray-200 text-slate-600 py-0.5 px-1.5 rounded-full text-xs font-medium border border-gray-300 font-body sm:px-2">
 												{
 													applications.filter(
 														(app) =>
@@ -2819,8 +2760,8 @@ function LoansPageContent() {
 									onClick={() => handleTabSwitch("incomplete")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "incomplete"
-											? "border-blue-600 text-blue-600"
-											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+											? "border-teal-500 text-teal-600"
+											: "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
 									}`}
 								>
 									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
@@ -2849,8 +2790,8 @@ function LoansPageContent() {
 									onClick={() => handleTabSwitch("rejected")}
 									className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm font-body transition-colors text-center ${
 										activeTab === "rejected"
-											? "border-blue-600 text-blue-600"
-											: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+											? "border-teal-500 text-teal-600"
+											: "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
 									}`}
 								>
 									<div className="flex flex-col items-center space-y-1 sm:flex-row sm:space-x-2 sm:space-y-0">
@@ -2918,7 +2859,7 @@ function LoansPageContent() {
 															const daysUntilDue = calculateDaysUntilDue(dueDateToUse);
 															urgency = getPaymentUrgency(daysUntilDue);
 														} else {
-															urgency = { color: "text-gray-500", text: "No Due Date" };
+															urgency = { color: "text-slate-500", text: "No Due Date" };
 														}
 													}
 													const isExpanded =
@@ -2929,18 +2870,18 @@ function LoansPageContent() {
 													return (
 														<div
 															key={loan.id}
-															className="bg-blue-50/30 rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-blue-200 overflow-hidden w-full min-w-0"
+															className="bg-teal-50/30 rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-blue-200 overflow-hidden w-full min-w-0"
 														>
 																															{/* Loan Header */}
 															<div className="p-6 lg:p-8">
 																<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 space-y-4 sm:space-y-0">
 																	<div className="flex items-center space-x-4">
-																		<div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600/10 rounded-xl lg:rounded-2xl flex items-center justify-center border border-blue-600/20">
-																			<CreditCardIcon className="h-8 w-8 lg:h-10 lg:w-10 text-blue-600" />
+																		<div className="w-16 h-16 lg:w-20 lg:h-20 bg-teal-500/10 rounded-xl lg:rounded-2xl flex items-center justify-center border border-teal-500/20">
+																			<CreditCardIcon className="h-8 w-8 lg:h-10 lg:w-10 text-teal-500" />
 																		</div>
 																		<div>
 																			<div className="flex items-center space-x-3 mb-1">
-																				<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700">
+																				<h4 className="text-lg lg:text-xl font-heading font-bold text-slate-900">
 																					{
 																						loan
 																							.application
@@ -2955,7 +2896,7 @@ function LoansPageContent() {
 																					</span>
 																				)}
 																				{loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" && (
-																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200 font-body">
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-600 border border-blue-200 font-body">
 																						<ClockIcon className="h-3 w-3 mr-1" />
 																						Early Settlement Pending
 																					</span>
@@ -2973,7 +2914,7 @@ function LoansPageContent() {
 																					</span>
 																				)}
 																			</div>
-																			<p className="text-sm lg:text-base text-blue-600 font-semibold font-body">
+																			<p className="text-sm lg:text-base text-teal-500 font-semibold font-body">
 																				ID: {loan.id
 																					.slice(
 																						0, 8
@@ -2989,7 +2930,7 @@ function LoansPageContent() {
 																					setSelectedLoan(loan);
 																					handleLoanRepayClick();
 																				}}
-																				className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+																				className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-500 hover:bg-teal-600 transition-colors"
 																				>
 																				Make Payment
 																				<ArrowRightIcon className="ml-2 h-4 w-4" />
@@ -3113,17 +3054,17 @@ function LoansPageContent() {
 																								fill="transparent"
 																								strokeDasharray={strokeDasharray}
 																								strokeDashoffset={strokeDashoffset}
-																								className="text-blue-600 transition-all duration-300"
+																								className="text-teal-500 transition-all duration-300"
 																								strokeLinecap="round"
 																							/>
 																						</svg>
 																						{/* Percentage in center */}
 																						<div className="absolute inset-0 flex items-center justify-center">
 																							<div className="text-center">
-																				<div className="text-xl lg:text-2xl font-heading font-bold text-gray-700">
+																				<div className="text-xl lg:text-2xl font-heading font-bold text-slate-900">
 																					{(isPendingEarlySettlement || isPendingDischarge) ? "✓" : `${progressPercent}%`}
 																			</div>
-																			<div className="text-sm text-gray-500 font-body">
+																			<div className="text-sm text-slate-500 font-body">
 																				{isPendingEarlySettlement ? "Settlement Pending" : 
 																				 isPendingDischarge ? "Awaiting Discharge" : "Repaid"}
 																			</div>
@@ -3131,7 +3072,7 @@ function LoansPageContent() {
 																						</div>
 																					</div>
 																					<div className="text-center">
-																						<p className="text-lg xl:text-xl font-heading font-bold text-blue-600">
+																						<p className="text-lg xl:text-xl font-heading font-bold text-teal-500">
 																					{isPendingEarlySettlement 
 																						? "Early Settlement" 
 																						: isPendingDischarge
@@ -3139,7 +3080,7 @@ function LoansPageContent() {
 																						: formatCurrency(totalPrincipalPaid)
 																					}
 																		</p>
-																						<p className="text-sm lg:text-base text-gray-500 font-body">
+																						<p className="text-sm lg:text-base text-slate-500 font-body">
 																							{isPendingEarlySettlement 
 																								? "Awaiting admin approval" 
 																								: isPendingDischarge
@@ -3170,7 +3111,7 @@ function LoansPageContent() {
 																								</svg>
 																							</div>
 																							<div>
-																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																								<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																									{loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" ? "Settlement Status" : "Loan Status"}
 																								</h4>
 																							</div>
@@ -3218,10 +3159,10 @@ function LoansPageContent() {
 														cardTitle = "Total Amount Due";
 													} else {
 														// Blue theme for regular payments
-														cardColors = "from-blue-50 to-blue-100 border-blue-200";
+														cardColors = "from-teal-50 to-teal-100 border-blue-200";
 														iconColor = "bg-blue-400";
-														textColor = "text-blue-700";
-														amountColor = "text-blue-700";
+														textColor = "text-teal-600";
+														amountColor = "text-teal-600";
 														cardTitle = "Next Payment";
 													}
 																			
@@ -3229,30 +3170,30 @@ function LoansPageContent() {
 																<>
 																	<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
 																		<div className="flex items-center mb-4">
-																			<div className={`w-12 h-12 lg:w-14 lg:h-14 ${isOverdue ? 'bg-red-600/10' : 'bg-blue-600/10'} rounded-xl flex items-center justify-center mr-3`}>
+																			<div className={`w-12 h-12 lg:w-14 lg:h-14 ${isOverdue ? 'bg-red-600/10' : 'bg-teal-500/10'} rounded-xl flex items-center justify-center mr-3`}>
 																				{isOverdue ? (
 																									<svg className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 																										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.982 16.5c-.77.833.192 2.5 1.732 2.5z" />
 																									</svg>
 																								) : (
-																									<svg className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																									<svg className="h-6 w-6 lg:h-7 lg:w-7 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 																										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
 																									</svg>
 																								)}
 																							</div>
 																							<div>
-																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																								<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																									{cardTitle}
 																								</h4>
 																							</div>
 																						</div>
 																						<div className="space-y-4 lg:space-y-6">
 																							<div>
-																								<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																								<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																									{totalDue > 0 ? formatCurrency(totalDue) : "Fully Paid"}
 																								</p>
 																							</div>
-															<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+															<div className="text-base lg:text-lg text-slate-600 font-body leading-relaxed">
 																{hasOverduePayments && (
 																	<div className="space-y-2">
 																		<div className="space-y-1">
@@ -3297,7 +3238,7 @@ function LoansPageContent() {
 																								</svg>
 																							</div>
 																							<div>
-																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																								<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																									Completion Status
 																								</h4>
 																							</div>
@@ -3361,7 +3302,7 @@ function LoansPageContent() {
 																							)}
 																	</div>
 																	<div>
-																							<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																							<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																								{hasOverduePayments ? "Payment Overdue" : "Due Date"}
 																							</h4>
 																						</div>
@@ -3374,17 +3315,17 @@ function LoansPageContent() {
 																			return displayDate ? (
 																				<>
 																					<div>
-																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																						<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																							{formatDate(displayDate)}
 																						</p>
 																					</div>
-																					<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+																					<div className="text-base lg:text-lg text-slate-600 font-body leading-relaxed">
 																						{hasOverduePayments && maxDaysOverdue > 0 ? `${urgency.text} by ${maxDaysOverdue} day${maxDaysOverdue !== 1 ? "s" : ""}` : urgency.text}
 																					</div>
 																				</>
 																			) : (
 																				<div>
-																					<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																					<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																						N/A
 																					</p>
 																				</div>
@@ -3403,7 +3344,7 @@ function LoansPageContent() {
 																<div className="flex justify-center mt-6">
 																	<button
 																		onClick={() => toggleLoanDetails(loan.id)}
-																		className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
+																		className="flex items-center px-4 py-2 text-sm font-medium text-teal-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
 																	>
 																		{isExpanded ? "Hide Details" : "View Details"}
 																		{isExpanded ? (
@@ -3446,10 +3387,10 @@ function LoansPageContent() {
 																			<>
 																					{/* Outstanding Balance */}
 																					<div className="bg-white p-4 rounded-lg border border-gray-200">
-																						<p className="text-sm text-gray-500 mb-1 font-body">
+																						<p className="text-sm text-slate-500 mb-1 font-body">
 																							Outstanding Balance
 																						</p>
-																						<p className="text-lg font-semibold text-gray-600 font-heading">
+																						<p className="text-lg font-semibold text-slate-600 font-heading">
 																							{(() => {
 																								const isPendingSettlement = loan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" || 
 																															loan.status.toUpperCase() === "PENDING_DISCHARGE";
@@ -3460,7 +3401,7 @@ function LoansPageContent() {
 
 																					{/* Payment Performance */}
 																					<div className="bg-white p-4 rounded-lg border border-gray-200">
-																						<p className="text-sm text-gray-500 mb-1 font-body">
+																						<p className="text-sm text-slate-500 mb-1 font-body">
 																							Payment Performance
 																						</p>
 																						{performance.percentage !== null ? (
@@ -3468,7 +3409,7 @@ function LoansPageContent() {
 																								<p className={`text-lg font-semibold font-heading ${getPerformanceColor(performance.percentage)}`}>
 																									{performance.percentage}%
 																								</p>
-																								<p className="text-xs text-gray-500 font-body">
+																								<p className="text-xs text-slate-500 font-body">
 																									{performance.onTimeCount} on-time
 																									{performance.settledEarlyCount > 0 && (
 																										<span className="text-purple-500"> / {performance.settledEarlyCount} settled early</span>
@@ -3486,10 +3427,10 @@ function LoansPageContent() {
 																							</>
 																						) : (
 																							<>
-																								<p className="text-lg font-semibold text-gray-500 font-heading">
+																								<p className="text-lg font-semibold text-slate-500 font-heading">
 																									N/A
 																								</p>
-																								<p className="text-xs text-gray-500 font-body">
+																								<p className="text-xs text-slate-500 font-body">
 																									No payments yet
 																								</p>
 																							</>
@@ -3498,10 +3439,10 @@ function LoansPageContent() {
 
 																					{/* Total Principal Paid */}
 																					<div className="bg-white p-4 rounded-lg border border-gray-200">
-																						<p className="text-sm text-gray-500 mb-1 font-body">
+																						<p className="text-sm text-slate-500 mb-1 font-body">
 																							Total Paid
 																						</p>
-																						<p className="text-lg font-semibold text-blue-600 font-heading">
+																						<p className="text-lg font-semibold text-teal-500 font-heading">
 																							{formatCurrency(totalPrincipalPaid)}
 																						</p>
 																				</div>
@@ -3509,13 +3450,13 @@ function LoansPageContent() {
 																					{/* Late Fees if any */}
 																					{totalLateFeesAssessed > 0 && (
 																						<div className="bg-white p-4 rounded-lg border border-gray-200">
-																							<p className="text-sm text-gray-500 mb-1 font-body">
+																							<p className="text-sm text-slate-500 mb-1 font-body">
 																								Late Fees Paid
 																							</p>
-																							<p className="text-lg font-semibold text-blue-600 font-heading">
+																							<p className="text-lg font-semibold text-teal-500 font-heading">
 																								{formatCurrency(totalLateFeesPaid)}
 																							</p>
-																							<p className="text-xs text-gray-500 font-body">
+																							<p className="text-xs text-slate-500 font-body">
 																								of {formatCurrency(totalLateFeesAssessed)} assessed
 																							</p>
 																				</div>
@@ -3527,7 +3468,7 @@ function LoansPageContent() {
 
 																	{/* Repayment Schedule Table */}
 																	<div className="mb-8">
-																		<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																		<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																			Repayment Schedule
 																		</h5>
 																		<div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -3536,14 +3477,14 @@ function LoansPageContent() {
 																					<table className="w-full min-w-[600px]">
 																						<thead className="bg-gray-50">
 																							<tr>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Late Fees</th>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cleared Date</th>
-																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">#</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Due Date</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Late Fees</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Balance</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Cleared Date</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Receipt</th>
 																							</tr>
 																						</thead>
 																						<tbody className="bg-white divide-y divide-gray-200">
@@ -3580,7 +3521,7 @@ function LoansPageContent() {
 																										} else if (diffDays > 0) {
 																											return { type: "late", days: diffDays, color: "text-red-600" };
 																										} else {
-																											return { type: "onTime", days: 0, color: "text-blue-600" };
+																											return { type: "onTime", days: 0, color: "text-teal-500" };
 																										}
 																									};
 																									
@@ -3591,7 +3532,7 @@ function LoansPageContent() {
 																											<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
 																												{repayment.installmentNumber || index + 1}
 																											</td>
-																											<td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+																											<td className="px-4 py-3 whitespace-nowrap text-sm text-slate-900">
 																												{formatDate(repayment.dueDate)}
 																											</td>
 																											<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -3616,7 +3557,7 @@ function LoansPageContent() {
 																															(repayment.installmentNumber === 1 || (index === 0 && !repayment.installmentNumber)) && 
 																															 Math.abs((repayment.amount || 0) - loan.monthlyPayment) > 1 && (
 																																<div className="relative group">
-																																	<svg className="h-3 w-3 text-blue-500 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																																	<svg className="h-3 w-3 text-teal-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 																																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 																																	</svg>
 																																	<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap">
@@ -3688,7 +3629,7 @@ function LoansPageContent() {
 																													<span className="text-gray-400">-</span>
 																												)}
 																											</td>
-																											<td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+																											<td className="px-4 py-3 whitespace-nowrap text-sm text-slate-900">
 																												{formatCurrency(remaining)}
 																											</td>
 																											<td className="px-4 py-3 whitespace-nowrap">
@@ -3716,7 +3657,7 @@ function LoansPageContent() {
 																														);
 																													} else if (repayment.status === "CANCELLED") {
 																														return (
-																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-slate-600 border border-gray-200">
 																																<XMarkIcon className="h-3 w-3 mr-1" />
 																										Cancelled
 																									</span>
@@ -3730,7 +3671,7 @@ function LoansPageContent() {
 																														);
 																													} else {
 																														return (
-																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-600 border border-blue-200">
 																																<ClockIcon className="h-3 w-3 mr-1" />
 																																Pending
 																															</span>
@@ -3738,7 +3679,7 @@ function LoansPageContent() {
 																													}
 																												})()}
 																											</td>
-																											<td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+																											<td className="px-4 py-3 whitespace-nowrap text-sm text-slate-900">
 																												{repayment.paidAt ? (
 																													<div className="flex flex-col">
 																														<span>{formatDate(repayment.paidAt)}</span>
@@ -3762,7 +3703,7 @@ function LoansPageContent() {
 																												)}
 																											</td>
 																											{/* Receipt Column */}
-																											<td className="px-4 py-3 text-sm text-gray-700">
+																											<td className="px-4 py-3 text-sm text-slate-900">
 																												{(repayment.status === "COMPLETED" || repayment.status === "PAID" || repayment.status === "PARTIAL" || repayment.status === "CANCELLED") && repayment.receipts && repayment.receipts.length > 0 ? (
 																													<div className="flex flex-wrap items-center gap-1">
 																														{repayment.receipts.map((receipt) => (
@@ -3780,7 +3721,7 @@ function LoansPageContent() {
 																														))}
 																													</div>
 																												) : (
-																													<span className="text-gray-500">-</span>
+																													<span className="text-slate-500">-</span>
 																												)}
 																											</td>
 																										</tr>
@@ -3792,7 +3733,7 @@ function LoansPageContent() {
 																			) : (
 																				<div className="text-center py-8">
 																					<CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-																					<p className="text-gray-500 font-body">No repayment schedule available</p>
+																					<p className="text-slate-500 font-body">No repayment schedule available</p>
 																				</div>
 																			)}
 																		</div>
@@ -3801,55 +3742,55 @@ function LoansPageContent() {
 																	<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
 																		{/* Loan Information */}
 																		<div>
-																			<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																			<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																				Loan Information
 																			</h5>
 																			<div className="space-y-4 text-base">
 																				<div className="flex justify-between">
-																					<span className="text-gray-600 font-body">
+																					<span className="text-slate-600 font-body">
 																						Principal Amount
 																					</span>
-																					<span className="font-semibold text-gray-700 font-body">
+																					<span className="font-semibold text-slate-900 font-body">
 																						{formatCurrency(loan.principalAmount)}
 																					</span>
 																				</div>
 																				<div className="flex justify-between">
-																					<span className="text-gray-600 font-body">
+																					<span className="text-slate-600 font-body">
 																						Monthly Payment
 																					</span>
-																					<span className="font-semibold text-gray-700 font-body">
+																					<span className="font-semibold text-slate-900 font-body">
 																						{formatCurrency(loan.monthlyPayment)}
 																					</span>
 																				</div>
 																				<div className="flex justify-between">
-																					<span className="text-gray-600 font-body">
+																					<span className="text-slate-600 font-body">
 																						Interest Rate
 																					</span>
-																					<span className="font-semibold text-gray-700 font-body">
+																					<span className="font-semibold text-slate-900 font-body">
 																						{loan.interestRate}% per month
 																					</span>
 																				</div>
 																				<div className="flex justify-between">
-																					<span className="text-gray-600 font-body">
+																					<span className="text-slate-600 font-body">
 																						Loan Term
 																					</span>
-																					<span className="font-semibold text-gray-700 font-body">
+																					<span className="font-semibold text-slate-900 font-body">
 																						{loan.term} months
 																					</span>
 																				</div>
 																				<div className="flex justify-between">
-																					<span className="text-gray-600 font-body">
+																					<span className="text-slate-600 font-body">
 																						Disbursed Date
 																					</span>
-																					<span className="font-semibold text-gray-700 font-body">
+																					<span className="font-semibold text-slate-900 font-body">
 																						{formatDate(loan.disbursedAt)}
 																					</span>
 																				</div>
 																				<div className="flex justify-between">
-																					<span className="text-gray-600 font-body">
+																					<span className="text-slate-600 font-body">
 																						Application Date
 																					</span>
-																					<span className="font-semibold text-gray-700 font-body">
+																					<span className="font-semibold text-slate-900 font-body">
 																						{formatDate(loan.application.createdAt)}
 																					</span>
 																				</div>
@@ -3859,13 +3800,13 @@ function LoansPageContent() {
 																		{/* Agreement Information */}
 																		{(loan.agreementStatus || loan.agreementSignedAt || loan.docusealSubmissionId) && (
 																			<div>
-																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																					Loan Agreement
 																				</h5>
 																				<div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
 																					{loan.agreementStatus && (
 																						<div className="flex justify-between">
-																							<span className="text-gray-600 font-body">
+																							<span className="text-slate-600 font-body">
 																								Agreement Status
 																							</span>
 																							<span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
@@ -3874,12 +3815,12 @@ function LoansPageContent() {
 																									: loan.agreementStatus === 'PENDING_SIGNATURE'
 																									? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
 																									: loan.agreementStatus === 'COMPANY_SIGNED'
-																									? 'bg-blue-100 text-blue-700 border border-blue-200'
+																									? 'bg-teal-100 text-teal-600 border border-blue-200'
 																									: loan.agreementStatus === 'BORROWER_SIGNED'
 																									? 'bg-purple-100 text-purple-700 border border-purple-200'
 																									: loan.agreementStatus === 'WITNESS_SIGNED'
 																									? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
-																									: 'bg-gray-100 text-gray-700 border border-gray-200'
+																									: 'bg-gray-100 text-slate-900 border border-gray-200'
 																							}`}>
 																								{loan.agreementStatus === 'SIGNED' ? 'Signed' :
 																								 loan.agreementStatus === 'PENDING_SIGNATURE' ? 'Pending Signature' :
@@ -3892,17 +3833,17 @@ function LoansPageContent() {
 																					)}
 																					{loan.agreementSignedAt && (
 																						<div className="flex justify-between">
-																							<span className="text-gray-600 font-body">
+																							<span className="text-slate-600 font-body">
 																								Signed Date
 																							</span>
-																							<span className="font-semibold text-gray-700 font-body">
+																							<span className="font-semibold text-slate-900 font-body">
 																			{formatDateTime(loan.agreementSignedAt)}
 																		</span>
 																	</div>
 																)}
 																{loan.agreementStatus === 'SIGNED' && (
 																	<div className="pt-3 border-t border-gray-100">
-																		<h6 className="text-sm font-medium text-gray-600 mb-3">Download Loan Documents</h6>
+																		<h6 className="text-sm font-medium text-slate-600 mb-3">Download Loan Documents</h6>
 																		<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
 														{/* Unsigned Agreement */}
 														<button
@@ -3942,7 +3883,7 @@ function LoansPageContent() {
 																toast.error('Failed to open unsigned agreement');
 															}
 															}}
-															className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+															className="inline-flex items-center justify-center px-3 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors text-sm font-medium"
 														>
 															<DocumentTextIcon className="h-4 w-4 mr-2" />
 															Unsigned
@@ -3964,7 +3905,7 @@ function LoansPageContent() {
 																				className={`inline-flex items-center justify-center px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
 																					loan.pkiStampCertificateUrl
 																						? 'bg-purple-600 text-white hover:bg-purple-700'
-																						: 'bg-gray-300 text-gray-500 cursor-not-allowed'
+																						: 'bg-gray-300 text-slate-500 cursor-not-allowed'
 																				}`}
 																				title={!loan.pkiStampCertificateUrl ? 'Stamp certificate pending' : 'Download stamp certificate'}
 																			>
@@ -3978,15 +3919,15 @@ function LoansPageContent() {
 																{/* Disbursement Information */}
 																{loan.application?.disbursement && (
 																	<div className="pt-3 border-t border-gray-100">
-																		<h6 className="text-sm font-medium text-gray-600 mb-3">Disbursement Information</h6>
+																		<h6 className="text-sm font-medium text-slate-600 mb-3">Disbursement Information</h6>
 																		<div className="space-y-2 mb-3">
 																			<div className="flex justify-between text-sm">
-																				<span className="text-gray-600">Reference</span>
-																				<span className="font-medium text-gray-700">{loan.application.disbursement.referenceNumber}</span>
+																				<span className="text-slate-600">Reference</span>
+																				<span className="font-medium text-slate-900">{loan.application.disbursement.referenceNumber}</span>
 																			</div>
 																			<div className="flex justify-between text-sm">
-																				<span className="text-gray-600">Disbursed Date</span>
-																				<span className="font-medium text-gray-700">
+																				<span className="text-slate-600">Disbursed Date</span>
+																				<span className="font-medium text-slate-900">
 																					{new Date(loan.application.disbursement.disbursedAt).toLocaleDateString("en-MY", {
 																						day: "numeric",
 																						month: "short",
@@ -3995,7 +3936,7 @@ function LoansPageContent() {
 																				</span>
 																			</div>
 																			<div className="flex justify-between text-sm">
-																				<span className="text-gray-600">Amount</span>
+																				<span className="text-slate-600">Amount</span>
 																				<span className="font-medium text-green-600">
 																					{new Intl.NumberFormat("en-MY", {
 																						style: "currency",
@@ -4021,7 +3962,7 @@ function LoansPageContent() {
 
 													{/* Recent Payments */}
 																		<div>
-																			<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																			<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																				Recent Payments
 																			</h5>
 																			{loadingTransactions[
@@ -4030,7 +3971,7 @@ function LoansPageContent() {
 																			] ? (
 																				<div className="flex items-center justify-center py-4">
 																					<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
-																					<span className="ml-2 text-sm text-gray-500">
+																					<span className="ml-2 text-sm text-slate-500">
 																						Loading
 																						payments...
 																					</span>
@@ -4065,18 +4006,18 @@ function LoansPageContent() {
 																									className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
 																								>
 																									<div className="flex-1 min-w-0">
-																										<p className="text-sm font-medium text-gray-700">
+																										<p className="text-sm font-medium text-slate-900">
 																											{formatCurrency(
 																												transaction.amount
 																											)}
 																										</p>
-																										<p className="text-xs text-gray-500">
+																										<p className="text-xs text-slate-500">
 																											{formatDateTime(
 																												transaction.createdAt
 																											)}
 																										</p>
 																										{transaction.reference && (
-																											<p className="text-xs text-gray-500 truncate">
+																											<p className="text-xs text-slate-500 truncate">
 																												Ref: {transaction.reference}
 																											</p>
 																										)}
@@ -4095,7 +4036,7 @@ function LoansPageContent() {
 																					]
 																						.length >
 																						3 && (
-																						<p className="text-xs text-gray-500 text-center mt-2">
+																						<p className="text-xs text-slate-500 text-center mt-2">
 																							Showing
 																							latest
 																							3
@@ -4109,7 +4050,7 @@ function LoansPageContent() {
 																								onClick={() => {
 																									router.push('/dashboard/transactions?filter=LOAN_REPAYMENT');
 																								}}
-																								className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors border border-blue-200 hover:border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50"
+																								className="text-xs text-teal-500 hover:text-teal-600 font-medium transition-colors border border-blue-200 hover:border-blue-300 rounded-lg px-3 py-1.5 hover:bg-teal-50"
 																							>
 																								See All Payments
 																							</button>
@@ -4118,13 +4059,13 @@ function LoansPageContent() {
 																				</div>
 																			) : (
 																				<div className="text-center py-4">
-																					<p className="text-sm text-gray-500 mb-2">
+																					<p className="text-sm text-slate-500 mb-2">
 																						No
 																						payment
 																						history
 																						available
 																					</p>
-																					<p className="text-xs text-gray-500">
+																					<p className="text-xs text-slate-500">
 																						Payment
 																						history
 																						will
@@ -4152,16 +4093,16 @@ function LoansPageContent() {
 										return (
 											<div className="text-center py-12">
 												<CreditCardIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+												<h4 className="text-xl font-medium text-slate-900 mb-2 font-heading">
 													No Active Loans
 												</h4>
-												<p className="text-gray-500 mb-6 font-body">
+												<p className="text-slate-500 mb-6 font-body">
 													You don't have any active
 													loans at the moment.
 												</p>
 												<Link
 													href="/dashboard/apply"
-													className="bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
+													className="bg-teal-500 hover:bg-teal-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
 												>
 													<PlusIcon className="h-5 w-5 mr-2" />
 													Apply for Your First Loan
@@ -4211,7 +4152,7 @@ function LoansPageContent() {
 																		<CheckCircleIcon className="h-8 w-8 lg:h-10 lg:w-10 text-green-600" />
 																	</div>
 																	<div>
-																		<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+																		<h4 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-1">
 																			{
 																				loan
 																					.application
@@ -4267,11 +4208,11 @@ function LoansPageContent() {
 																						</div>
 																						<div className="flex-1">
 																							<div className="flex items-center gap-2 mb-1">
-																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700">
+																								<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900">
 																									Total Repaid
 																								</h4>
 																								{hasEarlySettlement && (
-																									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+																									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-600 border border-blue-200">
 																										Early Settlement
 																									</span>
 																								)}
@@ -4280,16 +4221,16 @@ function LoansPageContent() {
 																					</div>
 																					<div className="space-y-4 lg:space-y-6">
 																						<div>
-																							<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																							<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																								{formatCurrency(totalRepaid)}
 																							</p>
 																							{hasEarlySettlement && interestSaved > 0 && (
-																								<p className="text-sm text-blue-600 font-medium">
+																								<p className="text-sm text-teal-500 font-medium">
 																									Saved: {formatCurrency(interestSaved)} in interest
 																								</p>
 																							)}
 																						</div>
-																						<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+																						<div className="text-base lg:text-lg text-slate-600 font-body leading-relaxed">
 																							{hasEarlySettlement ? "Early settlement completed" : "Loan fully completed"}
 																						</div>
 																					</div>
@@ -4309,7 +4250,7 @@ function LoansPageContent() {
 																							<ChartBarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-green-600" />
 																						</div>
 																						<div>
-																							<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																							<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																								Payment Performance
 																							</h4>
 																						</div>
@@ -4321,12 +4262,12 @@ function LoansPageContent() {
 																									{performance.percentage}%
 																								</p>
 																							) : (
-																								<p className="text-xl lg:text-2xl font-heading font-bold text-gray-500 mb-3">
+																								<p className="text-xl lg:text-2xl font-heading font-bold text-slate-500 mb-3">
 																									N/A
 																								</p>
 																							)}
 																						</div>
-																						<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+																						<div className="text-base lg:text-lg text-slate-600 font-body leading-relaxed">
 																							{performance.percentage !== null ? (
 																								<>
 																									<span>{performance.onTimeCount} on-time</span>
@@ -4359,18 +4300,18 @@ function LoansPageContent() {
 																			<CalendarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-green-600" />
 																				</div>
 																				<div>
-																					<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																					<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																						Discharged Date
 																					</h4>
 																				</div>
 																			</div>
 																			<div className="space-y-4 lg:space-y-6">
 																				<div>
-																					<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																					<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																						{loan.dischargedAt ? formatDate(loan.dischargedAt) : formatDate(loan.disbursedAt)}
 																					</p>
 																				</div>
-																				<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+																				<div className="text-base lg:text-lg text-slate-600 font-body leading-relaxed">
 																					Loan completion date
 																				</div>
 																			</div>
@@ -4386,7 +4327,7 @@ function LoansPageContent() {
 																			<p className="text-lg font-semibold text-green-700">
 																				Loan Fully Repaid
 																			</p>
-																			<p className="text-sm text-gray-600">
+																			<p className="text-sm text-slate-600">
 																				Congratulations on completing your loan!
 																			</p>
 																		</div>
@@ -4401,7 +4342,7 @@ function LoansPageContent() {
 																				loan.id
 																			)
 																		}
-																		className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
+																		className="flex items-center px-4 py-2 text-sm font-medium text-teal-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
 																	>
 																		{isExpanded
 																			? "Hide Details"
@@ -4421,47 +4362,47 @@ function LoansPageContent() {
 																	<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
 																		{/* Loan Information */}
 																		<div>
-																			<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																			<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																				Loan Information
 																			</h5>
 																			<div className="space-y-3 text-sm lg:text-base">
 																				<div className="flex justify-between py-2">
-																					<span className="text-gray-500 font-body">
+																					<span className="text-slate-500 font-body">
 																						Principal Amount
 																					</span>
-																					<span className="font-medium text-gray-700 font-body">
+																					<span className="font-medium text-slate-900 font-body">
 																						{formatCurrency(loan.principalAmount)}
 																					</span>
 																				</div>
 																				<div className="flex justify-between py-2">
-																					<span className="text-gray-500 font-body">
+																					<span className="text-slate-500 font-body">
 																						Interest Rate
 																					</span>
-																					<span className="font-medium text-gray-700 font-body">
+																					<span className="font-medium text-slate-900 font-body">
 																						{loan.interestRate}% per month
 																					</span>
 																				</div>
 																				<div className="flex justify-between py-2">
-																					<span className="text-gray-500 font-body">
+																					<span className="text-slate-500 font-body">
 																						Loan Term
 																					</span>
-																					<span className="font-medium text-gray-700 font-body">
+																					<span className="font-medium text-slate-900 font-body">
 																						{loan.term} months
 																					</span>
 																				</div>
 																				<div className="flex justify-between py-2">
-																					<span className="text-gray-500 font-body">
+																					<span className="text-slate-500 font-body">
 																						Disbursed Date
 																					</span>
-																					<span className="font-medium text-gray-700 font-body">
+																					<span className="font-medium text-slate-900 font-body">
 																						{formatDate(loan.disbursedAt)}
 																					</span>
 																				</div>
 																				<div className="flex justify-between py-2">
-																					<span className="text-gray-500 font-body">
+																					<span className="text-slate-500 font-body">
 																						Application Date
 																					</span>
-																					<span className="font-medium text-gray-700 font-body">
+																					<span className="font-medium text-slate-900 font-body">
 																						{formatDate(loan.application.createdAt)}
 																					</span>
 																				</div>
@@ -4471,13 +4412,13 @@ function LoansPageContent() {
 																		{/* Agreement Information */}
 																		{(loan.agreementStatus || loan.agreementSignedAt || loan.docusealSubmissionId) && (
 																			<div>
-																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																					Loan Agreement
 																				</h5>
 																				<div className="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
 																					{loan.agreementStatus && (
 																						<div className="flex justify-between py-2">
-																							<span className="text-gray-500 font-body">
+																							<span className="text-slate-500 font-body">
 																								Agreement Status
 																							</span>
 																							<span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
@@ -4486,12 +4427,12 @@ function LoansPageContent() {
 																									: loan.agreementStatus === 'PENDING_SIGNATURE'
 																									? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
 																									: loan.agreementStatus === 'COMPANY_SIGNED'
-																									? 'bg-blue-100 text-blue-700 border border-blue-200'
+																									? 'bg-teal-100 text-teal-600 border border-blue-200'
 																									: loan.agreementStatus === 'BORROWER_SIGNED'
 																									? 'bg-purple-100 text-purple-700 border border-purple-200'
 																									: loan.agreementStatus === 'WITNESS_SIGNED'
 																									? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
-																									: 'bg-gray-100 text-gray-700 border border-gray-200'
+																									: 'bg-gray-100 text-slate-900 border border-gray-200'
 																							}`}>
 																								{loan.agreementStatus === 'SIGNED' ? 'Signed' :
 																								 loan.agreementStatus === 'PENDING_SIGNATURE' ? 'Pending Signature' :
@@ -4504,10 +4445,10 @@ function LoansPageContent() {
 																					)}
 																					{loan.agreementSignedAt && (
 																						<div className="flex justify-between py-2">
-																							<span className="text-gray-500 font-body">
+																							<span className="text-slate-500 font-body">
 																								Signed Date
 																							</span>
-																							<span className="font-medium text-gray-700 font-body">
+																							<span className="font-medium text-slate-900 font-body">
 																								{formatDateTime(loan.agreementSignedAt)}
 																							</span>
 																						</div>
@@ -4561,13 +4502,13 @@ function LoansPageContent() {
 
 																		{/* Payment History */}
 																		<div>
-																			<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																			<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																				Payment History
 																			</h5>
 																			{loadingTransactions[loan.id] ? (
 																				<div className="flex items-center justify-center py-4">
 																					<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
-																					<span className="ml-2 text-sm text-gray-500">
+																					<span className="ml-2 text-sm text-slate-500">
 																						Loading payments...
 																					</span>
 																				</div>
@@ -4581,14 +4522,14 @@ function LoansPageContent() {
 																								className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
 																							>
 																								<div className="flex-1 min-w-0">
-																									<p className="text-sm font-medium text-gray-700">
+																									<p className="text-sm font-medium text-slate-900">
 																										{formatCurrency(transaction.amount)}
 																									</p>
-																									<p className="text-xs text-gray-500">
+																									<p className="text-xs text-slate-500">
 																										{formatDateTime(transaction.createdAt)}
 																									</p>
 																									{transaction.reference && (
-																										<p className="text-xs text-gray-500 truncate">
+																										<p className="text-xs text-slate-500 truncate">
 																											Ref: {transaction.reference}
 																										</p>
 																									)}
@@ -4599,7 +4540,7 @@ function LoansPageContent() {
 																							</div>
 																						))}
 																					{loanTransactions[loan.id].length > 3 && (
-																						<p className="text-xs text-gray-500 text-center mt-2">
+																						<p className="text-xs text-slate-500 text-center mt-2">
 																							Showing latest 3 payments
 																						</p>
 																					)}
@@ -4610,7 +4551,7 @@ function LoansPageContent() {
 																								onClick={() => {
 																									router.push('/dashboard/transactions?filter=LOAN_REPAYMENT');
 																								}}
-																								className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors border border-blue-200 hover:border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50"
+																								className="text-xs text-teal-500 hover:text-teal-600 font-medium transition-colors border border-blue-200 hover:border-blue-300 rounded-lg px-3 py-1.5 hover:bg-teal-50"
 																							>
 																								See All Payments
 																							</button>
@@ -4619,10 +4560,10 @@ function LoansPageContent() {
 																				</div>
 																			) : (
 																				<div className="text-center py-4">
-																					<p className="text-sm text-gray-500 mb-2">
+																					<p className="text-sm text-slate-500 mb-2">
 																						No payment history available
 																					</p>
-																					<p className="text-xs text-gray-500">
+																					<p className="text-xs text-slate-500">
 																						Payment records may not be available for completed loans
 																					</p>
 																				</div>
@@ -4640,10 +4581,10 @@ function LoansPageContent() {
 										return (
 											<div className="text-center py-12">
 												<CheckCircleIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+												<h4 className="text-xl font-medium text-slate-900 mb-2 font-heading">
 													No Discharged Loans
 												</h4>
-												<p className="text-gray-500 mb-6 font-body">
+												<p className="text-slate-500 mb-6 font-body">
 													Loans that have been fully
 													repaid will appear here.
 												</p>
@@ -4689,7 +4630,7 @@ function LoansPageContent() {
 																			</div>
 																			<div>
 																				<div className="flex items-center gap-3 mb-1">
-																					<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700">
+																					<h4 className="text-lg lg:text-xl font-heading font-bold text-slate-900">
 																					{app
 																						.product
 																						?.name ||
@@ -4787,7 +4728,7 @@ function LoansPageContent() {
 								{app.status === "PENDING_KYC" && (
 									<button
 										onClick={() => router.push(`/dashboard/applications/${app.id}/kyc-verification`)}
-										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+										className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-500 hover:bg-teal-600 transition-colors"
 									>
 										<CheckIcon className="h-4 w-4 mr-2" />
 										Complete KYC Verification
@@ -4839,10 +4780,10 @@ function LoansPageContent() {
 															const statusInfo = getSigningStatusMessage(app.loan?.agreementStatus);
 															if (statusInfo.type === 'waiting') {
 																return (
-																	<div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+																	<div className="bg-teal-50 border border-blue-200 rounded-lg p-3">
 																		<div className="flex items-center">
-																			<ClockIcon className="h-4 w-4 text-blue-600 mr-2" />
-																			<span className="text-sm font-medium text-blue-700">
+																			<ClockIcon className="h-4 w-4 text-teal-500 mr-2" />
+																			<span className="text-sm font-medium text-teal-600">
 																				{statusInfo.message}
 																			</span>
 																		</div>
@@ -4956,7 +4897,7 @@ function LoansPageContent() {
 																						<BanknotesIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" />
 																					</div>
 																					<div>
-																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																							{app.status === "PENDING_FRESH_OFFER" ? "Revised Amount" : "Amount Requested"}
 																						</h4>
 																					</div>
@@ -4971,7 +4912,7 @@ function LoansPageContent() {
 																						/>
 
 																					</div>
-																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																					<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																						{app.status === "PENDING_FRESH_OFFER" ? "Revised loan amount" : "Loan amount requested"}
 																					</div>
 																				</div>
@@ -4986,7 +4927,7 @@ function LoansPageContent() {
 																		<ClockIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" />
 																					</div>
 																					<div>
-																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																							Term & Purpose
 																						</h4>
 																					</div>
@@ -5001,7 +4942,7 @@ function LoansPageContent() {
 																						/>
 
 																					</div>
-																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																					<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																						{app.purpose || "Purpose not specified"}
 																					</div>
 																				</div>
@@ -5019,7 +4960,7 @@ function LoansPageContent() {
 																						</svg>
 																					</div>
 																					<div>
-																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																							{app.status === "PENDING_FRESH_OFFER" ? "Revised Monthly Payment" : "Monthly Payment"}
 																						</h4>
 																					</div>
@@ -5034,7 +4975,7 @@ function LoansPageContent() {
 																						/>
 
 																					</div>
-																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																					<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																						{app.status === "PENDING_FRESH_OFFER" ? "Revised monthly payment amount" : "Expected monthly payment"}
 																					</div>
 																				</div>
@@ -5058,7 +4999,7 @@ function LoansPageContent() {
 																						<ClockIcon className="h-6 w-6 text-purple-600" />
 																					</div>
 																					<div className="text-left">
-																						<h4 className="text-lg font-heading font-bold text-gray-700 mb-1">
+																						<h4 className="text-lg font-heading font-bold text-slate-900 mb-1">
 																							Application Progress
 																						</h4>
 																						{!showTimelineDetails[app.id] && (
@@ -5205,7 +5146,7 @@ function LoansPageContent() {
 																							<DocumentTextIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" />
 																						</div>
 																						<div>
-																							<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																							<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																								Fee Breakdown
 																							</h4>
 																						</div>
@@ -5216,11 +5157,11 @@ function LoansPageContent() {
 																							<>
 																								{/* Legal Fee (Fixed) */}
 																								<div className="flex justify-between items-center">
-																									<span className="text-sm text-gray-600">Legal Fee (Fixed)</span>
+																									<span className="text-sm text-slate-600">Legal Fee (Fixed)</span>
 																									<div className="text-right">
 																										{hasValueChanged(app.legalFeeFixed, app.freshOfferLegalFeeFixed) ? (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(app.freshOfferLegalFeeFixed || 0)}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5229,7 +5170,7 @@ function LoansPageContent() {
 																											</div>
 																										) : (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(getDisplayLegalFeeFixed(app))}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5242,11 +5183,11 @@ function LoansPageContent() {
 
 																								{/* Stamping Fee */}
 																								<div className="flex justify-between items-center">
-																									<span className="text-sm text-gray-600">Stamping Fee</span>
+																									<span className="text-sm text-slate-600">Stamping Fee</span>
 																									<div className="text-right">
 																										{hasValueChanged(app.stampingFee, app.freshOfferStampingFee) ? (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(app.freshOfferStampingFee || 0)}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5255,7 +5196,7 @@ function LoansPageContent() {
 																											</div>
 																										) : (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(getDisplayStampingFee(app))}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5271,11 +5212,11 @@ function LoansPageContent() {
 																								{/* Old fee structure */}
 																								{/* Origination Fee */}
 																								<div className="flex justify-between items-center">
-																									<span className="text-sm text-gray-600">Origination Fee</span>
+																									<span className="text-sm text-slate-600">Origination Fee</span>
 																									<div className="text-right">
 																										{hasValueChanged(app.originationFee, app.freshOfferOriginationFee) ? (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(app.freshOfferOriginationFee || 0)}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5284,7 +5225,7 @@ function LoansPageContent() {
 																											</div>
 																										) : (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(getDisplayOriginationFee(app))}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5297,11 +5238,11 @@ function LoansPageContent() {
 
 																								{/* Legal Fee */}
 																								<div className="flex justify-between items-center">
-																									<span className="text-sm text-gray-600">Legal Fee</span>
+																									<span className="text-sm text-slate-600">Legal Fee</span>
 																									<div className="text-right">
 																										{hasValueChanged(app.legalFee, app.freshOfferLegalFee) ? (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(app.freshOfferLegalFee || 0)}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5310,7 +5251,7 @@ function LoansPageContent() {
 																											</div>
 																										) : (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(getDisplayLegalFee(app))}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5323,11 +5264,11 @@ function LoansPageContent() {
 
 																								{/* Application Fee */}
 																								<div className="flex justify-between items-center">
-																									<span className="text-sm text-gray-600">Application Fee</span>
+																									<span className="text-sm text-slate-600">Application Fee</span>
 																									<div className="text-right">
 																										{hasValueChanged(app.applicationFee, app.freshOfferApplicationFee) ? (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(app.freshOfferApplicationFee || 0)}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5336,7 +5277,7 @@ function LoansPageContent() {
 																											</div>
 																										) : (
 																											<div className="space-y-1">
-																												<span className="text-sm font-medium text-gray-700">
+																												<span className="text-sm font-medium text-slate-900">
 																													{formatCurrency(getDisplayApplicationFee(app))}
 																												</span>
 																												<div className="text-xs text-gray-400">
@@ -5360,7 +5301,7 @@ function LoansPageContent() {
 																							<BanknotesIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" />
 																						</div>
 																						<div>
-																							<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																							<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																								Net Disbursement
 																							</h4>
 																						</div>
@@ -5375,7 +5316,7 @@ function LoansPageContent() {
 																							/>
 
 																					</div>
-																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																					<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																							Amount you will receive after deducting all fees
 																					</div>
 																				</div>
@@ -5393,7 +5334,7 @@ function LoansPageContent() {
 																					app.id
 																				)
 																			}
-																			className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
+																			className="flex items-center px-4 py-2 text-sm font-medium text-teal-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
 																		>
 																			{isExpanded ? "Hide Details" : "View Details"}
 																			{isExpanded ? (
@@ -5413,55 +5354,55 @@ function LoansPageContent() {
 																		<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
 																			{/* Application Information */}
 																			<div>
-																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																					Application Information
 																				</h5>
 																				<div className="space-y-3 text-sm lg:text-base">
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Product
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{app.product?.name || "Unknown"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Loan Amount
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Loan Term
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Loan Purpose
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{app.purpose || "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Created
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{formatDate(app.createdAt)}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Last Updated
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{formatDate(app.updatedAt)}
 																						</span>
 																					</div>
@@ -5471,7 +5412,7 @@ function LoansPageContent() {
 																							"MEETING" && (
 																							<div className="pt-3 border-t border-gray-200">
 																								<div className="flex justify-between">
-																									<span className="text-gray-500 font-body">
+																									<span className="text-slate-500 font-body">
 																										Attestation
 																										Type
 																									</span>
@@ -5483,7 +5424,7 @@ function LoansPageContent() {
 																								</div>
 																								{app.attestationNotes && (
 																									<div className="mt-2">
-																										<span className="text-gray-500 font-body text-sm">
+																										<span className="text-slate-500 font-body text-sm">
 																											Notes:{" "}
 																											{
 																												app.attestationNotes
@@ -5542,7 +5483,7 @@ function LoansPageContent() {
 
 																			{/* Application History */}
 																			<div>
-																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																					Application History
 																				</h5>
 																				{loadingApplicationHistory[
@@ -5551,7 +5492,7 @@ function LoansPageContent() {
 																				] ? (
 																					<div className="flex items-center justify-center py-4">
 																						<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
-																						<span className="ml-2 text-sm text-gray-500">
+																						<span className="ml-2 text-sm text-slate-500">
 																							Loading
 																							history...
 																						</span>
@@ -5585,20 +5526,20 @@ function LoansPageContent() {
 																									</div>
 																									<div className="flex-1 min-w-0">
 																										<div className="flex items-center justify-between">
-																											<p className="text-sm font-medium text-gray-700 font-body">
+																											<p className="text-sm font-medium text-slate-900 font-body">
 																												{getHistoryActionDescription(
 																													historyItem.previousStatus,
 																													historyItem.newStatus
 																												)}
 																											</p>
-																											<span className="text-xs text-gray-500 font-body ml-4">
+																											<span className="text-xs text-slate-500 font-body ml-4">
 																												{formatDateTime(
 																													historyItem.createdAt
 																												)}
 																											</span>
 																										</div>
 																										{historyItem.notes && (
-																											<p className="text-xs text-gray-600 mt-2 italic font-body">
+																											<p className="text-xs text-slate-600 mt-2 italic font-body">
 																												"
 																												{
 																													historyItem.notes
@@ -5614,12 +5555,12 @@ function LoansPageContent() {
 																					</div>
 																				) : (
 																					<div className="text-center py-4">
-																						<p className="text-sm text-gray-500 mb-2 font-body">
+																						<p className="text-sm text-slate-500 mb-2 font-body">
 																							No
 																							history
 																							available
 																						</p>
-																						<p className="text-xs text-gray-500 font-body">
+																						<p className="text-xs text-slate-500 font-body">
 																							Application
 																							history
 																							will
@@ -5646,10 +5587,10 @@ function LoansPageContent() {
 										return (
 											<div className="text-center py-12">
 												<DocumentTextIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+												<h4 className="text-xl font-medium text-slate-900 mb-2 font-heading">
 													No Applications Found
 												</h4>
-												<p className="text-gray-500 mb-6 font-body">
+												<p className="text-slate-500 mb-6 font-body">
 													You haven't submitted any
 													loan applications yet.
 												</p>
@@ -5687,7 +5628,7 @@ function LoansPageContent() {
 																		<ClockIcon className="h-8 w-8 lg:h-10 lg:w-10 text-yellow-600" />
 																	</div>
 																	<div>
-																		<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+																		<h4 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-1">
 																			{app
 																				.product
 																				?.name ||
@@ -5763,18 +5704,18 @@ function LoansPageContent() {
 																				<BanknotesIcon className="h-6 w-6 lg:h-7 lg:w-7 text-yellow-500" />
 																			</div>
 																			<div>
-																				<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																				<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																					Amount
 																				</h4>
 																			</div>
 																		</div>
 																		<div className="space-y-4 lg:space-y-6">
 																			<div>
-																				<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																				<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																					{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																				</p>
 																			</div>
-																			<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																			<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																				Requested amount
 																			</div>
 																		</div>
@@ -5789,18 +5730,18 @@ function LoansPageContent() {
 																				<ClockIcon className="h-6 w-6 lg:h-7 lg:w-7 text-yellow-500" />
 																			</div>
 																			<div>
-																				<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																				<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																					Term & Purpose
 																				</h4>
 																			</div>
 																		</div>
 																		<div className="space-y-4 lg:space-y-6">
 																			<div>
-																				<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																				<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																					{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																				</p>
 																			</div>
-																			<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																			<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																				{app.purpose || "Purpose not specified"}
 																			</div>
 																		</div>
@@ -5815,18 +5756,18 @@ function LoansPageContent() {
 																				<CalendarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-yellow-500" />
 																			</div>
 																			<div>
-																				<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																				<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																					Started On
 																				</h4>
 																			</div>
 																		</div>
 																		<div className="space-y-4 lg:space-y-6">
 																			<div>
-																				<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																				<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																					{formatDate(app.createdAt)}
 																				</p>
 																			</div>
-																			<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																			<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																				Application started
 																			</div>
 																		</div>
@@ -5842,7 +5783,7 @@ function LoansPageContent() {
 																		<p className="text-lg font-semibold text-yellow-700">
 																			Application Incomplete
 																		</p>
-																		<p className="text-sm text-gray-600">
+																		<p className="text-sm text-slate-600">
 																			Complete your application to proceed with the loan process.
 																		</p>
 																	</div>
@@ -5859,17 +5800,17 @@ function LoansPageContent() {
 										return (
 											<div className="text-center py-12">
 												<ClockIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+												<h4 className="text-xl font-medium text-slate-900 mb-2 font-heading">
 													No Incomplete Applications
 												</h4>
-												<p className="text-gray-500 mb-6 font-body">
+												<p className="text-slate-500 mb-6 font-body">
 													All your applications have
 													been completed or you
 													haven't started any yet.
 												</p>
 												<Link
 													href="/dashboard/apply"
-													className="bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
+													className="bg-teal-500 hover:bg-teal-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
 												>
 													<PlusIcon className="h-5 w-5 mr-2" />
 													Start New Application
@@ -5910,7 +5851,7 @@ function LoansPageContent() {
 																				<ExclamationTriangleIcon className="h-8 w-8 lg:h-10 lg:w-10 text-red-600" />
 																			</div>
 																			<div>
-																				<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+																				<h4 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-1">
 																					{app
 																						.product
 																						?.name ||
@@ -5937,18 +5878,18 @@ function LoansPageContent() {
 																						<BanknotesIcon className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" />
 																					</div>
 																					<div>
-																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																							Amount Requested
 																						</h4>
 																					</div>
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
-																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																						<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																						</p>
 																					</div>
-																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																					<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																						Loan amount requested
 																					</div>
 																				</div>
@@ -5963,18 +5904,18 @@ function LoansPageContent() {
 																						<ClockIcon className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" />
 																					</div>
 																					<div>
-																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																							Term & Purpose
 																						</h4>
 																					</div>
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
-																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																						<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																						</p>
 																					</div>
-																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																					<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																						{app.purpose || "Purpose not specified"}
 																					</div>
 																				</div>
@@ -5989,18 +5930,18 @@ function LoansPageContent() {
 																						<CalendarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" />
 																					</div>
 																					<div>
-																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
+																						<h4 className="text-base lg:text-lg font-heading font-bold text-slate-900 mb-1">
 																							{app.status.toUpperCase() === "REJECTED" ? "Rejected On" : "Withdrawn On"}
 																						</h4>
 																					</div>
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
-																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
+																						<p className="text-xl lg:text-2xl font-heading font-bold text-slate-900 mb-3">
 																							{formatDate(app.updatedAt)}
 																						</p>
 																					</div>
-																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
+																					<div className="text-sm lg:text-base text-slate-600 font-body leading-relaxed">
 																						{app.status.toUpperCase() === "REJECTED" ? "Application rejected" : "Application withdrawn"}
 																					</div>
 																				</div>
@@ -6016,7 +5957,7 @@ function LoansPageContent() {
 																				<p className="text-lg font-semibold text-red-700">
 																					{app.status.toUpperCase() === "REJECTED" ? "Application Rejected" : "Application Withdrawn"}
 																				</p>
-																				<p className="text-sm text-gray-600">
+																				<p className="text-sm text-slate-600">
 																					{app.status.toUpperCase() === "REJECTED" 
 																						? "Your loan application was not approved. Check the application history for details."
 																						: "Your loan application was withdrawn. Check the application history for details."
@@ -6034,7 +5975,7 @@ function LoansPageContent() {
 																					app.id
 																				)
 																			}
-																			className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
+																			className="flex items-center px-4 py-2 text-sm font-medium text-teal-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors font-body border border-blue-200 hover:border-blue-300"
 																		>
 																			{isExpanded ? "Hide Details" : "View Details"}
 																			{isExpanded ? (
@@ -6052,52 +5993,52 @@ function LoansPageContent() {
 																		<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
 																			{/* Application Information */}
 																			<div>
-																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																					Application Information
 																				</h5>
 																				<div className="space-y-3 text-sm lg:text-base">
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Product
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{app.product?.name || "Unknown"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Loan Amount
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Loan Term
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Loan Purpose
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{app.purpose || "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							Applied
 																						</span>
-																						<span className="font-medium text-gray-700 font-body">
+																						<span className="font-medium text-slate-900 font-body">
 																							{formatDate(app.createdAt)}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
-																						<span className="text-gray-500 font-body">
+																						<span className="text-slate-500 font-body">
 																							{app.status.toUpperCase() === "REJECTED" ? "Rejected" : "Withdrawn"}
 																						</span>
 																						<span className="font-medium text-red-700 font-body">
@@ -6109,7 +6050,7 @@ function LoansPageContent() {
 
 																			{/* Application History */}
 																			<div>
-																				<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																				<h5 className="text-lg lg:text-xl font-heading font-bold text-slate-900 mb-6">
 																					Application History
 																				</h5>
 																				{loadingApplicationHistory[
@@ -6118,7 +6059,7 @@ function LoansPageContent() {
 																				] ? (
 																					<div className="flex items-center justify-center py-4">
 																						<div className="w-6 h-6 border-2 border-blue-tertiary border-t-transparent rounded-full animate-spin"></div>
-																						<span className="ml-2 text-sm text-gray-500">
+																						<span className="ml-2 text-sm text-slate-500">
 																							Loading
 																							history...
 																						</span>
@@ -6152,20 +6093,20 @@ function LoansPageContent() {
 																									</div>
 																									<div className="flex-1 min-w-0">
 																										<div className="flex items-center justify-between">
-																											<p className="text-sm font-medium text-gray-700 font-body">
+																											<p className="text-sm font-medium text-slate-900 font-body">
 																												{getHistoryActionDescription(
 																													historyItem.previousStatus,
 																													historyItem.newStatus
 																												)}
 																											</p>
-																											<span className="text-xs text-gray-500 font-body ml-4">
+																											<span className="text-xs text-slate-500 font-body ml-4">
 																												{formatDateTime(
 																													historyItem.createdAt
 																												)}
 																											</span>
 																										</div>
 																										{historyItem.notes && (
-																											<p className="text-xs text-gray-600 mt-2 italic font-body">
+																											<p className="text-xs text-slate-600 mt-2 italic font-body">
 																												"
 																												{
 																													historyItem.notes
@@ -6181,12 +6122,12 @@ function LoansPageContent() {
 																					</div>
 																				) : (
 																					<div className="text-center py-4">
-																						<p className="text-sm text-gray-500 mb-2 font-body">
+																						<p className="text-sm text-slate-500 mb-2 font-body">
 																							No
 																							history
 																							available
 																						</p>
-																						<p className="text-xs text-gray-500 font-body">
+																						<p className="text-xs text-slate-500 font-body">
 																							Application
 																							history
 																							will
@@ -6213,15 +6154,15 @@ function LoansPageContent() {
 										return (
 											<div className="text-center py-12">
 												<ExclamationTriangleIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-												<h4 className="text-xl font-medium text-gray-700 mb-2 font-heading">
+												<h4 className="text-xl font-medium text-slate-900 mb-2 font-heading">
 													No Rejected or Withdrawn Applications
 												</h4>
-												<p className="text-gray-500 mb-6 font-body">
+												<p className="text-slate-500 mb-6 font-body">
 													Applications that have been rejected or withdrawn will appear here.
 												</p>
 												<Link
 													href="/dashboard/apply"
-													className="bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
+													className="bg-teal-500 hover:bg-teal-600 text-white inline-flex items-center px-6 py-3 text-base font-medium rounded-md transition-colors shadow-sm"
 												>
 													<PlusIcon className="h-5 w-5 mr-2" />
 													Apply for a New Loan
@@ -6244,7 +6185,7 @@ function LoansPageContent() {
 					<div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
 						<div className="p-6">
 							<div className="flex items-center justify-between mb-6">
-								<h2 className="text-lg md:text-xl font-bold text-gray-700 font-heading">
+								<h2 className="text-lg md:text-xl font-bold text-slate-900 font-heading">
 									<span className="hidden sm:inline">
 										Loan Repayment
 									</span>
@@ -6262,7 +6203,7 @@ function LoansPageContent() {
 										setEarlySettlementError("");
 										setEarlySettlementAvailableDate("");
 									}}
-									className="text-gray-500 hover:text-gray-700 transition-colors"
+									className="text-slate-500 hover:text-slate-900 transition-colors"
 								>
 									<svg
 										className="w-6 h-6"
@@ -6283,7 +6224,7 @@ function LoansPageContent() {
 							{/* Loan Selection */}
 							{!selectedLoan ? (
 								<div>
-									<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
+									<h3 className="text-lg font-semibold text-slate-900 mb-4 font-heading">
 										Select a Loan to Repay
 									</h3>
 									<div className="space-y-4">
@@ -6301,36 +6242,36 @@ function LoansPageContent() {
 												onClick={() =>
 													handleLoanSelection(loan)
 												}
-												className="w-full p-4 border border-gray-200 rounded-xl hover:border-blue-600/50 hover:bg-blue-600/5 transition-colors text-left bg-white shadow-sm"
+												className="w-full p-4 border border-gray-200 rounded-xl hover:border-teal-500/50 hover:bg-teal-500/5 transition-colors text-left bg-white shadow-sm"
 											>
 												<div className="flex items-center justify-between">
 													<div>
-														<p className="font-semibold text-gray-700 font-heading">
+														<p className="font-semibold text-slate-900 font-heading">
 															{
 																loan.application
 																	.product
 																	.name
 															}
 														</p>
-														<p className="text-sm text-gray-500 font-body">
+														<p className="text-sm text-slate-500 font-body">
 															Outstanding:{" "}
-															<span className="text-gray-700 font-medium">
+															<span className="text-slate-900 font-medium">
 																{formatCurrency(
 																	loan.outstandingBalance
 																)}
 															</span>
 														</p>
-														<p className="text-sm text-gray-500 font-body">
+														<p className="text-sm text-slate-500 font-body">
 															Monthly Payment:{" "}
-															<span className="text-gray-700 font-medium">
+															<span className="text-slate-900 font-medium">
 																{formatCurrency(
 																	loan.monthlyPayment
 																)}
 															</span>
 														</p>
-														<p className="text-sm text-gray-500 font-body">
+														<p className="text-sm text-slate-500 font-body">
 															Next Due:{" "}
-															<span className="text-gray-700 font-medium">
+															<span className="text-slate-900 font-medium">
 																{(() => {
 																	const displayDueDate = getCorrectDueDate(loan);
 																	return displayDueDate ? formatDate(displayDueDate) : "N/A";
@@ -6344,7 +6285,7 @@ function LoansPageContent() {
 																loan.status ===
 																"ACTIVE"
 																	? "bg-green-100 text-green-700 border border-green-200"
-																	: "bg-gray-100 text-gray-600 border border-gray-200"
+																	: "bg-gray-100 text-slate-600 border border-gray-200"
 															}`}
 														>
 															{loan.status}
@@ -6364,7 +6305,7 @@ function LoansPageContent() {
 										}).length === 0 && (
 										<div className="text-center py-12">
 											<CreditCardIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-											<p className="text-gray-500 font-body">
+											<p className="text-slate-500 font-body">
 												No active loans found
 											</p>
 										</div>
@@ -6374,7 +6315,7 @@ function LoansPageContent() {
 								<div>
 									{/* Selected Loan Details */}
 									<div className="bg-blue-tertiary/5 rounded-xl p-4 mb-6 border border-blue-tertiary/20">
-										<h3 className="text-base md:text-lg font-semibold text-gray-700 mb-3 font-heading">
+										<h3 className="text-base md:text-lg font-semibold text-slate-900 mb-3 font-heading">
 											{
 												selectedLoan.application.product
 													.name
@@ -6455,39 +6396,39 @@ function LoansPageContent() {
 
 										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 text-sm font-body">
 											<div>
-												<p className="text-gray-500 mb-1">
+												<p className="text-slate-500 mb-1">
 													Outstanding Amount
 												</p>
-												<p className="font-semibold text-gray-700 font-heading">
+												<p className="font-semibold text-slate-900 font-heading">
 													{formatCurrency(
 														selectedLoan.outstandingBalance
 													)}
 												</p>
 											</div>
 											<div>
-												<p className="text-gray-500 mb-1">
+												<p className="text-slate-500 mb-1">
 													Monthly Payment
 												</p>
-												<p className="font-semibold text-gray-700 font-heading">
+												<p className="font-semibold text-slate-900 font-heading">
 													{formatCurrency(
 														selectedLoan.monthlyPayment
 													)}
 												</p>
 											</div>
 											<div>
-												<p className="text-gray-500 mb-1">
+												<p className="text-slate-500 mb-1">
 													Interest Rate
 												</p>
-												<p className="font-semibold text-gray-700 font-heading">
+												<p className="font-semibold text-slate-900 font-heading">
 													{selectedLoan.interestRate}%
 													per month
 												</p>
 											</div>
 											<div>
-												<p className="text-gray-500 mb-1">
+												<p className="text-slate-500 mb-1">
 													Next Due Date
 												</p>
-												<p className="font-semibold text-gray-700 font-heading">
+												<p className="font-semibold text-slate-900 font-heading">
 																												{(() => {
 																const displayDueDate = getCorrectDueDate(selectedLoan);
 																return displayDueDate ? formatDate(displayDueDate) : "N/A";
@@ -6499,14 +6440,14 @@ function LoansPageContent() {
 
 									{/* Payment Method */}
 									<div className="mb-6">
-										<h4 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
+										<h4 className="text-lg font-semibold text-slate-900 mb-4 font-heading">
 											Payment Method
 										</h4>
-										<div className="w-full border rounded-xl p-4 bg-blue-50/50 border-blue-500 text-left shadow-sm">
+										<div className="w-full border rounded-xl p-4 bg-teal-50/50 border-teal-400 text-left shadow-sm">
 											<div className="flex items-center space-x-3">
-												<div className="w-10 h-10 bg-blue-600/10 rounded-lg flex items-center justify-center border border-blue-600/20">
+												<div className="w-10 h-10 bg-teal-500/10 rounded-lg flex items-center justify-center border border-teal-500/20">
 													<svg
-														className="w-5 h-5 text-blue-600"
+														className="w-5 h-5 text-teal-500"
 														fill="none"
 														stroke="currentColor"
 														viewBox="0 0 24 24"
@@ -6520,10 +6461,10 @@ function LoansPageContent() {
 													</svg>
 												</div>
 												<div>
-													<h3 className="font-semibold text-gray-700 font-heading">
+													<h3 className="font-semibold text-slate-900 font-heading">
 														Bank Transfer
 													</h3>
-													<p className="text-sm text-gray-500 font-body">
+													<p className="text-sm text-slate-500 font-body">
 														Usually 1 Business Day • Free
 													</p>
 												</div>
@@ -6536,7 +6477,7 @@ function LoansPageContent() {
 									{/* Repayment Amount */}
 									<div className="mb-6">
 										<div className="flex items-center justify-between mb-4">
-											<label className=" text-lg font-semibold text-gray-700 font-heading">
+											<label className=" text-lg font-semibold text-slate-900 font-heading">
 												Payment Amount (RM)
 											</label>
 											<div className="flex items-center space-x-3">
@@ -6555,7 +6496,7 @@ function LoansPageContent() {
 															onClick={
 																handleAutoFillMonthlyPayment
 															}
-															className="text-sm text-blue-tertiary hover:text-blue-600 font-medium font-body"
+															className="text-sm text-blue-tertiary hover:text-teal-500 font-medium font-body"
 														>
 															{nextPayment.amount ===
 															0
@@ -6571,10 +6512,10 @@ function LoansPageContent() {
 																onClick={handleEarlySettlementClick}
 																className={`text-sm font-medium font-body ${
 																	earlySettlementError
-																		? "text-blue-600 hover:text-blue-700"
+																		? "text-teal-500 hover:text-teal-600"
 																		: isEarlySettlementLikelyAvailable(selectedLoan)
 																			? "text-green-600 hover:text-green-700"
-																			: "text-gray-400 hover:text-gray-500"
+																			: "text-gray-400 hover:text-slate-500"
 																}`}
 																title={
 																	!isEarlySettlementLikelyAvailable(selectedLoan)
@@ -6601,7 +6542,7 @@ function LoansPageContent() {
 											}
 											placeholder="0.00"
 											readOnly={isEarlySettlement}
-											className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-gray-700 placeholder-gray-400 font-body ${
+											className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-slate-900 placeholder-gray-400 font-body ${
 												isEarlySettlement 
 													? "bg-gray-100 cursor-not-allowed" 
 													: "bg-white"
@@ -6622,7 +6563,7 @@ function LoansPageContent() {
 											</p>
 										)}
 										{isEarlySettlement && (
-											<p className="mt-2 text-sm text-blue-600 font-body flex items-center">
+											<p className="mt-2 text-sm text-teal-500 font-body flex items-center">
 												<span className="mr-1">ℹ️</span>
 												Early settlement amount is calculated and cannot be modified
 											</p>
@@ -6639,13 +6580,13 @@ function LoansPageContent() {
 												};
 
 											return (
-												<div className="flex justify-between text-sm text-gray-500 mt-2 font-body">
+												<div className="flex justify-between text-sm text-slate-500 mt-2 font-body">
 													<span>
 														{
 															nextPayment.description
 														}
 													</span>
-													<span className="font-medium text-gray-700">
+													<span className="font-medium text-slate-900">
 														{nextPayment.amount >
 														0
 															? formatCurrency(
@@ -6659,7 +6600,7 @@ function LoansPageContent() {
 
 										{/* Early Settlement Breakdown */}
 										{isEarlySettlement && earlySettlementQuote && (
-											<div className="mt-3 text-sm bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 font-body">
+											<div className="mt-3 text-sm bg-gradient-to-br from-green-50 to-teal-50 border border-green-200 rounded-lg p-4 font-body">
 												<div className="flex items-center justify-between mb-3">
 													<h4 className="font-semibold text-green-800 flex items-center">
 														💰 Early Settlement Breakdown
@@ -6675,12 +6616,12 @@ function LoansPageContent() {
 												</div>
 												
 												<div className="space-y-2">
-													<div className="flex justify-between text-gray-700">
+													<div className="flex justify-between text-slate-900">
 														<span>Remaining Principal</span>
 														<span className="font-medium">{formatCurrency(earlySettlementQuote.remainingPrincipal)}</span>
 													</div>
 													
-													<div className="flex justify-between text-gray-700">
+													<div className="flex justify-between text-slate-900">
 														<span>Future Interest (Total)</span>
 														<span className="font-medium">{formatCurrency(earlySettlementQuote.remainingInterest)}</span>
 													</div>
@@ -6693,7 +6634,7 @@ function LoansPageContent() {
 													)}
 													
 													{earlySettlementQuote.feeAmount > 0 && (
-														<div className="flex justify-between text-gray-700">
+														<div className="flex justify-between text-slate-900">
 															<span>Early Settlement Fee</span>
 															<span className="font-medium">+ {formatCurrency(earlySettlementQuote.feeAmount)}</span>
 														</div>
@@ -6726,7 +6667,7 @@ function LoansPageContent() {
 																	Instead of paying {formatCurrency(originalTotal)}, you only pay {formatCurrency(earlySettlementQuote.totalSettlement)}
 																</p>
 																{earlySettlementQuote.feeAmount > 0 && (
-																	<p className="text-xs text-gray-600 mt-1">
+																	<p className="text-xs text-slate-600 mt-1">
 																		(Interest discount: {formatCurrency(earlySettlementQuote.discountAmount)}, Early settlement fee: {formatCurrency(earlySettlementQuote.feeAmount)})
 																	</p>
 																)}
@@ -6735,7 +6676,7 @@ function LoansPageContent() {
 													})()}
 												</div>
 												
-												<p className="mt-3 text-xs text-gray-500 text-center border-t pt-2">
+												<p className="mt-3 text-xs text-slate-500 text-center border-t pt-2">
 													Quote generated on {new Date(earlySettlementQuote.computedAt).toLocaleString('en-MY', {
 														year: 'numeric',
 														month: 'short',
@@ -6808,7 +6749,7 @@ function LoansPageContent() {
 																	setEarlySettlementError("");
 																	setEarlySettlementAvailableDate("");
 																}}
-																className="text-sm text-gray-600 hover:text-gray-800 font-medium font-body underline"
+																className="text-sm text-slate-600 hover:text-gray-800 font-medium font-body underline"
 															>
 																Dismiss
 															</button>
@@ -6818,9 +6759,9 @@ function LoansPageContent() {
 											</div>
 										)}
 
-										<div className="flex justify-between text-sm text-gray-500 mt-2 font-body">
+										<div className="flex justify-between text-sm text-slate-500 mt-2 font-body">
 											<span>Outstanding Balance</span>
-											<span className="font-medium text-gray-700">
+											<span className="font-medium text-slate-900">
 												{(() => {
 													const isPendingSettlement = selectedLoan.status.toUpperCase() === "PENDING_EARLY_SETTLEMENT" || 
 																				selectedLoan.status.toUpperCase() === "PENDING_DISCHARGE";
@@ -6838,7 +6779,7 @@ function LoansPageContent() {
 												setRepaymentAmount("");
 												setRepaymentError("");
 											}}
-											className="flex-1 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
+											className="flex-1 bg-gray-100 text-slate-900 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
 										>
 											Back
 										</button>
@@ -6851,7 +6792,7 @@ function LoansPageContent() {
 												(!isEarlySettlement && parseFloat(repaymentAmount) >
 													selectedLoan.outstandingBalance)
 											}
-											className="bg-blue-600 text-white flex-1 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
+											className="bg-teal-500 text-white flex-1 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-teal-600 disabled:bg-gray-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
 										>
 											Continue
 										</button>
@@ -6883,7 +6824,7 @@ function LoansPageContent() {
 					<div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200">
 						<div className="p-6">
 							<div className="flex items-center justify-between mb-6">
-								<h2 className="text-xl font-bold text-gray-700 font-heading">
+								<h2 className="text-xl font-bold text-slate-900 font-heading">
 									Withdraw Application
 								</h2>
 								<button
@@ -6891,7 +6832,7 @@ function LoansPageContent() {
 										setShowWithdrawModal(false);
 										setSelectedApplication(null);
 									}}
-									className="text-gray-500 hover:text-gray-700 transition-colors"
+									className="text-slate-500 hover:text-slate-900 transition-colors"
 								>
 									<XMarkIcon className="w-6 h-6" />
 								</button>
@@ -6915,14 +6856,14 @@ function LoansPageContent() {
 								</div>
 
 								<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-									<h4 className="font-semibold text-gray-700 mb-2 font-heading">
+									<h4 className="font-semibold text-slate-900 mb-2 font-heading">
 										{selectedApplication.product?.name ||
 											"Unknown Product"}
 									</h4>
-									<div className="text-sm text-gray-500 space-y-1 font-body">
+									<div className="text-sm text-slate-500 space-y-1 font-body">
 										<p>
 											Application ID:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{selectedApplication.id
 													.slice(-8)
 													.toUpperCase()}
@@ -6930,7 +6871,7 @@ function LoansPageContent() {
 										</p>
 										<p>
 											Amount:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{selectedApplication.amount
 													? formatCurrency(
 															selectedApplication.amount
@@ -6940,7 +6881,7 @@ function LoansPageContent() {
 										</p>
 										<p>
 											Status:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{getApplicationStatusLabel(
 													selectedApplication.status,
 													selectedApplication.attestationType
@@ -6951,7 +6892,7 @@ function LoansPageContent() {
 								</div>
 							</div>
 
-							<p className="text-gray-600 mb-6 font-body">
+							<p className="text-slate-600 mb-6 font-body">
 								Are you sure you want to withdraw this loan
 								application?
 							</p>
@@ -6962,14 +6903,14 @@ function LoansPageContent() {
 										setShowWithdrawModal(false);
 										setSelectedApplication(null);
 									}}
-									className="flex-1 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
+									className="flex-1 bg-gray-100 text-slate-900 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
 								>
 									Cancel
 								</button>
 								<button
 									onClick={handleWithdrawApplication}
 									disabled={withdrawing}
-									className="flex-1 bg-red-600 text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-red-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors shadow-sm"
+									className="flex-1 bg-red-600 text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-red-700 disabled:bg-gray-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors shadow-sm"
 								>
 									{withdrawing
 										? "Withdrawing..."
@@ -6987,7 +6928,7 @@ function LoansPageContent() {
 					<div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200">
 						<div className="p-6">
 							<div className="flex items-center justify-between mb-6">
-								<h2 className="text-xl font-bold text-gray-700 font-heading">
+								<h2 className="text-xl font-bold text-slate-900 font-heading">
 									Delete Application
 								</h2>
 								<button
@@ -6995,7 +6936,7 @@ function LoansPageContent() {
 										setShowDeleteModal(false);
 										setSelectedDeleteApplication(null);
 									}}
-									className="text-gray-500 hover:text-gray-700 transition-colors"
+									className="text-slate-500 hover:text-slate-900 transition-colors"
 								>
 									<XMarkIcon className="w-6 h-6" />
 								</button>
@@ -7019,14 +6960,14 @@ function LoansPageContent() {
 								</div>
 
 								<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-									<h4 className="font-semibold text-gray-700 mb-2 font-heading">
+									<h4 className="font-semibold text-slate-900 mb-2 font-heading">
 										{selectedDeleteApplication.product
 											?.name || "Unknown Product"}
 									</h4>
-									<div className="text-sm text-gray-500 space-y-1 font-body">
+									<div className="text-sm text-slate-500 space-y-1 font-body">
 										<p>
 											Application ID:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{selectedDeleteApplication.id
 													.slice(-8)
 													.toUpperCase()}
@@ -7034,7 +6975,7 @@ function LoansPageContent() {
 										</p>
 										<p>
 											Amount:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{selectedDeleteApplication.amount
 													? formatCurrency(
 															selectedDeleteApplication.amount
@@ -7044,7 +6985,7 @@ function LoansPageContent() {
 										</p>
 										<p>
 											Status:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{getApplicationStatusLabel(
 													selectedDeleteApplication.status,
 													selectedDeleteApplication.attestationType
@@ -7055,7 +6996,7 @@ function LoansPageContent() {
 								</div>
 							</div>
 
-							<p className="text-gray-600 mb-6 font-body">
+							<p className="text-slate-600 mb-6 font-body">
 								Are you sure you want to permanently delete this
 								incomplete application?
 							</p>
@@ -7066,14 +7007,14 @@ function LoansPageContent() {
 										setShowDeleteModal(false);
 										setSelectedDeleteApplication(null);
 									}}
-									className="flex-1 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
+									className="flex-1 bg-gray-100 text-slate-900 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
 								>
 									Cancel
 								</button>
 								<button
 									onClick={handleDeleteApplication}
 									disabled={deleting}
-									className="flex-1 bg-red-600 text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-red-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors shadow-sm"
+									className="flex-1 bg-red-600 text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-red-700 disabled:bg-gray-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors shadow-sm"
 								>
 									{deleting
 										? "Deleting..."
@@ -7112,12 +7053,12 @@ function LoansPageContent() {
 					<div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200">
 						<div className="p-6">
 							<div className="flex items-center justify-between mb-6">
-								<h2 className="text-xl font-bold text-gray-700 font-heading">
+								<h2 className="text-xl font-bold text-slate-900 font-heading">
 									Sign Loan Agreement
 								</h2>
 								<button
 									onClick={handleDocumentSigningModalClose}
-									className="text-gray-500 hover:text-gray-700 transition-colors"
+									className="text-slate-500 hover:text-slate-900 transition-colors"
 								>
 									<XMarkIcon className="w-6 h-6" />
 								</button>
@@ -7139,19 +7080,19 @@ function LoansPageContent() {
 								</div>
 
 								<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
-									<h4 className="font-semibold text-gray-700 mb-2 font-heading">
+									<h4 className="font-semibold text-slate-900 mb-2 font-heading">
 										{selectedSigningApplication.product?.name || "Unknown Product"}
 									</h4>
-									<div className="text-sm text-gray-500 space-y-1 font-body">
+									<div className="text-sm text-slate-500 space-y-1 font-body">
 										<p>
 											Application ID:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{selectedSigningApplication.id.slice(-8).toUpperCase()}
 											</span>
 										</p>
 										<p>
 											Amount:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{getDisplayAmount(selectedSigningApplication) 
 													? formatCurrency(getDisplayAmount(selectedSigningApplication)!) 
 													: "-"}
@@ -7159,7 +7100,7 @@ function LoansPageContent() {
 										</p>
 										<p>
 											Monthly Payment:{" "}
-											<span className="text-gray-700 font-medium">
+											<span className="text-slate-900 font-medium">
 												{getDisplayMonthlyRepayment(selectedSigningApplication)
 													? formatCurrency(getDisplayMonthlyRepayment(selectedSigningApplication)!)
 													: "-"}
@@ -7194,7 +7135,7 @@ function LoansPageContent() {
 							<div className="flex space-x-3">
 								<button
 									onClick={handleDocumentSigningModalClose}
-									className="flex-1 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
+									className="flex-1 bg-gray-100 text-slate-900 py-3 px-4 rounded-xl font-semibold font-heading hover:bg-gray-200 transition-colors border border-gray-200"
 								>
 									Cancel
 								</button>
@@ -7204,7 +7145,7 @@ function LoansPageContent() {
 										handleDocumentSigning(selectedSigningApplication);
 									}}
 									disabled={signingInProgress}
-									className="flex-1 bg-indigo-600 text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-indigo-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors shadow-sm"
+									className="flex-1 bg-indigo-600 text-white py-3 px-4 rounded-xl font-semibold font-heading hover:bg-indigo-700 disabled:bg-gray-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors shadow-sm"
 								>
 									{signingInProgress ? "Initiating..." : "Proceed to Sign"}
 								</button>

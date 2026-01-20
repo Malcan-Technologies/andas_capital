@@ -241,7 +241,7 @@ export default function ProductSelectionForm({
 							<button
 								type="submit"
 								disabled={!selected || loading}
-								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl text-sm lg:text-base"
+								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl text-sm lg:text-base"
 							>
 								{loading ? "Processing..." : "Continue"}
 							</button>

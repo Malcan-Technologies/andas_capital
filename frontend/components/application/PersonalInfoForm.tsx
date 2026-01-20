@@ -134,7 +134,7 @@ export default function PersonalInfoForm({
 						</button>
 						<button
 							onClick={() => window.location.reload()}
-							className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body"
+							className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body"
 						>
 							Retry
 						</button>
@@ -375,7 +375,7 @@ export default function PersonalInfoForm({
 							</button>
 							<button
 								type="submit"
-								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl font-medium hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl text-sm lg:text-base font-body"
+								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl font-medium hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl text-sm lg:text-base font-body"
 							>
 								Continue
 							</button>

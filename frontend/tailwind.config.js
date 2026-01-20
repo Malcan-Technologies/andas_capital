@@ -96,19 +96,19 @@ module.exports = {
     		},
     		fontFamily: {
     			logo: [
-    				'Manrope',
+    				'Quicksand',
     				'sans-serif'
     			],
     			heading: [
-    				'Manrope',
+    				'Quicksand',
     				'sans-serif'
     			],
     			body: [
-    				'Inter',
+    				'Quicksand',
     				'sans-serif'
     			],
     			sans: [
-    				'Inter',
+    				'Quicksand',
     				'sans-serif'
     			]
     		},

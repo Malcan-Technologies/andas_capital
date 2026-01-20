@@ -278,7 +278,7 @@ export default function OTPVerificationForm({
 									<button
 										onClick={requestOTP}
 										disabled={requestingOtp}
-										className="bg-purple-primary text-white px-8 py-4 rounded-xl hover:bg-purple-700 transition-colors font-body font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed inline-flex items-center gap-3"
+										className="bg-purple-primary text-white px-8 py-4 rounded-xl hover:bg-teal-600 transition-colors font-body font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed inline-flex items-center gap-3"
 									>
 										{requestingOtp ? (
 											<>
@@ -389,7 +389,7 @@ export default function OTPVerificationForm({
 				<button
 					onClick={handleSubmit}
 					disabled={!otpRequested || !otp || otp.length !== 6 || loading}
-					className={`bg-purple-primary text-white px-8 py-4 rounded-xl hover:bg-purple-700 transition-colors font-body font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed inline-flex items-center justify-center gap-3 ${onBack ? 'order-1 sm:order-2' : 'w-full'}`}
+					className={`bg-purple-primary text-white px-8 py-4 rounded-xl hover:bg-teal-600 transition-colors font-body font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed inline-flex items-center justify-center gap-3 ${onBack ? 'order-1 sm:order-2' : 'w-full'}`}
 				>
 					{loading ? (
 						<>

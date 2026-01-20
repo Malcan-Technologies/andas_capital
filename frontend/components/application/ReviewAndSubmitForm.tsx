@@ -582,7 +582,7 @@ function ReviewAndSubmitFormContent({
 				)}
 				<button
 					onClick={() => window.location.reload()}
-					className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium font-body"
+					className="px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body"
 				>
 					Retry Loading
 				</button>
@@ -1113,55 +1113,50 @@ function ReviewAndSubmitFormContent({
 						</div>
 					</Paper>
 
-					<FormControlLabel
-						control={
-							<Checkbox
-								checked={termsAccepted}
-								onChange={(e) => {
-									setTermsAccepted(e.target.checked);
-									if (error) setError(null);
-								}}
-								className="text-indigo-600"
-							/>
-						}
-						label={
-							<Typography className="text-gray-600">
-								I have read and agree to the{" "}
-								<Link
-									href="/terms"
-									target="_blank"
-									className="text-indigo-600 hover:text-indigo-500"
-								>
-									Terms and Conditions
-								</Link>{" "}
-								and{" "}
-								<Link
-									href="/privacy"
-									target="_blank"
-									className="text-indigo-600 hover:text-indigo-500"
-								>
-									Privacy Policy
-								</Link>
-							</Typography>
-						}
-					/>
+					<label className="flex items-center gap-3 cursor-pointer">
+						<input
+							type="checkbox"
+							checked={termsAccepted}
+							onChange={(e) => {
+								setTermsAccepted(e.target.checked);
+								if (error) setError(null);
+							}}
+							className="h-5 w-5 shrink-0 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+						/>
+						<span className="text-gray-600 font-body text-sm leading-normal">
+							I have read and agree to the{" "}
+							<a
+								href="/terms"
+								target="_blank"
+								className="text-teal-600 hover:text-teal-700 underline"
+							>
+								Terms and Conditions
+							</a>{" "}
+							and{" "}
+							<a
+								href="/privacy"
+								target="_blank"
+								className="text-teal-600 hover:text-teal-700 underline"
+							>
+								Privacy Policy
+							</a>
+						</span>
+					</label>
 				</div>
 
-				<Box className="flex justify-between pt-6">
-					<Button
+				<div className="flex justify-between pt-6">
+					<button
 						type="button"
-						variant="outlined"
 						onClick={handleBack}
 						disabled={isLoading}
-						className="text-gray-700 border-gray-300 hover:bg-gray-50"
+						className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium font-body disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						Back
-					</Button>
-					<Button
+					</button>
+					<button
 						type="submit"
-						variant="contained"
 						disabled={isLoading || !termsAccepted}
-						className="bg-indigo-600 hover:bg-indigo-700 text-white"
+						className="px-8 py-3 bg-purple-primary text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						{isLoading ? (
 							<div className="flex items-center">
@@ -1178,8 +1173,8 @@ function ReviewAndSubmitFormContent({
 						) : (
 							"Submit Application"
 						)}
-					</Button>
-				</Box>
+					</button>
+				</div>
 			</Box>
 	);
 }

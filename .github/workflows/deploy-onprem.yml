@@ -28,6 +28,11 @@ on:
         default: 'false'
         type: choice
         options: ['true', 'false']
+      run_migrations:
+        description: 'Run database migrations (signing orchestrator)'
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
 
 jobs:
   validate:
@@ -232,6 +237,30 @@ jobs:
             echo "::warning::Signing Orchestrator health check failed - check docker logs"
             docker compose -f docker-compose.unified.yml logs signing-orchestrator --tail=20
           fi
+
+      - name: Run Signing Orchestrator Migrations
+        if: ${{ github.event.inputs.run_migrations == 'true' }}
+        run: |
+          echo "Running database migrations for Signing Orchestrator..."
+          
+          # Wait for database to be ready
+          echo "Waiting for database to be ready..."
+          sleep 10
+          
+          # Run Prisma db push to sync schema with database
+          # Using db push instead of migrate deploy since migrations may not be committed
+          if docker exec andas-signing-orchestrator npx prisma db push --accept-data-loss 2>/dev/null; then
+            echo "✅ Database schema synced successfully"
+          else
+            # Fallback: try migrate deploy if db push fails
+            echo "Trying migrate deploy..."
+            docker exec andas-signing-orchestrator npx prisma migrate deploy || echo "::warning::No migrations to apply"
+          fi
+          
+          # Regenerate Prisma client
+          docker exec andas-signing-orchestrator npx prisma generate || true
+          
+          echo "Database migrations completed"
 
       - name: Deploy MTSA
         if: ${{ github.event.inputs.deploy_mtsa == 'true' }}

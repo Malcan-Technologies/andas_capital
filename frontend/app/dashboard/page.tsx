@@ -19,6 +19,7 @@ import {
   CreditCard,
   Clock,
   AlertCircle,
+  AlertTriangle,
   ChevronRight,
   Sparkles,
   Target,
@@ -530,9 +531,13 @@ export default function DashboardPage() {
     return [...notifications, ...validAppNotifications];
   };
 
-  // Calculate data
+  // Calculate data - include ACTIVE, PENDING_DISCHARGE, DEFAULT, and default risk flagged loans
   const activeLoans = loans.filter(
-    (loan) => loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+    (loan) =>
+      loan.status === "ACTIVE" ||
+      loan.status === "PENDING_DISCHARGE" ||
+      loan.status === "DEFAULT" ||
+      (loan.defaultRiskFlaggedAt && !loan.defaultedAt)
   );
 
   const totalBorrowed = activeLoans.reduce(
@@ -573,6 +578,11 @@ export default function DashboardPage() {
   const repaymentProgress =
     totalBorrowed > 0 ? (totalPrincipalPaid / totalBorrowed) * 100 : 0;
 
+  // Calculate total overdue amounts
+  const totalOverdue = activeLoans.reduce((sum, loan) => {
+    return sum + (loan.overdueInfo?.totalOverdueAmount || 0) + (loan.overdueInfo?.totalLateFees || 0);
+  }, 0);
+
   return (
     <DashboardLayout userName={userName}>
       <div className="space-y-8">
@@ -580,44 +590,44 @@ export default function DashboardPage() {
         <ActionNotificationBar notifications={getActionNotifications()} />
 
         {/* Hero Stats Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Outstanding Balance - Primary Card */}
-          <Card className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 border-0 text-white overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-teal-400/10 rounded-full -translate-y-32 translate-x-32" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-teal-400/5 rounded-full translate-y-24 -translate-x-24" />
+          <Card className="md:col-span-2 bg-white border border-gray-200 overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-teal-50 rounded-full -translate-y-32 translate-x-32" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-teal-50/50 rounded-full translate-y-24 -translate-x-24" />
             <CardContent className="p-6 relative z-10">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-slate-400 text-sm font-body mb-1">
+                  <p className="text-slate-500 text-sm font-body mb-1">
                     Outstanding Balance
                   </p>
-                  <h2 className="text-3xl lg:text-4xl font-heading font-bold">
+                  <h2 className="text-3xl lg:text-4xl font-heading font-bold text-slate-900">
                     {formatCurrency(totalOutstanding)}
                   </h2>
                 </div>
-                <div className="p-3 bg-teal-400/20 rounded-xl">
-                  <Wallet className="h-6 w-6 text-teal-400" />
+                <div className="p-3 bg-teal-50 rounded-xl">
+                  <Wallet className="h-6 w-6 text-teal-600" />
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex-1">
-                  <div className="flex justify-between text-xs text-slate-400 mb-2">
+                  <div className="flex justify-between text-xs text-slate-500 mb-2">
                     <span>Repayment Progress</span>
                     <span>{repaymentProgress.toFixed(0)}%</span>
                   </div>
                   <Progress
                     value={repaymentProgress}
-                    className="h-2 bg-slate-700"
+                    className="h-2 bg-gray-100"
                   />
                 </div>
               </div>
-              <div className="mt-4 pt-4 border-t border-slate-700 flex items-center justify-between">
-                <span className="text-sm text-slate-400">
+              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-sm text-slate-500">
                   Total borrowed: {formatCurrency(totalBorrowed)}
                 </span>
                 <Link
                   href="/dashboard/loans"
-                  className="text-teal-400 text-sm font-medium flex items-center gap-1 hover:text-teal-300 transition-colors"
+                  className="text-teal-600 text-sm font-medium flex items-center gap-1 hover:text-teal-500 transition-colors"
                 >
                   View loans <ArrowUpRight className="h-4 w-4" />
                 </Link>
@@ -625,88 +635,52 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Next Payment Card */}
-          <Card
-            className={`border-0 overflow-hidden ${
-              nextPaymentInfo.isOverdue
-                ? "bg-gradient-to-br from-red-50 to-red-100"
-                : "bg-gradient-to-br from-teal-50 to-emerald-50"
-            }`}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div
-                  className={`p-2.5 rounded-xl ${
-                    nextPaymentInfo.isOverdue ? "bg-red-100" : "bg-teal-100"
-                  }`}
-                >
-                  <Calendar
-                    className={`h-5 w-5 ${
-                      nextPaymentInfo.isOverdue
-                        ? "text-red-600"
-                        : "text-teal-600"
-                    }`}
-                  />
-                </div>
-                {nextPaymentInfo.isOverdue && (
+          {/* Overdue / Active Loans Card */}
+          {totalOverdue > 0 ? (
+            <Card className="border-0 bg-gradient-to-br from-red-50 to-red-100 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="p-2.5 bg-red-100 rounded-xl">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                  </div>
                   <Badge
                     variant="destructive"
                     className="bg-red-500 text-white text-xs"
                   >
-                    Overdue
+                    Action Required
                   </Badge>
-                )}
-              </div>
-              <p
-                className={`text-sm font-body mb-1 ${
-                  nextPaymentInfo.isOverdue ? "text-red-600" : "text-slate-500"
-                }`}
-              >
-                {nextPaymentInfo.isOverdue ? "Overdue Payment" : "Next Payment"}
-              </p>
-              <p
-                className={`text-2xl font-heading font-bold ${
-                  nextPaymentInfo.isOverdue ? "text-red-700" : "text-slate-900"
-                }`}
-              >
-                {nextPaymentInfo.amount > 0
-                  ? formatCurrency(nextPaymentInfo.amount)
-                  : "—"}
-              </p>
-              {nextPaymentInfo.dueDate && (
-                <p
-                  className={`text-xs mt-2 ${
-                    nextPaymentInfo.isOverdue
-                      ? "text-red-500"
-                      : "text-slate-400"
-                  }`}
-                >
-                  {nextPaymentInfo.isOverdue ? "Was due " : "Due "}
-                  {formatDate(nextPaymentInfo.dueDate)}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Active Loans Card */}
-          <Card className="border-0 bg-gradient-to-br from-violet-50 to-purple-50 overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="p-2.5 bg-violet-100 rounded-xl">
-                  <CreditCard className="h-5 w-5 text-violet-600" />
                 </div>
-              </div>
-              <p className="text-sm text-slate-500 font-body mb-1">
-                Active Loans
-              </p>
-              <p className="text-2xl font-heading font-bold text-slate-900">
-                {activeLoans.length}
-              </p>
-              <p className="text-xs text-slate-400 mt-2">
-                {activeLoans.length === 1 ? "loan" : "loans"} in progress
-              </p>
-            </CardContent>
-          </Card>
+                <p className="text-sm text-red-600 font-body mb-1">
+                  Total Overdue
+                </p>
+                <p className="text-2xl font-heading font-bold text-red-700">
+                  {formatCurrency(totalOverdue)}
+                </p>
+                <p className="text-xs text-red-500 mt-2">
+                  Requires immediate attention
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-0 bg-gradient-to-br from-violet-50 to-purple-50 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="p-2.5 bg-violet-100 rounded-xl">
+                    <CreditCard className="h-5 w-5 text-violet-600" />
+                  </div>
+                </div>
+                <p className="text-sm text-slate-500 font-body mb-1">
+                  Active Loans
+                </p>
+                <p className="text-2xl font-heading font-bold text-slate-900">
+                  {activeLoans.length}
+                </p>
+                <p className="text-xs text-slate-400 mt-2">
+                  {activeLoans.length === 1 ? "loan" : "loans"} in progress
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Main Content Grid */}

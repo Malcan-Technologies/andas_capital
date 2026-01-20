@@ -1,4 +1,4 @@
-# Kredit.my Brand Style Guide (Frontend Only)
+# Andas Capital Brand Style Guide (Frontend Only)
 
 ## 1. Overall Look
 
@@ -163,9 +163,9 @@ This is the **core brand identity**.
 
 | Usage | Font | Class | Style |
 |-------|------|-------|-------|
-| **Headings** | `Playfair Display` | `font-heading` | `font-semibold` or `font-bold` |
-| **Body Text** | `Poppins` | `font-body` | `font-normal` |
-| **Logo Text** | `Playfair Display` | `font-logo` | `font-bold` |
+| **Headings** | `Quicksand` | `font-heading` | `font-bold` (700) |
+| **Body Text** | `Quicksand` | `font-body` | `font-normal` (400) |
+| **Logo Text** | `Quicksand` | `font-logo` | `font-bold` (700) |
 
 ---
 

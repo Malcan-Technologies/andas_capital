@@ -793,7 +793,7 @@ function ApplyPageContent() {
 														index === activeStep 
 															? 'bg-purple-primary w-6' 
 															: index < activeStep 
-															? 'bg-purple-300' 
+															? 'bg-slate-700' 
 															: 'bg-gray-200'
 													}`}
 												/>
@@ -804,7 +804,7 @@ function ApplyPageContent() {
 										<div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-all duration-200 ${
 											activeStep < steps.length 
 												? 'bg-purple-primary text-white' 
-												: 'bg-purple-300 text-white'
+												: 'bg-slate-700 text-white'
 										}`}>
 											{activeStep < steps.length ? (
 												(() => {
@@ -835,7 +835,7 @@ function ApplyPageContent() {
 												<div
 													key={index}
 													className={`flex-1 h-0.5 transition-all duration-200 ${
-														index < activeStep ? 'bg-purple-300' : 'bg-gray-200'
+														index < activeStep ? 'bg-slate-700' : 'bg-gray-200'
 													}`}
 												/>
 											))}
@@ -855,7 +855,7 @@ function ApplyPageContent() {
 																isActive 
 																	? 'border-purple-primary bg-purple-primary text-white shadow-lg' 
 																	: isCompleted 
-																	? 'border-purple-300 bg-purple-300 text-white shadow-md' 
+																	? 'border-slate-700 bg-slate-700 text-white shadow-md' 
 																	: 'border-gray-200 bg-white text-gray-400'
 															}`}>
 																{isCompleted ? (
@@ -868,7 +868,7 @@ function ApplyPageContent() {
 															</div>
 															<div className="space-y-1">
 																<p className={`text-sm font-medium font-body ${
-																	isActive ? 'text-purple-primary' : isCompleted ? 'text-purple-600' : 'text-gray-500'
+																	isActive ? 'text-purple-primary' : isCompleted ? 'text-slate-700' : 'text-gray-500'
 																}`}>
 																	{step.title}
 																</p>

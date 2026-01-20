@@ -442,7 +442,7 @@ function ApplicationDetailsFormContent({
 							</button>
 							<button
 								type="submit"
-								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl hover:bg-purple-700 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl text-sm lg:text-base"
+								className="w-full sm:w-auto px-8 py-3 lg:py-4 bg-purple-primary text-white rounded-xl lg:rounded-2xl hover:bg-teal-600 transition-all duration-200 font-medium font-body shadow-lg hover:shadow-xl text-sm lg:text-base"
 							>
 								Continue
 							</button>

@@ -93,19 +93,19 @@ export function AppSidebar({ userName = "User", ...props }: AppSidebarProps) {
 
       <SidebarContent>
         {/* Apply for Loan CTA - Top */}
-        <SidebarGroup className="px-2 pt-2">
+        <SidebarGroup className="px-2 pt-2 group-data-[collapsible=icon]:px-1">
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
+              <SidebarMenuItem className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
                 <SidebarMenuButton
                   asChild
                   size="lg"
                   tooltip="Apply for Loan"
-                  className="bg-teal-400 text-white hover:bg-teal-500 hover:text-white py-4 px-4 h-auto rounded-xl shadow-md shadow-teal-200/50"
+                  className="bg-teal-400 text-white hover:bg-teal-500 hover:text-white py-4 px-4 h-auto rounded-xl shadow-md shadow-teal-200/50 group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:!w-9 group-data-[collapsible=icon]:!h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-lg group-data-[collapsible=icon]:shadow-sm"
                 >
-                  <Link href="/dashboard/apply" className="flex items-center gap-3">
-                    <Plus className="size-5" />
-                    <span className="font-body font-semibold text-base">Apply for Loan</span>
+                  <Link href="/dashboard/apply" className="flex items-center gap-3 group-data-[collapsible=icon]:gap-0">
+                    <Plus className="size-5 shrink-0 group-data-[collapsible=icon]:size-4" />
+                    <span className="font-body font-semibold text-base group-data-[collapsible=icon]:hidden">Apply for Loan</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
