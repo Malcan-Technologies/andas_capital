@@ -676,10 +676,13 @@ export class SigningService {
     try {
       log.info('Requesting signing OTP', { userId });
       
+      // For DS (Digital Signing), EmailAddress should NOT be included
+      // MTSA sends OTP to the email registered with the certificate
+      // EmailAddress is only required for NU (New User enrollment)
       const result = await mtsaClient.requestEmailOTP({
         UserID: userId,
         OTPUsage: 'DS',
-        EmailAddress: emailAddress,
+        // EmailAddress omitted for DS usage per MTSA API spec
       }, correlationId);
       
       const success = result.statusCode === '000';

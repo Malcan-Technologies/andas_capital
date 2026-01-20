@@ -1,320 +1,345 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { 
-	ClockIcon, 
-	CreditCardIcon, 
-	CheckCircleIcon, 
-	ChevronLeftIcon,
-	ChevronRightIcon
-} from "@heroicons/react/24/outline";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Clock,
+  CreditCard,
+  CheckCircle,
+  ShieldCheck,
+  KeyRound,
+  UserCheck,
+  FileSignature,
+  FileCheck,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Bell,
+  ArrowRight,
+  Sparkles,
+} from "lucide-react";
 
 interface ActionNotification {
-	id: string;
-	type: 'INCOMPLETE_APPLICATION' | 'PENDING_APP_FEE' | 'APPROVED' | 'PENDING_ATTESTATION' | 'CERT_CHECK' | 'PENDING_SIGNING_OTP' | 'PENDING_KYC' | 'PENDING_PROFILE_CONFIRMATION' | 'PENDING_CERTIFICATE_OTP' | 'PENDING_SIGNING_OTP_DS' | 'PENDING_SIGNATURE' | 'PENDING_FRESH_OFFER' | 'PROFILE_INCOMPLETE';
-	title: string;
-	description: string;
-	buttonText: string;
-	buttonHref: string;
-	priority: 'HIGH' | 'MEDIUM' | 'LOW';
-	metadata?: {
-		productName?: string;
-		amount?: string;
-		date?: string;
-		applicationId?: string;
-		completionPercentage?: number;
-		missing?: string[];
-	};
+  id: string;
+  type:
+    | "INCOMPLETE_APPLICATION"
+    | "PENDING_APP_FEE"
+    | "APPROVED"
+    | "PENDING_ATTESTATION"
+    | "CERT_CHECK"
+    | "PENDING_SIGNING_OTP"
+    | "PENDING_KYC"
+    | "PENDING_PROFILE_CONFIRMATION"
+    | "PENDING_CERTIFICATE_OTP"
+    | "PENDING_SIGNING_OTP_DS"
+    | "PENDING_SIGNATURE"
+    | "PENDING_FRESH_OFFER"
+    | "PROFILE_INCOMPLETE";
+  title: string;
+  description: string;
+  buttonText: string;
+  buttonHref: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  metadata?: {
+    productName?: string;
+    amount?: string;
+    date?: string;
+    applicationId?: string;
+    completionPercentage?: number;
+    missing?: string[];
+  };
 }
 
 interface ActionNotificationBarProps {
-	notifications: ActionNotification[];
+  notifications: ActionNotification[];
 }
 
-export default function ActionNotificationBar({ 
-	notifications 
+export default function ActionNotificationBar({
+  notifications,
 }: ActionNotificationBarProps) {
-	const [currentIndex, setCurrentIndex] = useState(0);
-	const [isVisible, setIsVisible] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
-	// Auto-rotate notifications every 8 seconds if multiple exist
-	useEffect(() => {
-		if (notifications.length <= 1) return;
+  const ROTATION_INTERVAL = 8000; // 8 seconds
 
-		const interval = setInterval(() => {
-			setCurrentIndex((prev) => (prev + 1) % notifications.length);
-		}, 8000);
+  const goToNext = useCallback(() => {
+    if (notifications.length <= 1) return;
+    setCurrentIndex((prev) => (prev + 1) % notifications.length);
+    setProgress(0);
+  }, [notifications.length]);
 
-		return () => clearInterval(interval);
-	}, [notifications.length]);
+  const goToPrev = useCallback(() => {
+    if (notifications.length <= 1) return;
+    setCurrentIndex((prev) =>
+      prev === 0 ? notifications.length - 1 : prev - 1
+    );
+    setProgress(0);
+  }, [notifications.length]);
 
-	// Reset index when notifications change
-	useEffect(() => {
-		if (currentIndex >= notifications.length) {
-			setCurrentIndex(0);
-		}
-	}, [notifications.length, currentIndex]);
+  // Auto-rotate and progress bar
+  useEffect(() => {
+    if (notifications.length <= 1 || isPaused) return;
 
-	if (!isVisible || notifications.length === 0) {
-		return null;
-	}
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          goToNext();
+          return 0;
+        }
+        return prev + 100 / (ROTATION_INTERVAL / 100);
+      });
+    }, 100);
 
-	const currentNotification = notifications[currentIndex];
+    return () => clearInterval(progressInterval);
+  }, [notifications.length, isPaused, goToNext]);
 
-	const getNotificationStyle = (type: string) => {
-		switch (type) {
-			case 'INCOMPLETE_APPLICATION':
-				return {
-					bgColor: 'bg-amber-50',
-					borderColor: 'border-amber-200',
-					iconBg: 'bg-amber-100',
-					iconBorder: 'border-amber-200',
-					buttonBg: 'bg-amber-500 hover:bg-amber-600',
-					textColor: 'text-amber-600',
-					icon: <ClockIcon className="h-6 w-6" />
-				};
-			case 'PENDING_APP_FEE':
-				return {
-					bgColor: 'bg-orange-50',
-					borderColor: 'border-orange-200',
-					iconBg: 'bg-orange-100',
-					iconBorder: 'border-orange-200',
-					buttonBg: 'bg-orange-500 hover:bg-orange-600',
-					textColor: 'text-orange-600',
-					icon: <CreditCardIcon className="h-6 w-6" />
-				};
-			case 'APPROVED':
-				return {
-					bgColor: 'bg-green-50',
-					borderColor: 'border-green-200',
-					iconBg: 'bg-green-100',
-					iconBorder: 'border-green-200',
-					buttonBg: 'bg-green-500 hover:bg-green-600',
-					textColor: 'text-green-600',
-					icon: <CheckCircleIcon className="h-6 w-6" />
-				};
-			case 'PENDING_ATTESTATION':
-				return {
-					bgColor: 'bg-cyan-50',
-					borderColor: 'border-cyan-200',
-					iconBg: 'bg-cyan-100',
-					iconBorder: 'border-cyan-200',
-					buttonBg: 'bg-cyan-500 hover:bg-cyan-600',
-					textColor: 'text-cyan-600',
-					icon: (
-						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
-					)
-				};
-				case 'CERT_CHECK':
-				return {
-					bgColor: 'bg-indigo-50',
-					borderColor: 'border-indigo-200',
-					iconBg: 'bg-indigo-100',
-					iconBorder: 'border-indigo-200',
-					buttonBg: 'bg-indigo-500 hover:bg-indigo-600',
-					textColor: 'text-indigo-600',
-					icon: (
-						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
-					)
-				};
-				case 'PENDING_SIGNING_OTP':
-			return {
-				bgColor: 'bg-purple-50',
-				borderColor: 'border-purple-200',
-				iconBg: 'bg-purple-100',
-				iconBorder: 'border-purple-200',
-				buttonBg: 'bg-purple-500 hover:bg-purple-600',
-				textColor: 'text-purple-600',
-				icon: (
-					<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-					</svg>
-				)
-			};
-		case 'PENDING_CERTIFICATE_OTP':
-			return {
-				bgColor: 'bg-purple-50',
-				borderColor: 'border-purple-200',
-				iconBg: 'bg-purple-100',
-				iconBorder: 'border-purple-200',
-				buttonBg: 'bg-purple-500 hover:bg-purple-600',
-				textColor: 'text-purple-600',
-				icon: (
-					<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5 0a8 8 0 11-16 0 8 8 0 0116 0z" />
-					</svg>
-				)
-			};
-		case 'PENDING_KYC':
-				return {
-					bgColor: 'bg-purple-50',
-					borderColor: 'border-purple-200',
-					iconBg: 'bg-purple-100',
-					iconBorder: 'border-purple-200',
-					buttonBg: 'bg-purple-500 hover:bg-purple-600',
-					textColor: 'text-purple-600',
-					icon: (
-						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
-					)
-				};
-			case 'PENDING_PROFILE_CONFIRMATION':
-				return {
-					bgColor: 'bg-purple-50',
-					borderColor: 'border-purple-200',
-					iconBg: 'bg-purple-100',
-					iconBorder: 'border-purple-200',
-					buttonBg: 'bg-purple-500 hover:bg-purple-600',
-					textColor: 'text-purple-600',
-					icon: (
-						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-						</svg>
-					)
-				};
-			case 'PENDING_SIGNING_OTP_DS':
-				return {
-					bgColor: 'bg-violet-50',
-					borderColor: 'border-violet-200',
-					iconBg: 'bg-violet-100',
-					iconBorder: 'border-violet-200',
-					buttonBg: 'bg-violet-500 hover:bg-violet-600',
-					textColor: 'text-violet-600',
-					icon: (
-						<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5 0H9l3 3 3-3z" />
-						</svg>
-					)
-				};
-			default:
-				return {
-					bgColor: 'bg-blue-50',
-					borderColor: 'border-blue-200',
-					iconBg: 'bg-blue-100',
-					iconBorder: 'border-blue-200',
-					buttonBg: 'bg-blue-500 hover:bg-blue-600',
-					textColor: 'text-blue-600',
-					icon: <ClockIcon className="h-6 w-6" />
-				};
-		}
-	};
+  // Reset index when notifications change
+  useEffect(() => {
+    if (currentIndex >= notifications.length) {
+      setCurrentIndex(0);
+    }
+  }, [notifications.length, currentIndex]);
 
-	const style = getNotificationStyle(currentNotification.type);
+  if (notifications.length === 0) {
+    return null;
+  }
 
+  const currentNotification = notifications[currentIndex];
 
+  const getNotificationConfig = (type: string) => {
+    const configs: Record<
+      string,
+      {
+        icon: React.ReactNode;
+        gradient: string;
+        iconBg: string;
+        badgeColor: string;
+        buttonColor: string;
+      }
+    > = {
+      INCOMPLETE_APPLICATION: {
+        icon: <Clock className="h-5 w-5" />,
+        gradient: "from-amber-500 to-orange-500",
+        iconBg: "bg-amber-100 text-amber-600",
+        badgeColor: "bg-amber-100 text-amber-700",
+        buttonColor: "bg-amber-500 hover:bg-amber-600",
+      },
+      PENDING_APP_FEE: {
+        icon: <CreditCard className="h-5 w-5" />,
+        gradient: "from-orange-500 to-red-500",
+        iconBg: "bg-orange-100 text-orange-600",
+        badgeColor: "bg-orange-100 text-orange-700",
+        buttonColor: "bg-orange-500 hover:bg-orange-600",
+      },
+      APPROVED: {
+        icon: <CheckCircle className="h-5 w-5" />,
+        gradient: "from-emerald-500 to-teal-500",
+        iconBg: "bg-emerald-100 text-emerald-600",
+        badgeColor: "bg-emerald-100 text-emerald-700",
+        buttonColor: "bg-emerald-500 hover:bg-emerald-600",
+      },
+      PENDING_ATTESTATION: {
+        icon: <ShieldCheck className="h-5 w-5" />,
+        gradient: "from-cyan-500 to-blue-500",
+        iconBg: "bg-cyan-100 text-cyan-600",
+        badgeColor: "bg-cyan-100 text-cyan-700",
+        buttonColor: "bg-cyan-500 hover:bg-cyan-600",
+      },
+      CERT_CHECK: {
+        icon: <FileCheck className="h-5 w-5" />,
+        gradient: "from-indigo-500 to-purple-500",
+        iconBg: "bg-indigo-100 text-indigo-600",
+        badgeColor: "bg-indigo-100 text-indigo-700",
+        buttonColor: "bg-indigo-500 hover:bg-indigo-600",
+      },
+      PENDING_SIGNING_OTP: {
+        icon: <KeyRound className="h-5 w-5" />,
+        gradient: "from-purple-500 to-pink-500",
+        iconBg: "bg-purple-100 text-purple-600",
+        badgeColor: "bg-purple-100 text-purple-700",
+        buttonColor: "bg-purple-500 hover:bg-purple-600",
+      },
+      PENDING_CERTIFICATE_OTP: {
+        icon: <KeyRound className="h-5 w-5" />,
+        gradient: "from-purple-500 to-pink-500",
+        iconBg: "bg-purple-100 text-purple-600",
+        badgeColor: "bg-purple-100 text-purple-700",
+        buttonColor: "bg-purple-500 hover:bg-purple-600",
+      },
+      PENDING_KYC: {
+        icon: <UserCheck className="h-5 w-5" />,
+        gradient: "from-violet-500 to-purple-500",
+        iconBg: "bg-violet-100 text-violet-600",
+        badgeColor: "bg-violet-100 text-violet-700",
+        buttonColor: "bg-violet-500 hover:bg-violet-600",
+      },
+      PENDING_PROFILE_CONFIRMATION: {
+        icon: <UserCheck className="h-5 w-5" />,
+        gradient: "from-blue-500 to-indigo-500",
+        iconBg: "bg-blue-100 text-blue-600",
+        badgeColor: "bg-blue-100 text-blue-700",
+        buttonColor: "bg-blue-500 hover:bg-blue-600",
+      },
+      PENDING_SIGNING_OTP_DS: {
+        icon: <FileSignature className="h-5 w-5" />,
+        gradient: "from-fuchsia-500 to-purple-500",
+        iconBg: "bg-fuchsia-100 text-fuchsia-600",
+        badgeColor: "bg-fuchsia-100 text-fuchsia-700",
+        buttonColor: "bg-fuchsia-500 hover:bg-fuchsia-600",
+      },
+      PENDING_SIGNATURE: {
+        icon: <FileSignature className="h-5 w-5" />,
+        gradient: "from-rose-500 to-pink-500",
+        iconBg: "bg-rose-100 text-rose-600",
+        badgeColor: "bg-rose-100 text-rose-700",
+        buttonColor: "bg-rose-500 hover:bg-rose-600",
+      },
+      PENDING_FRESH_OFFER: {
+        icon: <Sparkles className="h-5 w-5" />,
+        gradient: "from-teal-500 to-emerald-500",
+        iconBg: "bg-teal-100 text-teal-600",
+        badgeColor: "bg-teal-100 text-teal-700",
+        buttonColor: "bg-teal-500 hover:bg-teal-600",
+      },
+      PROFILE_INCOMPLETE: {
+        icon: <AlertTriangle className="h-5 w-5" />,
+        gradient: "from-slate-600 to-slate-800",
+        iconBg: "bg-slate-100 text-slate-600",
+        badgeColor: "bg-slate-100 text-slate-700",
+        buttonColor: "bg-slate-700 hover:bg-slate-800",
+      },
+    };
 
-	const handlePrevious = () => {
-		setCurrentIndex((prev) => prev === 0 ? notifications.length - 1 : prev - 1);
-	};
+    return (
+      configs[type] || {
+        icon: <Bell className="h-5 w-5" />,
+        gradient: "from-slate-500 to-slate-700",
+        iconBg: "bg-slate-100 text-slate-600",
+        badgeColor: "bg-slate-100 text-slate-700",
+        buttonColor: "bg-slate-600 hover:bg-slate-700",
+      }
+    );
+  };
 
-	const handleNext = () => {
-		setCurrentIndex((prev) => (prev + 1) % notifications.length);
-	};
+  const config = getNotificationConfig(currentNotification.type);
 
-	return (
-		<div className={`${style.bgColor} ${style.borderColor} rounded-xl lg:rounded-2xl shadow-sm border p-4 sm:p-6 lg:p-8 mb-6`}>
-			{/* Navigation Controls for Multiple Notifications */}
-			{notifications.length > 1 && (
-				<div className="flex items-center justify-start mb-4">
-					{/* Navigation Arrows */}
-					<div className="flex items-center space-x-4">
-						<button
-							onClick={handlePrevious}
-							className={`p-2 rounded-lg ${style.textColor} hover:bg-white/50 transition-colors`}
-							title="Previous notification"
-						>
-							<ChevronLeftIcon className="h-5 w-5" />
-						</button>
-						<span className="text-sm text-gray-600 font-medium px-3">
-							{currentIndex + 1} of {notifications.length}
-						</span>
-						<button
-							onClick={handleNext}
-							className={`p-2 rounded-lg ${style.textColor} hover:bg-white/50 transition-colors`}
-							title="Next notification"
-						>
-							<ChevronRightIcon className="h-5 w-5" />
-						</button>
-					</div>
-				</div>
-			)}
+  return (
+    <Card
+      className="relative overflow-hidden border-0 shadow-lg"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      {/* Gradient top bar */}
+      <div
+        className={`h-1.5 w-full bg-gradient-to-r ${config.gradient}`}
+        aria-hidden="true"
+      />
 
-			{/* Main Notification Content */}
-			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-6 lg:space-y-0 lg:space-x-6">
-				{/* Left Side - Icon and Content */}
-				<div className="flex items-start space-x-4 min-w-0 flex-1">
-					{/* Icon */}
-					<div className="flex-shrink-0">
-						<div className={`p-3 ${style.iconBg} ${style.iconBorder} rounded-xl border`}>
-							<div className={style.textColor}>
-								{style.icon}
-							</div>
-						</div>
-					</div>
+      <CardContent className="p-0">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-4 lg:p-5">
+          {/* Left: Icon + Content */}
+          <div className="flex items-start gap-4 flex-1 min-w-0">
+            {/* Icon */}
+            <div
+              className={`flex-shrink-0 p-3 rounded-xl ${config.iconBg} shadow-sm`}
+            >
+              {config.icon}
+            </div>
 
-					{/* Content */}
-					<div className="min-w-0 flex-1">
-						<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-							{currentNotification.title}
-						</h3>
-						<p className="text-sm lg:text-base text-gray-600 font-body mb-2">
-							{currentNotification.description}
-						</p>
-						{currentNotification.metadata?.date && (
-							<p className="text-xs text-gray-500 font-body">
-								{currentNotification.metadata.date}
-							</p>
-						)}
-					</div>
-				</div>
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <h3 className="text-base lg:text-lg font-heading font-semibold text-slate-900 truncate">
+                  {currentNotification.title}
+                </h3>
+                {currentNotification.priority === "HIGH" && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-red-100 text-red-700 hover:bg-red-100"
+                  >
+                    Action Required
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-slate-600 font-body line-clamp-2">
+                {currentNotification.description}
+              </p>
+              {currentNotification.metadata?.date && (
+                <p className="text-xs text-slate-400 mt-1.5 font-body">
+                  {currentNotification.metadata.date}
+                </p>
+              )}
+            </div>
+          </div>
 
-				{/* Right Side - Action Button */}
-				<div className="flex-shrink-0">
-					{/* Primary Action Button */}
-					<Link
-						href={currentNotification.buttonHref}
-						className={`${style.buttonBg} text-white px-6 py-3 rounded-xl font-medium font-body text-base transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center`}
-					>
-						{currentNotification.buttonText}
-						<svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-						</svg>
-					</Link>
-				</div>
-			</div>
+          {/* Right: Action + Navigation */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Navigation for multiple notifications */}
+            {notifications.length > 1 && (
+              <div className="flex items-center gap-1 mr-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToPrev}
+                  className="h-8 w-8 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="flex items-center gap-1.5 px-2">
+                  {notifications.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setCurrentIndex(idx);
+                        setProgress(0);
+                      }}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        idx === currentIndex
+                          ? "w-4 bg-slate-800"
+                          : "w-1.5 bg-slate-300 hover:bg-slate-400"
+                      }`}
+                      aria-label={`Go to notification ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToNext}
+                  className="h-8 w-8 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
 
-			{/* Progress Bar for Auto-rotation */}
-			{notifications.length > 1 && (
-				<div className="mt-4 bg-white/50 rounded-full h-1 overflow-hidden">
-					<div 
-						className={`h-full transition-all duration-75 ease-linear`}
-						style={{ 
-							backgroundColor: style.textColor.includes('amber') ? '#D97706' :
-											  style.textColor.includes('orange') ? '#EA580C' :
-											  style.textColor.includes('green') ? '#059669' :
-											  style.textColor.includes('cyan') ? '#0891B2' :
-											  style.textColor.includes('purple') ? '#9333EA' :
-											  style.textColor.includes('indigo') ? '#4F46E5' :
-											  style.textColor.includes('violet') ? '#7C3AED' : '#2563EB',
-							width: '100%',
-							animation: 'actionNotificationProgress 8s linear infinite'
-						}}
-					/>
-				</div>
-			)}
+            {/* Action Button */}
+            <Button
+              asChild
+              className={`${config.buttonColor} text-white rounded-xl font-body font-medium shadow-sm`}
+            >
+              <Link href={currentNotification.buttonHref}>
+                {currentNotification.buttonText}
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Link>
+            </Button>
+          </div>
+        </div>
 
-			<style jsx>{`
-				@keyframes actionNotificationProgress {
-					0% { width: 0%; }
-					100% { width: 100%; }
-				}
-			`}</style>
-		</div>
-	);
-} 
+        {/* Progress bar for auto-rotation */}
+        {notifications.length > 1 && (
+          <div className="h-0.5 w-full bg-slate-100">
+            <div
+              className={`h-full bg-gradient-to-r ${config.gradient} transition-all duration-100 ease-linear`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

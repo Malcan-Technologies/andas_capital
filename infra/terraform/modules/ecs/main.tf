@@ -295,13 +295,13 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "FRONTEND_URL", value = "https://${var.domains.app}" },
         { name = "ADMIN_BASE_URL", value = "https://${var.domains.admin}" },
         { name = "ADMIN_URL", value = "https://${var.domains.admin}" },
-        # DocuSeal Configuration
+        # DocuSeal & Signing Orchestrator Configuration
+        # NOTE: api_token, template_id, orchestrator_api_key are read from AWS Secrets (DOCUSEAL_SIGNING_CONFIG)
+        # Only URLs are set here as they're derived from domains
         { name = "DOCUSEAL_BASE_URL", value = "https://${var.domains.sign}" },
         { name = "DOCUSEAL_API_URL", value = "https://${var.domains.sign}" },
-        { name = "DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID", value = var.docuseal_template_id },
-        # Signing Orchestrator
         { name = "SIGNING_ORCHESTRATOR_URL", value = "https://${var.domains.sign}" },
-        # Document Signing Configuration
+        # Document Signing Configuration (company/witness info)
         { name = "COMPANY_SIGNING_EMAIL", value = var.company_signing_email },
         { name = "WITNESS_EMAIL", value = var.witness_email },
         { name = "WITNESS_NAME", value = var.witness_name },

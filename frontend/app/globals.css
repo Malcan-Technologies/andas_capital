@@ -78,6 +78,25 @@
     --chart-4: 0 84% 60%; /* red */
     --chart-5: 215 16% 47%; /* slate */
     --radius: 0.75rem;
+    /* Sidebar theming - Brand aligned (teal accent) */
+    --sidebar-background: 210 20% 98%; /* gray-50 */
+    --sidebar-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --sidebar-primary: 168 76% 50%; /* teal-400 */
+    --sidebar-primary-foreground: 0 0% 100%; /* white */
+    --sidebar-accent: 166 76% 97%; /* teal-50 */
+    --sidebar-accent-foreground: 168 64% 42%; /* teal-500 */
+    --sidebar-border: 220 13% 91%; /* gray-200 */
+    --sidebar-ring: 168 76% 50%; /* teal-400 */
+  }
+  .dark {
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
@@ -239,4 +258,15 @@
 
 .animate-scroll:hover {
   animation-play-state: paused;
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

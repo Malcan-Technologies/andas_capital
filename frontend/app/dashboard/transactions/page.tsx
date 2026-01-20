@@ -3,386 +3,508 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
-	WalletIcon,
-	ArrowUpIcon,
-	ArrowDownIcon,
-	CheckCircleIcon,
-	ClockIcon,
-	ExclamationTriangleIcon,
-	ArrowPathIcon,
-} from "@heroicons/react/24/outline";
+  Wallet,
+  ArrowUpRight,
+  ArrowDownLeft,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  RefreshCw,
+  ArrowRightLeft,
+  Search,
+  Filter,
+  TrendingUp,
+  TrendingDown,
+  Receipt,
+  Calendar,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
-import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
+import {
+  checkAuth,
+  fetchWithTokenRefresh,
+  TokenStorage,
+} from "@/lib/authUtils";
 
 interface Transaction {
-	id: string;
-	type: "DEPOSIT" | "WITHDRAWAL" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
-	amount: number;
-	status: "PENDING" | "APPROVED" | "REJECTED";
-	description: string;
-	createdAt: string;
-	reference?: string;
+  id: string;
+  type: "DEPOSIT" | "WITHDRAWAL" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+  amount: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  description: string;
+  createdAt: string;
+  reference?: string;
 }
 
 export default function TransactionsPage() {
-	const router = useRouter();
-	const [userName, setUserName] = useState<string>("");
-	const [transactions, setTransactions] = useState<Transaction[]>([]);
-	const [transactionFilter, setTransactionFilter] = useState<string>("ALL");
-	const [loading, setLoading] = useState<boolean>(true);
-	const [refreshing, setRefreshing] = useState<boolean>(false);
+  const router = useRouter();
+  const [userName, setUserName] = useState<string>("");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionFilter, setTransactionFilter] = useState<string>("ALL");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
-	// Set filter from URL parameter on component mount
-	useEffect(() => {
-		const urlParams = new URLSearchParams(window.location.search);
-		const filterParam = urlParams.get('filter');
-		if (filterParam && ['LOAN_DISBURSEMENT', 'LOAN_REPAYMENT'].includes(filterParam)) {
-			setTransactionFilter(filterParam);
-		}
-	}, []);
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const filterParam = urlParams.get("filter");
+    if (
+      filterParam &&
+      ["LOAN_DISBURSEMENT", "LOAN_REPAYMENT"].includes(filterParam)
+    ) {
+      setTransactionFilter(filterParam);
+    }
+  }, []);
 
-	useEffect(() => {
-		const checkAuthAndLoadData = async () => {
-			try {
-				// First check if we have any tokens at all
-				const accessToken = TokenStorage.getAccessToken();
-				const refreshToken = TokenStorage.getRefreshToken();
+  useEffect(() => {
+    const checkAuthAndLoadData = async () => {
+      try {
+        const accessToken = TokenStorage.getAccessToken();
+        const refreshToken = TokenStorage.getRefreshToken();
 
-				// If no tokens available, immediately redirect to login
-				if (!accessToken && !refreshToken) {
-					router.push("/login");
-					return;
-				}
+        if (!accessToken && !refreshToken) {
+          router.push("/login");
+          return;
+        }
 
-				const isAuthenticated = await checkAuth();
-				if (!isAuthenticated) {
-					// Clear any invalid tokens
-					TokenStorage.clearTokens();
-					router.push("/login");
-					return;
-				}
+        const isAuthenticated = await checkAuth();
+        if (!isAuthenticated) {
+          TokenStorage.clearTokens();
+          router.push("/login");
+          return;
+        }
 
-				// Fetch user data
-				const userData = await fetchWithTokenRefresh<any>(
-					"/api/users/me"
-				);
-				// Skip onboarding check - all users go directly to dashboard
-				// if (!userData?.isOnboardingComplete) {
-				// 	router.push("/onboarding");
-				// 	return;
-				// }
+        const userData = await fetchWithTokenRefresh<any>("/api/users/me");
 
-				// Set user name
-				if (userData.firstName) {
-					setUserName(userData.firstName);
-				} else if (userData.fullName) {
-					setUserName(userData.fullName.split(" ")[0]);
-				} else {
-					setUserName("User");
-				}
+        if (userData.firstName) {
+          setUserName(userData.firstName);
+        } else if (userData.fullName) {
+          setUserName(userData.fullName.split(" ")[0]);
+        } else {
+          setUserName("User");
+        }
 
-				// Load transactions
-				fetchTransactions();
-			} catch (error) {
-				console.error("Transactions - Auth check error:", error);
-				// Clear any invalid tokens and redirect to login
-				TokenStorage.clearTokens();
-				router.push("/login");
-			} finally {
-				setLoading(false);
-			}
-		};
+        fetchTransactions();
+      } catch (error) {
+        console.error("Transactions - Auth check error:", error);
+        TokenStorage.clearTokens();
+        router.push("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-		checkAuthAndLoadData();
-	}, [router]);
+    checkAuthAndLoadData();
+  }, [router]);
 
-	const fetchTransactions = async () => {
-		try {
-			const data = await fetchWithTokenRefresh<{
-				transactions: Transaction[];
-			}>("/api/wallet/transactions?limit=50");
-			if (data?.transactions) {
-				setTransactions(data.transactions);
-			}
-		} catch (error) {
-			console.error("Error fetching transactions:", error);
-		}
-	};
+  const fetchTransactions = async () => {
+    try {
+      const data = await fetchWithTokenRefresh<{
+        transactions: Transaction[];
+      }>("/api/wallet/transactions?limit=50");
+      if (data?.transactions) {
+        setTransactions(data.transactions);
+      }
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+    }
+  };
 
-	const formatCurrency = (amount: number) => {
-		return new Intl.NumberFormat("en-MY", {
-			style: "currency",
-			currency: "MYR",
-			minimumFractionDigits: 2,
-			maximumFractionDigits: 2,
-		}).format(Math.abs(amount));
-	};
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-MY", {
+      style: "currency",
+      currency: "MYR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Math.abs(amount));
+  };
 
-	const formatDateTime = (dateString: string) => {
-		return new Date(dateString).toLocaleDateString("en-MY", {
-			day: "numeric",
-			month: "short",
-			year: "numeric",
-			hour: "2-digit",
-			minute: "2-digit",
-		});
-	};
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-MY", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
-	const getTransactionIcon = (type: Transaction["type"]) => {
-		switch (type) {
-			case "DEPOSIT":
-			case "LOAN_DISBURSEMENT":
-				return (
-					<ArrowDownIcon className="h-5 w-5 lg:h-6 lg:w-6 text-green-600" />
-				);
-			case "WITHDRAWAL":
-				return <ArrowUpIcon className="h-5 w-5 lg:h-6 lg:w-6 text-gray-600" />;
-			case "LOAN_REPAYMENT":
-				return (
-					<svg
-						className="h-5 w-5 lg:h-6 lg:w-6 text-purple-primary"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-							d="M17 8l4 4m0 0l-4 4m4-4H3"
-						/>
-					</svg>
-				);
-			default:
-				return <WalletIcon className="h-5 w-5 lg:h-6 lg:w-6 text-gray-500" />;
-		}
-	};
+  const formatDateShort = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-MY", {
+      day: "numeric",
+      month: "short",
+    });
+  };
 
-	const getStatusBadge = (status: Transaction["status"]) => {
-		switch (status) {
-			case "APPROVED":
-				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200 font-body">
-						<CheckCircleIcon className="h-3 w-3 mr-1" />
-						Approved
-					</span>
-				);
-			case "PENDING":
-				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200 font-body">
-						<ClockIcon className="h-3 w-3 mr-1" />
-						Pending
-					</span>
-				);
-			case "REJECTED":
-				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200 font-body">
-						<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
-						Rejected
-					</span>
-				);
-		}
-	};
+  const getTransactionConfig = (type: Transaction["type"]) => {
+    switch (type) {
+      case "DEPOSIT":
+      case "LOAN_DISBURSEMENT":
+        return {
+          icon: <ArrowDownLeft className="h-5 w-5" />,
+          color: "text-green-600",
+          bg: "bg-green-100",
+          label: type === "DEPOSIT" ? "Deposit" : "Disbursement",
+        };
+      case "WITHDRAWAL":
+        return {
+          icon: <ArrowUpRight className="h-5 w-5" />,
+          color: "text-slate-600",
+          bg: "bg-slate-100",
+          label: "Withdrawal",
+        };
+      case "LOAN_REPAYMENT":
+        return {
+          icon: <ArrowRightLeft className="h-5 w-5" />,
+          color: "text-teal-600",
+          bg: "bg-teal-100",
+          label: "Repayment",
+        };
+      default:
+        return {
+          icon: <Wallet className="h-5 w-5" />,
+          color: "text-slate-400",
+          bg: "bg-slate-100",
+          label: "Transaction",
+        };
+    }
+  };
 
-	const getFilteredTransactions = () => {
-		if (transactionFilter === "ALL") {
-			return transactions;
-		}
-		return transactions.filter(
-			(transaction) => transaction.type === transactionFilter
-		);
-	};
+  const getStatusConfig = (status: Transaction["status"]) => {
+    switch (status) {
+      case "APPROVED":
+        return {
+          icon: <CheckCircle className="h-3.5 w-3.5" />,
+          bg: "bg-green-100",
+          text: "text-green-700",
+          label: "Completed",
+        };
+      case "PENDING":
+        return {
+          icon: <Clock className="h-3.5 w-3.5" />,
+          bg: "bg-amber-100",
+          text: "text-amber-700",
+          label: "Pending",
+        };
+      case "REJECTED":
+        return {
+          icon: <AlertTriangle className="h-3.5 w-3.5" />,
+          bg: "bg-red-100",
+          text: "text-red-700",
+          label: "Failed",
+        };
+    }
+  };
 
-	const getTransactionTypeLabel = (type: string) => {
-		switch (type) {
-			case "DEPOSIT":
-				return "Deposit";
-			case "WITHDRAWAL":
-				return "Withdrawal";
-			case "LOAN_DISBURSEMENT":
-				return "Loan Disbursement";
-			case "LOAN_REPAYMENT":
-				return "Loan Repayment";
-			default:
-				return "All";
-		}
-	};
+  const getFilteredTransactions = () => {
+    if (transactionFilter === "ALL") {
+      return transactions;
+    }
+    return transactions.filter(
+      (transaction) => transaction.type === transactionFilter
+    );
+  };
 
-	if (loading) {
-		return (
-			<DashboardLayout userName={userName} title="Transactions">
-				<div className="flex items-center justify-center h-64">
-					<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin"></div>
-				</div>
-			</DashboardLayout>
-		);
-	}
+  // Calculate stats
+  const totalInflow = transactions
+    .filter((t) => t.amount > 0 && t.status === "APPROVED")
+    .reduce((sum, t) => sum + t.amount, 0);
 
-	return (
-		<DashboardLayout userName={userName} title="Transactions">
-			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
-				<div className="space-y-6">
-					{/* Main Transactions Card */}
-					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
-						{/* Header - Following dashboard card pattern */}
-						<div className="p-4 sm:p-6 lg:p-8">
-							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
-								<div className="flex items-center">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
-										<WalletIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
-									</div>
-									<div className="min-w-0">
-										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-											Transaction History
-										</h3>
-										<p className="text-sm lg:text-base text-purple-primary font-semibold">
-											{transactions.length} total transaction{transactions.length !== 1 ? "s" : ""}
-										</p>
-									</div>
-								</div>
-								<button
-									onClick={async () => {
-										setRefreshing(true);
-										try {
-											await fetchTransactions();
-											toast.success("Transactions refreshed successfully");
-										} catch (error) {
-											console.error("Error refreshing transactions:", error);
-											toast.error("Failed to refresh transactions");
-										} finally {
-											setRefreshing(false);
-										}
-									}}
-									disabled={refreshing}
-									className="group inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 bg-white hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 rounded-lg shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
-									title="Refresh transaction data"
-								>
-									<ArrowPathIcon className={`h-4 w-4 mr-2 text-gray-500 group-hover:text-blue-600 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
-									<span className="group-hover:text-blue-700 transition-colors">
-										{refreshing ? 'Refreshing...' : 'Refresh All Data'}
-									</span>
-								</button>
-							</div>
+  const totalOutflow = transactions
+    .filter((t) => t.amount < 0 && t.status === "APPROVED")
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-							{/* Transaction Type Filter */}
-							{transactions.length > 0 && (
-								<div className="mb-6">
-									<div className="flex flex-wrap gap-2 sm:gap-3">
-										{[
-											"ALL",
-											"LOAN_DISBURSEMENT",
-											"LOAN_REPAYMENT",
-										].map((type) => (
-											<button
-												key={type}
-												onClick={() =>
-													setTransactionFilter(type)
-												}
-												className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 font-body whitespace-nowrap ${
-													transactionFilter === type
-														? "bg-purple-primary text-white shadow-sm"
-														: "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200"
-												}`}
-											>
-												{getTransactionTypeLabel(type)}
-											</button>
-										))}
-									</div>
-								</div>
-							)}
+  const pendingCount = transactions.filter((t) => t.status === "PENDING").length;
 
-							{/* Transactions List */}
-							<div className="space-y-4">
-								{loading ? (
-									<div className="text-center py-8 sm:py-12">
-										<div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-										<p className="mt-4 text-sm sm:text-base text-gray-500 font-body">
-											Loading transactions...
-										</p>
-									</div>
-								) : getFilteredTransactions().length > 0 ? (
-									<div className="space-y-3">
-										{getFilteredTransactions().map(
-											(transaction) => (
-																							<div
-												key={transaction.id}
-												className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 lg:p-6 border border-gray-200 rounded-xl hover:shadow-md transition-all duration-200 bg-white hover:border-gray-300 gap-4 sm:gap-0"
-											>
-												<div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-													<div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-gray-200">
-														{getTransactionIcon(
-															transaction.type
-														)}
-													</div>
-													<div className="min-w-0 flex-1 overflow-hidden">
-														<p className="text-sm sm:text-base lg:text-lg font-semibold text-gray-700 font-body line-clamp-2 sm:line-clamp-1 break-words leading-tight">
-															{
-																transaction.description
-															}
-														</p>
-														<p className="text-xs sm:text-sm lg:text-base text-gray-500 mt-1 font-body truncate">
-															{formatDateTime(
-																transaction.createdAt
-															)}
-														</p>
-														{transaction.reference && (
-															<p className="text-xs lg:text-sm text-gray-500 font-body mt-1 truncate">
-																<span className="text-gray-400">Ref:</span> {transaction.reference}
-															</p>
-														)}
-													</div>
-												</div>
-												<div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start flex-shrink-0 sm:ml-4 sm:text-right gap-2 sm:gap-0">
-													<p className={`text-base sm:text-lg lg:text-xl font-heading font-bold sm:mb-2 ${
-														transaction.amount > 0
-															? "text-green-600"
-															: "text-gray-700"
-													}`}>
-														{transaction.amount > 0 ? "+" : ""}
-														{formatCurrency(transaction.amount)}
-													</p>
-													<div className="flex-shrink-0">
-														{getStatusBadge(transaction.status)}
-													</div>
-												</div>
-											</div>
-											)
-										)}
-									</div>
-								) : transactions.length > 0 ? (
-									<div className="text-center py-8 sm:py-12">
-										<div className="bg-gray-50 rounded-lg p-4 sm:p-6 lg:p-8 border border-gray-200 max-w-md mx-auto">
-											<WalletIcon className="h-10 w-10 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
-											<p className="text-sm sm:text-base lg:text-lg font-medium font-heading text-gray-700 mb-2 px-2">
-												No {getTransactionTypeLabel(transactionFilter).toLowerCase()} transactions found
-											</p>
-											<button
-												onClick={() => setTransactionFilter("ALL")}
-												className="text-xs sm:text-sm lg:text-base text-purple-primary hover:text-purple-700 font-medium font-body transition-colors"
-											>
-												Show all transactions
-											</button>
-										</div>
-									</div>
-								) : (
-									<div className="text-center py-8 sm:py-12">
-										<div className="bg-gray-50 rounded-lg p-4 sm:p-6 lg:p-8 border border-gray-200 max-w-md mx-auto">
-											<WalletIcon className="h-10 w-10 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
-											<h4 className="text-sm sm:text-base lg:text-lg font-medium font-heading text-gray-700 mb-2 px-2">
-												No Transactions Yet
-											</h4>
-											<p className="text-xs sm:text-sm lg:text-base text-gray-500 font-body leading-relaxed px-2">
-												Your transaction history will appear here once you start using your wallet.
-											</p>
-										</div>
-									</div>
-								)}
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		</DashboardLayout>
-	);
+  // Group transactions by date
+  const groupedTransactions = getFilteredTransactions().reduce(
+    (groups: Record<string, Transaction[]>, transaction) => {
+      const date = new Date(transaction.createdAt).toLocaleDateString("en-MY", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(transaction);
+      return groups;
+    },
+    {}
+  );
+
+  if (loading) {
+    return (
+      <DashboardLayout userName={userName} title="Transactions">
+        <div className="flex items-center justify-center h-64">
+          <div className="w-16 h-16 border-4 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout userName={userName} title="Transactions">
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Total Inflow */}
+          <Card className="border-0 bg-gradient-to-br from-green-50 to-emerald-50 overflow-hidden">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-green-600 font-body mb-1">
+                    Total Received
+                  </p>
+                  <p className="text-2xl font-heading font-bold text-green-700">
+                    {formatCurrency(totalInflow)}
+                  </p>
+                </div>
+                <div className="p-2.5 bg-green-100 rounded-xl">
+                  <TrendingDown className="h-5 w-5 text-green-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Total Outflow */}
+          <Card className="border-0 bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-slate-500 font-body mb-1">
+                    Total Paid
+                  </p>
+                  <p className="text-2xl font-heading font-bold text-slate-700">
+                    {formatCurrency(totalOutflow)}
+                  </p>
+                </div>
+                <div className="p-2.5 bg-slate-200 rounded-xl">
+                  <TrendingUp className="h-5 w-5 text-slate-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Pending */}
+          <Card className="border-0 bg-gradient-to-br from-amber-50 to-orange-50 overflow-hidden">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-amber-600 font-body mb-1">
+                    Pending
+                  </p>
+                  <p className="text-2xl font-heading font-bold text-amber-700">
+                    {pendingCount}
+                  </p>
+                  <p className="text-xs text-amber-500 mt-1">
+                    transaction{pendingCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <div className="p-2.5 bg-amber-100 rounded-xl">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Content */}
+        <Card className="border-gray-200">
+          <CardContent className="p-0">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-teal-50 rounded-xl">
+                    <Receipt className="h-5 w-5 text-teal-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-heading font-semibold text-slate-900">
+                      Transaction History
+                    </h2>
+                    <p className="text-sm text-slate-500 font-body">
+                      {transactions.length} total transaction
+                      {transactions.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={async () => {
+                    setRefreshing(true);
+                    try {
+                      await fetchTransactions();
+                      toast.success("Refreshed successfully");
+                    } catch (error) {
+                      toast.error("Failed to refresh");
+                    } finally {
+                      setRefreshing(false);
+                    }
+                  }}
+                  disabled={refreshing}
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl border-gray-200"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </Button>
+              </div>
+
+              {/* Filter Tabs */}
+              {transactions.length > 0 && (
+                <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
+                  {[
+                    { value: "ALL", label: "All" },
+                    { value: "LOAN_DISBURSEMENT", label: "Disbursements" },
+                    { value: "LOAN_REPAYMENT", label: "Repayments" },
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      onClick={() => setTransactionFilter(filter.value)}
+                      className={`px-4 py-2 rounded-full text-sm font-body font-medium whitespace-nowrap transition-all ${
+                        transactionFilter === filter.value
+                          ? "bg-teal-500 text-white shadow-md shadow-teal-200"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Transactions List */}
+            <div className="divide-y divide-gray-100">
+              {Object.keys(groupedTransactions).length > 0 ? (
+                Object.entries(groupedTransactions).map(([date, txns]) => (
+                  <div key={date}>
+                    {/* Date Header */}
+                    <div className="px-5 py-3 bg-slate-50 sticky top-0 z-10">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-slate-400" />
+                        <span className="text-sm font-medium text-slate-600 font-body">
+                          {date}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Transactions for this date */}
+                    {txns.map((transaction) => {
+                      const config = getTransactionConfig(transaction.type);
+                      const statusConfig = getStatusConfig(transaction.status);
+
+                      return (
+                        <div
+                          key={transaction.id}
+                          className="px-5 py-4 hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            {/* Icon */}
+                            <div
+                              className={`w-12 h-12 ${config.bg} rounded-xl flex items-center justify-center flex-shrink-0`}
+                            >
+                              <span className={config.color}>{config.icon}</span>
+                            </div>
+
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900 font-body truncate">
+                                    {transaction.description}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs text-slate-400 font-body">
+                                      {config.label}
+                                    </span>
+                                    {transaction.reference && (
+                                      <>
+                                        <span className="text-slate-300">•</span>
+                                        <span className="text-xs text-slate-400 font-body truncate">
+                                          {transaction.reference}
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Amount & Status */}
+                                <div className="text-right flex-shrink-0">
+                                  <p
+                                    className={`text-base font-heading font-bold ${
+                                      transaction.amount > 0
+                                        ? "text-green-600"
+                                        : "text-slate-700"
+                                    }`}
+                                  >
+                                    {transaction.amount > 0 ? "+" : "-"}
+                                    {formatCurrency(transaction.amount)}
+                                  </p>
+                                  <Badge
+                                    className={`mt-1 ${statusConfig.bg} ${statusConfig.text} text-xs border-0`}
+                                  >
+                                    {statusConfig.icon}
+                                    <span className="ml-1">{statusConfig.label}</span>
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))
+              ) : transactions.length > 0 ? (
+                <div className="text-center py-16 px-6">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-2xl flex items-center justify-center">
+                    <Search className="h-8 w-8 text-slate-300" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-900 font-heading mb-2">
+                    No Matching Transactions
+                  </h4>
+                  <p className="text-slate-500 font-body mb-4">
+                    Try changing your filter to see more results.
+                  </p>
+                  <Button
+                    onClick={() => setTransactionFilter("ALL")}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    Show All Transactions
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center py-16 px-6">
+                  <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl flex items-center justify-center">
+                    <Wallet className="h-10 w-10 text-teal-400" />
+                  </div>
+                  <h4 className="text-xl font-semibold text-slate-900 font-heading mb-2">
+                    No Transactions Yet
+                  </h4>
+                  <p className="text-slate-500 font-body max-w-sm mx-auto mb-6">
+                    Your transaction history will appear here once you receive
+                    disbursements or make repayments.
+                  </p>
+                  <Button
+                    onClick={() => router.push("/dashboard/apply")}
+                    className="bg-teal-400 hover:bg-teal-500 text-white rounded-xl"
+                  >
+                    Apply for a Loan
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
 }
