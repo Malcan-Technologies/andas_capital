@@ -692,17 +692,22 @@ export default function OTPVerificationPage() {
                 onClick={async () => {
                   try {
                     // First, try to get existing signing URL
-                    const signingResponse = await fetchWithTokenRefresh<{
-                      success: boolean;
-                      data?: { signingUrl: string };
-                    }>(`/api/loan-applications/${params.id}/signing-url`);
+                    try {
+                      const signingResponse = await fetchWithTokenRefresh<{
+                        success: boolean;
+                        data?: { signingUrl: string };
+                      }>(`/api/loan-applications/${params.id}/signing-url`);
 
-                    if (
-                      signingResponse?.success &&
-                      signingResponse?.data?.signingUrl
-                    ) {
-                      window.location.href = signingResponse.data.signingUrl;
-                      return;
+                      if (
+                        signingResponse?.success &&
+                        signingResponse?.data?.signingUrl
+                      ) {
+                        window.location.href = signingResponse.data.signingUrl;
+                        return;
+                      }
+                    } catch {
+                      // No existing signing URL, will initiate new signing below
+                      console.log("No existing signing URL, initiating new signing...");
                     }
 
                     // If no existing URL, initiate new signing
