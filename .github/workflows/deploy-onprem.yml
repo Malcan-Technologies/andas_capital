@@ -48,7 +48,9 @@ jobs:
           echo "CLIENT_SLUG=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
           echo "SIGN_DOMAIN=$(jq -r '.domains.sign' client.json)" >> $GITHUB_OUTPUT
           echo "ONPREM_ENABLED=$(jq -r '.onprem.enabled // false' client.json)" >> $GITHUB_OUTPUT
-          echo "RUNNER_LABEL=$(jq -r '.onprem.runner_label // .client_slug' client.json)" >> $GITHUB_OUTPUT
+          # Build runs-on labels as JSON array for dynamic runner selection
+          RUNNER_LABEL=$(jq -r '.onprem.runner_label // .client_slug' client.json)
+          echo "RUNNER_LABEL=[\"self-hosted\", \"$RUNNER_LABEL\"]" >> $GITHUB_OUTPUT
           
           # Validate on-prem is enabled
           ENABLED=$(jq -r '.onprem.enabled // false' client.json)
@@ -66,7 +68,7 @@ jobs:
   deploy:
     name: Deploy to On-Prem Server
     needs: validate
-    runs-on: [self-hosted, "${{ needs.validate.outputs.runner_label }}"]
+    runs-on: ${{ needs.validate.outputs.runner_label }}
     if: needs.validate.outputs.onprem_enabled == 'true'
     
     steps:
