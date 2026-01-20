@@ -68,7 +68,7 @@ jobs:
   deploy:
     name: Deploy to On-Prem Server
     needs: validate
-    runs-on: ${{ needs.validate.outputs.runner_label }}
+    runs-on: ${{ fromJSON(needs.validate.outputs.runner_label) }}
     if: needs.validate.outputs.onprem_enabled == 'true'
     
     steps:
