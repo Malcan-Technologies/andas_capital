@@ -91,9 +91,14 @@ postgres_data/
 tfplan
 .terraform.lock.hcl
 
-# On-premises deployment files (keep separate from cloud deployments)
-# Note: These files are tracked in git but should not be deployed to cloud servers
-# Use deploy-onprem.sh for on-prem deployments only
+# On-premises deployment files
+# Note: env.production and .secrets files contain secrets and should NOT be committed
+on-prem/**/env.production
+on-prem/**/.env.production
+on-prem/**/.env
+on-prem/**/.secrets
+!on-prem/**/*.example
+!on-prem/**/*.template
 
 # Security audit files - NEVER commit to git
 # These contain sensitive infrastructure information

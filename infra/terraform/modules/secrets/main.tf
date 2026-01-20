@@ -59,18 +59,41 @@ resource "aws_secretsmanager_secret" "resend_api_key" {
   }
 }
 
-# CTOS eKYC API credentials (JSON: api_key, package_name, security_key, base_url, webhook_url, ciphertext, cipher)
+# CTOS eKYC API credentials
+# IMPORTANT: JSON keys MUST be lowercase with underscores:
+# {
+#   "api_key": "...",
+#   "package_name": "...",
+#   "security_key": "...",
+#   "base_url": "https://uat-eonboarding.ctos.com.my",
+#   "webhook_url": "https://api.{domain}/api/ctos/webhook",
+#   "ciphertext": "...",
+#   "cipher": "aes-256-cbc"
+# }
 resource "aws_secretsmanager_secret" "ctos_credentials" {
-  name = "${var.secrets_prefix}/ctos-credentials"
+  name        = "${var.secrets_prefix}/ctos-credentials"
+  description = "CTOS eKYC credentials. Keys: api_key, package_name, security_key, base_url, webhook_url, ciphertext, cipher (all lowercase)"
 
   tags = {
     Client = var.client_slug
   }
 }
 
-# CTOS B2B Credit Report credentials (JSON: company_code, account_no, user_id, client_id, sso_password, sso_url, api_url, private_key)
+# CTOS B2B Credit Report credentials
+# IMPORTANT: JSON keys MUST be lowercase with underscores:
+# {
+#   "company_code": "...",
+#   "account_no": "...",
+#   "user_id": "...",
+#   "client_id": "...",
+#   "sso_password": "...",
+#   "sso_url": "https://uat-sso.ctos.com.my",
+#   "api_url": "https://uat-integration.ctos.com.my",
+#   "private_key": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+# }
 resource "aws_secretsmanager_secret" "ctos_b2b_credentials" {
-  name = "${var.secrets_prefix}/ctos-b2b-credentials"
+  name        = "${var.secrets_prefix}/ctos-b2b-credentials"
+  description = "CTOS B2B credit report credentials. Keys: company_code, account_no, user_id, client_id, sso_password, sso_url, api_url, private_key (all lowercase)"
 
   tags = {
     Client = var.client_slug
