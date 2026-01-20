@@ -57,10 +57,11 @@
 
   "onprem": {
     "enabled": true,
-    "server_ip": "100.76.8.62",
-    "ssh_user": "admin-kapital",
-    "ssh_host": "admin-kapital@100.76.8.62",
-    "base_dir": "/home/admin-kapital",
+    "server_ip": "100.67.236.96",
+    "ssh_user": "admin-srv",
+    "ssh_host": "admin-srv@100.67.236.96",
+    "base_dir": "/home/admin-srv",
+    "runner_label": "andas",
     "mtsa": {
       "env": "pilot",
       "container_image": "mtsa-pilot:1.01"

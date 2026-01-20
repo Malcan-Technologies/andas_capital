@@ -37,6 +37,7 @@ jobs:
       client_slug: ${{ steps.config.outputs.CLIENT_SLUG }}
       sign_domain: ${{ steps.config.outputs.SIGN_DOMAIN }}
       onprem_enabled: ${{ steps.config.outputs.ONPREM_ENABLED }}
+      runner_label: ${{ steps.config.outputs.RUNNER_LABEL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,6 +48,7 @@ jobs:
           echo "CLIENT_SLUG=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
           echo "SIGN_DOMAIN=$(jq -r '.domains.sign' client.json)" >> $GITHUB_OUTPUT
           echo "ONPREM_ENABLED=$(jq -r '.onprem.enabled // false' client.json)" >> $GITHUB_OUTPUT
+          echo "RUNNER_LABEL=$(jq -r '.onprem.runner_label // .client_slug' client.json)" >> $GITHUB_OUTPUT
           
           # Validate on-prem is enabled
           ENABLED=$(jq -r '.onprem.enabled // false' client.json)
@@ -59,11 +61,12 @@ jobs:
           echo "Client: ${{ steps.config.outputs.CLIENT_SLUG }}"
           echo "Sign Domain: ${{ steps.config.outputs.SIGN_DOMAIN }}"
           echo "On-Prem Enabled: ${{ steps.config.outputs.ONPREM_ENABLED }}"
+          echo "Runner Label: ${{ steps.config.outputs.RUNNER_LABEL }}"
 
   deploy:
     name: Deploy to On-Prem Server
     needs: validate
-    runs-on: self-hosted
+    runs-on: [self-hosted, "${{ needs.validate.outputs.runner_label }}"]
     if: needs.validate.outputs.onprem_enabled == 'true'
     
     steps:
