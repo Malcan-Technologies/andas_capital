@@ -62,8 +62,6 @@ Authorization: Bearer {adminToken}
 16. [Cron Jobs & System Tasks](#16-cron-jobs--system-tasks)
 17. [PDF Letters & Reports](#17-pdf-letters--reports)
 18. [Access & Document Logs](#18-access--document-logs)
-19. [Signing Orchestrator (Admin)](#19-signing-orchestrator-admin)
-20. [Health Check](#20-health-check)
 
 ---
 
@@ -71,36 +69,103 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/login-token` | Get one-time login token | Public | `admin/app/api/admin/login/route.ts` |
-| POST | `/api/admin/login` | Admin login | Public | `admin/app/api/admin/login/route.ts` |
-| POST | `/api/admin/refresh` | Refresh admin token | Public | `admin/app/api/admin/refresh/route.ts` |
-| POST | `/api/admin/logout` | Admin logout | Admin/Attestor | `admin/app/api/admin/logout/route.ts` |
-| GET | `/api/admin/me` | Get current admin profile | Admin/Attestor | `admin/app/api/admin/me/route.ts` |
-| PUT | `/api/admin/me` | Update admin profile | Admin/Attestor | `admin/app/api/admin/me/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/login-token` | Get one-time login token | Public |
+| POST | `/api/admin/login` | Admin login | Public |
+| POST | `/api/admin/refresh` | Refresh admin token | Public |
+| POST | `/api/admin/logout` | Admin logout | Admin/Attestor |
+| GET | `/api/admin/me` | Get current admin profile | Admin/Attestor |
+| PUT | `/api/admin/me` | Update admin profile | Admin/Attestor |
 
-### Login Flow
+### GET /api/admin/login-token
 
-1. **Get Login Token**:
-   ```
-   GET {API_BASE_URL}/api/admin/login-token
-   ```
+**Response:**
+```json
+{
+  "loginToken": "a1b2c3d4e5f6...",
+  "message": "Login token generated successfully"
+}
+```
 
-2. **Login**:
-   ```
-   POST {API_BASE_URL}/api/admin/login
-   Body: { "phoneNumber": "60123456789", "password": "...", "loginToken": "..." }
-   ```
+### POST /api/admin/login
 
-3. **Verify OTP** (2FA required for all admins):
-   ```
-   POST {API_BASE_URL}/api/auth/verify-otp
-   Body: { "phoneNumber": "60123456789", "otp": "123456" }
-   ```
+**Request:**
+```json
+{
+  "phoneNumber": "60123456789",
+  "password": "AdminSecurePass1!",
+  "loginToken": "a1b2c3d4e5f6..."
+}
+```
 
-### Rate Limiting
-- Admin Login: 5 attempts per 5 minutes per IP
+**Response (2FA Required - 403):**
+```json
+{
+  "message": "Please verify your phone number to complete admin login. We've sent a verification code to your WhatsApp.",
+  "requiresPhoneVerification": true,
+  "phoneNumber": "+60123456789",
+  "userId": "uuid"
+}
+```
+
+After OTP verification via `/api/auth/verify-otp`:
+
+**Response (Success):**
+```json
+{
+  "message": "Phone number verified successfully",
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
+  "userId": "uuid",
+  "phoneNumber": "+60123456789",
+  "role": "ADMIN"
+}
+```
+
+### POST /api/admin/refresh
+
+**Request:**
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+**Response:**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+### GET /api/admin/me
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "phoneNumber": "+60123456789",
+  "fullName": "Admin User",
+  "email": "admin@company.com",
+  "role": "ADMIN",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "lastLoginAt": "2025-01-21T10:30:00.000Z"
+}
+```
+
+### PUT /api/admin/me
+
+**Request:**
+```json
+{
+  "fullName": "Admin User",
+  "email": "admin@company.com"
+}
+```
+
+**Response:** Same as GET /api/admin/me
 
 ---
 
@@ -108,11 +173,64 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/dashboard` | Get dashboard statistics | Admin/Attestor | `admin/app/api/admin/dashboard/route.ts` |
-| GET | `/api/admin/monthly-stats` | Get monthly statistics | Admin/Attestor | `admin/app/api/admin/monthly-stats/route.ts` |
-| GET | `/api/admin/daily-stats` | Get daily statistics | Admin/Attestor | `admin/app/api/admin/daily-stats/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/dashboard` | Get dashboard statistics | Admin/Attestor |
+| GET | `/api/admin/monthly-stats` | Get monthly statistics | Admin/Attestor |
+| GET | `/api/admin/daily-stats` | Get daily statistics | Admin/Attestor |
+
+### GET /api/admin/dashboard
+
+**Response (ADMIN role):**
+```json
+{
+  "totalUsers": 1250,
+  "totalApplications": 450,
+  "pendingReviewApplications": 25,
+  "approvedLoans": 320,
+  "pendingDisbursementCount": 15,
+  "disbursedLoans": 280,
+  "totalDisbursedAmount": 2500000.00,
+  "totalLoanValue": 3500000.00,
+  "currentLoanValue": 1800000.00,
+  "totalFeesCollected": 125000.00,
+  "totalLateFeesCollected": 15000.00,
+  "totalRepayments": 1200000.00,
+  "PENDING_SIGNATURE": 8,
+  "LIVE_ATTESTATIONS": 3,
+  "recentApplications": [
+    {
+      "id": "uuid",
+      "userName": "John Doe",
+      "amount": 10000,
+      "status": "PENDING_APPROVAL",
+      "createdAt": "2025-01-21T09:00:00.000Z"
+    }
+  ],
+  "portfolioOverview": {
+    "activeLoans": 250,
+    "overdueLoans": 15,
+    "defaultLoans": 5,
+    "dischargedLoans": 50
+  },
+  "repaymentPerformance": {
+    "onTimePayments": 95.5,
+    "latePayments": 4.5,
+    "totalCollected": 1200000.00
+  }
+}
+```
+
+**Response (ATTESTOR role - Limited data):**
+```json
+{
+  "PENDING_SIGNATURE": 8,
+  "LIVE_ATTESTATIONS": 3,
+  "totalUsers": 0,
+  "totalApplications": 0,
+  "pendingReviewApplications": 0
+}
+```
 
 ---
 
@@ -120,13 +238,119 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/users` | Get all users | Admin/Attestor | - |
-| GET | `/api/admin/users/:id` | Get specific user | Admin/Attestor | - |
-| PUT | `/api/admin/users/:id` | Update user | Admin | - |
-| DELETE | `/api/admin/users/:id` | Delete user | Admin | - |
-| POST | `/api/admin/users` | Create new user | Admin | - |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/users` | Get all users | Admin/Attestor |
+| GET | `/api/admin/users/:id` | Get specific user | Admin |
+| POST | `/api/admin/users` | Create new user | Admin |
+| PUT | `/api/admin/users/:id` | Update user | Admin |
+| DELETE | `/api/admin/users/:id` | Delete user | Admin |
+
+### GET /api/admin/users
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "fullName": "John Doe",
+    "email": "john@example.com",
+    "phoneNumber": "+60123456789",
+    "role": "USER",
+    "createdAt": "2024-06-15T08:00:00.000Z",
+    "lastLoginAt": "2025-01-20T10:30:00.000Z",
+    "icNumber": "901234-14-5678",
+    "icType": "MYKAD",
+    "kycStatus": true,
+    "isOnboardingComplete": true,
+    "city": "Kuala Lumpur",
+    "state": "Selangor"
+  }
+]
+```
+
+### POST /api/admin/users
+
+**Request:**
+```json
+{
+  "phoneNumber": "60198765432",
+  "password": "SecurePass1!",
+  "fullName": "New User",
+  "email": "newuser@example.com",
+  "role": "USER"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "fullName": "New User",
+  "email": "newuser@example.com",
+  "phoneNumber": "+60198765432",
+  "role": "USER",
+  "createdAt": "2025-01-21T10:30:00.000Z",
+  "lastLoginAt": null
+}
+```
+
+### GET /api/admin/users/:id
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "fullName": "John Doe",
+  "email": "john@example.com",
+  "phoneNumber": "+60123456789",
+  "role": "USER",
+  "createdAt": "2024-06-15T08:00:00.000Z",
+  "updatedAt": "2025-01-20T10:30:00.000Z",
+  "dateOfBirth": "1990-01-15T00:00:00.000Z",
+  "address1": "123 Main Street",
+  "address2": "Unit 4A",
+  "city": "Kuala Lumpur",
+  "state": "Selangor",
+  "zipCode": "50000",
+  "country": "Malaysia",
+  "employmentStatus": "EMPLOYED",
+  "employerName": "ABC Company Sdn Bhd",
+  "monthlyIncome": "5000",
+  "serviceLength": "3",
+  "occupation": "SOFTWARE_ENGINEER",
+  "bankName": "Maybank",
+  "accountNumber": "1234567890",
+  "onboardingStep": 4,
+  "isOnboardingComplete": true,
+  "kycStatus": true,
+  "lastLoginAt": "2025-01-20T10:30:00.000Z",
+  "phoneVerified": true,
+  "icNumber": "901234-14-5678",
+  "icType": "MYKAD",
+  "nationality": "Malaysian",
+  "race": "MALAY",
+  "gender": "MALE",
+  "educationLevel": "DEGREE",
+  "emergencyContactName": "Jane Doe",
+  "emergencyContactPhone": "+60198765432",
+  "emergencyContactRelationship": "SPOUSE"
+}
+```
+
+### PUT /api/admin/users/:id
+
+**Request:**
+```json
+{
+  "fullName": "John Doe Updated",
+  "email": "john.updated@example.com",
+  "role": "ATTESTOR",
+  "kycStatus": true
+}
+```
+
+**Response:** Same as GET /api/admin/users/:id
 
 ---
 
@@ -134,26 +358,249 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/applications` | Get all applications | Admin/Attestor | `admin/app/api/admin/applications/route.ts` |
-| GET | `/api/admin/applications/counts` | Get application counts | Admin/Attestor | `admin/app/api/admin/applications/counts/route.ts` |
-| GET | `/api/admin/applications/:id` | Get specific application | Admin/Attestor | `admin/app/api/admin/applications/[id]/route.ts` |
-| PATCH | `/api/admin/applications/:id/status` | Update application status | Admin/Attestor | `admin/app/api/admin/applications/[id]/status/route.ts` |
-| GET | `/api/admin/applications/:id/history` | Get application history | Admin/Attestor | `admin/app/api/admin/applications/[id]/history/route.ts` |
-| POST | `/api/admin/applications/:id/fresh-offer` | Create fresh offer | Admin/Attestor | - |
-| POST | `/api/admin/applications/:id/disburse` | Disburse loan | Admin/Attestor | `admin/app/api/admin/applications/[id]/disburse/route.ts` |
-| POST | `/api/admin/applications/:id/complete-attestation` | Complete attestation | Admin/Attestor | - |
-| GET | `/api/admin/applications/live-attestations` | Get live attestations | Admin/Attestor | `admin/app/api/admin/applications/live-attestations/route.ts` |
-| POST | `/api/admin/applications/:id/complete-live-attestation` | Complete live attestation | Admin/Attestor | `admin/app/api/admin/applications/[id]/complete-live-attestation/route.ts` |
-| GET | `/api/admin/applications/:applicationId/signatures` | Get application signatures | Admin/Attestor | `admin/app/api/admin/applications/[id]/signatures/route.ts` |
-| POST | `/api/admin/applications/pin-sign` | PIN-based signing | Admin/Attestor | `admin/app/api/admin/applications/pin-sign/route.ts` |
-| GET | `/api/admin/applications/:id/unsigned-agreement` | Get unsigned agreement URL | Admin/Attestor | `admin/app/api/admin/applications/[id]/unsigned-agreement/route.ts` |
-| GET | `/api/admin/applications/:id/signed-agreement` | Download signed agreement | Admin/Attestor | `admin/app/api/admin/applications/[id]/signed-agreement/route.ts` |
-| GET | `/api/admin/applications/:id/stamp-certificate` | Download stamp certificate | Admin/Attestor | `admin/app/api/admin/applications/[id]/stamp-certificate/route.ts` |
-| POST | `/api/admin/applications/:id/upload-stamp-certificate` | Upload stamp certificate | Admin/Attestor | `admin/app/api/admin/applications/[id]/upload-stamp-certificate/route.ts` |
-| POST | `/api/admin/applications/:id/upload-disbursement-slip` | Upload disbursement slip | Admin/Attestor | `admin/app/api/admin/applications/[id]/upload-disbursement-slip/route.ts` |
-| POST | `/api/admin/applications/:id/confirm-stamping` | Confirm stamping complete | Admin/Attestor | `admin/app/api/admin/applications/[id]/confirm-stamping/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/applications` | Get all applications | Admin/Attestor |
+| GET | `/api/admin/applications/counts` | Get application counts | Admin/Attestor |
+| GET | `/api/admin/applications/:id` | Get specific application | Admin/Attestor |
+| PATCH | `/api/admin/applications/:id/status` | Update application status | Admin/Attestor |
+| GET | `/api/admin/applications/:id/history` | Get application history | Admin/Attestor |
+| POST | `/api/admin/applications/:id/fresh-offer` | Create fresh offer | Admin |
+| POST | `/api/admin/applications/:id/disburse` | Disburse loan | Admin/Attestor |
+| POST | `/api/admin/applications/:id/complete-attestation` | Complete attestation | Admin/Attestor |
+| GET | `/api/admin/applications/live-attestations` | Get live attestations | Admin/Attestor |
+| POST | `/api/admin/applications/:id/complete-live-attestation` | Complete live attestation | Admin/Attestor |
+
+### GET /api/admin/applications
+
+**Query Parameters:**
+- `status` - Filter by status
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 20)
+- `search` - Search by name/phone/IC
+
+**Response:**
+```json
+{
+  "applications": [
+    {
+      "id": "uuid",
+      "userId": "uuid",
+      "productId": "uuid",
+      "requestedAmount": 10000,
+      "approvedAmount": 10000,
+      "amount": 10000,
+      "term": 12,
+      "interestRate": 12.0,
+      "monthlyRepayment": 900.50,
+      "netDisbursement": 9640,
+      "status": "PENDING_APPROVAL",
+      "currentStep": 5,
+      "createdAt": "2025-01-21T09:00:00.000Z",
+      "updatedAt": "2025-01-21T10:00:00.000Z",
+      "user": {
+        "id": "uuid",
+        "fullName": "John Doe",
+        "phoneNumber": "+60123456789",
+        "email": "john@example.com",
+        "icNumber": "901234-14-5678"
+      },
+      "product": {
+        "id": "uuid",
+        "name": "Personal Loan",
+        "code": "PL001"
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8
+  }
+}
+```
+
+### GET /api/admin/applications/counts
+
+**Response:**
+```json
+{
+  "INCOMPLETE": 45,
+  "PENDING_APP_FEE": 12,
+  "PENDING_PROFILE_CONFIRMATION": 8,
+  "PENDING_KYC": 15,
+  "PENDING_APPROVAL": 25,
+  "PENDING_FRESH_OFFER": 5,
+  "PENDING_ATTESTATION": 10,
+  "PENDING_SIGNATURE": 8,
+  "PENDING_PKI_SIGNING": 3,
+  "PENDING_SIGNING_COMPANY_WITNESS": 2,
+  "PENDING_STAMPING": 4,
+  "PENDING_DISBURSEMENT": 15,
+  "ACTIVE": 280,
+  "REJECTED": 20,
+  "CANCELLED": 15,
+  "total": 467
+}
+```
+
+### GET /api/admin/applications/:id
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "userId": "uuid",
+  "productId": "uuid",
+  "requestedAmount": 10000,
+  "approvedAmount": 10000,
+  "amount": 10000,
+  "term": 12,
+  "interestRate": 12.0,
+  "monthlyRepayment": 900.50,
+  "totalAmount": 10806,
+  "netDisbursement": 9640,
+  "originationFee": 200,
+  "legalFee": 100,
+  "applicationFee": 50,
+  "stampingFee": 10,
+  "status": "PENDING_APPROVAL",
+  "currentStep": 5,
+  "kycStatus": true,
+  "attestationType": null,
+  "attestationCompleted": false,
+  "createdAt": "2025-01-21T09:00:00.000Z",
+  "updatedAt": "2025-01-21T10:00:00.000Z",
+  "user": {
+    "id": "uuid",
+    "fullName": "John Doe",
+    "phoneNumber": "+60123456789",
+    "email": "john@example.com",
+    "dateOfBirth": "1990-01-15T00:00:00.000Z",
+    "employmentStatus": "EMPLOYED",
+    "employerName": "ABC Company Sdn Bhd",
+    "monthlyIncome": "5000",
+    "bankName": "Maybank",
+    "accountNumber": "1234567890",
+    "address1": "123 Main Street",
+    "city": "Kuala Lumpur",
+    "state": "Selangor",
+    "icNumber": "901234-14-5678"
+  },
+  "product": {
+    "id": "uuid",
+    "name": "Personal Loan",
+    "code": "PL001",
+    "interestRate": 12.0,
+    "requiredDocuments": ["IC_FRONT", "IC_BACK", "PAYSLIP"]
+  },
+  "documents": [
+    {
+      "id": "uuid",
+      "type": "IC_FRONT",
+      "status": "APPROVED",
+      "fileName": "ic_front.jpg",
+      "uploadedAt": "2025-01-21T09:30:00.000Z"
+    }
+  ],
+  "loan": null
+}
+```
+
+### PATCH /api/admin/applications/:id/status
+
+**Request:**
+```json
+{
+  "status": "PENDING_ATTESTATION",
+  "notes": "Application approved, proceeding to attestation",
+  "approvedAmount": 10000,
+  "approvedTerm": 12
+}
+```
+
+**Response:** Same as GET /api/admin/applications/:id with updated status
+
+### POST /api/admin/applications/:id/fresh-offer
+
+**Request:**
+```json
+{
+  "amount": 8000,
+  "term": 12,
+  "interestRate": 10.0,
+  "monthlyRepayment": 720.50,
+  "netDisbursement": 7680,
+  "stampingFee": 10,
+  "legalFeeFixed": 100,
+  "notes": "Reduced amount based on income verification"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "status": "PENDING_FRESH_OFFER",
+  "freshOfferAmount": 8000,
+  "freshOfferTerm": 12,
+  "freshOfferInterestRate": 10.0,
+  "freshOfferMonthlyRepayment": 720.50,
+  "freshOfferNetDisbursement": 7680,
+  "freshOfferNotes": "Reduced amount based on income verification",
+  "freshOfferSubmittedAt": "2025-01-21T11:00:00.000Z",
+  "originalOfferAmount": 10000,
+  "originalOfferTerm": 12
+}
+```
+
+### POST /api/admin/applications/:id/complete-live-attestation
+
+**Request:**
+```json
+{
+  "notes": "Video call completed successfully. Borrower confirmed all terms.",
+  "meetingCompletedAt": "2025-01-21T10:30:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "status": "CERT_CHECK",
+  "attestationCompleted": true,
+  "attestationDate": "2025-01-21T10:30:00.000Z",
+  "attestationNotes": "Video call completed successfully. Borrower confirmed all terms.",
+  "attestationType": "MEETING"
+}
+```
+
+### POST /api/admin/applications/:id/disburse
+
+**Request:**
+```json
+{
+  "disbursementDate": "2025-01-21",
+  "referenceNumber": "DIS20250121001",
+  "notes": "Disbursed via bank transfer"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Loan disbursed successfully",
+  "applicationId": "uuid",
+  "loanId": "uuid",
+  "disbursement": {
+    "referenceNumber": "DIS20250121001",
+    "amount": 9640,
+    "disbursedAt": "2025-01-21T10:00:00.000Z"
+  }
+}
+```
 
 ---
 
@@ -161,24 +608,141 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/loans` | Get all loans | Admin/Attestor | `admin/app/api/admin/loans/route.ts` |
-| GET | `/api/admin/loans/:id` | Get specific loan | Admin/Attestor | `admin/app/api/admin/loans/[id]/route.ts` |
-| GET | `/api/admin/loans/:id/repayments` | Get loan repayments | Admin/Attestor | `admin/app/api/admin/loans/[id]/repayments/route.ts` |
-| GET | `/api/admin/loans/:id/transactions` | Get loan transactions | Admin/Attestor | - |
-| GET | `/api/admin/loans/pending-discharge` | Get loans pending discharge | Admin/Attestor | - |
-| POST | `/api/admin/loans/:id/request-discharge` | Request loan discharge | Admin/Attestor | `admin/app/api/admin/loans/[id]/request-discharge/route.ts` |
-| POST | `/api/admin/loans/:id/approve-discharge` | Approve loan discharge | Admin/Attestor | `admin/app/api/admin/loans/[id]/approve-discharge/route.ts` |
-| POST | `/api/admin/loans/:id/reject-discharge` | Reject loan discharge | Admin/Attestor | `admin/app/api/admin/loans/[id]/reject-discharge/route.ts` |
-| POST | `/api/admin/loans/sync-balances` | Sync all loan balances | Admin | - |
-| GET | `/api/admin/loans/:loanId/signatures` | Get loan signatures | Admin/Attestor | - |
-| GET | `/api/admin/loans/:loanId/download-agreement` | Download loan agreement | Admin/Attestor | `admin/app/api/admin/loans/[id]/download-agreement/route.ts` |
-| GET | `/api/admin/loans/:loanId/download-stamped-agreement` | Download stamped agreement | Admin/Attestor | `admin/app/api/admin/loans/[id]/download-stamped-agreement/route.ts` |
-| GET | `/api/admin/loans/:loanId/download-stamp-certificate` | Download stamp certificate | Admin/Attestor | `admin/app/api/admin/loans/[id]/download-stamp-certificate/route.ts` |
-| POST | `/api/admin/loans/:id/upload-stamped-agreement` | Upload stamped agreement | Admin/Attestor | `admin/app/api/admin/loans/[id]/upload-stamped-agreement/route.ts` |
-| POST | `/api/admin/loans/:id/upload-stamp-certificate` | Upload stamp certificate | Admin/Attestor | `admin/app/api/admin/loans/[id]/upload-stamp-certificate/route.ts` |
-| GET | `/api/admin/:loanId/lampiran-a` | Get Lampiran A document | Admin | `admin/app/api/admin/loans/[id]/lampiran-a/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/loans` | Get all loans | Admin/Attestor |
+| GET | `/api/admin/loans/:id` | Get specific loan | Admin/Attestor |
+| GET | `/api/admin/loans/:id/repayments` | Get loan repayments | Admin/Attestor |
+| GET | `/api/admin/loans/pending-discharge` | Get loans pending discharge | Admin/Attestor |
+| POST | `/api/admin/loans/:id/request-discharge` | Request loan discharge | Admin/Attestor |
+| POST | `/api/admin/loans/:id/approve-discharge` | Approve loan discharge | Admin/Attestor |
+| GET | `/api/admin/loans/:loanId/download-agreement` | Download loan agreement | Admin/Attestor |
+| GET | `/api/admin/loans/:loanId/download-stamped-agreement` | Download stamped agreement | Admin/Attestor |
+| POST | `/api/admin/loans/:id/upload-stamped-agreement` | Upload stamped agreement | Admin/Attestor |
+| POST | `/api/admin/loans/:id/upload-stamp-certificate` | Upload stamp certificate | Admin/Attestor |
+
+### GET /api/admin/loans
+
+**Query Parameters:**
+- `status` - Filter by status (ACTIVE, OVERDUE, DEFAULT, DISCHARGED)
+- `page` - Page number
+- `limit` - Items per page
+- `search` - Search by borrower name/phone/IC
+
+**Response:**
+```json
+{
+  "loans": [
+    {
+      "id": "uuid",
+      "userId": "uuid",
+      "applicationId": "uuid",
+      "principalAmount": 10000,
+      "totalAmount": 10806,
+      "outstandingBalance": 5403,
+      "monthlyPayment": 900.50,
+      "interestRate": 12.0,
+      "repaymentTerm": 12,
+      "startDate": "2025-01-01T00:00:00.000Z",
+      "endDate": "2025-12-31T00:00:00.000Z",
+      "nextPaymentDue": "2025-02-01T00:00:00.000Z",
+      "status": "ACTIVE",
+      "user": {
+        "id": "uuid",
+        "fullName": "John Doe",
+        "phoneNumber": "+60123456789"
+      },
+      "application": {
+        "product": {
+          "name": "Personal Loan",
+          "code": "PL001"
+        }
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 280
+  }
+}
+```
+
+### GET /api/admin/loans/:id
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "userId": "uuid",
+  "applicationId": "uuid",
+  "principalAmount": 10000,
+  "totalAmount": 10806,
+  "outstandingBalance": 5403,
+  "principalPaid": 4597,
+  "interestPaid": 0,
+  "monthlyPayment": 900.50,
+  "interestRate": 12.0,
+  "repaymentTerm": 12,
+  "startDate": "2025-01-01T00:00:00.000Z",
+  "endDate": "2025-12-31T00:00:00.000Z",
+  "nextPaymentDue": "2025-02-01T00:00:00.000Z",
+  "status": "ACTIVE",
+  "signedAgreementUrl": "https://...",
+  "stampedAgreementUrl": "https://...",
+  "stampCertificateUrl": "https://...",
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "user": {
+    "id": "uuid",
+    "fullName": "John Doe",
+    "phoneNumber": "+60123456789",
+    "email": "john@example.com",
+    "bankName": "Maybank",
+    "accountNumber": "1234567890"
+  },
+  "application": {
+    "id": "uuid",
+    "product": {
+      "name": "Personal Loan",
+      "code": "PL001"
+    },
+    "disbursement": {
+      "referenceNumber": "DIS20250101001",
+      "amount": 9640,
+      "disbursedAt": "2025-01-01T10:00:00.000Z"
+    }
+  },
+  "repayments": [
+    {
+      "id": "uuid",
+      "dueDate": "2025-02-01T00:00:00.000Z",
+      "amount": 900.50,
+      "status": "PENDING",
+      "principalPaid": 0,
+      "lateFeeAmount": 0
+    }
+  ],
+  "lateFee": {
+    "gracePeriodDays": 3,
+    "totalAccruedFees": 0,
+    "status": "NONE"
+  }
+}
+```
+
+### POST /api/admin/loans/:id/upload-stamped-agreement
+
+**Request:** `multipart/form-data`
+- `file` - PDF file
+
+**Response:**
+```json
+{
+  "message": "Stamped agreement uploaded successfully",
+  "loanId": "uuid",
+  "stampedAgreementUrl": "https://..."
+}
+```
 
 ---
 
@@ -186,28 +750,107 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/repayments` | Get all repayments | Admin/Attestor | - |
-| GET | `/api/admin/repayments/pending` | Get pending repayments | Admin/Attestor | `admin/app/api/admin/repayments/pending/route.ts` |
-| POST | `/api/admin/repayments/:id/approve` | Approve repayment | Admin/Attestor | `admin/app/api/admin/repayments/[id]/approve/route.ts` |
-| POST | `/api/admin/repayments/:id/reject` | Reject repayment | Admin/Attestor | `admin/app/api/admin/repayments/[id]/reject/route.ts` |
-| POST | `/api/admin/payments/manual` | Create manual payment | Admin/Attestor | - |
-| POST | `/api/admin/payments/csv-upload` | Upload payment CSV | Admin/Attestor | `admin/app/api/admin/payments/csv-upload/route.ts` |
-| POST | `/api/admin/payments/csv-batch-approve` | Batch approve CSV payments | Admin/Attestor | `admin/app/api/admin/payments/csv-batch-approve/route.ts` |
-| GET | `/api/admin/payments/pending` | Get pending payments | Admin/Attestor | `admin/app/api/admin/payments/pending/route.ts` |
-| POST | `/api/admin/payments/:id/approve` | Approve payment | Admin/Attestor | `admin/app/api/admin/payments/[id]/approve/route.ts` |
-| POST | `/api/admin/payments/:id/reject` | Reject payment | Admin/Attestor | `admin/app/api/admin/payments/[id]/reject/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/repayments/pending` | Get pending repayments | Admin/Attestor |
+| POST | `/api/admin/repayments/:id/approve` | Approve repayment | Admin/Attestor |
+| POST | `/api/admin/repayments/:id/reject` | Reject repayment | Admin/Attestor |
+| POST | `/api/admin/payments/manual` | Create manual payment | Admin/Attestor |
+| POST | `/api/admin/payments/csv-upload` | Upload payment CSV | Admin/Attestor |
+| GET | `/api/admin/payments/pending` | Get pending payments | Admin/Attestor |
+| POST | `/api/admin/payments/:id/approve` | Approve payment | Admin/Attestor |
 
-### Receipts
+### GET /api/admin/repayments/pending
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| POST | `/api/admin/receipts/generate` | Generate receipt | Admin/Attestor | - |
-| GET | `/api/admin/receipts/:receiptId/download` | Download receipt PDF | Admin/Attestor | `admin/app/api/admin/receipts/[id]/download/route.ts` |
-| GET | `/api/admin/receipts/repayment/:repaymentId` | Get receipts for repayment | Admin/Attestor | - |
-| GET | `/api/admin/receipts` | Get all receipts | Admin/Attestor | - |
-| DELETE | `/api/admin/receipts/:receiptId` | Delete receipt | Admin | - |
+**Response:**
+```json
+{
+  "repayments": [
+    {
+      "id": "uuid",
+      "loanId": "uuid",
+      "dueDate": "2025-02-01T00:00:00.000Z",
+      "amount": 900.50,
+      "status": "PENDING",
+      "principalPaid": 0,
+      "lateFeeAmount": 0,
+      "loan": {
+        "id": "uuid",
+        "user": {
+          "fullName": "John Doe",
+          "phoneNumber": "+60123456789"
+        }
+      }
+    }
+  ]
+}
+```
+
+### POST /api/admin/repayments/:id/approve
+
+**Request:**
+```json
+{
+  "amount": 900.50,
+  "paymentDate": "2025-01-21",
+  "paymentReference": "TRF123456",
+  "notes": "Bank transfer confirmed"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Repayment approved successfully",
+  "repaymentId": "uuid",
+  "receiptId": "uuid",
+  "receiptNumber": "RCP20250121001"
+}
+```
+
+### POST /api/admin/payments/manual
+
+**Request:**
+```json
+{
+  "loanId": "uuid",
+  "repaymentId": "uuid",
+  "amount": 900.50,
+  "paymentDate": "2025-01-21",
+  "paymentMethod": "BANK_TRANSFER",
+  "paymentReference": "TRF123456",
+  "notes": "Manual payment recorded"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Manual payment recorded successfully",
+  "transactionId": "uuid",
+  "receiptId": "uuid"
+}
+```
+
+### POST /api/admin/payments/csv-upload
+
+**Request:** `multipart/form-data`
+- `file` - CSV file with columns: `loanId`, `amount`, `paymentDate`, `reference`
+
+**Response:**
+```json
+{
+  "message": "CSV processed successfully",
+  "processed": 25,
+  "failed": 2,
+  "errors": [
+    {
+      "row": 10,
+      "error": "Loan not found"
+    }
+  ]
+}
+```
 
 ---
 
@@ -215,17 +858,49 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/late-fees` | Get all late fees | Admin/Attestor | - |
-| GET | `/api/admin/late-fees/status` | Get late fee processing status | Admin/Attestor | - |
-| POST | `/api/admin/late-fees/process` | Process late fees | Admin | - |
-| GET | `/api/admin/late-fees/repayment/:repaymentId` | Get repayment late fees | Admin/Attestor | - |
-| GET | `/api/admin/late-fees/repayment/:repaymentId/total-due` | Get total due amount | Admin/Attestor | - |
-| POST | `/api/admin/late-fees/repayment/:repaymentId/handle-payment` | Handle late fee payment | Admin/Attestor | - |
-| POST | `/api/admin/late-fees/repayment/:repaymentId/waive` | Waive late fees | Admin | - |
-| GET | `/api/admin/late-fees/logs` | Get late fee processing logs | Admin/Attestor | - |
-| DELETE | `/api/admin/late-fees/alerts` | Clear late fee alerts | Admin | - |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/late-fees` | Get all late fees | Admin/Attestor |
+| GET | `/api/admin/late-fees/status` | Get late fee processing status | Admin/Attestor |
+| POST | `/api/admin/late-fees/process` | Process late fees | Admin |
+| GET | `/api/admin/late-fees/repayment/:repaymentId` | Get repayment late fees | Admin/Attestor |
+| POST | `/api/admin/late-fees/repayment/:repaymentId/waive` | Waive late fees | Admin |
+
+### GET /api/admin/late-fees/repayment/:repaymentId
+
+**Response:**
+```json
+{
+  "repaymentId": "uuid",
+  "scheduledAmount": 900.50,
+  "principalPaid": 0,
+  "outstandingAmount": 900.50,
+  "lateFeeAmount": 50.00,
+  "lateFeesPaid": 0,
+  "totalDue": 950.50,
+  "daysOverdue": 15,
+  "dueDate": "2025-01-01T00:00:00.000Z"
+}
+```
+
+### POST /api/admin/late-fees/repayment/:repaymentId/waive
+
+**Request:**
+```json
+{
+  "amount": 50.00,
+  "reason": "Customer hardship - approved by management"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Late fees waived successfully",
+  "waivedAmount": 50.00,
+  "remainingLateFees": 0
+}
+```
 
 ---
 
@@ -233,12 +908,59 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/early-settlement/pending` | Get pending early settlements | Admin/Attestor | `admin/app/api/admin/early-settlement/pending/route.ts` |
-| GET | `/api/admin/early-settlement/:transactionId` | Get specific early settlement | Admin/Attestor | `admin/app/api/admin/early-settlement/[transactionId]/route.ts` |
-| POST | `/api/admin/early-settlement/:transactionId/approve` | Approve early settlement | Admin/Attestor | `admin/app/api/admin/early-settlement/[transactionId]/approve/route.ts` |
-| POST | `/api/admin/early-settlement/:transactionId/reject` | Reject early settlement | Admin/Attestor | `admin/app/api/admin/early-settlement/[transactionId]/reject/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/early-settlement/pending` | Get pending early settlements | Admin/Attestor |
+| GET | `/api/admin/early-settlement/:transactionId` | Get specific early settlement | Admin/Attestor |
+| POST | `/api/admin/early-settlement/:transactionId/approve` | Approve early settlement | Admin/Attestor |
+| POST | `/api/admin/early-settlement/:transactionId/reject` | Reject early settlement | Admin/Attestor |
+
+### GET /api/admin/early-settlement/pending
+
+**Response:**
+```json
+{
+  "settlements": [
+    {
+      "id": "uuid",
+      "loanId": "uuid",
+      "settlementAmount": 5050.00,
+      "outstandingPrincipal": 5000.00,
+      "accruedInterest": 50.00,
+      "unpaidLateFees": 0,
+      "status": "PENDING",
+      "requestedAt": "2025-01-21T09:00:00.000Z",
+      "loan": {
+        "user": {
+          "fullName": "John Doe",
+          "phoneNumber": "+60123456789"
+        }
+      }
+    }
+  ]
+}
+```
+
+### POST /api/admin/early-settlement/:transactionId/approve
+
+**Request:**
+```json
+{
+  "paymentReference": "TRF123456",
+  "notes": "Payment verified",
+  "interestDiscount": 25.00
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Early settlement approved",
+  "loanId": "uuid",
+  "newStatus": "PENDING_DISCHARGE",
+  "settledAmount": 5025.00
+}
+```
 
 ---
 
@@ -246,11 +968,35 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/disbursements` | Get all disbursements | Admin/Attestor | `admin/app/api/admin/disbursements/route.ts` |
-| GET | `/api/admin/disbursements/:applicationId/payment-slip` | Download payment slip | Admin/Attestor | `admin/app/api/admin/disbursements/[applicationId]/payment-slip/route.ts` |
-| POST | `/api/admin/ensure-wallets` | Ensure all users have wallets | Admin | `admin/app/api/admin/ensure-wallets/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/disbursements` | Get all disbursements | Admin/Attestor |
+| GET | `/api/admin/disbursements/:applicationId/payment-slip` | Download payment slip | Admin/Attestor |
+
+### GET /api/admin/disbursements
+
+**Response:**
+```json
+{
+  "disbursements": [
+    {
+      "id": "uuid",
+      "applicationId": "uuid",
+      "amount": 9640,
+      "referenceNumber": "DIS20250121001",
+      "disbursedAt": "2025-01-21T10:00:00.000Z",
+      "status": "COMPLETED",
+      "application": {
+        "user": {
+          "fullName": "John Doe",
+          "bankName": "Maybank",
+          "accountNumber": "1234567890"
+        }
+      }
+    }
+  ]
+}
+```
 
 ---
 
@@ -258,9 +1004,29 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| PATCH | `/api/admin/documents/:id/status` | Update document status | Admin/Attestor | `admin/app/api/admin/documents/[id]/status/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| PATCH | `/api/admin/documents/:id/status` | Update document status | Admin/Attestor |
+
+### PATCH /api/admin/documents/:id/status
+
+**Request:**
+```json
+{
+  "status": "APPROVED",
+  "notes": "Document verified"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "type": "IC_FRONT",
+  "status": "APPROVED",
+  "updatedAt": "2025-01-21T10:30:00.000Z"
+}
+```
 
 ---
 
@@ -268,59 +1034,123 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/notifications` | Get all notifications | Admin/Attestor | - |
-| GET | `/api/admin/notification-templates` | Get notification templates | Admin/Attestor | - |
-| POST | `/api/admin/notification-templates` | Create notification template | Admin | - |
-| PUT | `/api/admin/notification-templates/:id` | Update notification template | Admin | - |
-| DELETE | `/api/admin/notification-templates/:id` | Delete notification template | Admin | - |
-| GET | `/api/admin/notification-groups` | Get notification groups | Admin/Attestor | - |
-| POST | `/api/admin/notification-groups` | Create notification group | Admin | - |
-| PUT | `/api/admin/notification-groups/:id` | Update notification group | Admin | - |
-| DELETE | `/api/admin/notification-groups/:id` | Delete notification group | Admin | - |
-| POST | `/api/admin/send-notification` | Send notification | Admin/Attestor | - |
-| POST | `/api/admin/trigger-upcoming-payment-notifications` | Trigger payment notifications | Admin | - |
-| POST | `/api/admin/trigger-payment-notifications` | Trigger all payment notifications | Admin | - |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/notification-templates` | Get notification templates | Admin/Attestor |
+| POST | `/api/admin/notification-templates` | Create notification template | Admin |
+| PUT | `/api/admin/notification-templates/:id` | Update notification template | Admin |
+| DELETE | `/api/admin/notification-templates/:id` | Delete notification template | Admin |
+| POST | `/api/admin/send-notification` | Send notification | Admin/Attestor |
+
+### POST /api/admin/send-notification
+
+**Request:**
+```json
+{
+  "userId": "uuid",
+  "title": "Payment Reminder",
+  "message": "Your payment of RM900.50 is due tomorrow",
+  "type": "PAYMENT_REMINDER",
+  "sendWhatsApp": true
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Notification sent successfully",
+  "notificationId": "uuid",
+  "whatsAppSent": true
+}
+```
 
 ---
 
 ## 12. Settings & Configuration
 
-### System Settings
+### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/settings` | Get all settings | Admin | `admin/app/api/admin/settings/route.ts` |
-| GET | `/api/admin/settings/categories` | Get settings by category | Admin | `admin/app/api/admin/settings/categories/route.ts` |
-| PUT | `/api/admin/settings` | Update settings | Admin | `admin/app/api/admin/settings/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/settings` | Get all settings | Admin |
+| PUT | `/api/admin/settings` | Update settings | Admin |
+| GET | `/api/admin/bank-accounts` | Get all bank accounts | Admin |
+| POST | `/api/admin/bank-accounts` | Create bank account | Admin |
+| PUT | `/api/admin/bank-accounts/:id` | Update bank account | Admin |
+| POST | `/api/admin/bank-accounts/:id/set-default` | Set as default account | Admin |
 
-### Bank Accounts
+### GET /api/admin/settings
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/bank-accounts` | Get all bank accounts | Admin | `admin/app/api/admin/bank-accounts/route.ts` |
-| POST | `/api/admin/bank-accounts` | Create bank account | Admin | `admin/app/api/admin/bank-accounts/route.ts` |
-| PUT | `/api/admin/bank-accounts/:id` | Update bank account | Admin | `admin/app/api/admin/bank-accounts/[id]/route.ts` |
-| DELETE | `/api/admin/bank-accounts/:id` | Delete bank account | Admin | `admin/app/api/admin/bank-accounts/[id]/route.ts` |
-| POST | `/api/admin/bank-accounts/:id/set-default` | Set as default account | Admin | `admin/app/api/admin/bank-accounts/[id]/set-default/route.ts` |
+**Response:**
+```json
+{
+  "settings": [
+    {
+      "key": "ENABLE_WHATSAPP_NOTIFICATIONS",
+      "value": true,
+      "category": "NOTIFICATIONS"
+    },
+    {
+      "key": "LATE_FEE_GRACE_DAYS",
+      "value": 3,
+      "category": "LATE_FEES"
+    },
+    {
+      "key": "ENABLE_LATE_FEE_GRACE_PERIOD",
+      "value": true,
+      "category": "LATE_FEES"
+    }
+  ]
+}
+```
 
-### Company Settings
+### PUT /api/admin/settings
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/company-settings` | Get company settings | Admin | `admin/app/api/admin/company-settings/route.ts` |
-| POST | `/api/admin/company-settings` | Create/update company settings | Admin | `admin/app/api/admin/company-settings/route.ts` |
-| DELETE | `/api/admin/company-settings/:id` | Delete company setting | Admin | - |
+**Request:**
+```json
+{
+  "settings": [
+    {
+      "key": "LATE_FEE_GRACE_DAYS",
+      "value": 5
+    }
+  ]
+}
+```
 
-### Products
+**Response:**
+```json
+{
+  "message": "Settings updated successfully",
+  "updated": 1
+}
+```
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/products` | Get all products (including inactive) | Admin | - |
-| POST | `/api/products` | Create product | Admin | - |
-| PATCH | `/api/products/:id` | Update product | Admin | - |
-| DELETE | `/api/products/:id` | Delete product | Admin | - |
+### POST /api/admin/bank-accounts
+
+**Request:**
+```json
+{
+  "bankName": "CIMB",
+  "accountName": "Company Name Sdn Bhd",
+  "accountNumber": "1234567890",
+  "swiftCode": "CIABORBBXXX",
+  "isDefault": false
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "bankName": "CIMB",
+  "accountName": "Company Name Sdn Bhd",
+  "accountNumber": "1234567890",
+  "swiftCode": "CIABORBBXXX",
+  "isDefault": false,
+  "createdAt": "2025-01-21T10:30:00.000Z"
+}
+```
 
 ---
 
@@ -328,15 +1158,52 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/internal-signers` | Get all internal signers | Admin/Attestor | `admin/app/api/admin/internal-signers/route.ts` |
-| GET | `/api/admin/internal-signers/lookup/:icNumber` | Lookup signer by IC | Admin/Attestor | `admin/app/api/admin/internal-signers/lookup/[icNumber]/route.ts` |
-| POST | `/api/admin/internal-signers` | Create internal signer | Admin/Attestor | `admin/app/api/admin/internal-signers/route.ts` |
-| POST | `/api/admin/internal-signers/:id/verify-pin` | Verify signer PIN | Admin/Attestor | `admin/app/api/admin/internal-signers/[id]/verify-pin/route.ts` |
-| PUT | `/api/admin/internal-signers/:id` | Update internal signer | Admin/Attestor | `admin/app/api/admin/internal-signers/[id]/route.ts` |
-| DELETE | `/api/admin/internal-signers/:id` | Delete internal signer | Admin | `admin/app/api/admin/internal-signers/[id]/route.ts` |
-| POST | `/api/admin/internal-signers/refresh` | Refresh signer cache | Admin/Attestor | `admin/app/api/admin/internal-signers/refresh/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/internal-signers` | Get all internal signers | Admin/Attestor |
+| GET | `/api/admin/internal-signers/lookup/:icNumber` | Lookup signer by IC | Admin/Attestor |
+| POST | `/api/admin/internal-signers` | Create internal signer | Admin/Attestor |
+| POST | `/api/admin/internal-signers/:id/verify-pin` | Verify signer PIN | Admin/Attestor |
+| PUT | `/api/admin/internal-signers/:id` | Update internal signer | Admin/Attestor |
+| DELETE | `/api/admin/internal-signers/:id` | Delete internal signer | Admin |
+
+### GET /api/admin/internal-signers
+
+**Response:**
+```json
+{
+  "signers": [
+    {
+      "id": "uuid",
+      "name": "Company Representative",
+      "icNumber": "800101-14-5678",
+      "email": "rep@company.com",
+      "phoneNumber": "+60123456789",
+      "role": "COMPANY",
+      "hasCertificate": true,
+      "certificateExpiry": "2026-01-01T00:00:00.000Z",
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### POST /api/admin/internal-signers/:id/verify-pin
+
+**Request:**
+```json
+{
+  "pin": "123456"
+}
+```
+
+**Response:**
+```json
+{
+  "valid": true,
+  "signerId": "uuid"
+}
+```
 
 ---
 
@@ -344,31 +1211,86 @@ Authorization: Bearer {adminToken}
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/kyc/status` | Get KYC overview status | Admin/Attestor | `admin/app/api/admin/kyc/status/route.ts` |
-| GET | `/api/admin/kyc/:kycId/status` | Get specific KYC status | Admin/Attestor | `admin/app/api/admin/kyc/status/[kycId]/route.ts` |
-| POST | `/api/admin/kyc/start-ctos` | Start CTOS for user | Admin/Attestor | `admin/app/api/admin/kyc/start/route.ts` |
-| GET | `/api/admin/kyc/admin-ctos-status` | Get admin CTOS status | Admin/Attestor | `admin/app/api/admin/kyc/admin-ctos-status/route.ts` |
-| GET | `/api/admin/kyc/images` | Get KYC images | Admin/Attestor | `admin/app/api/admin/kyc/images/route.ts` |
-| GET | `/api/admin/kyc/session-status/:kycSessionId` | Get session status | Admin/Attestor | `admin/app/api/admin/kyc/session-status/[kycSessionId]/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/kyc/status` | Get KYC overview status | Admin/Attestor |
+| GET | `/api/admin/kyc/:kycId/status` | Get specific KYC status | Admin/Attestor |
+| POST | `/api/admin/kyc/start-ctos` | Start CTOS for user | Admin/Attestor |
+| GET | `/api/admin/kyc/admin-ctos-status` | Get admin CTOS status | Admin/Attestor |
+| GET | `/api/admin/kyc/images` | Get KYC images | Admin/Attestor |
+
+### GET /api/admin/kyc/status
+
+**Query Parameters:**
+- `userId` - Filter by user ID
+
+**Response:**
+```json
+{
+  "userId": "uuid",
+  "kycStatus": true,
+  "ctosStatus": "VERIFIED",
+  "lastVerifiedAt": "2025-01-15T10:00:00.000Z",
+  "documents": [
+    {
+      "type": "IC_FRONT",
+      "status": "VERIFIED",
+      "verifiedAt": "2025-01-15T10:00:00.000Z"
+    }
+  ]
+}
+```
 
 ---
 
 ## 15. Admin MTSA/PKI Management
 
-These endpoints are for certificate management via the Signing Orchestrator.
-
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/mtsa/cert-info/:userId` | Get user certificate info | Admin/Attestor | `admin/app/api/admin/mtsa/cert-info/[userId]/route.ts` |
-| POST | `/api/admin/mtsa/verify-cert-pin` | Verify certificate PIN | Admin/Attestor | `admin/app/api/admin/mtsa/verify-cert-pin/route.ts` |
-| POST | `/api/admin/mtsa/reset-cert-pin` | Reset certificate PIN | Admin/Attestor | `admin/app/api/admin/mtsa/reset-cert-pin/route.ts` |
-| POST | `/api/admin/mtsa/request-otp` | Request signing OTP | Admin/Attestor | `admin/app/api/admin/mtsa/request-otp/route.ts` |
-| POST | `/api/admin/mtsa/request-certificate` | Request new certificate | Admin/Attestor | `admin/app/api/admin/mtsa/request-certificate/route.ts` |
-| POST | `/api/admin/mtsa/revoke-certificate` | Revoke user certificate | Admin | - |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/mtsa/cert-info/:userId` | Get user certificate info | Admin/Attestor |
+| POST | `/api/admin/mtsa/verify-cert-pin` | Verify certificate PIN | Admin/Attestor |
+| POST | `/api/admin/mtsa/reset-cert-pin` | Reset certificate PIN | Admin/Attestor |
+| POST | `/api/admin/mtsa/request-otp` | Request signing OTP | Admin/Attestor |
+| POST | `/api/admin/mtsa/request-certificate` | Request new certificate | Admin/Attestor |
+| POST | `/api/admin/mtsa/revoke-certificate` | Revoke user certificate | Admin |
+
+### GET /api/admin/mtsa/cert-info/:userId
+
+**Response:**
+```json
+{
+  "userId": "uuid",
+  "hasCertificate": true,
+  "certificateStatus": "ACTIVE",
+  "serialNumber": "ABC123456",
+  "issuedAt": "2025-01-01T00:00:00.000Z",
+  "expiresAt": "2026-01-01T00:00:00.000Z",
+  "issuer": "MyTrustCA"
+}
+```
+
+### POST /api/admin/mtsa/request-certificate
+
+**Request:**
+```json
+{
+  "userId": "uuid",
+  "icNumber": "901234-14-5678",
+  "fullName": "John Doe",
+  "phoneNumber": "+60123456789"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Certificate request submitted",
+  "requestId": "uuid",
+  "status": "PENDING"
+}
+```
 
 ---
 
@@ -376,12 +1298,47 @@ These endpoints are for certificate management via the Signing Orchestrator.
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/cron/status` | Get cron job status | Admin/Attestor | - |
-| POST | `/api/admin/cron/trigger-late-fee-processing` | Trigger late fee processing | Admin/Attestor | - |
-| POST | `/api/admin/cron/trigger-default-processing` | Trigger default processing | Admin/Attestor | - |
-| POST | `/api/admin/cron/trigger-payment-notifications` | Trigger payment notifications | Admin/Attestor | - |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/cron/status` | Get cron job status | Admin/Attestor |
+| POST | `/api/admin/cron/trigger-late-fee-processing` | Trigger late fee processing | Admin/Attestor |
+| POST | `/api/admin/cron/trigger-default-processing` | Trigger default processing | Admin/Attestor |
+| POST | `/api/admin/cron/trigger-payment-notifications` | Trigger payment notifications | Admin/Attestor |
+
+### GET /api/admin/cron/status
+
+**Response:**
+```json
+{
+  "lateFeeProcessing": {
+    "lastRun": "2025-01-21T00:00:00.000Z",
+    "nextRun": "2025-01-22T00:00:00.000Z",
+    "status": "IDLE"
+  },
+  "paymentNotifications": {
+    "lastRun": "2025-01-21T08:00:00.000Z",
+    "nextRun": "2025-01-21T09:00:00.000Z",
+    "status": "IDLE"
+  },
+  "defaultProcessing": {
+    "lastRun": "2025-01-21T00:00:00.000Z",
+    "nextRun": "2025-01-22T00:00:00.000Z",
+    "status": "IDLE"
+  }
+}
+```
+
+### POST /api/admin/cron/trigger-late-fee-processing
+
+**Response:**
+```json
+{
+  "message": "Late fee processing triggered",
+  "processed": 15,
+  "newLateFees": 5,
+  "totalAmount": 250.00
+}
+```
 
 ---
 
@@ -389,99 +1346,85 @@ These endpoints are for certificate management via the Signing Orchestrator.
 
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/:loanId/pdf-letters` | Get PDF letters for loan | Admin | `admin/app/api/admin/loans/[id]/pdf-letters/route.ts` |
-| GET | `/api/admin/:loanId/borrower-info` | Get borrower information | Admin | - |
-| POST | `/api/admin/:loanId/generate-pdf-letter` | Generate PDF letter | Admin | - |
-| GET | `/api/admin/:loanId/pdf-letters/:filename/download` | Download PDF letter | Admin | `admin/app/api/admin/loans/[id]/pdf-letters/[filename]/download/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/:loanId/pdf-letters` | Get PDF letters for loan | Admin |
+| POST | `/api/admin/:loanId/generate-pdf-letter` | Generate PDF letter | Admin |
+| GET | `/api/admin/:loanId/pdf-letters/:filename/download` | Download PDF letter | Admin |
+| GET | `/api/admin/:loanId/lampiran-a` | Get Lampiran A document | Admin |
 
-### Credit Reports
+### POST /api/admin/:loanId/generate-pdf-letter
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/credit-reports/:userId` | Get user credit reports | Admin/Attestor | `admin/app/api/admin/credit-reports/[userId]/route.ts` |
-| POST | `/api/admin/credit-reports/request` | Request credit report | Admin/Attestor | `admin/app/api/admin/credit-reports/request/route.ts` |
-| POST | `/api/admin/credit-reports/confirm` | Confirm credit report | Admin/Attestor | `admin/app/api/admin/credit-reports/confirm/route.ts` |
-| POST | `/api/admin/credit-reports/fetch` | Fetch credit report | Admin/Attestor | `admin/app/api/admin/credit-reports/fetch/route.ts` |
-| POST | `/api/admin/credit-reports/request-and-confirm` | Request and confirm report | Admin/Attestor | `admin/app/api/admin/credit-reports/request-and-confirm/route.ts` |
-| GET | `/api/admin/credit-reports/pdf/:reportId` | Download report PDF | Admin/Attestor | `admin/app/api/admin/credit-reports/pdf/[reportId]/route.ts` |
-| GET | `/api/admin/credit-reports/cache/:userId` | Get cached report | Admin/Attestor | `admin/app/api/admin/credit-reports/cache/[userId]/route.ts` |
+**Request:**
+```json
+{
+  "letterType": "REMINDER_1",
+  "language": "MALAY"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "PDF letter generated",
+  "filename": "reminder_1_20250121.pdf",
+  "downloadUrl": "/api/admin/uuid/pdf-letters/reminder_1_20250121.pdf/download"
+}
+```
+
+### Letter Types
+
+| Type | Description |
+|------|-------------|
+| `REMINDER_1` | First payment reminder |
+| `REMINDER_2` | Second payment reminder |
+| `REMINDER_3` | Final payment reminder |
+| `NOTICE_OF_DEFAULT` | Default notice |
+| `DEMAND_LETTER` | Legal demand letter |
 
 ---
 
 ## 18. Access & Document Logs
 
-### Access Logs
-
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/access-logs` | Get admin access logs | Admin | `admin/app/api/admin/access-logs/route.ts` |
-| GET | `/api/admin/access-logs/export` | Export access logs | Admin | `admin/app/api/admin/access-logs/export/route.ts` |
-
-### Document Logs
-
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/document-logs` | Get document logs | Admin | `admin/app/api/admin/document-logs/route.ts` |
-| POST | `/api/admin/document-logs/scan` | Scan for documents | Admin | `admin/app/api/admin/document-logs/scan/route.ts` |
-| GET | `/api/admin/document-logs/export` | Export document logs | Admin | `admin/app/api/admin/document-logs/export/route.ts` |
-
----
-
-## 19. Signing Orchestrator (Admin)
-
-These endpoints proxy to the on-prem Signing Orchestrator for document signing operations.
-
-### DocuSeal Integration
-
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| POST | `/api/docuseal/initiate-loan-signing` | Initiate loan signing | Admin/Attestor | - |
-| POST | `/api/docuseal/initiate-application-signing` | Initiate application signing | Admin/Attestor | - |
-| POST | `/api/docuseal/admin/initiate-loan-signing` | Admin initiate signing | Admin/Attestor | - |
-| GET | `/api/docuseal/submission/:submissionId` | Get submission status | Admin/Attestor | - |
-| GET | `/api/docuseal/admin/templates` | Get DocuSeal templates | Admin/Attestor | - |
-| POST | `/api/docuseal/webhook` | DocuSeal webhook receiver | Webhook | - |
-| GET | `/api/docuseal/download/:submissionId` | Download DocuSeal document | Admin/Attestor | - |
-| GET | `/api/docuseal/admin/download/:submissionId` | Admin download document | Admin/Attestor | - |
-| GET | `/api/docuseal/admin/webhooks` | Get webhook configurations | Admin | - |
-| POST | `/api/docuseal/admin/configure-webhook` | Configure webhooks | Admin | - |
-| POST | `/api/docuseal/test-connection-simple` | Test DocuSeal connection | Public | - |
-
-### Signing Orchestrator Direct APIs
-
-The backend proxies these to `{SIGNING_BASE_URL}`:
-
-| Method | Backend Proxy | Orchestrator Endpoint | Description | Auth |
-|--------|--------------|----------------------|-------------|------|
-| GET | Via `/api/admin/loans/:loanId/download-agreement` | `/api/signed/:applicationId/download` | Download signed PDF | API Key |
-| POST | Via `/api/admin/loans/:id/upload-stamped-agreement` | `/api/admin/agreements/:applicationId/upload/stamped` | Upload stamped agreement | API Key |
-| POST | Via `/api/admin/loans/:id/upload-stamp-certificate` | `/api/admin/agreements/:applicationId/upload/certificate` | Upload stamp certificate | API Key |
-| GET | Via `/api/admin/loans/:loanId/download-stamped-agreement` | `/api/admin/agreements/:applicationId/download/stamped` | Download stamped agreement | API Key |
-| GET | Via `/api/admin/loans/:loanId/download-stamp-certificate` | `/api/admin/agreements/:applicationId/download/certificate` | Download stamp certificate | API Key |
-
-### Health Checks (Signing Orchestrator)
-
-These are direct endpoints on the Signing Orchestrator:
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `{SIGNING_BASE_URL}/health` | Basic health check |
-| GET | `{SIGNING_BASE_URL}/health/detailed` | Detailed health check |
-| GET | `{SIGNING_BASE_URL}/health/ready` | Kubernetes readiness probe |
-| GET | `{SIGNING_BASE_URL}/health/live` | Kubernetes liveness probe |
-
----
-
-## 20. Health Check
-
 ### Endpoints
 
-| Method | Endpoint | Description | Role | Admin Frontend Route |
-|--------|----------|-------------|------|---------------------|
-| GET | `/api/admin/health-check` | System health check | Admin/Attestor | - |
-| GET | `/api/health` | Basic API health check | Public | `admin/app/api/health/route.ts` |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/access-logs` | Get admin access logs | Admin |
+| GET | `/api/admin/access-logs/export` | Export access logs | Admin |
+| GET | `/api/admin/document-logs` | Get document logs | Admin |
+| POST | `/api/admin/document-logs/scan` | Scan for documents | Admin |
+| GET | `/api/admin/document-logs/export` | Export document logs | Admin |
+
+### GET /api/admin/access-logs
+
+**Query Parameters:**
+- `startDate` - Filter from date
+- `endDate` - Filter to date
+- `userId` - Filter by user ID
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "id": "uuid",
+      "userId": "uuid",
+      "userName": "Admin User",
+      "phoneNumber": "+60123456789",
+      "role": "ADMIN",
+      "ipAddress": "192.168.1.100",
+      "userAgent": "Mozilla/5.0...",
+      "loginAt": "2025-01-21T08:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 250
+  }
+}
+```
 
 ---
 
@@ -504,9 +1447,8 @@ All endpoints return standard HTTP status codes:
 
 ```json
 {
-  "error": "Error message",
-  "message": "Detailed message",
-  "success": false
+  "error": "Error description",
+  "message": "Detailed message"
 }
 ```
 
@@ -554,3 +1496,4 @@ All endpoints return standard HTTP status codes:
 - Added credit report management
 - Added access and document logging
 - Added cron job management endpoints
+- Added comprehensive request/response examples
