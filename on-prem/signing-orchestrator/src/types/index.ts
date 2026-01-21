@@ -145,10 +145,11 @@ export interface MTSAOrganisationInfo {
   orgName?: string;
   orgPhoneNo?: string;
   orgRegistationNo?: string;
-  orgRegistrationType?: string;
+  orgRegistrationType?: 'NTRMY' | 'IRB' | 'RMC' | 'CIDB' | 'BAM' | 'GOV' | 'GOVSUB' | 'INT' | 'LEI' | string;
   orgUserDesignation?: string;
   orgUserRegistrationNo?: string;
-  orgUserRegistrationType?: string;
+  /** User ID type: 'IDC' for MyKad (National ID Card), 'PAS' for Passport */
+  orgUserRegistrationType?: 'IDC' | 'PAS' | string;
 }
 
 export interface MTSARequestCertificateRequest {
