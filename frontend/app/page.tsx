@@ -115,14 +115,14 @@ export default function Home() {
 											<ArrowRight className="ml-2 h-5 w-5" />
 										</Link>
 									</Button>
-									<Button
-										size="lg"
-										variant="outline"
-										onClick={() => scrollToSection('how-it-works')}
-										className="border-gray-300 text-slate-700 hover:bg-white font-semibold px-8 py-6 rounded-full text-lg h-auto"
-									>
-										See How It Works
-									</Button>
+								<Button
+									size="lg"
+									variant="outline"
+									onClick={() => scrollToSection('how-it-works')}
+									className="border-gray-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-semibold px-8 py-6 rounded-full text-lg h-auto"
+								>
+									See How It Works
+								</Button>
 								</div>
 
 								{/* Trust Indicators */}

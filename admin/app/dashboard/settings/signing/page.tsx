@@ -951,7 +951,7 @@ export default function AdminSigningSettingsPage() {
       <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Digital Signing Settings</h1>
+          <h1 className="text-3xl font-heading font-medium text-white mb-2">Digital Signing Settings</h1>
           <p className="text-gray-400">Manage your digital certificate and internal signers</p>
         </div>
 

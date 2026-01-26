@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Inter, Rethink_Sans } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 
-const poppins = Poppins({ 
+const inter = Inter({ 
 	subsets: ["latin"],
-	weight: ["300", "400", "500", "600", "700"],
+	variable: "--font-inter",
+	display: "swap",
+});
+
+const rethinkSans = Rethink_Sans({ 
+	subsets: ["latin"],
+	variable: "--font-rethink-sans",
 	display: "swap",
 });
 
@@ -91,8 +97,8 @@ export default function RootLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<html lang="en">
-			<body className={`${poppins.className} min-h-screen`}>
+		<html lang="en" className={`${inter.variable} ${rethinkSans.variable}`}>
+			<body className={`${inter.className} min-h-screen`}>
 				<Providers>
 					<div className="w-full min-h-screen">{children}</div>
 				</Providers>

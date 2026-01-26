@@ -51,17 +51,17 @@ module.exports = {
 					DEFAULT: "#22D3EE",
 				},
 			},
-			fontFamily: {
-				// Brand typography
-				logo: ["Manrope", "sans-serif"], // Logo font
-				heading: ["Manrope", "sans-serif"], // Headings
-				body: ["Inter", "Satoshi", "sans-serif"], // Body text
-				sans: ["Inter", "Satoshi", "sans-serif"], // Default sans
-			},
-			fontWeight: {
-				logo: "700", // Bold for logo
-				heading: "600", // SemiBold for headings
-			},
+		fontFamily: {
+			// Brand typography
+			logo: ["var(--font-rethink-sans)", "Rethink Sans", "sans-serif"], // Logo font
+			heading: ["var(--font-rethink-sans)", "Rethink Sans", "sans-serif"], // Headings
+			body: ["var(--font-inter)", "Inter", "sans-serif"], // Body text
+			sans: ["var(--font-inter)", "Inter", "sans-serif"], // Default sans
+		},
+		fontWeight: {
+			logo: "600", // SemiBold for logo
+			heading: "500", // Medium for headings
+		},
 			backgroundImage: {
 				"brand-gradient":
 					"linear-gradient(135deg, #14B8A6 0%, #3B82F6 100%)",

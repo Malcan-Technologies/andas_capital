@@ -163,9 +163,9 @@ This is the **core brand identity**.
 
 | Usage | Font | Class | Style |
 |-------|------|-------|-------|
-| **Headings** | `Quicksand` | `font-heading` | `font-bold` (700) |
-| **Body Text** | `Quicksand` | `font-body` | `font-normal` (400) |
-| **Logo Text** | `Quicksand` | `font-logo` | `font-bold` (700) |
+| **Headings** | `Rethink Sans` | `font-heading` | `font-medium` (500) |
+| **Body Text** | `Inter` | `font-body` | `font-normal` (400) |
+| **Logo Text** | `Rethink Sans` | `font-logo` | `font-semibold` (600) |
 
 ---
 
