@@ -984,34 +984,135 @@ Authorization: Bearer {accessToken}
 
 ## 9. KYC (Know Your Customer)
 
+The KYC system uses TrueStack for identity verification (eKYC). The API endpoints maintain backwards compatibility with the previous CTOS integration.
+
 ### Endpoints
 
 | Method | Endpoint | Description | Auth | Frontend Route |
 |--------|----------|-------------|------|----------------|
-| POST | `/api/kyc/start-ctos` | Start CTOS eKYC process | Yes | - |
+| POST | `/api/kyc/start-ctos` | Start eKYC verification process | Yes | - |
 | POST | `/api/kyc/start` | Start or reuse KYC session | Yes | - |
 | POST | `/api/kyc/:kycId/upload` | Upload KYC documents | Yes* | - |
 | GET | `/api/kyc/:kycId/status` | Get KYC session status | Yes* | - |
 | POST | `/api/kyc/:kycId/accept` | Accept KYC results | Yes* | - |
-| GET | `/api/kyc/user-ctos-status` | Get user's CTOS status | Yes | - |
+| GET | `/api/kyc/user-ctos-status` | Get user's eKYC status | Yes | - |
+| GET | `/api/kyc/user-documents` | Get user's verified KYC documents | Yes | - |
 
 *Note: Accepts either JWT token or one-time KYC token
 
 ### POST /api/kyc/start-ctos
 
+Starts a new eKYC verification session. Returns a URL to redirect the user to complete identity verification.
+
 **Request:**
 ```json
 {
-  "applicationId": "uuid"
+  "applicationId": "uuid",
+  "documentName": "AHMAD BIN ABDULLAH",
+  "documentNumber": "901234-56-7890",
+  "platform": "Web",
+  "forceNewSession": false
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `applicationId` | string | Yes | Loan application ID |
+| `documentName` | string | Yes | Full name as shown on IC |
+| `documentNumber` | string | Yes | IC number |
+| `platform` | string | No | Platform type: "Web" or "Mobile" (default: "Web") |
+| `forceNewSession` | boolean | No | If true, creates new session even if approved session exists (default: false) |
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "kycId": "cmkz7t0jx00011g01yc43tcw7",
+  "onboardingUrl": "https://verify.truestack.my/onboarding/abc123...",
+  "onboardingId": "550e8400-e29b-41d4-a716-446655440000",
+  "expiredAt": "2026-01-30T12:00:00.000Z",
+  "kycToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "ttlMinutes": 30
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Whether session was created successfully |
+| `kycId` | string | Internal KYC session ID |
+| `onboardingUrl` | string | URL to redirect user for eKYC verification |
+| `onboardingId` | string | External provider session ID |
+| `expiredAt` | string | Session expiry time (ISO 8601) |
+| `kycToken` | string | Short-lived JWT for KYC-specific endpoints |
+| `ttlMinutes` | number | Token validity in minutes |
+
+**Response (200 OK - Resuming existing session):**
+```json
+{
+  "success": true,
+  "kycId": "cmkz7t0jx00011g01yc43tcw7",
+  "onboardingUrl": "https://verify.truestack.my/onboarding/abc123...",
+  "onboardingId": "550e8400-e29b-41d4-a716-446655440000",
+  "expiredAt": "2026-01-30T12:00:00.000Z",
+  "kycToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "ttlMinutes": 30,
+  "resumed": true,
+  "message": "Resuming existing KYC session"
+}
+```
+
+### GET /api/kyc/user-ctos-status
+
+Returns the user's current eKYC verification status.
 
 **Response:**
 ```json
 {
-  "kycSessionId": "uuid",
-  "ctosRedirectUrl": "https://ctos.example.com/ekyc/...",
-  "expiresAt": "2025-01-21T11:30:00.000Z"
+  "hasKycSession": true,
+  "status": 2,
+  "result": 1,
+  "isAlreadyApproved": true,
+  "rejectMessage": null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `hasKycSession` | boolean | Whether user has a KYC session |
+| `status` | number | 0: Not Opened, 1: Processing, 2: Completed, 3: Expired |
+| `result` | number | 0: Rejected, 1: Approved, 2: Not Available |
+| `isAlreadyApproved` | boolean | Whether user has been approved |
+| `rejectMessage` | string | Rejection reason (if applicable) |
+
+### GET /api/kyc/user-documents
+
+Returns the user's verified KYC documents (IC images, selfie) from approved sessions.
+
+**Response:**
+```json
+{
+  "success": true,
+  "hasDocuments": true,
+  "documents": [
+    {
+      "id": "doc123",
+      "type": "front",
+      "storageUrl": "data:image/jpeg;base64,...",
+      "createdAt": "2026-01-29T10:30:00.000Z"
+    },
+    {
+      "id": "doc124",
+      "type": "back",
+      "storageUrl": "data:image/jpeg;base64,...",
+      "createdAt": "2026-01-29T10:30:00.000Z"
+    },
+    {
+      "id": "doc125",
+      "type": "selfie",
+      "storageUrl": "data:image/jpeg;base64,...",
+      "createdAt": "2026-01-29T10:30:00.000Z"
+    }
+  ]
 }
 ```
 
@@ -1021,41 +1122,43 @@ Authorization: Bearer {accessToken}
 ```json
 {
   "id": "uuid",
-  "status": "PENDING",
-  "ctosStatus": "IN_PROGRESS",
-  "documents": [
-    {
-      "type": "IC_FRONT",
-      "status": "VERIFIED"
-    }
-  ],
-  "verificationResult": null,
-  "createdAt": "2025-01-21T10:30:00.000Z"
+  "status": "IN_PROGRESS",
+  "ctosStatus": 1,
+  "ctosResult": null,
+  "documents": [],
+  "createdAt": "2026-01-29T10:30:00.000Z"
 }
 ```
 
 ### KYC Statuses
 
-| Status | Description |
-|--------|-------------|
-| `PENDING` | KYC verification pending |
-| `IN_PROGRESS` | Verification in progress |
-| `VERIFIED` | Successfully verified |
-| `FAILED` | Verification failed |
-| `EXPIRED` | Session expired |
+| Status | Value | Description |
+|--------|-------|-------------|
+| Not Opened | 0 | User hasn't opened the verification URL |
+| Processing | 1 | Verification in progress |
+| Completed | 2 | Verification completed (check result) |
+| Expired | 3 | Session expired |
+
+### KYC Results
+
+| Result | Value | Description |
+|--------|-------|-------------|
+| Rejected | 0 | Verification failed |
+| Approved | 1 | Verification successful |
+| Not Available | 2 | Result not yet available |
 
 ---
 
-## 10. CTOS Integration
+## 10. eKYC Integration (Internal)
+
+These endpoints are used internally by the eKYC provider (TrueStack) and should not be called directly by clients.
 
 ### Endpoints
 
-| Method | Endpoint | Description | Auth | Frontend Route |
-|--------|----------|-------------|------|----------------|
-| POST | `/api/ctos/create-transaction` | Create CTOS eKYC transaction | No | - |
-| POST | `/api/ctos/status` | Get CTOS transaction status | No | - |
-| POST | `/api/ctos/webhook` | CTOS webhook receiver | No | - |
-| GET | `/api/ctos/session/:id` | Get CTOS session | No | - |
+| Method | Endpoint | Description | Auth | Notes |
+|--------|----------|-------------|------|-------|
+| POST | `/api/ctos/webhook` | eKYC webhook receiver | No | Called by TrueStack |
+| GET | `/api/ctos/session/:id` | Get eKYC session details | Yes | Internal use |
 
 ---
 
