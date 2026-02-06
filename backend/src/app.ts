@@ -86,7 +86,7 @@ app.use((req, res, next) => {
 	}
 	// Strip X-Forwarded-Host to prevent injection
 	delete req.headers['x-forwarded-host'];
-	next();
+	return next();
 });
 
 // Security headers via Helmet (CSP, HSTS, X-Frame-Options, X-Content-Type-Options)
