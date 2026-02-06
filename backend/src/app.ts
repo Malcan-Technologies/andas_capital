@@ -4,6 +4,7 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import { baseUrl } from "./config/swagger";
 import fs from "fs";
@@ -74,6 +75,46 @@ logConfigStatus();
 // Trust proxy for correct IP detection behind reverse proxy/load balancer
 // This is required for rate limiting and token validation to work correctly in production
 app.set('trust proxy', true);
+
+// Host header validation to prevent Host Header Injection attacks
+// Rejects requests with unexpected Host or X-Forwarded-Host values
+const allowedHosts = (process.env.ALLOWED_HOSTS || 'api.andas.com.my,localhost,127.0.0.1').split(',').map(h => h.trim());
+app.use((req, res, next) => {
+	const host = req.hostname;
+	if (!allowedHosts.some(h => host === h || host.endsWith('.' + h))) {
+		return res.status(400).json({ message: "Invalid host header" });
+	}
+	// Strip X-Forwarded-Host to prevent injection
+	delete req.headers['x-forwarded-host'];
+	next();
+});
+
+// Security headers via Helmet (CSP, HSTS, X-Frame-Options, X-Content-Type-Options)
+app.use(
+	helmet({
+		contentSecurityPolicy: {
+			directives: {
+				defaultSrc: ["'self'"],
+				scriptSrc: ["'self'"],
+				styleSrc: ["'self'", "'unsafe-inline'"],
+				imgSrc: ["'self'", "data:", "https:"],
+				fontSrc: ["'self'", "data:"],
+				connectSrc: ["'self'"],
+				frameSrc: ["'none'"],
+				objectSrc: ["'none'"],
+				baseUri: ["'self'"],
+			},
+		},
+		strictTransportSecurity: {
+			maxAge: 63072000, // 2 years
+			includeSubDomains: true,
+			preload: true,
+		},
+		frameguard: { action: "deny" },
+		xContentTypeOptions: true, // nosniff
+		referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+	})
+);
 
 // Middleware
 app.use(

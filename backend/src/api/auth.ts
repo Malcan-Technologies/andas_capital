@@ -422,11 +422,12 @@ router.post("/signup", async (req, res) => {
 		// Normalize phone number for database storage
 		const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-		// Check if user already exists
+		// Check if user already exists — return generic message to prevent user enumeration
 		const existingUser = await User.findByPhoneNumber(normalizedPhone);
 		if (existingUser) {
-			return res.status(400).json({ 
-				message: "This phone number is already registered. Please use a different number or try logging in instead." 
+			return res.status(200).json({ 
+				message: "If this phone number is not already registered, you will receive a verification code via WhatsApp.",
+				phoneNumber: normalizedPhone,
 			});
 		}
 

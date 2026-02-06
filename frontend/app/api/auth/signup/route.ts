@@ -28,13 +28,13 @@ export async function POST(request: Request) {
 			);
 		}
 
-	// Return the actual response from the backend (userId, phoneNumber, otpSent, expiresAt)
+	// Forward the backend response — may include userId (new account) or just a generic message (to prevent enumeration)
 	return NextResponse.json({
 		message: data.message,
-		userId: data.userId,
+		...(data.userId && { userId: data.userId }),
 		phoneNumber: data.phoneNumber,
-		otpSent: data.otpSent,
-		expiresAt: data.expiresAt,
+		...(data.otpSent !== undefined && { otpSent: data.otpSent }),
+		...(data.expiresAt && { expiresAt: data.expiresAt }),
 	});
 	} catch (error) {
 		console.error("Signup error:", error);

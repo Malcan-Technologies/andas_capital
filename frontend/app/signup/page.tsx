@@ -217,22 +217,22 @@ export default function SignupPage() {
 			const data = await response.json();
 
 			if (!response.ok) {
-				// Handle specific error cases
-				if (response.status === 400 && data.message?.includes("already registered")) {
-					setError("This phone number is already registered. Please use a different number or try logging in instead.");
-				} else {
-					throw new Error(data.message || data.error || "Failed to create account");
-				}
-				return;
+				throw new Error(data.message || data.error || "Failed to create account");
 			}
 
-			// Account created successfully, now show OTP verification
-			setSignupData({
-				userId: data.userId,
-				phoneNumber: data.phoneNumber,
-				expiresAt: data.expiresAt,
-			});
-			setShowOTPVerification(true);
+			// If the response contains a userId, the account was newly created — show OTP verification.
+			// If no userId is returned, it means a generic response was given (to prevent user enumeration).
+			if (data.userId) {
+				setSignupData({
+					userId: data.userId,
+					phoneNumber: data.phoneNumber,
+					expiresAt: data.expiresAt,
+				});
+				setShowOTPVerification(true);
+			} else {
+				// Show generic message without revealing whether the phone number exists
+				setError(data.message || "If this phone number is not already registered, you will receive a verification code via WhatsApp.");
+			}
 		} catch (error) {
 			setError(
 				error instanceof Error ? error.message : "An error occurred"
