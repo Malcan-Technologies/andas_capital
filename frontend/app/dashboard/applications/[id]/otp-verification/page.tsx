@@ -138,6 +138,8 @@ export default function OTPVerificationPage() {
       )) as any;
 
       // Determine OTP usage type based on certificate status
+      // GC100 = cert not found (expected for new enrollment) - always use NU
+      // Only use DS when user has an ACTIVE certificate
       let otpUsage = "NU"; // New enrollment by default
       if (
         certCheckData.success &&
@@ -148,7 +150,11 @@ export default function OTPVerificationPage() {
           "User has active certificate, using DS (Digital Signing) OTP"
         );
       } else {
-        console.warn("User needs new certificate, using NU (New User) OTP");
+        // GC100 (cert not found) or any other status - use NU for enrollment
+        console.warn(
+          "User needs new certificate, using NU (New User) OTP",
+          certCheckData.data?.statusCode ? `(status: ${certCheckData.data.statusCode})` : ""
+        );
       }
 
       // Step 2: Request OTP with appropriate usage type
