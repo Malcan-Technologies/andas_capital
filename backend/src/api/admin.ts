@@ -12361,6 +12361,152 @@ router.get('/applications/:applicationId/signatures', authenticateToken, async (
 });
 
 /**
+ * POST /api/admin/applications/:applicationId/reconcile-signing-status
+ * Reconcile stale signatory statuses using live DocuSeal submitter state.
+ */
+router.post(
+	'/applications/:applicationId/reconcile-signing-status',
+	authenticateToken,
+	requireAdminOrAttestor as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId } = req.params;
+
+			if (!applicationId) {
+				return res.status(400).json({
+					success: false,
+					message: 'Application ID is required'
+				});
+			}
+
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: {
+						include: {
+							signatories: true
+						}
+					}
+				}
+			});
+
+			if (!application || !application.loan) {
+				return res.status(404).json({
+					success: false,
+					message: 'Application or loan not found'
+				});
+			}
+
+			const pendingSignatories = application.loan.signatories.filter(
+				(signatory) => signatory.status === 'PENDING' && !!signatory.docusealSubmitterId
+			);
+
+			const summary = {
+				checked: 0,
+				updated: 0,
+				skipped: 0,
+				errors: 0
+			};
+			const details: Array<{
+				signatoryId: string;
+				signatoryType: string;
+				submitterId?: string;
+				action: 'updated' | 'skipped' | 'error';
+				reason: string;
+			}> = [];
+
+			for (const signatory of pendingSignatories) {
+				const submitterId = signatory.docusealSubmitterId!;
+				summary.checked += 1;
+
+				try {
+					const submitterResponse = await fetch(`${docusealConfig.apiUrl}/api/submitters/${submitterId}`, {
+						headers: {
+							'X-Auth-Token': docusealConfig.apiToken,
+							'Accept': 'application/json'
+						}
+					});
+
+					if (!submitterResponse.ok) {
+						summary.errors += 1;
+						details.push({
+							signatoryId: signatory.id,
+							signatoryType: signatory.signatoryType,
+							submitterId,
+							action: 'error',
+							reason: `DocuSeal submitter fetch failed with status ${submitterResponse.status}`
+						});
+						continue;
+					}
+
+					const submitterData = await submitterResponse.json();
+					const submitterStatus = submitterData?.status;
+
+					if (submitterStatus !== 'completed') {
+						summary.skipped += 1;
+						details.push({
+							signatoryId: signatory.id,
+							signatoryType: signatory.signatoryType,
+							submitterId,
+							action: 'skipped',
+							reason: `Submitter status is ${submitterStatus || 'unknown'}`
+						});
+						continue;
+					}
+
+					await prisma.loanSignatory.update({
+						where: { id: signatory.id },
+						data: {
+							status: 'PENDING_PKI_SIGNING',
+							signingUrl: null,
+							signingSlug: null,
+							slug: null,
+							updatedAt: new Date()
+						}
+					});
+
+					summary.updated += 1;
+					details.push({
+						signatoryId: signatory.id,
+						signatoryType: signatory.signatoryType,
+						submitterId,
+						action: 'updated',
+						reason: 'DocuSeal submitter was completed; moved to PENDING_PKI_SIGNING'
+					});
+				} catch (error) {
+					summary.errors += 1;
+					details.push({
+						signatoryId: signatory.id,
+						signatoryType: signatory.signatoryType,
+						submitterId,
+						action: 'error',
+						reason: error instanceof Error ? error.message : 'Unknown reconciliation error'
+					});
+				}
+			}
+
+			return res.json({
+				success: true,
+				message: 'Signing status reconciliation completed',
+				data: {
+					applicationId,
+					loanId: application.loan.id,
+					...summary,
+					details
+				}
+			});
+		} catch (error: any) {
+			console.error('Error reconciling signing status:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to reconcile signing status',
+				error: error.message
+			});
+		}
+	}
+);
+
+/**
  * @swagger
  * /api/admin/applications/pin-sign:
  *   post:
@@ -12402,9 +12548,10 @@ router.post(
 		try {
 			const { applicationId, pin, signatoryType } = req.body;
 			const userRole = req.user?.role;
+			const normalizedSignatoryType = String(signatoryType || "").trim().toUpperCase();
 
 			// Validate required fields
-			if (!applicationId || !pin || !signatoryType) {
+			if (!applicationId || !pin || !normalizedSignatoryType) {
 				return res.status(400).json({
 					success: false,
 					message: "Missing required fields"
@@ -12419,8 +12566,16 @@ router.post(
 				});
 			}
 
+			// Borrower must sign in borrower portal. Admin PIN signing is company/witness only.
+			if (!["COMPANY", "WITNESS"].includes(normalizedSignatoryType)) {
+				return res.status(400).json({
+					success: false,
+					message: "Only company and witness can sign in admin portal"
+				});
+			}
+
 			// ATTESTOR users can only sign as WITNESS
-			if (userRole === "ATTESTOR" && signatoryType !== "WITNESS") {
+			if (userRole === "ATTESTOR" && normalizedSignatoryType !== "WITNESS") {
 				return res.status(403).json({
 					success: false,
 					message: "ATTESTOR users can only sign as witness"
@@ -12447,9 +12602,6 @@ router.post(
 			}
 
 		// Find the signatory by type (since we don't have signatoryId anymore)
-		// Convert signatoryType to uppercase to match database values
-		const normalizedSignatoryType = signatoryType.toUpperCase();
-		
 		console.log(`Looking for signatory with type: ${normalizedSignatoryType} for loan: ${application.loan.id}`);
 		
 		const signatory = await prisma.loanSignatory.findFirst({
@@ -12510,8 +12662,8 @@ router.post(
 			// Use admin user's IC number and name for signing
 			const userInfo = {
 				userId: adminIcNumber, // Admin user's IC number for MTSA
-				fullName: adminUser.fullName || `${signatoryType} Representative`,
-				vpsUserId: `${signatoryType}_${application.loan.id}` // Unique identifier for database
+				fullName: adminUser.fullName || `${normalizedSignatoryType} Representative`,
+				vpsUserId: `${normalizedSignatoryType}_${application.loan.id}` // Unique identifier for database
 			};
 
 			try {
@@ -12635,7 +12787,7 @@ router.post(
 			// Add audit trail entry for loan status update after all signatures completed
 			try {
 				const finalSignerName = adminUser?.fullName || 'Unknown Admin';
-				const roleDisplayName = signatoryType === 'COMPANY' ? 'Company' : 'Witness';
+				const roleDisplayName = normalizedSignatoryType === 'COMPANY' ? 'Company' : 'Witness';
 				await prisma.loanApplicationHistory.create({
 					data: {
 						applicationId: applicationId,
@@ -12648,7 +12800,7 @@ router.post(
 							loanId: application.loan.id,
 							completedAt: new Date().toISOString(),
 							allSignatoriesCount: allSignatories.length,
-							finalSignatoryType: signatoryType,
+							finalSignatoryType: normalizedSignatoryType,
 							finalSignerName: finalSignerName,
 							finalSignerUserId: req.user?.userId,
 							docusealSubmissionId: application.loan.docusealSubmissionId
@@ -12720,7 +12872,7 @@ router.post(
 
 		return res.json({
 			success: true,
-			message: `Document signed successfully as ${signatoryType}`,
+			message: `Document signed successfully as ${normalizedSignatoryType}`,
 			allSigned,
 			newStatus: allSigned ? "PENDING_STAMPING" : application.status
 		});

@@ -252,6 +252,7 @@ function AdminApplicationsPageContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [signaturesData, setSignaturesData] = useState<any>(null);
   const [loadingSignatures, setLoadingSignatures] = useState(false);
+  const [reconcilingSignatures, setReconcilingSignatures] = useState(false);
   
   // System-wide late fee grace period setting
   const [lateFeeGraceDays, setLateFeeGraceDays] = useState<number>(3);
@@ -1024,11 +1025,18 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  const fetchSignatureStatus = async (applicationId: string) => {
+  const fetchSignatureStatus = async (
+    applicationId: string,
+    options?: { reconcileFirst?: boolean }
+  ) => {
     if (!applicationId) return;
+    const shouldReconcileFirst = options?.reconcileFirst ?? true;
 
     setLoadingSignatures(true);
     try {
+      if (shouldReconcileFirst)
+        await reconcileSignatureStatus(applicationId, false);
+
       const data = await fetchWithAdminTokenRefresh<{
         success: boolean;
         data: any;
@@ -1045,6 +1053,51 @@ function AdminApplicationsPageContent() {
       setSignaturesData(null);
     } finally {
       setLoadingSignatures(false);
+    }
+  };
+
+  const reconcileSignatureStatus = async (
+    applicationId: string,
+    showToast = true
+  ) => {
+    if (!applicationId) return;
+
+    setReconcilingSignatures(true);
+    try {
+      const response = await fetchWithAdminTokenRefresh<{
+        success: boolean;
+        message?: string;
+        data?: {
+          checked: number;
+          updated: number;
+          skipped: number;
+          errors: number;
+        };
+      }>(`/api/admin/applications/${applicationId}/reconcile-signing-status`, {
+        method: "POST",
+      });
+
+      if (!response?.success) {
+        if (showToast)
+          toast.error(response?.message || "Failed to refresh signing status");
+        return;
+      }
+
+      if (showToast) {
+        const updatedCount = response.data?.updated || 0;
+        if (updatedCount > 0) {
+          toast.success(
+            `Signing status refreshed. ${updatedCount} pending signer(s) moved to PKI signing.`
+          );
+        } else {
+          toast.success("Signing status is already up to date.");
+        }
+      }
+    } catch (error) {
+      console.error("Error reconciling signature status:", error);
+      if (showToast) toast.error("Failed to refresh signing status");
+    } finally {
+      setReconcilingSignatures(false);
     }
   };
 
@@ -3909,10 +3962,30 @@ function AdminApplicationsPageContent() {
                     ) : signaturesData ? (
                       <div>
                         <div className="mb-6">
-                          <h4 className="text-white font-medium mb-4 flex items-center">
-                            <PencilSquareIcon className="h-5 w-5 mr-2 text-purple-400" />
-                            Document Signature Status
-                          </h4>
+                          <div className="mb-4 flex items-center justify-between">
+                            <h4 className="text-white font-medium flex items-center">
+                              <PencilSquareIcon className="h-5 w-5 mr-2 text-purple-400" />
+                              Document Signature Status
+                            </h4>
+                            <button
+                              onClick={async () => {
+                                if (!selectedApplication?.id) return;
+                                await reconcileSignatureStatus(selectedApplication.id, true);
+                                await fetchSignatureStatus(selectedApplication.id, {
+                                  reconcileFirst: false,
+                                });
+                              }}
+                              disabled={reconcilingSignatures || loadingSignatures}
+                              className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-gray-700 text-gray-100 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <ArrowPathIcon
+                                className={`h-3.5 w-3.5 mr-1.5 ${
+                                  reconcilingSignatures ? "animate-spin" : ""
+                                }`}
+                              />
+                              Refresh signing status
+                            </button>
+                          </div>
                           <div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4 mb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                               <div>
@@ -4010,15 +4083,17 @@ function AdminApplicationsPageContent() {
                                   </div>
                                   <div className="ml-4">
                                     {signature.canSign ? (
-                                      // Hide company signing button for ATTESTOR users
-                                      userRole === "ATTESTOR" &&
-                                      signature.type === "COMPANY" ? (
+                                      signature.type === "USER" ? (
+                                        <span className="text-gray-500 text-xs">
+                                          Borrower signs in borrower portal
+                                        </span>
+                                      ) : userRole === "ATTESTOR" &&
+                                        signature.type === "COMPANY" ? (
                                         <span className="text-gray-500 text-xs">
                                           Admin access required
                                         </span>
                                       ) : signature.status === "PENDING" &&
                                         signature.signingUrl ? (
-                                        // PENDING status: Complete DocuSeal (for all signatory types)
                                         <a
                                           href={signature.signingUrl}
                                           target="_blank"
@@ -4030,28 +4105,15 @@ function AdminApplicationsPageContent() {
                                         </a>
                                       ) : signature.status ===
                                         "PENDING_PKI_SIGNING" ? (
-                                        // PENDING_PKI_SIGNING status: Sign with PKI/PIN
-                                        signature.type === "USER" ? (
-                                          // For USER signatures, redirect to PKI signing page
-                                          <a
-                                            href={`/pki-signing?submissionId=${signaturesData?.docusealSubmissionId}&applicationId=${selectedApplication?.id}`}
-                                            className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                                          >
-                                            <PencilSquareIcon className="h-3 w-3 mr-1" />
-                                            Complete Signing
-                                          </a>
-                                        ) : (
-                                          // For COMPANY and WITNESS signatures, redirect to PKI signing page
-                                          <a
-                                            href={`/pki-signing?application=${
-                                              selectedApplication?.id
-                                            }&signatory=${signature.type.toLowerCase()}`}
-                                            className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
-                                          >
-                                            <PencilSquareIcon className="h-3 w-3 mr-1" />
-                                            Complete Signing
-                                          </a>
-                                        )
+                                        <a
+                                          href={`/pki-signing?application=${
+                                            selectedApplication?.id
+                                          }&signatory=${signature.type.toLowerCase()}`}
+                                          className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                                        >
+                                          <PencilSquareIcon className="h-3 w-3 mr-1" />
+                                          Complete Signing
+                                        </a>
                                       ) : (
                                         <span className="text-gray-500 text-xs">
                                           No action available
