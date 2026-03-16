@@ -5321,17 +5321,17 @@ function AdminApplicationsPageContent() {
                                   stampCertificateFile
                                 );
 
-                                const loanId = selectedApplication.loan?.id;
+                                const applicationId = selectedApplication.id;
 
-                                if (!loanId) {
+                                if (!applicationId) {
                                   toast.error(
-                                    "Missing loan ID. Please refresh and ensure the application has a linked loan."
+                                    "Missing application ID. Please refresh the page."
                                   );
                                   return;
                                 }
 
                                 const response = await fetch(
-                                  `/api/admin/loans/${loanId}/upload-stamp-certificate`,
+                                  `/api/admin/applications/${applicationId}/upload-stamp-certificate`,
                                   {
                                     method: "POST",
                                     headers: {
