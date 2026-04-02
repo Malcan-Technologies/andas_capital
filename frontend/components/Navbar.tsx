@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "./Logo";
-import { Menu, Phone, LayoutDashboard, Mail, MessageCircle } from "lucide-react";
+import { Menu, LayoutDashboard, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 	Sheet,
@@ -110,36 +110,6 @@ export default function Navbar() {
 						{/* Divider */}
 						<div className="w-px h-6 bg-gray-200 mx-2" />
 
-						{/* WhatsApp Contact Button */}
-						<div className="relative group">
-							<Button
-								variant="ghost"
-								size="icon"
-								className="rounded-full border-2 border-gray-200 hover:border-teal-400 text-slate-600 hover:text-teal-400 hover:bg-transparent"
-								asChild
-							>
-								<a
-									href="https://wa.me/60164614919?text=I'm%20interested%20in%20Andas%20Capital%20lending%20products"
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									<Phone className="h-5 w-5" />
-									<span className="sr-only">Contact us on WhatsApp</span>
-								</a>
-							</Button>
-							{/* Tooltip */}
-							<div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block pointer-events-none">
-								<div className="bg-white text-slate-900 px-4 py-2 rounded-lg shadow-lg text-sm whitespace-nowrap border border-gray-200">
-									<div className="absolute left-1/2 -translate-x-1/2 -top-2">
-										<div className="w-4 h-4 bg-white border-l border-t border-gray-200 transform rotate-45" />
-									</div>
-									Click to WhatsApp us or
-									<br />
-									Call us at +60 16-461 4919
-								</div>
-							</div>
-						</div>
-
 						{isLoggedIn ? (
 							<Button
 								className="bg-teal-400 hover:bg-teal-500 text-white rounded-full px-6"
@@ -222,21 +192,6 @@ export default function Navbar() {
 											Contact
 										</h3>
 										<div className="space-y-2">
-											<a
-												href="https://wa.me/60164614919?text=I'm%20interested%20in%20Andas%20Capital%20lending%20products"
-												target="_blank"
-												rel="noopener noreferrer"
-												className="flex items-center gap-4 text-slate-600 hover:text-teal-400 p-4 rounded-xl hover:bg-gray-50 transition-colors"
-												onClick={() => setSheetOpen(false)}
-											>
-												<div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
-													<MessageCircle className="h-5 w-5 text-teal-500" />
-												</div>
-												<div className="text-left">
-													<span className="font-medium block">WhatsApp</span>
-													<p className="text-sm text-slate-500">+60 16-461 4919</p>
-												</div>
-											</a>
 											<a
 												href="mailto:opgcapital3@gmail.com"
 												className="flex items-center gap-4 text-slate-600 hover:text-teal-400 p-4 rounded-xl hover:bg-gray-50 transition-colors"

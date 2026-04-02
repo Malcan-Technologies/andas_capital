@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import ScamNoticePopup from "@/components/ScamNoticePopup";
 import {
 	ArrowRight,
 	Check,
@@ -73,6 +74,7 @@ export default function Home() {
 	return (
 		<div className="min-h-screen bg-gray-50 text-slate-900 font-body w-full">
 			<Navbar />
+			<ScamNoticePopup />
 
 			{/* Hero Section - Illustration Based */}
 			<section className="relative min-h-[90vh] flex items-center bg-gradient-to-b from-white via-gray-50 to-gray-100 w-full pt-20 overflow-hidden">

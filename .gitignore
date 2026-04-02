@@ -133,4 +133,7 @@ known_hosts
 
 # Security incident logs
 docs/ssl_cert_incident_log.txt
-docs/ssh_access_log.txt 
+docs/ssh_access_log.txt
+
+# Pen test credentials - contains access keys and DB passwords
+docs/pentest/PENTEST_CREDENTIALS.local* 

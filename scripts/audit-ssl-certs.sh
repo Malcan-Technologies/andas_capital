@@ -23,13 +23,13 @@ VPS_USER="root"
 ONPREM_IP="100.76.8.62"
 ONPREM_USER="admin-kapital"
 
-# Domains and services (Production: creditxpress.com.my)
+# Domains and services (Production: andas.com.my)
 DOMAINS=(
-    "creditxpress.com.my:443"
-    "www.creditxpress.com.my:443"
-    "admin.creditxpress.com.my:443"
-    "api.creditxpress.com.my:443"
-    "sign.creditxpress.com.my:443"
+    "andas.com.my:443"
+    "www.andas.com.my:443"
+    "admin.andas.com.my:443"
+    "api.andas.com.my:443"
+    "sign.andas.com.my:443"
 )
 
 # Output directory
@@ -294,7 +294,7 @@ case $AUDIT_CHOICE in
     1)
         echo ""
         for DOMAIN in "${DOMAINS[@]}"; do
-            check_domain_cert "$DOMAIN"
+            check_domain_cert "$DOMAIN" || true
         done
         ;;
         
@@ -326,7 +326,7 @@ case $AUDIT_CHOICE in
     5)
         echo ""
         for DOMAIN in "${DOMAINS[@]}"; do
-            check_domain_cert "$DOMAIN"
+            check_domain_cert "$DOMAIN" || true
         done
         check_vps_certs
         check_onprem_certs
