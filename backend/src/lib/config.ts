@@ -90,9 +90,36 @@ export const whatsappConfig = {
 // ==============================================
 // Resend Email Credentials
 // AWS Secret: {secrets_prefix}/resend-api-key
-// JSON keys: api_key, from_email
+// Preferred: JSON keys api_key, from_email (same as creditxpress / docs).
+// Also accepts a plain API key string — many consoles store only `re_...`, which
+// would otherwise fail JSON.parse and leave the key empty in ECS.
 // ==============================================
-const resendCredentials = parseJsonCredentials(process.env.RESEND_CREDENTIALS);
+function parseResendCredentials(raw: string | undefined): Record<string, string> {
+  if (!raw) return {};
+  const trimmed = raw.trim();
+  try {
+    const obj = JSON.parse(trimmed) as Record<string, unknown>;
+    const apiKey =
+      (typeof obj.api_key === 'string' && obj.api_key) ||
+      (typeof obj.apiKey === 'string' && obj.apiKey) ||
+      '';
+    const fromEmail =
+      (typeof obj.from_email === 'string' && obj.from_email) ||
+      (typeof obj.fromEmail === 'string' && obj.fromEmail) ||
+      '';
+    return { ...(apiKey && { api_key: apiKey }), ...(fromEmail && { from_email: fromEmail }) };
+  } catch {
+    if (/^re_[A-Za-z0-9_-]+$/.test(trimmed)) {
+      return { api_key: trimmed };
+    }
+    console.warn(
+      'RESEND_CREDENTIALS is not valid JSON and does not look like a Resend API key; email may be disabled'
+    );
+    return {};
+  }
+}
+
+const resendCredentials = parseResendCredentials(process.env.RESEND_CREDENTIALS);
 
 export const resendConfig = {
   apiKey: process.env.RESEND_API_KEY || resendCredentials.api_key || '',
