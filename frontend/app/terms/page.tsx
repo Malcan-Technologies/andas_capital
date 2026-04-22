@@ -28,7 +28,7 @@ export default function Terms() {
 							1. Agreement to Terms
 						</h2>
 						<p>
-							By accessing or using CreditXpress&apos;s services, you
+							By accessing or using Andas Capital&apos;s services, you
 							agree to be bound by these Terms of Service. If you
 							disagree with any part of the terms, you may not
 							access our services.

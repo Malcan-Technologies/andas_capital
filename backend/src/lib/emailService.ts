@@ -127,7 +127,7 @@ class EmailService {
         
         <p>If you have any questions, please contact our support team.</p>
         
-        <p>Best regards,<br>CreditXpress Team</p>
+        <p>Best regards,<br>Andas Capital team</p>
         
         <hr>
         <p style="font-size: 12px; color: #666;">
@@ -155,7 +155,7 @@ ${pdfBuffer ? 'Please find your current signed agreement attached to this email.
 If you have any questions, please contact our support team.
 
 Best regards,
-CreditXpress Team
+Andas Capital team
 
 ---
 This is an automated notification. Please do not reply to this email.
@@ -275,7 +275,7 @@ This is an automated notification. Please do not reply to this email.
         
         <p>If you have any questions, please contact our support team.</p>
         
-        <p>Best regards,<br>CreditXpress Team</p>
+        <p>Best regards,<br>Andas Capital team</p>
         
         <hr>
         <p style="font-size: 12px; color: #666;">
@@ -306,7 +306,7 @@ We will notify you once the disbursement has been completed.
 If you have any questions, please contact our support team.
 
 Best regards,
-CreditXpress Team
+Andas Capital team
 
 ---
 This is an automated notification. Please do not reply to this email.
