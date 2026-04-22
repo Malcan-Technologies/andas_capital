@@ -573,10 +573,9 @@ export default function AttestationForm({
 										<div className="relative aspect-video">
 											<video
 												className="w-full h-full object-cover"
-												controls
 												autoPlay
+												playsInline
 												onEnded={handleVideoComplete}
-												controlsList="nodownload"
 											>
 												<source
 													src="/videos/attestation.mp4"
