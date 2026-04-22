@@ -197,24 +197,6 @@ export default function AttestationMethodModal({
 							</ul>
 						</div>
 					</button>
-
-					{/* Actions: live CTA first, then instant (secondary) */}
-					<div className="space-y-3 pt-1">
-						<button
-							type="button"
-							onClick={onLiveCallSelect}
-							className="w-full py-3.5 px-4 rounded-xl font-semibold font-heading text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm"
-						>
-							Continue with live video call
-						</button>
-						<button
-							type="button"
-							onClick={onInstantSelect}
-							className="w-full py-3.5 px-4 rounded-xl font-semibold font-heading text-purple-primary bg-white border-2 border-purple-primary hover:bg-purple-50 transition-colors"
-						>
-							Use instant video instead
-						</button>
-					</div>
 				</div>
 
 					{/* Note */}
